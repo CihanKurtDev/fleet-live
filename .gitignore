@@ -7,3 +7,7 @@ build/
 .env
 .env.*
 !.env.example
+
+apps/api/data/*.db
+apps/api/data/*.db-shm
+apps/api/data/*.db-wal
