@@ -1,4 +1,4 @@
-import { db } from "./database.ts";
+import { db } from "./database";
 
 const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users (
