@@ -5,7 +5,8 @@
   "description": "Live dashboard for a simulated vehicle fleet",
   "workspaces": [
     "apps/web",
-    "apps/api"
+    "apps/api",
+    "packages/shared"
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w api\" \"npm run dev -w web\"",

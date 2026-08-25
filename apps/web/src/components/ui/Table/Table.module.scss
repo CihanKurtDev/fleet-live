@@ -1,0 +1,72 @@
+.tableContainer {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tableHeader {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.sortButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 0;
+    border: 0;
+    background: none;
+
+    font: inherit;
+    color: inherit;
+
+    cursor: pointer;
+}
+
+.sortButton:hover {
+    text-decoration: underline;
+}
+
+.sortIndicator {
+    display: inline-flex;
+    width: 16px;
+}
+
+.tableCell {
+    padding: 12px 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.tableRow {
+    cursor: pointer;
+}
+
+.tableRow:hover {
+    background-color: #f9fafb;
+}
+
+.tableRowSelected {
+    background-color: #e5f0ff;
+}
+
+.empty {
+    padding: 32px 16px;
+    text-align: center;
+    color: #6b7280;
+}
+
+.tableHead ul,
+.tableRow {
+    display: contents;
+
+    .rowElement {
+        width: 100%;
+    }
+}

@@ -1,6 +1,6 @@
 import { db } from "../db/database";
 
-export type VehicleWithLastTelemetry = {
+export type VehicleWithLastTelemetry  = {
     id: number;
     license_plate: string;
     driver_name: string;
