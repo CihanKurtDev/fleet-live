@@ -1,4 +1,9 @@
 import { Request, Response } from "express";
+import {
+    validateVehicleInput,
+    type VehicleFieldErrors,
+    type VehicleInput,
+} from "@fleet-live/shared";
 import { VehicleModel } from "../models/vehicle.model";
 
 function parseId(value: string | string []): number | null {
@@ -15,6 +20,50 @@ function parseId(value: string | string []): number | null {
 
 function isUniqueConstraintError(error: unknown): boolean {
     return error instanceof Error && error.message.includes("UNIQUE");
+}
+
+/**
+ * Antwortet mit 400 und den Feldfehlern.
+ * `error` bleibt für Clients erhalten, die nur eine Meldung anzeigen.
+ */
+function sendFieldErrors(res: Response, fields: VehicleFieldErrors) {
+    const [firstMessage] = Object.values(fields);
+    res.status(400).json({ error: firstMessage, fields });
+}
+
+/** Liest die beschreibbaren Felder aus dem Request-Body. */
+function readInput(body: unknown): Partial<VehicleInput> {
+    const { license_plate, driver_name, fuel_level, status } =
+        (body ?? {}) as Partial<VehicleInput>;
+
+    const input: Partial<VehicleInput> = {};
+
+    if (license_plate !== undefined) {
+        input.license_plate = license_plate;
+    }
+    if (driver_name !== undefined) {
+        input.driver_name = driver_name;
+    }
+    if (fuel_level !== undefined) {
+        input.fuel_level = fuel_level;
+    }
+    if (status !== undefined) {
+        input.status = status;
+    }
+
+    return input;
+}
+
+function trimStrings(input: Partial<VehicleInput>): Partial<VehicleInput> {
+    return {
+        ...input,
+        ...(input.license_plate !== undefined && {
+            license_plate: input.license_plate.trim(),
+        }),
+        ...(input.driver_name !== undefined && {
+            driver_name: input.driver_name.trim(),
+        }),
+    };
 }
 
 export function getVehicles(req: Request, res: Response) {
@@ -39,21 +88,31 @@ export function getVehicleById(req: Request, res: Response) {
 }
 
 export function createVehicle(req: Request, res: Response) {
-    const { license_plate, driver_name, fuel_level, status } = req.body ?? {};
+    const input = readInput(req.body);
 
-    if (typeof license_plate !== "string" || license_plate.trim() === "") {
-        res.status(400).json({ error: "license_plate is required." });
+    // fuel_level und status sind beim Anlegen optional,
+    // das Model setzt dafür Standardwerte.
+    const errors = validateVehicleInput(input, { partial: true });
+
+    if (input.license_plate === undefined) {
+        errors.license_plate = "Kennzeichen ist erforderlich.";
+    }
+    if (input.driver_name === undefined) {
+        errors.driver_name = "Fahrer ist erforderlich.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+        sendFieldErrors(res, errors);
         return;
     }
-    if (typeof driver_name !== "string" || driver_name.trim() === "") {
-        res.status(400).json({ error: "driver_name is required." });
-        return;
-    }
+
+    const { license_plate, driver_name, fuel_level, status } =
+        trimStrings(input);
 
     try {
         const vehicle = VehicleModel.create({
-            license_plate: license_plate.trim(),
-            driver_name: driver_name.trim(),
+            license_plate: license_plate!,
+            driver_name: driver_name!,
             fuel_level,
             status,
         });
@@ -74,32 +133,19 @@ export function replaceVehicle(req: Request, res: Response) {
         return;
     }
 
-    const { license_plate, driver_name, fuel_level, status } = req.body ?? {};
+    const input = readInput(req.body);
+    const errors = validateVehicleInput(input);
 
-    if (typeof license_plate !== "string" || license_plate.trim() === "") {
-        res.status(400).json({ error: "license_plate is required." });
-        return;
-    }
-    if (typeof driver_name !== "string" || driver_name.trim() === "") {
-        res.status(400).json({ error: "driver_name is required." });
-        return;
-    }
-    if (typeof fuel_level !== "number") {
-        res.status(400).json({ error: "fuel_level is required." });
-        return;
-    }
-    if (typeof status !== "string" || status.trim() === "") {
-        res.status(400).json({ error: "status is required." });
+    if (Object.keys(errors).length > 0) {
+        sendFieldErrors(res, errors);
         return;
     }
 
     try {
-        const vehicle = VehicleModel.replace(id, {
-            license_plate: license_plate.trim(),
-            driver_name: driver_name.trim(),
-            fuel_level,
-            status: status.trim(),
-        });
+        const vehicle = VehicleModel.replace(
+            id,
+            trimStrings(input) as VehicleInput,
+        );
         if (!vehicle) {
             res.status(404).json({ error: "Vehicle not found." });
             return;
@@ -121,50 +167,22 @@ export function updateVehicle(req: Request, res: Response) {
         return;
     }
 
-    const { license_plate, driver_name, fuel_level, status } = req.body ?? {};
-    const patch: {
-        license_plate?: string;
-        driver_name?: string;
-        fuel_level?: number;
-        status?: string;
-    } = {};
+    const input = readInput(req.body);
 
-    if (license_plate !== undefined) {
-        if (typeof license_plate !== "string" || license_plate.trim() === "") {
-            res.status(400).json({ error: "license_plate must be a non-empty string." });
-            return;
-        }
-        patch.license_plate = license_plate.trim();
-    }
-    if (driver_name !== undefined) {
-        if (typeof driver_name !== "string" || driver_name.trim() === "") {
-            res.status(400).json({ error: "driver_name must be a non-empty string." });
-            return;
-        }
-        patch.driver_name = driver_name.trim();
-    }
-    if (fuel_level !== undefined) {
-        if (typeof fuel_level !== "number") {
-            res.status(400).json({ error: "fuel_level must be a number." });
-            return;
-        }
-        patch.fuel_level = fuel_level;
-    }
-    if (status !== undefined) {
-        if (typeof status !== "string" || status.trim() === "") {
-            res.status(400).json({ error: "status must be a non-empty string." });
-            return;
-        }
-        patch.status = status.trim();
-    }
-
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(input).length === 0) {
         res.status(400).json({ error: "At least one field is required." });
         return;
     }
 
+    const errors = validateVehicleInput(input, { partial: true });
+
+    if (Object.keys(errors).length > 0) {
+        sendFieldErrors(res, errors);
+        return;
+    }
+
     try {
-        const vehicle = VehicleModel.update(id, patch);
+        const vehicle = VehicleModel.update(id, trimStrings(input));
         if (!vehicle) {
             res.status(404).json({ error: "Vehicle not found." });
             return;

@@ -73,7 +73,7 @@ try {
         "K-GH 321",
         "Lisa Meier",
         64,
-        "ALERT"
+        "STOPPED"
     );
 
     const vehicle = db

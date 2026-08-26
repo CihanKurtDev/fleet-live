@@ -8,8 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"],
-    "rootDir": "src"
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }

@@ -1,37 +1,15 @@
+import type { Vehicle, VehicleInput } from "@fleet-live/shared";
 import { db } from "../db/database";
 
-export type VehicleWithLastTelemetry  = {
-    id: number;
-    license_plate: string;
-    driver_name: string;
-    fuel_level: number;
-    status: string;
-    latitude: number | null;
-    longitude: number | null;
-    speed: number | null;
-    recorded_at: string | null;
-}
+export type VehicleCreateInput = Pick<
+    VehicleInput,
+    "license_plate" | "driver_name"
+> &
+    Partial<Pick<VehicleInput, "fuel_level" | "status">>;
 
-export type VehicleCreateInput = {
-    license_plate: string;
-    driver_name: string;
-    fuel_level?: number;
-    status?: string;
-}
+export type VehiclePutInput = VehicleInput;
 
-export type VehiclePutInput = {
-    license_plate: string;
-    driver_name: string;
-    fuel_level: number;
-    status: string;
-}
-
-export type VehiclePatchInput = {
-    license_plate?: string;
-    driver_name?: string;
-    fuel_level?: number;
-    status?: string;
-};
+export type VehiclePatchInput = Partial<VehicleInput>;
 
 const selectWithLastTelemetry = `
     SELECT
@@ -43,7 +21,13 @@ const selectWithLastTelemetry = `
         t.latitude,
         t.longitude,
         t.speed,
-        t.recorded_at
+        t.recorded_at,
+        (
+            SELECT COUNT(*)
+            FROM alerts a
+            WHERE a.vehicle_id = v.id
+              AND a.resolved_at IS NULL
+        ) AS activeAlerts
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = (
         SELECT t2.id
@@ -55,18 +39,18 @@ const selectWithLastTelemetry = `
 `;
 
 export class VehicleModel {
-    static getAll(): VehicleWithLastTelemetry[] {
+    static getAll(): Vehicle[] {
         const statement = db.prepare(selectWithLastTelemetry);
-        return statement.all() as VehicleWithLastTelemetry[];
+        return statement.all() as Vehicle[];
     }
 
-    static getById(id: number): VehicleWithLastTelemetry | undefined {
+    static getById(id: number): Vehicle | undefined {
         return db
             .prepare(`${selectWithLastTelemetry} WHERE v.id = ?`)
-            .get(id) as VehicleWithLastTelemetry | undefined;
+            .get(id) as Vehicle | undefined;
     }
 
-    static create(input: VehicleCreateInput): VehicleWithLastTelemetry {
+    static create(input: VehicleCreateInput): Vehicle {
     const result = db
         .prepare(
             `
@@ -88,7 +72,7 @@ export class VehicleModel {
         return created;
     }
 
-    static replace(id: number, input: VehiclePutInput): VehicleWithLastTelemetry | undefined {
+    static replace(id: number, input: VehiclePutInput): Vehicle | undefined {
         const result = db
             .prepare(
                 `
@@ -105,7 +89,7 @@ export class VehicleModel {
         return this.getById(id);
     }
 
-    static update(id: number, input: VehiclePatchInput): VehicleWithLastTelemetry | undefined {
+    static update(id: number, input: VehiclePatchInput): Vehicle | undefined {
         const current = this.getById(id);
         if (!current) {
             return undefined;
