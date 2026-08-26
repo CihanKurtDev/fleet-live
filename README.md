@@ -385,17 +385,15 @@ The planned development path is:
        ↓
 3. API integration + live telemetry
        ↓
-4. Map visualization
+4. Map (detail marker, then live movement; fleet map later)
        ↓
-5. Historical telemetry
+5. Companies
        ↓
-6. Companies
+6. Users
        ↓
-7. Users
+7. Authentication
        ↓
-8. Authentication
-       ↓
-9. Authorization & multi-tenancy
+8. Authorization & multi-tenancy
 ```
 
 This order keeps the complexity manageable and allows each layer to be tested before adding the next one.
@@ -594,8 +592,8 @@ This project is **not production-ready**.
 
 The following areas are intentionally incomplete:
 
-* Map integration
-* Historical telemetry API
+* Map integration (detail marker and live movement)
+* Telemetry history / trail (only if a path over time is needed)
 * Realistic movement / speed limits
 * Authentication
 * Authorization
@@ -628,27 +626,24 @@ These are planned development areas rather than features that are currently impl
 * [x] Create/edit/delete vehicle UI
 * [x] API integration (server-driven list, no mock data)
 
-## Phase 3 — Map
+## Phase 3 — Map and live position
 
-* [ ] Map integration
-* [ ] Display vehicle locations
-* [ ] Vehicle details on map
+Live telemetry (SSE, focused driving vehicles, list/detail patches) is already in place. This phase is the map on top of that last known point — not a separate telemetry milestone.
 
-## Phase 4 — Telemetry
+* [ ] Map on the vehicle detail page
+* [ ] Marker at the last telemetry position
+* [ ] Marker moves with SSE updates
+* [ ] Compact position/speed on or next to the map (full stammdaten stay in the form)
+* [ ] Optional later: fleet map on the list, trail from recent points (history API only if a path is needed)
 
-* [x] Live telemetry over SSE (driving vehicles, focused ids)
-* [ ] Telemetry history API
-* [ ] Simulated movement on a map
-* [x] Live UI updates (list + detail)
-
-## Phase 5 — Companies & Users
+## Phase 4 — Companies & Users
 
 * [ ] Company model
 * [ ] User/company relationship
 * [ ] Authentication
 * [ ] Authorization
 
-## Phase 6 — Multi-Tenancy
+## Phase 5 — Multi-Tenancy
 
 * [ ] Tenant-aware data model
 * [ ] Tenant-aware API
