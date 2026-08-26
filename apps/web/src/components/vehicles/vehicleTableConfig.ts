@@ -1,7 +1,45 @@
-import type { VehicleTableRow } from "@fleet-live/shared";
-import type { TableColumn } from "../../types/table";
+import type { Vehicle } from "@fleet-live/shared";
+import type {
+    TableColumn,
+    TableFilter,
+} from "../../types/table";
 
-export const vehicleColumns: TableColumn<VehicleTableRow>[] = [
+/** Ab diesem Tankstand gilt ein Fahrzeug als kritisch. */
+const LOW_FUEL_THRESHOLD = 20;
+
+export const vehicleSearchKeys: Array<keyof Vehicle> = [
+    "license_plate",
+    "driver_name",
+];
+
+export const vehicleFilters: TableFilter<Vehicle>[] = [
+    {
+        id: "alerts",
+        displayText: "Warnungen",
+        customSearchFunc: (vehicle) =>
+            vehicle.activeAlerts > 0,
+    },
+    {
+        id: "lowFuel",
+        displayText: "Wenig Tank",
+        customSearchFunc: (vehicle) =>
+            vehicle.fuel_level < LOW_FUEL_THRESHOLD,
+    },
+    {
+        id: "driving",
+        displayText: "Unterwegs",
+        customSearchFunc: (vehicle) =>
+            vehicle.status === "DRIVING",
+    },
+    {
+        id: "offline",
+        displayText: "Offline",
+        customSearchFunc: (vehicle) =>
+            vehicle.status === "OFFLINE",
+    },
+];
+
+export const vehicleColumns: TableColumn<Vehicle>[] = [
     /*
      * Jede Spalte kann optional ein eigenes `sortBy` definieren.
      *
