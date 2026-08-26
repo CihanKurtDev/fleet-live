@@ -35,8 +35,27 @@ export type TableColumn<T> = {
 }[keyof T];
 
 export interface TableFilter<RowType> {
+    /**
+     * Stabile Kennung des Filters.
+     * Wird als React-Key und als aktiver Filter im Table-State verwendet.
+     */
+    id: string;
+
     displayText: string;
     customSearchFunc?: (row: RowType) => boolean;
+}
+
+export interface TableFilterWithCount<RowType>
+    extends TableFilter<RowType> {
+    count: number;
+}
+
+export interface TableStateProps<RowType> {
+    search: string;
+    filterId: string | null;
+    sortConfig: SortConfig<RowType>;
+    page: number;
+    limit: number;
 }
 
 export interface TableProps<RowType> {

@@ -14,11 +14,26 @@ export const Table = <RowType,>({
     sortConfig = null,
     onSort,
 }: TableProps<RowType>) => {
+    const columnCount = isEditing
+        ? columns.length + 1
+        : columns.length;
+
     return (
         <div className={styles.tableContainer}>
             <table className={styles.table}>
                 <thead>
                     <tr>
+                        {isEditing && (
+                            <th
+                                scope="col"
+                                className={`${styles.tableHeader} ${styles.selectCell}`}
+                            >
+                                <span className={styles.visuallyHidden}>
+                                    Auswahl
+                                </span>
+                            </th>
+                        )}
+
                         <TableHeader
                             columns={columns}
                             sortConfig={sortConfig}
@@ -47,7 +62,7 @@ export const Table = <RowType,>({
                     ) : (
                         <tr>
                             <td
-                                colSpan={columns.length}
+                                colSpan={columnCount}
                                 className={styles.empty}
                             >
                                 Keine Ergebnisse

@@ -1,0 +1,118 @@
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    padding: 12px 0;
+    font-size: 14px;
+}
+
+.limit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.limitSelect {
+    height: 32px;
+    padding: 0 6px;
+
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+
+    font: inherit;
+    font-size: 14px;
+    color: var(--text-h);
+
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: none;
+        border-color: var(--accent-border);
+        box-shadow: 0 0 0 3px var(--accent-bg);
+    }
+}
+
+.pages {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.pageButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
+    box-sizing: border-box;
+
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: none;
+
+    font: inherit;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+
+    cursor: pointer;
+
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+
+    &:hover:not(:disabled) {
+        background: var(--code-bg);
+        color: var(--text-h);
+    }
+
+    &:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-bg);
+    }
+
+    &:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+}
+
+.pageButtonActive {
+    border-color: var(--accent-border);
+    background: var(--accent-bg);
+    color: var(--text-h);
+    font-weight: 600;
+
+    &:hover:not(:disabled) {
+        background: var(--accent-bg);
+    }
+}
+
+.ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    min-width: 24px;
+    height: 32px;
+    color: var(--text);
+}
+
+.chevron {
+    display: block;
+}
+
+.chevronFlipped {
+    transform: rotate(180deg);
+}
+
+.range {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}

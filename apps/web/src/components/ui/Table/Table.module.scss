@@ -6,13 +6,17 @@
 .table {
     width: 100%;
     border-collapse: collapse;
+    font-size: 14px;
+    text-align: left;
 }
 
 .tableHeader {
     padding: 12px 16px;
     text-align: left;
     font-weight: 600;
-    border-bottom: 1px solid #e5e7eb;
+    color: var(--text-h);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
 }
 
 .sortButton {
@@ -25,6 +29,7 @@
     background: none;
 
     font: inherit;
+    font-weight: inherit;
     color: inherit;
 
     cursor: pointer;
@@ -37,11 +42,17 @@
 .sortIndicator {
     display: inline-flex;
     width: 16px;
+    color: var(--text);
 }
 
 .tableCell {
     padding: 12px 16px;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
+}
+
+.selectCell {
+    width: 1%;
+    padding-right: 0;
 }
 
 .tableRow {
@@ -49,24 +60,27 @@
 }
 
 .tableRow:hover {
-    background-color: #f9fafb;
+    background-color: var(--code-bg);
 }
 
-.tableRowSelected {
-    background-color: #e5f0ff;
+.tableRowSelected,
+.tableRowSelected:hover {
+    background-color: var(--accent-bg);
 }
 
 .empty {
     padding: 32px 16px;
     text-align: center;
-    color: #6b7280;
+    color: var(--text);
 }
 
-.tableHead ul,
-.tableRow {
-    display: contents;
-
-    .rowElement {
-        width: 100%;
-    }
+.visuallyHidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }

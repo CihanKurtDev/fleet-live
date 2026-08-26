@@ -1,0 +1,66 @@
+.dialog {
+    width: 440px;
+    max-width: calc(100vw - 32px);
+    padding: 0;
+
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: var(--shadow);
+
+    &::backdrop {
+        background: rgb(0 0 0 / 45%);
+    }
+}
+
+.content {
+    text-align: left;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.title {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 28px;
+    height: 28px;
+    padding: 0;
+
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--text);
+
+    cursor: pointer;
+
+    &:hover {
+        background: var(--code-bg);
+        color: var(--text-h);
+    }
+
+    &:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-bg);
+    }
+}
+
+.body {
+    padding: 20px;
+}

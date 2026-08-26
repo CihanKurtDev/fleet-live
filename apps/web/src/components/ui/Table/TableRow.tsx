@@ -41,16 +41,35 @@ const TableRowComponent = <RowType,>({
         onClick?.();
     };
 
+    const className = [
+        styles.tableRow,
+        isSelected && styles.tableRowSelected,
+    ]
+        .filter(Boolean)
+        .join(" ");
+
     return (
         <tr
-            className={
-                isSelected
-                    ? styles.tableRowSelected
-                    : undefined
-            }
+            className={className}
             onClick={handleRowClick}
             aria-selected={isSelected}
         >
+            {isEditing && (
+                <td
+                    className={`${styles.tableCell} ${styles.selectCell}`}
+                    // Der Klick auf die Checkbox darf nicht zusätzlich
+                    // über die Zeile ausgewertet werden.
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={onSelect}
+                        aria-label="Zeile auswählen"
+                    />
+                </td>
+            )}
+
             {columns.map((column) => {
                 const value = rowData[column.key];
 
