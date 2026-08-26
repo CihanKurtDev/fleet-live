@@ -2,7 +2,7 @@
 
 A full-stack fleet management application built with **TypeScript, Node.js, Express, React and SQLite**.
 
-The project is being developed incrementally with a focus on building the backend and domain model first, before adding the frontend, vehicle visualization and eventually multi-tenancy and authentication.
+The project is being developed incrementally, starting with the backend and domain model, followed by the frontend and eventually vehicle visualization, multi-tenancy and authentication.
 
 > **Status: Work in progress**
 
@@ -16,11 +16,10 @@ This is a personal development project focused on learning and applying full-sta
 
 The application is being developed in several stages.
 
-The current stage focuses on building a clean and testable **vehicle REST API** and establishing the underlying database model.
+The **vehicle REST API** and the underlying database model are in place, and the **vehicle management UI** is built on top of mock data. The current stage focuses on connecting the frontend to the API.
 
 Future iterations will add:
 
-* A React frontend
 * Vehicle visualization on a map
 * Simulated vehicle movement and telemetry
 * Companies and users
@@ -33,7 +32,7 @@ The project is intentionally being developed step by step rather than implementi
 
 ## Current Status
 
-The current implementation focuses on the backend.
+The backend provides the vehicle API, and the frontend implements the vehicle management UI on top of mock data.
 
 ### Implemented
 
@@ -50,11 +49,19 @@ The current implementation focuses on the backend.
 * Development seed data
 * Health endpoint
 * Separate frontend and API applications
+* Shared domain package for types and validation
+* Vehicle input validation shared between API and frontend
+* Field-level validation errors in API responses
+* Last telemetry and active alert count in vehicle responses
+* React frontend with client-side routing
+* Generic, reusable table component
+* Vehicle list with search, filters, sorting and pagination
+* Vehicle detail page
+* Create, edit and delete vehicle UI
 
 ### Currently being developed
 
-* Frontend integration
-* Vehicle dashboard
+* Frontend API integration (replacing the mock data)
 * Map visualization
 * Telemetry simulation
 
@@ -70,7 +77,7 @@ The current implementation focuses on the backend.
 
 # Architecture
 
-The repository is structured as a small monorepo containing separate frontend and backend applications.
+The repository is structured as a small monorepo containing separate frontend and backend applications plus a shared package.
 
 ```text id="7m7g6m"
 fleet-live/
@@ -85,6 +92,21 @@ fleet-live/
 │   │
 │   └── web/
 │       └── src/
+│           ├── components/
+│           │   ├── ui/
+│           │   └── vehicles/
+│           ├── context/
+│           ├── hooks/
+│           ├── mocks/
+│           ├── pages/
+│           ├── types/
+│           ├── utils/
+│           └── router.tsx
+│
+├── packages/
+│   └── shared/
+│       └── src/
+│           └── models/
 │
 └── package.json
 ```
@@ -112,9 +134,18 @@ The intended architecture is:
                                       │
                                       ▼
                                    SQLite
+
+
+                    ┌─────────────────┐
+                    │  Shared package │
+                    │    (shared)     │
+                    └─────────────────┘
+                 used by both web and api
 ```
 
 The API is separated into routes, controllers and models to keep HTTP handling and database access separated.
+
+The shared package contains the vehicle domain types and the input validation used by both the API and the frontend, so that both sides agree on the same rules.
 
 ---
 
@@ -132,6 +163,14 @@ The API is separated into routes, controllers and models to keep HTTP handling a
 * React
 * TypeScript
 * Vite
+* React Router
+* Sass / CSS Modules
+
+## Shared
+
+* `@fleet-live/shared` npm workspace package
+* Vehicle domain types
+* Vehicle input validation
 
 ## Development
 
@@ -158,7 +197,20 @@ The first development milestone is a reliable REST API for vehicle management.
 | `DELETE` | `/api/vehicles/:id` | Delete a vehicle  |
 | `GET`    | `/api/health`       | Check API health  |
 
-The API performs basic request validation and returns appropriate HTTP status codes for invalid requests, missing resources and conflicts.
+The API performs request validation and returns appropriate HTTP status codes for invalid requests, missing resources and conflicts.
+
+Validation errors are returned with the offending fields so that a client can display them next to the corresponding input:
+
+```json id="4k2m9v"
+{
+  "error": "Tankstand muss zwischen 0 und 100 liegen.",
+  "fields": {
+    "fuel_level": "Tankstand muss zwischen 0 und 100 liegen."
+  }
+}
+```
+
+Vehicle responses also include the most recent telemetry record and the number of unresolved alerts.
 
 ---
 
@@ -172,9 +224,52 @@ Vehicles currently contain information such as:
 * Status
 * Creation timestamp
 
+Vehicle responses additionally contain:
+
+* Latitude, longitude, speed and timestamp of the last telemetry record
+* The number of currently active alerts
+
+The telemetry fields are `null` while a vehicle has no telemetry data yet.
+
 The current database model is intentionally simple.
 
 The goal of the first development stage is to establish reliable vehicle CRUD operations before introducing more complex business concepts.
+
+---
+
+# Frontend
+
+The frontend is a React application for managing the vehicle fleet.
+
+> The frontend currently runs on mock data. The API is **not** connected yet.
+
+## Routes
+
+| Route           | Description                          |
+| --------------- | ------------------------------------ |
+| `/`             | Redirects to the vehicle list        |
+| `/vehicles`     | Vehicle list and creation dialog     |
+| `/vehicles/:id` | Vehicle details, editing and removal |
+
+## Vehicle list
+
+The vehicle list is built on a generic table component that receives its columns and filters through a configuration and contains no vehicle-specific logic itself.
+
+It supports:
+
+* Search across license plate and driver
+* Filters for alerts, low fuel, driving and offline vehicles
+* Sorting per column
+* Pagination
+* Selecting rows and deleting several vehicles at once
+
+## Vehicle management
+
+Vehicles can be created, edited and deleted through the UI.
+
+The forms validate their input with the same validation function the API uses, which comes from the shared package.
+
+See [apps/docs/table.md](apps/docs/table.md) for a detailed description of the table component.
 
 ---
 
@@ -190,7 +285,7 @@ Telemetry data includes information such as:
 * Speed
 * Recorded timestamp
 
-The next step is to expose this information through the API and eventually simulate vehicle movement.
+The last telemetry record of a vehicle is already included in the vehicle API responses. A dedicated telemetry endpoint for historical data and simulated vehicle movement are still open.
 
 The intended flow is:
 
@@ -225,6 +320,8 @@ The database also contains an alert model associated with vehicles.
 
 Alerts are intended to represent events such as abnormal vehicle behaviour or other conditions that should be surfaced to users.
 
+The number of unresolved alerts per vehicle is already exposed through the vehicle API and used in the frontend to highlight and filter affected vehicles.
+
 The alert system will be expanded as the vehicle and telemetry functionality matures.
 
 ---
@@ -254,7 +351,7 @@ A development seed script is provided to create example data.
 
 The project is intentionally being developed incrementally.
 
-Instead of implementing authentication, companies, multi-tenancy and the complete frontend immediately, the current focus is on getting the underlying vehicle functionality correct first.
+Instead of implementing authentication, companies, multi-tenancy and map visualization immediately, the focus is on getting the underlying vehicle functionality correct first.
 
 The planned development path is:
 
@@ -446,7 +543,7 @@ This project is **not production-ready**.
 
 The following areas are intentionally incomplete:
 
-* Frontend application
+* Frontend API integration (the frontend uses mock data)
 * Map integration
 * Live telemetry
 * Telemetry simulation
@@ -477,10 +574,10 @@ These are planned development areas rather than features that are currently impl
 
 ## Phase 2 — Frontend
 
-* [ ] Vehicle list
-* [ ] Vehicle details
-* [ ] Create/edit vehicle UI
-* [ ] API integration
+* [x] Vehicle list (search, filters, sorting, pagination)
+* [x] Vehicle details page
+* [x] Create/edit/delete vehicle UI
+* [ ] API integration (frontend currently runs on mock data)
 
 ## Phase 3 — Map
 
