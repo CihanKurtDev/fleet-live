@@ -570,7 +570,6 @@ These are planned development areas rather than features that are currently impl
 * [x] Vehicle CRUD API
 * [x] Input validation
 * [x] Development seed data
-* [ ] Manual API testing
 
 ## Phase 2 — Frontend
 
