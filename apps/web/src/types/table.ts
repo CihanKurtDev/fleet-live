@@ -73,4 +73,7 @@ export interface TableProps<RowType> {
 
     sortConfig?: SortConfig<RowType>;
     onSort?: (key: keyof RowType) => void;
+
+    isLoading?: boolean;
+    skeletonRowCount?: number;
 }

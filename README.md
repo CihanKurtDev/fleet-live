@@ -16,12 +16,11 @@ This is a personal development project focused on learning and applying full-sta
 
 The application is being developed in several stages.
 
-The **vehicle REST API** and the underlying database model are in place, and the **vehicle management UI** is built on top of mock data. The current stage focuses on connecting the frontend to the API.
+The **vehicle REST API**, **server-driven vehicle list** and **live telemetry stream** are connected to the React UI. The current stage focuses on map visualization and more realistic movement.
 
 Future iterations will add:
 
 * Vehicle visualization on a map
-* Simulated vehicle movement and telemetry
 * Companies and users
 * Authentication and authorization
 * Multi-tenant data isolation
@@ -32,38 +31,40 @@ The project is intentionally being developed step by step rather than implementi
 
 ## Current Status
 
-The backend provides the vehicle API, and the frontend implements the vehicle management UI on top of mock data.
+The backend serves paginated vehicle queries over SQLite, and the frontend talks to that API. Driving vehicles receive simulated telemetry over SSE.
 
 ### Implemented
 
 * TypeScript backend
 * Express API
-* SQLite database
+* SQLite database (WAL, statement cache, lightweight migrations)
 * Vehicle model
 * Vehicle CRUD API
+* Server-driven list query (search, filter, sort, pagination, facet counts)
 * Input validation
-* HTTP status handling
+* HTTP status handling and structured API errors
 * Database relationships
 * Telemetry data model
 * Alert data model
-* Development seed data
+* Development seed data (small and large)
 * Health endpoint
+* SSE telemetry stream with client focus
 * Separate frontend and API applications
-* Shared domain package for types and validation
-* Vehicle input validation shared between API and frontend
+* Shared domain package for types, validation and list query contract
 * Field-level validation errors in API responses
 * Last telemetry and active alert count in vehicle responses
 * React frontend with client-side routing
 * Generic, reusable table component
-* Vehicle list with search, filters, sorting and pagination
+* Vehicle list backed by the API (URL state, cache, prefetch, skeleton)
+* Live table and detail updates for focused driving vehicles
 * Vehicle detail page
 * Create, edit and delete vehicle UI
+* API integration tests (`node:test` + SuperTest)
 
 ### Currently being developed
 
-* Frontend API integration (replacing the mock data)
 * Map visualization
-* Telemetry simulation
+* More realistic movement (speed limits, routes)
 
 ### Planned
 
@@ -86,18 +87,23 @@ fleet-live/
 │   │   └── src/
 │   │       ├── controllers/
 │   │       ├── db/
+│   │       ├── middleware/
 │   │       ├── models/
 │   │       ├── routes/
+│   │       ├── sse/
+│   │       ├── test/
+│   │       ├── app.ts
+│   │       ├── config.ts
 │   │       └── server.ts
 │   │
 │   └── web/
 │       └── src/
+│           ├── api/
 │           ├── components/
 │           │   ├── ui/
 │           │   └── vehicles/
 │           ├── context/
 │           ├── hooks/
-│           ├── mocks/
 │           ├── pages/
 │           ├── types/
 │           ├── utils/
@@ -119,7 +125,7 @@ The intended architecture is:
                     │     (web)       │
                     └────────┬────────┘
                              │
-                           HTTP
+                    HTTP + SSE (/api)
                              │
                              ▼
                     ┌─────────────────┐
@@ -171,6 +177,7 @@ The shared package contains the vehicle domain types and the input validation us
 * `@fleet-live/shared` npm workspace package
 * Vehicle domain types
 * Vehicle input validation
+* Vehicle list query contract (Zod)
 
 ## Development
 
@@ -178,6 +185,8 @@ The shared package contains the vehicle domain types and the input validation us
 * tsx
 * ESLint
 * TypeScript
+* node:test + SuperTest (API)
+* autocannon bench script
 
 ---
 
@@ -187,15 +196,21 @@ The first development milestone is a reliable REST API for vehicle management.
 
 ## Endpoints
 
-| Method   | Endpoint            | Description       |
-| -------- | ------------------- | ----------------- |
-| `GET`    | `/api/vehicles`     | List all vehicles |
-| `GET`    | `/api/vehicles/:id` | Get a vehicle     |
-| `POST`   | `/api/vehicles`     | Create a vehicle  |
-| `PUT`    | `/api/vehicles/:id` | Replace a vehicle |
-| `PATCH`  | `/api/vehicles/:id` | Update a vehicle  |
-| `DELETE` | `/api/vehicles/:id` | Delete a vehicle  |
-| `GET`    | `/api/health`       | Check API health  |
+| Method   | Endpoint              | Description                                      |
+| -------- | --------------------- | ------------------------------------------------ |
+| `GET`    | `/api/vehicles`       | Paginated vehicle list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
+| `GET`    | `/api/vehicles/:id`   | Get a vehicle                                    |
+| `POST`   | `/api/vehicles`       | Create a vehicle                                 |
+| `PUT`    | `/api/vehicles/:id`   | Replace a vehicle                                |
+| `PATCH`  | `/api/vehicles/:id`   | Update a vehicle                                 |
+| `DELETE` | `/api/vehicles/:id`   | Delete a vehicle                                 |
+| `GET`    | `/api/stream`         | SSE: telemetry patches and `vehicles-changed`    |
+| `POST`   | `/api/stream/focus`   | Tell the simulator which vehicle ids to tick     |
+| `GET`    | `/api/health`         | Check API health                                 |
+
+`GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` for the filter chips.
+
+Query parameters are defined once in `@fleet-live/shared` (`vehicleListQuerySchema`). Invalid sort keys or limits are rejected with `400`. Default page size is `10`; allowed limits are `10`, `25`, `50` and `100`.
 
 The API performs request validation and returns appropriate HTTP status codes for invalid requests, missing resources and conflicts.
 
@@ -241,7 +256,9 @@ The goal of the first development stage is to establish reliable vehicle CRUD op
 
 The frontend is a React application for managing the vehicle fleet.
 
-> The frontend currently runs on mock data. The API is **not** connected yet.
+Vite proxies `/api` to `http://localhost:3000` so the browser can use same-origin requests and EventSource.
+
+List state (search, filter, sort, page, limit) lives in the URL. Reloading keeps the current view; a fresh visit to `/vehicles` starts on page 1.
 
 ## Routes
 
@@ -255,11 +272,13 @@ The frontend is a React application for managing the vehicle fleet.
 
 The vehicle list is built on a generic table component that receives its columns and filters through a configuration and contains no vehicle-specific logic itself.
 
+Search, filters, sorting and pagination run **on the server**. The table renders the current page, facet counts from `meta`, a loading skeleton while the API is unreachable (for example during a restart), and live telemetry patches for the current page plus neighbouring pages.
+
 It supports:
 
-* Search across license plate and driver
+* Search across license plate and driver (`search_text`)
 * Filters for alerts, low fuel, driving and offline vehicles
-* Sorting per column
+* Sorting per column (allowlisted keys)
 * Pagination
 * Selecting rows and deleting several vehicles at once
 
@@ -285,7 +304,11 @@ Telemetry data includes information such as:
 * Speed
 * Recorded timestamp
 
-The last telemetry record of a vehicle is already included in the vehicle API responses. A dedicated telemetry endpoint for historical data and simulated vehicle movement are still open.
+The last telemetry record of a vehicle is included in the vehicle API responses.
+
+A ticker writes new points only for vehicles with status `DRIVING`. The frontend posts the ids of the visible list page (plus neighbours) and the open detail vehicle to `POST /api/stream/focus`. Speed currently random-walks around the last value instead of jumping.
+
+A dedicated telemetry history API and map-based movement are still open.
 
 The intended flow is:
 
@@ -358,23 +381,21 @@ The planned development path is:
 ```text id="qf5k7h"
 1. Vehicle API
        ↓
-2. Test API manually
+2. Vehicle frontend
        ↓
-3. Vehicle frontend
+3. API integration + live telemetry
        ↓
 4. Map visualization
        ↓
-5. Telemetry
+5. Historical telemetry
        ↓
-6. Simulated vehicle movement
+6. Companies
        ↓
-7. Companies
+7. Users
        ↓
-8. Users
+8. Authentication
        ↓
-9. Authentication
-       ↓
-10. Authorization & multi-tenancy
+9. Authorization & multi-tenancy
 ```
 
 This order keeps the complexity manageable and allows each layer to be tested before adding the next one.
@@ -465,6 +486,36 @@ npm run dev:web
 npm run db:seed
 ```
 
+Large dataset (tens of thousands of vehicles, for list/SSE performance):
+
+```bash
+npm run db:seed:large
+```
+
+API tests:
+
+```bash
+npm test
+```
+
+List-query bench (against a running API is not required; see `apps/api/scripts/bench.ts`):
+
+```bash
+npm run bench
+```
+
+Useful environment variables for the API (validated on startup):
+
+| Variable | Default | Notes |
+| -------- | ------- | ----- |
+| `PORT` | `3000` | |
+| `DATABASE_PATH` | `apps/api/data/fleetlive.db` | Use `:memory:` in tests |
+| `CORS_ORIGIN` | `*` | |
+| `TELEMETRY_TICK_MS` | `400` | `0` disables the simulator |
+| `TELEMETRY_BATCH_SIZE` | `32` | Used when no client focus is set |
+| `LOG_LEVEL` | `info` | |
+| `NODE_ENV` | `development` | Rate limiting is production-only |
+
 ---
 
 # Example API Request
@@ -533,7 +584,7 @@ This includes example:
 * Telemetry
 * Alerts
 
-The seed data makes it possible to develop and test the API without manually creating every record.
+`npm run db:seed:large` replaces the vehicle set with a much larger sample (unique plates) so pagination, search and the live stream can be exercised under load.
 
 ---
 
@@ -543,14 +594,13 @@ This project is **not production-ready**.
 
 The following areas are intentionally incomplete:
 
-* Frontend API integration (the frontend uses mock data)
 * Map integration
-* Live telemetry
-* Telemetry simulation
+* Historical telemetry API
+* Realistic movement / speed limits
 * Authentication
 * Authorization
 * Multi-tenancy
-* Automated tests
+* Frontend unit tests
 * Production deployment
 * CI/CD
 * Production database
@@ -576,7 +626,7 @@ These are planned development areas rather than features that are currently impl
 * [x] Vehicle list (search, filters, sorting, pagination)
 * [x] Vehicle details page
 * [x] Create/edit/delete vehicle UI
-* [ ] API integration (frontend currently runs on mock data)
+* [x] API integration (server-driven list, no mock data)
 
 ## Phase 3 — Map
 
@@ -586,10 +636,10 @@ These are planned development areas rather than features that are currently impl
 
 ## Phase 4 — Telemetry
 
-* [ ] Telemetry API
-* [ ] Historical telemetry
-* [ ] Simulated vehicle movement
-* [ ] Live UI updates
+* [x] Live telemetry over SSE (driving vehicles, focused ids)
+* [ ] Telemetry history API
+* [ ] Simulated movement on a map
+* [x] Live UI updates (list + detail)
 
 ## Phase 5 — Companies & Users
 

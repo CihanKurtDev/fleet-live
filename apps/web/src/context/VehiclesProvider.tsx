@@ -1,128 +1,172 @@
-import {
-    useCallback,
-    useMemo,
-    useState,
-    type ReactNode,
-} from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type {
+    TelemetryPatch,
+    Vehicle,
     VehicleFieldErrors,
     VehicleInput,
 } from "@fleet-live/shared";
-import { mockVehicles } from "../mocks/vehicles";
+import { ApiError } from "../api/client";
+import {
+    createVehicle as createVehicleRequest,
+    deleteVehicle as deleteVehicleRequest,
+    updateVehicle as updateVehicleRequest,
+} from "../api/vehicles";
+import { forgetVehicles, rememberVehicle } from "../api/vehicleCache";
+import { invalidateVehicleListCache } from "../api/vehicleListCache";
 import { VehiclesContext } from "./vehiclesContext";
+import { useVehicleStream } from "../hooks/useVehicleStream";
 
-/**
- * Hält die Fahrzeugliste.
- *
- * Aktuell aus Mock-Daten. Bei der API-Integration wird nur der Inhalt
- * dieses Providers ersetzt, die Schnittstelle für die Seiten bleibt gleich.
- */
+const fieldErrorsFromApi = (
+    error: unknown,
+): VehicleFieldErrors | void => {
+    if (!(error instanceof ApiError)) {
+        throw error;
+    }
+
+    if (error.status === 409) {
+        return (
+            error.fields ?? {
+                license_plate: "Kennzeichen ist bereits vergeben.",
+            }
+        );
+    }
+
+    if (error.status === 400 && error.fields) {
+        return error.fields;
+    }
+
+    throw error;
+};
+
 export const VehiclesProvider = ({
     children,
 }: {
     children: ReactNode;
 }) => {
-    const [vehicles, setVehicles] = useState(mockVehicles);
+    const [listEpoch, setListEpoch] = useState(0);
+    const [vehicleOverrides, setVehicleOverrides] = useState<
+        Record<number, Partial<Vehicle>>
+    >({});
 
-    const getVehicle = useCallback(
-        (id: number) =>
-            vehicles.find((vehicle) => vehicle.id === id),
-        [vehicles],
-    );
+    const refetchLists = useCallback(() => {
+        invalidateVehicleListCache();
+        setListEpoch((current) => current + 1);
+    }, []);
 
-    /** Die API antwortet auf ein doppeltes Kennzeichen mit 409. */
-    const findPlateConflict = useCallback(
-        (licensePlate: string, exceptId?: number) =>
-            vehicles.some(
-                (vehicle) =>
-                    vehicle.id !== exceptId &&
-                    vehicle.license_plate.toLowerCase() ===
-                        licensePlate.trim().toLowerCase(),
-            ),
-        [vehicles],
-    );
+    const applyTelemetry = useCallback((patches: TelemetryPatch[]) => {
+        if (patches.length === 0) {
+            return;
+        }
 
-    const createVehicle = useCallback(
-        (input: VehicleInput): VehicleFieldErrors | void => {
-            if (findPlateConflict(input.license_plate)) {
-                return {
-                    license_plate:
-                        "Kennzeichen ist bereits vergeben.",
+        setVehicleOverrides((current) => {
+            const next = { ...current };
+
+            for (const patch of patches) {
+                next[patch.id] = {
+                    ...next[patch.id],
+                    speed: patch.speed,
+                    latitude: patch.latitude,
+                    longitude: patch.longitude,
+                    recorded_at: patch.recorded_at,
                 };
             }
 
-            setVehicles((current) => [
-                {
-                    ...input,
-                    license_plate: input.license_plate.trim(),
-                    driver_name: input.driver_name.trim(),
-                    id:
-                        current.reduce(
-                            (max, vehicle) =>
-                                Math.max(max, vehicle.id),
-                            0,
-                        ) + 1,
-                    latitude: null,
-                    longitude: null,
-                    speed: null,
-                    recorded_at: null,
-                    activeAlerts: 0,
-                },
-                ...current,
-            ]);
+            const keys = Object.keys(next);
+            const maxOverrides = 300;
+
+            if (keys.length > maxOverrides) {
+                const overflow = keys.length - maxOverrides;
+                for (let index = 0; index < overflow; index += 1) {
+                    delete next[Number(keys[index])];
+                }
+            }
+
+            return next;
+        });
+    }, []);
+
+    useVehicleStream({
+        onTelemetry: applyTelemetry,
+        onVehiclesChanged: refetchLists,
+    });
+
+    const createVehicle = useCallback(
+        async (
+            input: VehicleInput,
+        ): Promise<VehicleFieldErrors | void> => {
+            try {
+                const created = await createVehicleRequest(input);
+                rememberVehicle(created);
+                refetchLists();
+            } catch (error) {
+                return fieldErrorsFromApi(error);
+            }
         },
-        [findPlateConflict],
+        [refetchLists],
     );
 
     const updateVehicle = useCallback(
-        (
+        async (
             id: number,
             input: VehicleInput,
-        ): VehicleFieldErrors | void => {
-            if (findPlateConflict(input.license_plate, id)) {
-                return {
-                    license_plate:
-                        "Kennzeichen ist bereits vergeben.",
-                };
-            }
+        ): Promise<VehicleFieldErrors | void> => {
+            const previous = vehicleOverrides[id];
 
-            setVehicles((current) =>
-                current.map((vehicle) =>
-                    vehicle.id === id
-                        ? {
-                              ...vehicle,
-                              ...input,
-                              license_plate:
-                                  input.license_plate.trim(),
-                              driver_name:
-                                  input.driver_name.trim(),
-                          }
-                        : vehicle,
-                ),
-            );
+            setVehicleOverrides((current) => ({
+                ...current,
+                [id]: { ...current[id], ...input },
+            }));
+
+            try {
+                const updated = await updateVehicleRequest(id, input);
+                rememberVehicle(updated);
+                refetchLists();
+                setVehicleOverrides((current) => {
+                    const next = { ...current };
+                    delete next[id];
+                    return next;
+                });
+            } catch (error) {
+                setVehicleOverrides((current) => {
+                    const next = { ...current };
+
+                    if (previous) {
+                        next[id] = previous;
+                    } else {
+                        delete next[id];
+                    }
+
+                    return next;
+                });
+
+                return fieldErrorsFromApi(error);
+            }
         },
-        [findPlateConflict],
+        [refetchLists, vehicleOverrides],
     );
 
-    const deleteVehicles = useCallback((ids: number[]) => {
-        setVehicles((current) =>
-            current.filter(
-                (vehicle) => !ids.includes(vehicle.id),
-            ),
-        );
-    }, []);
+    const deleteVehicles = useCallback(
+        async (ids: number[]) => {
+            await Promise.all(ids.map((id) => deleteVehicleRequest(id)));
+            forgetVehicles(ids);
+            refetchLists();
+        },
+        [refetchLists],
+    );
 
     const value = useMemo(
         () => ({
-            vehicles,
-            getVehicle,
+            listEpoch,
+            vehicleOverrides,
+            refetchLists,
             createVehicle,
             updateVehicle,
             deleteVehicles,
         }),
         [
-            vehicles,
-            getVehicle,
+            listEpoch,
+            vehicleOverrides,
+            refetchLists,
             createVehicle,
             updateVehicle,
             deleteVehicles,

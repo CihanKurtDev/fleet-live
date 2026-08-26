@@ -13,6 +13,8 @@ export const Table = <RowType,>({
     onRowClick,
     sortConfig = null,
     onSort,
+    isLoading = false,
+    skeletonRowCount = 10,
 }: TableProps<RowType>) => {
     const columnCount = isEditing
         ? columns.length + 1
@@ -20,7 +22,10 @@ export const Table = <RowType,>({
 
     return (
         <div className={styles.tableContainer}>
-            <table className={styles.table}>
+            <table
+                className={styles.table}
+                aria-busy={isLoading}
+            >
                 <thead>
                     <tr>
                         {isEditing && (
@@ -43,32 +48,61 @@ export const Table = <RowType,>({
                 </thead>
 
                 <tbody>
-                    {rows.length > 0 ? (
-                        rows.map((row) => {
-                            const rowKey = getRowKey(row);
+                    {isLoading
+                        ? Array.from(
+                              { length: skeletonRowCount },
+                              (_, rowIndex) => (
+                                  <tr
+                                      key={`skeleton-${rowIndex}`}
+                                      className={styles.skeletonRow}
+                                      aria-hidden="true"
+                                  >
+                                      {Array.from(
+                                          { length: columnCount },
+                                          (_, cellIndex) => (
+                                              <td
+                                                  key={cellIndex}
+                                                  className={styles.tableCell}
+                                              >
+                                                  <span
+                                                      className={
+                                                          styles.skeletonBar
+                                                      }
+                                                  />
+                                              </td>
+                                          ),
+                                      )}
+                                  </tr>
+                              ),
+                          )
+                        : rows.length > 0
+                          ? rows.map((row) => {
+                                const rowKey = getRowKey(row);
 
-                            return (
-                                <TableRow
-                                    key={rowKey}
-                                    rowData={row}
-                                    columns={columns}
-                                    isSelected={selectedRows.includes(rowKey)}
-                                    isEditing={isEditing}
-                                    onSelect={() => onSelectRow?.(rowKey)}
-                                    onClick={() => onRowClick?.(row)}
-                                />
-                            );
-                        })
-                    ) : (
-                        <tr>
-                            <td
-                                colSpan={columnCount}
-                                className={styles.empty}
-                            >
-                                Keine Ergebnisse
-                            </td>
-                        </tr>
-                    )}
+                                return (
+                                    <TableRow
+                                        key={rowKey}
+                                        rowData={row}
+                                        columns={columns}
+                                        isSelected={selectedRows.includes(
+                                            rowKey,
+                                        )}
+                                        isEditing={isEditing}
+                                        onSelect={() => onSelectRow?.(rowKey)}
+                                        onClick={() => onRowClick?.(row)}
+                                    />
+                                );
+                            })
+                          : (
+                                <tr>
+                                    <td
+                                        colSpan={columnCount}
+                                        className={styles.empty}
+                                    >
+                                        Keine Ergebnisse
+                                    </td>
+                                </tr>
+                            )}
                 </tbody>
             </table>
         </div>

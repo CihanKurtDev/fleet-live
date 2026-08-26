@@ -6,42 +6,53 @@ import { TableToolbar } from "../ui/Table/TableToolbar";
 import { TableFilterBar } from "../ui/Table/TableFilterBar";
 import { TablePagination } from "../ui/Table/TablePagination";
 import { useTable } from "../../hooks/useTable";
+import { useVehicleList } from "../../hooks/useVehicleList";
+import { useVehicleListQuery } from "../../hooks/useVehicleListQuery";
 import {
     vehicleColumns,
     vehicleFilters,
-    vehicleSearchKeys,
 } from "./vehicleTableConfig";
 import styles from "./VehicleTable.module.scss";
 
 interface VehicleTableProps {
-    vehicles: Vehicle[];
     onDeleteVehicles?: (ids: number[]) => void;
     onAddVehicle?: () => void;
     onSelectVehicle?: (vehicle: Vehicle) => void;
 }
 
 export const VehicleTable = ({
-    vehicles,
     onDeleteVehicles,
     onAddVehicle,
     onSelectVehicle,
 }: VehicleTableProps) => {
     const {
+        apiQuery,
         tableState,
         setSearch,
         setFilter,
         handleSort,
         setPage,
         setLimit,
+    } = useVehicleListQuery();
+
+    const { data, meta, isLoading, isFetching, error, pageCount, total } =
+        useVehicleList(apiQuery);
+
+    const {
         filtersWithCounts,
-        filteredRows,
         paginatedRows,
-        pageCount,
     } = useTable({
-        rows: vehicles,
-        columns: vehicleColumns,
-        searchKeys: vehicleSearchKeys,
+        rows: data,
         filters: vehicleFilters,
+        counts: meta?.counts,
+        pageCount,
+        total,
+        tableState,
+        setSearch,
+        setFilter,
+        handleSort,
+        setPage,
+        setLimit,
     });
 
     const [isEditing, setIsEditing] = useState(false);
@@ -70,7 +81,13 @@ export const VehicleTable = ({
     };
 
     return (
-        <section className={styles.vehicleTable}>
+        <section
+            className={
+                isFetching && !isLoading
+                    ? `${styles.vehicleTable} ${styles.isFetching}`
+                    : styles.vehicleTable
+            }
+        >
             <TableToolbar
                 search={tableState.search}
                 onSearchChange={setSearch}
@@ -86,11 +103,25 @@ export const VehicleTable = ({
                 onAddNew={onAddVehicle}
             />
 
-            <TableFilterBar
-                filters={filtersWithCounts}
-                activeFilterId={tableState.filterId}
-                onFilterChange={setFilter}
-            />
+            {!isLoading && (
+                <TableFilterBar
+                    filters={filtersWithCounts}
+                    activeFilterId={tableState.filterId}
+                    onFilterChange={setFilter}
+                />
+            )}
+
+            {error && (
+                <p className={styles.error} role="alert">
+                    {error}
+                </p>
+            )}
+
+            {isLoading && (
+                <p className={styles.status} aria-live="polite">
+                    Tabelle wird geladen…
+                </p>
+            )}
 
             <Table
                 columns={vehicleColumns}
@@ -104,14 +135,16 @@ export const VehicleTable = ({
                 onRowClick={onSelectVehicle}
                 sortConfig={tableState.sortConfig}
                 onSort={handleSort}
+                isLoading={isLoading}
+                skeletonRowCount={Math.min(tableState.limit, 10)}
             />
 
-            {filteredRows.length > 0 && (
+            {total > 0 && (
                 <TablePagination
                     page={tableState.page}
                     pageCount={pageCount}
                     limit={tableState.limit}
-                    total={filteredRows.length}
+                    total={total}
                     onPageChange={setPage}
                     onLimitChange={setLimit}
                 />

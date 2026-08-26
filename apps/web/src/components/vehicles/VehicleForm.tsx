@@ -58,7 +58,9 @@ interface VehicleFormProps {
     initialValue?: VehicleInput;
 
     submitLabel: string;
-    onSubmit: (input: VehicleInput) => VehicleFieldErrors | void;
+    onSubmit: (
+        input: VehicleInput,
+    ) => VehicleFieldErrors | void | Promise<VehicleFieldErrors | void>;
     onCancel?: () => void;
 }
 
@@ -76,6 +78,7 @@ export const VehicleForm = ({
     const [errors, setErrors] =
         useState<VehicleFieldErrors>({});
     const [wasSubmitted, setWasSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const isEditing = initialValue !== undefined;
 
@@ -101,7 +104,7 @@ export const VehicleForm = ({
         });
     };
 
-    const handleSubmit = (event: FormEvent) => {
+    const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         setWasSubmitted(true);
 
@@ -113,15 +116,23 @@ export const VehicleForm = ({
             return;
         }
 
-        // Der Aufrufer darf weitere Fehler melden, z. B. ein
-        // bereits vergebenes Kennzeichen (API antwortet darauf mit 409).
-        const submitErrors = onSubmit(input as VehicleInput);
+        setIsSubmitting(true);
 
-        if (
-            submitErrors &&
-            Object.keys(submitErrors).length > 0
-        ) {
-            setErrors(submitErrors);
+        try {
+            // Der Aufrufer darf weitere Fehler melden, z. B. ein
+            // bereits vergebenes Kennzeichen (API antwortet darauf mit 409).
+            const submitErrors = await onSubmit(
+                input as VehicleInput,
+            );
+
+            if (
+                submitErrors &&
+                Object.keys(submitErrors).length > 0
+            ) {
+                setErrors(submitErrors);
+            }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -252,7 +263,7 @@ export const VehicleForm = ({
                 <Button
                     type="submit"
                     size="sm"
-                    disabled={isEditing && !isDirty}
+                    disabled={isSubmitting || (isEditing && !isDirty)}
                 >
                     {submitLabel}
                 </Button>

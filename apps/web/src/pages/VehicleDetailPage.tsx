@@ -4,6 +4,7 @@ import type { VehicleInput } from "@fleet-live/shared";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import { Button } from "../components/ui/Button/Button";
 import { useVehicles } from "../context/vehiclesContext";
+import { useVehicle } from "../hooks/useVehicle";
 import styles from "./VehicleDetailPage.module.scss";
 
 const formatCoordinate = (value: number | null) =>
@@ -12,15 +13,31 @@ const formatCoordinate = (value: number | null) =>
 export const VehicleDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { getVehicle, updateVehicle, deleteVehicles } =
-        useVehicles();
+    const { updateVehicle, deleteVehicles } = useVehicles();
 
     const vehicleId = Number(id);
-    const vehicle = Number.isInteger(vehicleId)
-        ? getVehicle(vehicleId)
-        : undefined;
+    const parsedId = Number.isInteger(vehicleId) ? vehicleId : null;
+    const { vehicle, isLoading, error, notFound } = useVehicle(parsedId);
 
-    if (!vehicle) {
+    if (isLoading) {
+        return (
+            <section className={styles.page}>
+                <p>Fahrzeug wird geladen…</p>
+            </section>
+        );
+    }
+
+    if (error) {
+        return (
+            <section className={styles.page}>
+                <h1 className={styles.title}>Fehler</h1>
+                <p>{error}</p>
+                <Link to="/vehicles">Zurück zur Übersicht</Link>
+            </section>
+        );
+    }
+
+    if (!vehicle || notFound) {
         return (
             <section className={styles.page}>
                 <h1 className={styles.title}>
@@ -38,8 +55,8 @@ export const VehicleDetailPage = () => {
     const handleSubmit = (input: VehicleInput) =>
         updateVehicle(vehicle.id, input);
 
-    const handleDelete = () => {
-        deleteVehicles([vehicle.id]);
+    const handleDelete = async () => {
+        await deleteVehicles([vehicle.id]);
         navigate("/vehicles");
     };
 
@@ -63,7 +80,6 @@ export const VehicleDetailPage = () => {
                 </Button>
             </header>
 
-            {/* Platzhalter für die Karte, sobald die Telemetrie-Endpunkte stehen. */}
             <section className={styles.panel}>
                 <h2 className={styles.panelTitle}>
                     Letzte Position
@@ -102,8 +118,9 @@ export const VehicleDetailPage = () => {
                     </dl>
                 ) : (
                     <p className={styles.empty}>
-                        Für dieses Fahrzeug liegt noch keine
-                        Telemetrie vor.
+                        {vehicle.status === "DRIVING"
+                            ? "Noch kein Datenpunkt — sobald der Simulator dieses Fahrzeug in einer Scheibe hat, erscheinen hier Position und Tempo."
+                            : `Keine Telemetrie. Der Simulator sendet nur an Fahrzeuge mit Status DRIVING (aktuell: ${vehicle.status}).`}
                     </p>
                 )}
             </section>

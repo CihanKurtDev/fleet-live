@@ -74,6 +74,49 @@
     color: var(--text);
 }
 
+.skeletonRow {
+    pointer-events: none;
+}
+
+.skeletonBar {
+    display: block;
+    height: 12px;
+    width: 72%;
+    border-radius: 4px;
+    background: linear-gradient(
+        90deg,
+        var(--border) 0%,
+        var(--code-bg) 45%,
+        var(--border) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeletonRow:nth-child(even) .skeletonBar {
+    width: 58%;
+}
+
+.skeletonRow:nth-child(3n) .skeletonBar {
+    width: 84%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeletonBar {
+        animation: none;
+    }
+}
+
+@keyframes skeleton-shimmer {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: -100% 0;
+    }
+}
+
 .visuallyHidden {
     position: absolute;
     width: 1px;

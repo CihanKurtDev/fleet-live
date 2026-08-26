@@ -12,7 +12,10 @@
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w api\" \"npm run dev -w web\"",
     "dev:api": "npm run dev -w api",
     "dev:web": "npm run dev -w web",
-    "db:seed": "npm run db:seed -w api"
+    "db:seed": "npm run db:seed -w api",
+    "db:seed:large": "npm run db:seed:large -w api",
+    "test": "npm test -w api",
+    "bench": "npm run bench -w api"
   },
   "keywords": [],
   "author": "",

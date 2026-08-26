@@ -6,16 +6,17 @@ import { VehicleTable } from "../components/vehicles/VehicleTable";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
+import { rememberVehicle } from "../api/vehicleCache";
+import { setTelemetryFocus } from "../api/telemetryFocus";
 
 export const VehiclesPage = () => {
-    const { vehicles, createVehicle, deleteVehicles } =
-        useVehicles();
+    const { createVehicle, deleteVehicles } = useVehicles();
     const navigate = useNavigate();
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-    const handleCreate = (input: VehicleInput) => {
-        const errors = createVehicle(input);
+    const handleCreate = async (input: VehicleInput) => {
+        const errors = await createVehicle(input);
 
         if (errors) {
             return errors;
@@ -27,12 +28,13 @@ export const VehiclesPage = () => {
     return (
         <>
             <VehicleTable
-                vehicles={vehicles}
                 onDeleteVehicles={deleteVehicles}
                 onAddVehicle={() => setIsCreateOpen(true)}
-                onSelectVehicle={(vehicle) =>
-                    navigate(`/vehicles/${vehicle.id}`)
-                }
+                onSelectVehicle={(vehicle) => {
+                    rememberVehicle(vehicle);
+                    setTelemetryFocus("detail", [vehicle.id]);
+                    navigate(`/vehicles/${vehicle.id}`);
+                }}
             />
 
             <Modal

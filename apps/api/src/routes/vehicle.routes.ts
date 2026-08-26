@@ -1,6 +1,14 @@
 import express from "express";
-import { createVehicle, deleteVehicle, getVehicleById, getVehicles, replaceVehicle, updateVehicle } from "../controllers/vehicle.controller";
-const router = express.Router()
+import {
+    createVehicle,
+    deleteVehicle,
+    getVehicleById,
+    getVehicles,
+    replaceVehicle,
+    updateVehicle,
+} from "../controllers/vehicle.controller";
+
+const router = express.Router();
 
 router.get("/", getVehicles);
 router.get("/:id", getVehicleById);
@@ -9,5 +17,4 @@ router.put("/:id", replaceVehicle);
 router.patch("/:id", updateVehicle);
 router.delete("/:id", deleteVehicle);
 
-
-export default router
+export default router;

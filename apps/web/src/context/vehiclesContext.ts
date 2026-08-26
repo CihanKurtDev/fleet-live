@@ -6,20 +6,20 @@ import type {
 } from "@fleet-live/shared";
 
 export interface VehiclesContextValue {
-    vehicles: Vehicle[];
-    getVehicle: (id: number) => Vehicle | undefined;
+    listEpoch: number;
+    vehicleOverrides: Record<number, Partial<Vehicle>>;
+    refetchLists: () => void;
 
-    /** Gibt Feldfehler zurück, wenn das Anlegen abgelehnt wird. */
     createVehicle: (
         input: VehicleInput,
-    ) => VehicleFieldErrors | void;
+    ) => Promise<VehicleFieldErrors | void>;
 
     updateVehicle: (
         id: number,
         input: VehicleInput,
-    ) => VehicleFieldErrors | void;
+    ) => Promise<VehicleFieldErrors | void>;
 
-    deleteVehicles: (ids: number[]) => void;
+    deleteVehicles: (ids: number[]) => Promise<void>;
 }
 
 export const VehiclesContext =

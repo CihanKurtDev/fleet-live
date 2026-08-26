@@ -2,4 +2,21 @@
     // #root zentriert global; die Tabelle bleibt aber linksbündig.
     text-align: left;
     padding: 0 16px;
+    transition: opacity 120ms ease;
+}
+
+.isFetching {
+    opacity: 0.72;
+}
+
+.error {
+    margin: 8px 0 0;
+    color: var(--danger, #b42318);
+    font-size: 14px;
+}
+
+.status {
+    margin: 8px 0 0;
+    color: var(--text);
+    font-size: 13px;
 }
