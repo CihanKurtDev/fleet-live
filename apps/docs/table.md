@@ -97,7 +97,7 @@ utils/getPageWindow.ts         – Seitenliste für die Pagination
 - **Klickbare Zeilen** über `onRowClick`, in der Fahrzeugliste für die Navigation zur Detailseite.
 - **Leerer Zustand**: Zeigt "Keine Ergebnisse", wenn `rows.length === 0` und nicht geladen wird.
 - **Skeleton**: Platzhalterzeilen plus Retry bei 502/503/504, solange die API (z. B. nach einem Neustart) noch nicht erreichbar ist.
-- **Live-Updates**: SSE-Patches für die aktuelle Seite und die Nachbarseiten. Focus ist pro SSE-Connection (`connection_id` aus dem `connected`-Event).
+- **Live-Updates**: SSE-Patches für die aktuelle Seite und die Nachbarseiten. Focus ist pro SSE-Connection (`connection_id` aus dem `connected`-Event). Die API filtert Telemetrie-Events auf den Focus der jeweiligen Connection.
 
 ## Server-Modus (`hooks/useTable.ts`)
 
