@@ -95,9 +95,10 @@ utils/getPageWindow.ts         – Seitenliste für die Pagination
 - **Custom Rendering** je Spalte über `render(value, context)`, z. B. `fuel_level` → `"82%"`.
 - **Zeilenauswahl** über den Bearbeitungsmodus (`isEditing`): ausgewählte Zeilen können gesammelt gelöscht werden. Im Bearbeitungsmodus wählt ein Klick auf die Zeile aus, statt zu navigieren.
 - **Klickbare Zeilen** über `onRowClick`, in der Fahrzeugliste für die Navigation zur Detailseite.
-- **Leerer Zustand**: Zeigt "Keine Ergebnisse", wenn `rows.length === 0` und nicht geladen wird.
+- **Leerer Zustand**: „Keine Ergebnisse“, wenn die aktuelle Query keine Treffer hat. Liegt `page` hinter `pageCount`, ein eigener Hinweis plus Sprung zur letzten oder ersten Seite — die URL wird nicht still geklemmt.
 - **Skeleton**: Platzhalterzeilen plus Retry bei 502/503/504, solange die API (z. B. nach einem Neustart) noch nicht erreichbar ist.
 - **Live-Updates**: SSE-Patches für die aktuelle Seite und die Nachbarseiten. Focus ist pro SSE-Connection (`connection_id` aus dem `connected`-Event).
+- **Löschen**: Bestätigungsdialog (Liste und Detail), bevor Fahrzeuge entfernt werden.
 
 ## Server-Modus (`hooks/useTable.ts`)
 
@@ -184,5 +185,5 @@ Spalten-, Filter- und Suchkonfiguration siehe `vehicleTableConfig.ts` (Kennzeich
 - [ ] Aktions-Buttons pro Zeile
 - [ ] Card-Ansicht (vermutlich für Mobile) als Alternative zur Tabelle
 - [ ] ggf. eigene `sortBy`-Logik für `status` (fachliche statt alphabetischer Reihenfolge, ist als Kommentar in `vehicleTableConfig.ts` bereits skizziert)
-- [ ] Bestätigungsdialog vor dem Löschen ausgewählter Zeilen
-- [ ] Seite außerhalb von `pageCount` auf die letzte gültige Seite klemmen
+- [x] Bestätigungsdialog vor dem Löschen ausgewählter Zeilen
+- [x] Seite außerhalb von `pageCount`: eigener Leerzustand statt still klemmen
