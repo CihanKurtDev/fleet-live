@@ -25,12 +25,12 @@ const SORT_COLUMNS: Record<VehicleSortKey, string> = {
     status: "v.status",
     fuel_level: "v.fuel_level",
     speed: "t.speed",
-    activeAlerts: "v.active_alerts",
+    active_alerts: "v.active_alerts",
 };
 
 const FILTER_SQL: Record<VehicleFilterId, string> = {
     alerts: "v.active_alerts > 0",
-    lowFuel: "v.fuel_level < 20",
+    low_fuel: "v.fuel_level < 20",
     driving: "v.status = 'DRIVING'",
     offline: "v.status = 'OFFLINE'",
 };
@@ -46,7 +46,8 @@ const SELECT_ONE = `
         t.longitude,
         t.speed,
         t.recorded_at,
-        v.active_alerts AS activeAlerts
+        v.active_alerts,
+        v.created_at
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
     WHERE v.id = ?
@@ -69,7 +70,7 @@ const FACET_SQL = `
     SELECT
         COUNT(*) AS all_count,
         COALESCE(SUM(active_alerts > 0), 0) AS alerts,
-        COALESCE(SUM(fuel_level < 20), 0) AS lowFuel,
+        COALESCE(SUM(fuel_level < 20), 0) AS low_fuel,
         COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
         COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
     FROM vehicles v
@@ -81,7 +82,7 @@ type ListRow = Vehicle & { total: number };
 type FacetRow = {
     all_count: number;
     alerts: number;
-    lowFuel: number;
+    low_fuel: number;
     driving: number;
     offline: number;
 };
@@ -126,7 +127,8 @@ export class VehicleModel {
                 t.longitude,
                 t.speed,
                 t.recorded_at,
-                v.active_alerts AS activeAlerts,
+                v.active_alerts,
+                v.created_at,
                 COUNT(*) OVER () AS total
             FROM vehicles v
             LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
@@ -169,7 +171,7 @@ export class VehicleModel {
                 counts: {
                     all: Number(counts.all_count),
                     alerts: Number(counts.alerts),
-                    lowFuel: Number(counts.lowFuel),
+                    low_fuel: Number(counts.low_fuel),
                     driving: Number(counts.driving),
                     offline: Number(counts.offline),
                 },

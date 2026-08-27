@@ -17,10 +17,10 @@ export const vehicleFilters: TableFilter<Vehicle>[] = [
         id: "alerts",
         displayText: "Warnungen",
         customSearchFunc: (vehicle) =>
-            vehicle.activeAlerts > 0,
+            vehicle.active_alerts > 0,
     },
     {
-        id: "lowFuel",
+        id: "low_fuel",
         displayText: "Wenig Tank",
         customSearchFunc: (vehicle) =>
             vehicle.fuel_level < LOW_FUEL_THRESHOLD,
@@ -99,7 +99,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
                 : `${value} km/h`,
     },
     {
-        key: "activeAlerts",
+        key: "active_alerts",
         displayText: "Warnungen",
         sortable: true,
         render: (value) =>

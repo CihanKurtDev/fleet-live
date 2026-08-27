@@ -1,6 +1,12 @@
 import type { Request, Response } from "express";
-import { setFocusIds } from "../sse/focus";
-import { subscribe, unsubscribe } from "../sse/hub";
+import { parseStreamFocus } from "@fleet-live/shared";
+import { BadRequestError } from "../lib/errors";
+import {
+    replay,
+    setConnectionFocus,
+    subscribe,
+    unsubscribe,
+} from "../sse/hub";
 
 export function streamEvents(req: Request, res: Response) {
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -10,13 +16,17 @@ export function streamEvents(req: Request, res: Response) {
     res.flushHeaders();
 
     res.write("retry: 3000\n\n");
-    res.write("event: connected\ndata: {}\n\n");
+
+    const connectionId = subscribe(res);
+    res.write(
+        `event: connected\ndata: ${JSON.stringify({ connection_id: connectionId })}\n\n`,
+    );
 
     const rawId = req.headers["last-event-id"];
     const lastEventId =
         typeof rawId === "string" ? Number(rawId) : Number.NaN;
 
-    subscribe(res, Number.isFinite(lastEventId) ? lastEventId : 0);
+    replay(res, Number.isFinite(lastEventId) ? lastEventId : 0);
 
     const heartbeat = setInterval(() => {
         res.write(":heartbeat\n\n");
@@ -34,14 +44,12 @@ export function streamEvents(req: Request, res: Response) {
 }
 
 export function setStreamFocus(req: Request, res: Response) {
-    const rawIds = (req.body as { ids?: unknown })?.ids;
-    const ids = Array.isArray(rawIds)
-        ? rawIds.filter(
-              (value): value is number =>
-                  typeof value === "number" && Number.isInteger(value) && value > 0,
-          )
-        : [];
+    const { connection_id, ids } = parseStreamFocus(req.body);
+    const count = setConnectionFocus(connection_id, ids);
 
-    setFocusIds(ids);
-    res.json({ ok: true, count: ids.length });
+    if (count === false) {
+        throw new BadRequestError("Unbekannte Verbindung.");
+    }
+
+    res.json({ ok: true, count });
 }

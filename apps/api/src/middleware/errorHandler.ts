@@ -31,7 +31,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     if (error instanceof ZodError) {
         const [first] = error.issues;
         res.status(400).json({
-            error: first?.message ?? "Invalid request.",
+            error: first?.message ?? "Ungültige Anfrage.",
             code: "VALIDATION_ERROR",
             fields: Object.fromEntries(
                 error.issues.map((issue) => [
@@ -47,10 +47,10 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
 
     res.status(500).json({
         error: config.isProduction
-            ? "An unexpected error occurred."
+            ? "Ein unerwarteter Fehler ist aufgetreten."
             : error instanceof Error
               ? error.message
-              : "An unexpected error occurred.",
+              : "Ein unerwarteter Fehler ist aufgetreten.",
         code: "INTERNAL_ERROR",
         ...(config.isProduction
             ? {}

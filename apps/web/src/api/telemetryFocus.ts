@@ -1,5 +1,6 @@
 const sources = new Map<string, number[]>();
 let publishTimer: ReturnType<typeof setTimeout> | undefined;
+let connectionId: string | null = null;
 
 function collectIds(): number[] {
     const ids = new Set<number>();
@@ -14,12 +15,16 @@ function collectIds(): number[] {
 }
 
 function publish() {
+    if (!connectionId) {
+        return;
+    }
+
     const ids = collectIds();
 
     void fetch("/api/stream/focus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify({ connection_id: connectionId, ids }),
     }).catch(() => undefined);
 }
 
@@ -32,6 +37,15 @@ function schedulePublish() {
         publishTimer = undefined;
         publish();
     }, 50);
+}
+
+/** Setzt die SSE-Verbindungs-ID. Focus-POSTs warten, bis sie da ist. */
+export function setStreamConnection(id: string | null) {
+    connectionId = id;
+
+    if (id) {
+        schedulePublish();
+    }
 }
 
 /** Meldet, welche Fahrzeuge der Simulator bevorzugt ticken soll. */

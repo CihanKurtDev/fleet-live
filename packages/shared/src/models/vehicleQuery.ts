@@ -7,12 +7,12 @@ export const VEHICLE_SORT_KEYS = [
     "status",
     "fuel_level",
     "speed",
-    "activeAlerts",
+    "active_alerts",
 ] as const;
 
 export const VEHICLE_FILTERS = [
     "alerts",
-    "lowFuel",
+    "low_fuel",
     "driving",
     "offline",
 ] as const;
@@ -38,33 +38,37 @@ const emptyToUndefined = (value: unknown): unknown => {
 export const vehicleListQuerySchema = z.object({
     search: z.preprocess(
         (value) => (value == null ? "" : Array.isArray(value) ? value[0] : value),
-        z.string().trim().max(100).default(""),
+        z.string().trim().max(100, "Suche darf höchstens 100 Zeichen haben.").default(""),
     ),
     filter: z.preprocess(
         emptyToUndefined,
-        z.enum(VEHICLE_FILTERS).optional(),
+        z.enum(VEHICLE_FILTERS, { error: "Ungültiger Filter." }).optional(),
     ),
     sort: z.preprocess(
         emptyToUndefined,
-        z.enum(VEHICLE_SORT_KEYS).optional(),
+        z.enum(VEHICLE_SORT_KEYS, { error: "Ungültiges Sortierfeld." }).optional(),
     ),
     dir: z.preprocess(
         emptyToUndefined,
-        z.enum(["asc", "desc"]).default("asc"),
+        z.enum(["asc", "desc"], { error: "Ungültige Sortierrichtung." }).default("asc"),
     ),
     page: z.preprocess(
         emptyToUndefined,
-        z.coerce.number().int().min(1).default(1),
+        z.coerce
+            .number({ error: "Seite muss eine Zahl sein." })
+            .int("Seite muss eine ganze Zahl sein.")
+            .min(1, "Seite muss mindestens 1 sein.")
+            .default(1),
     ),
     limit: z.preprocess(
         emptyToUndefined,
         z.coerce
-            .number()
-            .int()
+            .number({ error: "Limit muss eine Zahl sein." })
+            .int("Limit muss eine ganze Zahl sein.")
             .refine(
                 (value) =>
                     (VEHICLE_PAGE_LIMITS as readonly number[]).includes(value),
-                { message: "limit must be 10, 25, 50 or 100" },
+                { message: "Limit muss 10, 25, 50 oder 100 sein." },
             )
             .default(10),
     ),
@@ -75,7 +79,7 @@ export type VehicleListQuery = z.infer<typeof vehicleListQuerySchema>;
 export type VehicleListCounts = {
     all: number;
     alerts: number;
-    lowFuel: number;
+    low_fuel: number;
     driving: number;
     offline: number;
 };
@@ -91,15 +95,6 @@ export type VehicleListMeta = {
 export type VehicleListResponse = {
     data: Vehicle[];
     meta: VehicleListMeta;
-};
-
-/** Live-Patch eines Fahrzeugs aus dem Telemetrie-Stream. */
-export type TelemetryPatch = {
-    id: number;
-    speed: number;
-    latitude: number;
-    longitude: number;
-    recorded_at: string;
 };
 
 export function parseVehicleListQuery(input: unknown): VehicleListQuery {

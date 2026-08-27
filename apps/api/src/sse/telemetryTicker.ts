@@ -1,7 +1,6 @@
 import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
-import { getFocusIds } from "./focus";
-import { broadcast } from "./hub";
+import { broadcast, getFocusUnion } from "./hub";
 
 let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -12,7 +11,13 @@ export function startTelemetryTicker(intervalMs: number) {
 
     timer = setInterval(() => {
         try {
-            const patches = TelemetryModel.tickDrivingVehicles(getFocusIds());
+            const focusIds = getFocusUnion();
+
+            if (focusIds.length === 0) {
+                return;
+            }
+
+            const patches = TelemetryModel.tickDrivingVehicles(focusIds);
 
             if (patches.length > 0) {
                 broadcast("telemetry", patches);

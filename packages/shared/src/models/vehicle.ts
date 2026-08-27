@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export const VEHICLE_STATUSES = [
     "IDLE",
     "DRIVING",
@@ -9,6 +11,8 @@ export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
 
 export const FUEL_LEVEL_MIN = 0;
 export const FUEL_LEVEL_MAX = 100;
+export const LICENSE_PLATE_MAX = 32;
+export const DRIVER_NAME_MAX = 80;
 
 /**
  * Antwortform von GET /api/vehicles und GET /api/vehicles/:id.
@@ -26,7 +30,8 @@ export type Vehicle = {
     longitude: number | null;
     speed: number | null;
     recorded_at: string | null;
-    activeAlerts: number;
+    active_alerts: number;
+    created_at: string;
 };
 
 /** Die vom Client beschreibbaren Felder eines Fahrzeugs. */
@@ -50,12 +55,75 @@ export function isVehicleStatus(
     );
 }
 
+const licensePlateSchema = z
+    .string({ error: "Kennzeichen ist erforderlich." })
+    .trim()
+    .min(1, "Kennzeichen ist erforderlich.")
+    .max(
+        LICENSE_PLATE_MAX,
+        `Kennzeichen darf höchstens ${LICENSE_PLATE_MAX} Zeichen haben.`,
+    );
+
+const driverNameSchema = z
+    .string({ error: "Fahrer ist erforderlich." })
+    .trim()
+    .min(1, "Fahrer ist erforderlich.")
+    .max(
+        DRIVER_NAME_MAX,
+        `Fahrer darf höchstens ${DRIVER_NAME_MAX} Zeichen haben.`,
+    );
+
+const fuelLevelSchema = z
+    .number({ error: "Tankstand muss eine Zahl sein." })
+    .refine(
+        (value) => !Number.isNaN(value),
+        "Tankstand muss eine Zahl sein.",
+    )
+    .min(
+        FUEL_LEVEL_MIN,
+        `Tankstand muss zwischen ${FUEL_LEVEL_MIN} und ${FUEL_LEVEL_MAX} liegen.`,
+    )
+    .max(
+        FUEL_LEVEL_MAX,
+        `Tankstand muss zwischen ${FUEL_LEVEL_MIN} und ${FUEL_LEVEL_MAX} liegen.`,
+    );
+
+const statusSchema = z.enum(VEHICLE_STATUSES, {
+    error: `Status muss einer von ${VEHICLE_STATUSES.join(", ")} sein.`,
+});
+
+export const vehicleInputSchema = z.object({
+    license_plate: licensePlateSchema,
+    driver_name: driverNameSchema,
+    fuel_level: fuelLevelSchema,
+    status: statusSchema,
+});
+
 interface ValidateOptions {
     /**
-     * Für PATCH: nur die tatsächlich übergebenen Felder prüfen.
+     * Für PATCH und POST: nur die tatsächlich übergebenen Felder prüfen.
      * Fehlende Felder gelten dann nicht als Fehler.
      */
     partial?: boolean;
+}
+
+function fieldErrorsFromZod(error: z.ZodError): VehicleFieldErrors {
+    const fields: VehicleFieldErrors = {};
+
+    for (const issue of error.issues) {
+        const key = issue.path[0];
+
+        if (
+            key === "license_plate" ||
+            key === "driver_name" ||
+            key === "fuel_level" ||
+            key === "status"
+        ) {
+            fields[key] ??= issue.message;
+        }
+    }
+
+    return fields;
 }
 
 /**
@@ -68,59 +136,14 @@ export function validateVehicleInput(
     input: Partial<VehicleInput>,
     options: ValidateOptions = {},
 ): VehicleFieldErrors {
-    const { partial = false } = options;
-    const errors: VehicleFieldErrors = {};
+    const schema = options.partial
+        ? vehicleInputSchema.partial()
+        : vehicleInputSchema;
+    const result = schema.safeParse(input);
 
-    const isProvided = (key: keyof VehicleInput) =>
-        input[key] !== undefined;
-
-    const shouldCheck = (key: keyof VehicleInput) =>
-        partial ? isProvided(key) : true;
-
-    if (shouldCheck("license_plate")) {
-        const { license_plate } = input;
-
-        if (
-            typeof license_plate !== "string" ||
-            license_plate.trim() === ""
-        ) {
-            errors.license_plate =
-                "Kennzeichen ist erforderlich.";
-        }
+    if (result.success) {
+        return {};
     }
 
-    if (shouldCheck("driver_name")) {
-        const { driver_name } = input;
-
-        if (
-            typeof driver_name !== "string" ||
-            driver_name.trim() === ""
-        ) {
-            errors.driver_name = "Fahrer ist erforderlich.";
-        }
-    }
-
-    if (shouldCheck("fuel_level")) {
-        const { fuel_level } = input;
-
-        if (
-            typeof fuel_level !== "number" ||
-            Number.isNaN(fuel_level)
-        ) {
-            errors.fuel_level = "Tankstand muss eine Zahl sein.";
-        } else if (
-            fuel_level < FUEL_LEVEL_MIN ||
-            fuel_level > FUEL_LEVEL_MAX
-        ) {
-            errors.fuel_level = `Tankstand muss zwischen ${FUEL_LEVEL_MIN} und ${FUEL_LEVEL_MAX} liegen.`;
-        }
-    }
-
-    if (shouldCheck("status")) {
-        if (!isVehicleStatus(input.status)) {
-            errors.status = `Status muss einer von ${VEHICLE_STATUSES.join(", ")} sein.`;
-        }
-    }
-
-    return errors;
+    return fieldErrorsFromZod(result.error);
 }

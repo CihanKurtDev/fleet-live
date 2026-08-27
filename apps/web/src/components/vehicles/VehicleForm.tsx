@@ -1,5 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import {
+    DRIVER_NAME_MAX,
+    LICENSE_PLATE_MAX,
     VEHICLE_STATUSES,
     validateVehicleInput,
     type VehicleFieldErrors,
@@ -148,6 +150,7 @@ export const VehicleForm = ({
                 <input
                     id={`${fieldId}-plate`}
                     type="text"
+                    maxLength={LICENSE_PLATE_MAX}
                     value={values.license_plate}
                     onChange={(event) =>
                         setField(
@@ -173,6 +176,7 @@ export const VehicleForm = ({
                 <input
                     id={`${fieldId}-driver`}
                     type="text"
+                    maxLength={DRIVER_NAME_MAX}
                     value={values.driver_name}
                     onChange={(event) =>
                         setField(

@@ -1,16 +1,16 @@
-import type { VehicleFieldErrors } from "@fleet-live/shared";
+export type FieldErrors = Record<string, string>;
 
 export class AppError extends Error {
     readonly status: number;
     readonly code: string;
-    readonly fields?: VehicleFieldErrors;
+    readonly fields?: FieldErrors;
     readonly isOperational = true;
 
     constructor(
         status: number,
         code: string,
         message: string,
-        fields?: VehicleFieldErrors,
+        fields?: FieldErrors,
     ) {
         super(message);
         this.name = "AppError";
@@ -21,7 +21,7 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-    constructor(message: string, fields?: VehicleFieldErrors) {
+    constructor(message: string, fields?: FieldErrors) {
         super(400, "VALIDATION_ERROR", message, fields);
     }
 }
@@ -33,13 +33,13 @@ export class BadRequestError extends AppError {
 }
 
 export class NotFoundError extends AppError {
-    constructor(message = "Vehicle not found.") {
+    constructor(message = "Fahrzeug nicht gefunden.") {
         super(404, "NOT_FOUND", message);
     }
 }
 
 export class ConflictError extends AppError {
-    constructor(message = "license_plate already exists.") {
+    constructor(message = "Kennzeichen ist bereits vergeben.") {
         super(409, "CONFLICT", message, {
             license_plate: "Kennzeichen ist bereits vergeben.",
         });

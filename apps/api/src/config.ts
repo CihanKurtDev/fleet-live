@@ -25,10 +25,19 @@ const environmentSchema = z.object({
     TELEMETRY_TICK_MS: z.coerce.number().int().min(0).default(400),
 
     /**
-     * Fahrzeuge pro Tick. Alle DRIVING-Zeilen auf einmal würde
-     * bei 50k Datensätzen SQLite und den SSE-Stream blockieren.
+     * Obergrenze der Fahrzeuge, die ein Tick schreibt.
+     * Greift auf die Union der Connection-Focus-Ids, nicht als
+     * Fallback wenn niemand zuguckt.
      */
     TELEMETRY_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(32),
+
+    /** Rolling Window: so viele Telemetriepunkte bleiben pro Fahrzeug. */
+    TELEMETRY_KEEP_PER_VEHICLE: z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .default(100),
 
     LOG_LEVEL: z
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
@@ -62,6 +71,7 @@ export const config = {
             : env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
     telemetryTickMs: env.TELEMETRY_TICK_MS,
     telemetryBatchSize: env.TELEMETRY_BATCH_SIZE,
+    telemetryKeepPerVehicle: env.TELEMETRY_KEEP_PER_VEHICLE,
     logLevel: env.LOG_LEVEL,
 } as const;
 

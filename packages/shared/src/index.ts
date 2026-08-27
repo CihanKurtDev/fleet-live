@@ -6,15 +6,17 @@ export type {
 } from "./models/vehicle";
 
 export {
+    DRIVER_NAME_MAX,
     FUEL_LEVEL_MAX,
     FUEL_LEVEL_MIN,
+    LICENSE_PLATE_MAX,
     VEHICLE_STATUSES,
     isVehicleStatus,
     validateVehicleInput,
+    vehicleInputSchema,
 } from "./models/vehicle";
 
 export type {
-    TelemetryPatch,
     VehicleFilterId,
     VehicleListCounts,
     VehicleListMeta,
@@ -34,3 +36,25 @@ export {
     serializeVehicleListQuery,
     vehicleListQuerySchema,
 } from "./models/vehicleQuery";
+
+export type {
+    TelemetryHistoryLimit,
+    TelemetryHistoryQuery,
+    TelemetryHistoryResponse,
+    TelemetryPatch,
+    TelemetryPoint,
+} from "./models/telemetry";
+
+export {
+    TELEMETRY_HISTORY_LIMITS,
+    parseTelemetryHistoryQuery,
+    telemetryHistoryQuerySchema,
+} from "./models/telemetry";
+
+export type { StreamFocusInput } from "./models/stream";
+
+export {
+    STREAM_FOCUS_MAX_IDS,
+    parseStreamFocus,
+    streamFocusSchema,
+} from "./models/stream";

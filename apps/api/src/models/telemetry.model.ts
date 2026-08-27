@@ -1,4 +1,4 @@
-import type { TelemetryPatch } from "@fleet-live/shared";
+import type { TelemetryPatch, TelemetryPoint } from "@fleet-live/shared";
 import { config } from "../config";
 import { db } from "../db/database";
 import { stmt } from "../db/statements";
@@ -9,19 +9,6 @@ type DrivingVehicle = {
     longitude: number;
     speed: number | null;
 };
-
-const SELECT_DRIVING_AFTER = `
-    SELECT
-        v.id,
-        COALESCE(t.latitude, 50.9375) AS latitude,
-        COALESCE(t.longitude, 6.9603) AS longitude,
-        t.speed
-    FROM vehicles v
-    LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
-    WHERE v.status = 'DRIVING' AND v.id > ?
-    ORDER BY v.id ASC
-    LIMIT ?
-`;
 
 const SELECT_DRIVING_BY_IDS = `
     SELECT
@@ -40,7 +27,27 @@ const INSERT_TELEMETRY = `
     VALUES (?, ?, ?, ?, ?)
 `;
 
-let cursorId = 0;
+const PRUNE_TELEMETRY = `
+    DELETE FROM telemetry
+    WHERE vehicle_id = ? AND id IN (
+        SELECT id FROM (
+            SELECT id FROM telemetry
+            WHERE vehicle_id = ?
+            ORDER BY recorded_at DESC, id DESC
+            LIMIT -1 OFFSET ?
+        )
+    )
+`;
+
+const SELECT_HISTORY = `
+    SELECT id, vehicle_id, latitude, longitude, speed, recorded_at
+    FROM telemetry
+    WHERE vehicle_id = ?
+    ORDER BY recorded_at DESC, id DESC
+    LIMIT ?
+`;
+
+let batchCursor = 0;
 
 function nowSqlite(): string {
     return new Date().toISOString().slice(0, 19).replace("T", " ");
@@ -56,14 +63,33 @@ function nextSpeed(current: number | null): number {
     return Math.round(Math.min(128, Math.max(18, cruising + delta)));
 }
 
+function takeBatch<T>(items: T[], limit: number): T[] {
+    if (items.length <= limit) {
+        batchCursor = 0;
+        return items;
+    }
+
+    const start = batchCursor % items.length;
+    const batch: T[] = [];
+
+    for (let index = 0; index < limit; index += 1) {
+        batch.push(items[(start + index) % items.length] as T);
+    }
+
+    batchCursor = start + limit;
+    return batch;
+}
+
 function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
     if (vehicles.length === 0) {
         return [];
     }
 
     const insert = stmt(INSERT_TELEMETRY);
+    const prune = stmt(PRUNE_TELEMETRY);
     const recordedAt = nowSqlite();
     const patches: TelemetryPatch[] = [];
+    const keep = config.telemetryKeepPerVehicle;
 
     db.exec("BEGIN");
     try {
@@ -81,6 +107,8 @@ function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
                 speed,
                 recordedAt,
             );
+
+            prune.run(vehicle.id, vehicle.id, keep);
 
             patches.push({
                 id: vehicle.id,
@@ -105,28 +133,31 @@ export class TelemetryModel {
         focusIds: number[] = [],
         limit = config.telemetryBatchSize,
     ): TelemetryPatch[] {
-        if (focusIds.length > 0) {
-            const focused = stmt(SELECT_DRIVING_BY_IDS).all(
-                JSON.stringify(focusIds),
-            ) as DrivingVehicle[];
-            return writePatches(focused);
+        if (focusIds.length === 0) {
+            return [];
         }
 
-        let driving = stmt(SELECT_DRIVING_AFTER).all(
-            cursorId,
-            limit,
+        const focused = stmt(SELECT_DRIVING_BY_IDS).all(
+            JSON.stringify(focusIds),
         ) as DrivingVehicle[];
 
-        if (driving.length === 0 && cursorId > 0) {
-            cursorId = 0;
-            driving = stmt(SELECT_DRIVING_AFTER).all(
-                0,
-                limit,
-            ) as DrivingVehicle[];
-        }
+        return writePatches(takeBatch(focused, limit));
+    }
 
-        const patches = writePatches(driving);
-        cursorId = driving[driving.length - 1]?.id ?? 0;
-        return patches;
+    static listForVehicle(vehicleId: number, limit: number): TelemetryPoint[] {
+        const rows = stmt(SELECT_HISTORY).all(
+            vehicleId,
+            limit,
+        ) as TelemetryPoint[];
+
+        return rows.reverse();
+    }
+
+    static countForVehicle(vehicleId: number): number {
+        const row = stmt(
+            "SELECT COUNT(*) AS total FROM telemetry WHERE vehicle_id = ?",
+        ).get(vehicleId) as { total: number };
+
+        return row.total;
     }
 }

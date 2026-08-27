@@ -1,11 +1,13 @@
 import type { Request, Response } from "express";
 import {
+    parseTelemetryHistoryQuery,
     parseVehicleListQuery,
     validateVehicleInput,
     type VehicleFieldErrors,
     type VehicleInput,
 } from "@fleet-live/shared";
 import { VehicleModel } from "../models/vehicle.model";
+import { TelemetryModel } from "../models/telemetry.model";
 import {
     BadRequestError,
     NotFoundError,
@@ -15,12 +17,12 @@ import { broadcast } from "../sse/hub";
 
 function parseId(value: string | string[] | undefined): number {
     if (typeof value !== "string") {
-        throw new BadRequestError("Invalid vehicle id.");
+        throw new BadRequestError("Ungültige Fahrzeug-ID.");
     }
 
     const id = Number(value);
     if (!Number.isInteger(id) || id < 1) {
-        throw new BadRequestError("Invalid vehicle id.");
+        throw new BadRequestError("Ungültige Fahrzeug-ID.");
     }
 
     return id;
@@ -28,7 +30,7 @@ function parseId(value: string | string[] | undefined): number {
 
 function throwFieldErrors(fields: VehicleFieldErrors): never {
     const [firstMessage] = Object.values(fields);
-    throw new ValidationError(firstMessage ?? "Invalid input.", fields);
+    throw new ValidationError(firstMessage ?? "Ungültige Eingabe.", fields);
 }
 
 function readInput(body: unknown): Partial<VehicleInput> {
@@ -92,6 +94,20 @@ export function getVehicleById(req: Request, res: Response) {
     res.json(vehicle);
 }
 
+export function getVehicleTelemetry(req: Request, res: Response) {
+    const id = parseId(req.params.id);
+
+    if (!VehicleModel.getById(id)) {
+        throw new NotFoundError();
+    }
+
+    const query = parseTelemetryHistoryQuery(req.query);
+    const data = TelemetryModel.listForVehicle(id, query.limit);
+
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.json({ data });
+}
+
 export function createVehicle(req: Request, res: Response) {
     const input = readInput(req.body);
     const errors = validateVehicleInput(input, { partial: true });
@@ -118,7 +134,7 @@ export function createVehicle(req: Request, res: Response) {
     });
 
     notifyVehiclesChanged();
-    res.status(201).json(vehicle);
+    res.status(201).location(`/api/vehicles/${vehicle.id}`).json(vehicle);
 }
 
 export function replaceVehicle(req: Request, res: Response) {
@@ -148,7 +164,7 @@ export function updateVehicle(req: Request, res: Response) {
     const input = readInput(req.body);
 
     if (Object.keys(input).length === 0) {
-        throw new BadRequestError("At least one field is required.");
+        throw new BadRequestError("Mindestens ein Feld ist erforderlich.");
     }
 
     const errors = validateVehicleInput(input, { partial: true });
