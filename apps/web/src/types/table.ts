@@ -76,4 +76,7 @@ export interface TableProps<RowType> {
 
     isLoading?: boolean;
     skeletonRowCount?: number;
+
+    /** Ersetzt „Keine Ergebnisse“, wenn die Tabelle leer und nicht am Laden ist. */
+    emptyContent?: ReactNode;
 }

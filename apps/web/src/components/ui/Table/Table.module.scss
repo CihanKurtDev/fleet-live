@@ -72,6 +72,10 @@
     padding: 32px 16px;
     text-align: center;
     color: var(--text);
+
+    p {
+        margin: 0;
+    }
 }
 
 .skeletonRow {

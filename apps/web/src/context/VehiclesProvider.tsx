@@ -110,13 +110,6 @@ export const VehiclesProvider = ({
             id: number,
             input: VehicleInput,
         ): Promise<VehicleFieldErrors | void> => {
-            const previous = vehicleOverrides[id];
-
-            setVehicleOverrides((current) => ({
-                ...current,
-                [id]: { ...current[id], ...input },
-            }));
-
             try {
                 const updated = await updateVehicleRequest(id, input);
                 rememberVehicle(updated);
@@ -127,22 +120,10 @@ export const VehiclesProvider = ({
                     return next;
                 });
             } catch (error) {
-                setVehicleOverrides((current) => {
-                    const next = { ...current };
-
-                    if (previous) {
-                        next[id] = previous;
-                    } else {
-                        delete next[id];
-                    }
-
-                    return next;
-                });
-
                 return fieldErrorsFromApi(error);
             }
         },
-        [refetchLists, vehicleOverrides],
+        [refetchLists],
     );
 
     const deleteVehicles = useCallback(

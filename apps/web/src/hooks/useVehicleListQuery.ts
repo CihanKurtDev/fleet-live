@@ -1,9 +1,10 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router";
 import type { Vehicle } from "@fleet-live/shared";
 import {
     isVehicleFilterId,
     isVehicleSortKey,
+    serializeVehicleListQuery,
     vehicleListQuerySchema,
     type VehicleListQuery,
 } from "@fleet-live/shared";
@@ -11,45 +12,49 @@ import type { SortConfig, TableStateProps } from "../types/table";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 function parseParams(searchParams: URLSearchParams): VehicleListQuery {
-    const parsed = vehicleListQuerySchema.safeParse({
+    const raw = {
         search: searchParams.get("search") ?? "",
         filter: searchParams.get("filter") ?? undefined,
         sort: searchParams.get("sort") ?? undefined,
         dir: searchParams.get("dir") ?? undefined,
         page: searchParams.get("page") ?? undefined,
         limit: searchParams.get("limit") ?? undefined,
-    });
+    };
 
-    return parsed.success
-        ? parsed.data
-        : vehicleListQuerySchema.parse({});
-}
-
-function toSearchParams(query: VehicleListQuery): URLSearchParams {
-    const params = new URLSearchParams();
-
-    if (query.search) {
-        params.set("search", query.search);
+    const parsed = vehicleListQuerySchema.safeParse(raw);
+    if (parsed.success) {
+        return parsed.data;
     }
 
-    if (query.filter) {
-        params.set("filter", query.filter);
+    const kept: Record<string, unknown> = {};
+    const candidates = [
+        vehicleListQuerySchema.pick({ search: true }).safeParse({
+            search: raw.search,
+        }),
+        vehicleListQuerySchema.pick({ filter: true }).safeParse({
+            filter: raw.filter,
+        }),
+        vehicleListQuerySchema.pick({ sort: true }).safeParse({
+            sort: raw.sort,
+        }),
+        vehicleListQuerySchema.pick({ dir: true }).safeParse({
+            dir: raw.dir,
+        }),
+        vehicleListQuerySchema.pick({ page: true }).safeParse({
+            page: raw.page,
+        }),
+        vehicleListQuerySchema.pick({ limit: true }).safeParse({
+            limit: raw.limit,
+        }),
+    ];
+
+    for (const result of candidates) {
+        if (result.success) {
+            Object.assign(kept, result.data);
+        }
     }
 
-    if (query.sort) {
-        params.set("sort", query.sort);
-        params.set("dir", query.dir);
-    }
-
-    if (query.page > 1) {
-        params.set("page", String(query.page));
-    }
-
-    if (query.limit !== 10) {
-        params.set("limit", String(query.limit));
-    }
-
-    return params;
+    return vehicleListQuerySchema.parse(kept);
 }
 
 type QueryPatch = {
@@ -68,6 +73,14 @@ export const useVehicleListQuery = () => {
         [searchParams],
     );
     const debouncedSearch = useDebouncedValue(query.search);
+
+    useEffect(() => {
+        const canonical = serializeVehicleListQuery(query);
+
+        if (searchParams.toString() !== canonical.toString()) {
+            setSearchParams(canonical, { replace: true });
+        }
+    }, [query, searchParams, setSearchParams]);
 
     const patch = useCallback(
         (
@@ -94,7 +107,7 @@ export const useVehicleListQuery = () => {
                         ...(options.resetPage ? { page: 1 } : {}),
                     };
 
-                    return toSearchParams(next);
+                    return serializeVehicleListQuery(next);
                 },
                 { replace: options.replace ?? false },
             );

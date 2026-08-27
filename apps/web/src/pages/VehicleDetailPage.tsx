@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { VehicleInput } from "@fleet-live/shared";
 
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import { Button } from "../components/ui/Button/Button";
+import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { useVehicles } from "../context/vehiclesContext";
 import { useVehicle } from "../hooks/useVehicle";
 import styles from "./VehicleDetailPage.module.scss";
@@ -18,6 +20,7 @@ export const VehicleDetailPage = () => {
     const vehicleId = Number(id);
     const parsedId = Number.isInteger(vehicleId) ? vehicleId : null;
     const { vehicle, isLoading, error, notFound } = useVehicle(parsedId);
+    const [confirmDelete, setConfirmDelete] = useState(false);
 
     if (isLoading) {
         return (
@@ -60,6 +63,8 @@ export const VehicleDetailPage = () => {
         navigate("/vehicles");
     };
 
+    const requestDelete = () => setConfirmDelete(true);
+
     return (
         <section className={styles.page}>
             <Link className={styles.back} to="/vehicles">
@@ -74,7 +79,7 @@ export const VehicleDetailPage = () => {
                 <Button
                     variant="danger"
                     size="sm"
-                    onClick={handleDelete}
+                    onClick={requestDelete}
                 >
                     Fahrzeug löschen
                 </Button>
@@ -141,6 +146,19 @@ export const VehicleDetailPage = () => {
                     onSubmit={handleSubmit}
                 />
             </section>
+
+            <ConfirmDialog
+                open={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                title="Fahrzeug löschen?"
+                confirmLabel="Löschen"
+                onConfirm={handleDelete}
+            >
+                <p>
+                    „{vehicle.license_plate}“ wirklich löschen? Das
+                    kann nicht rückgängig gemacht werden.
+                </p>
+            </ConfirmDialog>
         </section>
     );
 };

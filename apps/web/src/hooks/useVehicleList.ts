@@ -85,20 +85,13 @@ export const useVehicleList = (query: VehicleListQuery) => {
     }, [query.search, query.filter, query.sort, query.dir, query.page, query.limit, listEpoch]);
 
     useEffect(() => {
-        if (!response) {
-            clearTelemetryFocus("list");
-            return;
-        }
+        let cancelled = false;
 
-        const neighborPages = [query.page - 1, query.page + 1].filter(
-            (page) => page >= 1 && page <= response.meta.pageCount,
-        );
-
-        const publishFocus = () => {
-            const ids = [...response.data.map((vehicle) => vehicle.id)];
+        const publishFocus = (list: VehicleListResponse) => {
+            const ids = [...list.data.map((vehicle) => vehicle.id)];
 
             for (const page of [query.page + 1, query.page - 1]) {
-                if (page < 1 || page > response.meta.pageCount) {
+                if (page < 1 || page > list.meta.pageCount) {
                     continue;
                 }
 
@@ -113,7 +106,21 @@ export const useVehicleList = (query: VehicleListQuery) => {
             setTelemetryFocus("list", ids);
         };
 
-        publishFocus();
+        const current = getCachedVehicleList(query)?.data;
+
+        if (!current) {
+            clearTelemetryFocus("list");
+            return () => {
+                cancelled = true;
+                clearTelemetryFocus("list");
+            };
+        }
+
+        publishFocus(current);
+
+        const neighborPages = [query.page - 1, query.page + 1].filter(
+            (page) => page >= 1 && page <= current.meta.pageCount,
+        );
 
         const idle =
             typeof requestIdleCallback === "function"
@@ -125,10 +132,20 @@ export const useVehicleList = (query: VehicleListQuery) => {
                 neighborPages.map((page) =>
                     fetchVehicleList({ ...query, page }),
                 ),
-            ).then(publishFocus);
+            ).then(() => {
+                if (cancelled) {
+                    return;
+                }
+
+                const latest = getCachedVehicleList(query)?.data;
+                if (latest) {
+                    publishFocus(latest);
+                }
+            });
         });
 
         return () => {
+            cancelled = true;
             clearTelemetryFocus("list");
             if (typeof cancelIdleCallback === "function" && typeof id === "number") {
                 cancelIdleCallback(id);

@@ -15,6 +15,7 @@ export const Table = <RowType,>({
     onSort,
     isLoading = false,
     skeletonRowCount = 10,
+    emptyContent = "Keine Ergebnisse",
 }: TableProps<RowType>) => {
     const columnCount = isEditing
         ? columns.length + 1
@@ -99,7 +100,7 @@ export const Table = <RowType,>({
                                         colSpan={columnCount}
                                         className={styles.empty}
                                     >
-                                        Keine Ergebnisse
+                                        {emptyContent}
                                     </td>
                                 </tr>
                             )}

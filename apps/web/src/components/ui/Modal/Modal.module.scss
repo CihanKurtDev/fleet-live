@@ -64,3 +64,26 @@
 .body {
     padding: 20px;
 }
+
+.confirm {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.confirmBody {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--text);
+
+    p {
+        margin: 0;
+    }
+}
+
+.confirmActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
