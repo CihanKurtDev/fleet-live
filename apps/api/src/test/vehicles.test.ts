@@ -8,6 +8,7 @@ import { app } from "../app";
 import { db } from "../db/database";
 import { TelemetryModel } from "../models/telemetry.model";
 import { VehicleModel } from "../models/vehicle.model";
+import { broadcast, closeAllSseClients } from "../sse/hub";
 
 function seedFleet(count = 3) {
     const created = [];
@@ -59,8 +60,84 @@ function seedFleet(count = 3) {
     return created;
 }
 
+function parseSseEvents(
+    text: string,
+): Array<{ event: string; data: unknown }> {
+    const events: Array<{ event: string; data: unknown }> = [];
+
+    for (const block of text.split("\n\n")) {
+        let eventName = "message";
+        let dataLine: string | undefined;
+
+        for (const line of block.split("\n")) {
+            if (line.startsWith("event: ")) {
+                eventName = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+                dataLine = line.slice(6);
+            }
+        }
+
+        if (dataLine) {
+            events.push({ event: eventName, data: JSON.parse(dataLine) });
+        }
+    }
+
+    return events;
+}
+
+async function openSseStream(port: number) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/stream`);
+    assert.equal(response.status, 200);
+
+    const reader = response.body?.getReader();
+    assert.ok(reader);
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    const waitUntil = async (
+        predicate: (text: string) => boolean,
+        timeoutMs = 2000,
+    ) => {
+        const deadline = Date.now() + timeoutMs;
+
+        while (!predicate(buffer)) {
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) {
+                throw new Error(`timeout waiting for SSE, got: ${buffer}`);
+            }
+
+            const result = await Promise.race([
+                reader.read(),
+                new Promise<null>((resolve) =>
+                    setTimeout(() => resolve(null), remaining),
+                ),
+            ]);
+
+            if (result === null) {
+                throw new Error(`timeout waiting for SSE, got: ${buffer}`);
+            }
+
+            if (result.done) {
+                throw new Error(`stream closed, got: ${buffer}`);
+            }
+
+            buffer += decoder.decode(result.value, { stream: true });
+        }
+
+        return buffer;
+    };
+
+    return {
+        reader,
+        waitUntil,
+        events: () => parseSseEvents(buffer),
+    };
+}
+
 afterEach(() => {
     VehicleModel.resetForTests();
+    closeAllSseClients();
 });
 
 describe("GET /api/vehicles", () => {
@@ -392,6 +469,111 @@ describe("GET /api/stream", () => {
 
             await reader.cancel();
         } finally {
+            await new Promise<void>((resolve, reject) => {
+                server.close((error) => (error ? reject(error) : resolve()));
+            });
+        }
+    });
+
+    it("delivers telemetry only to connections that focused the vehicle", async () => {
+        const [first, second] = seedFleet(2);
+        assert.ok(first);
+        assert.ok(second);
+
+        const server = app.listen(0);
+
+        await new Promise<void>((resolve, reject) => {
+            server.once("listening", () => resolve());
+            server.once("error", reject);
+        });
+
+        try {
+            const { port } = server.address() as AddressInfo;
+            const streamA = await openSseStream(port);
+            const streamB = await openSseStream(port);
+
+            await streamA.waitUntil((text) => /event: connected/.test(text));
+            await streamB.waitUntil((text) => /event: connected/.test(text));
+
+            const connectionA = streamA.events().find(
+                (event) => event.event === "connected",
+            )?.data as { connection_id: string };
+            const connectionB = streamB.events().find(
+                (event) => event.event === "connected",
+            )?.data as { connection_id: string };
+
+            assert.equal(typeof connectionA.connection_id, "string");
+            assert.equal(typeof connectionB.connection_id, "string");
+
+            const focusedA = await request(app)
+                .post("/api/stream/focus")
+                .send({
+                    connection_id: connectionA.connection_id,
+                    ids: [first.id],
+                });
+            const focusedB = await request(app)
+                .post("/api/stream/focus")
+                .send({
+                    connection_id: connectionB.connection_id,
+                    ids: [second.id],
+                });
+
+            assert.equal(focusedA.status, 200);
+            assert.equal(focusedB.status, 200);
+
+            broadcast("telemetry", [
+                {
+                    id: first.id,
+                    speed: 11,
+                    latitude: 50.1,
+                    longitude: 6.1,
+                    recorded_at: "2026-01-01T00:00:00.000Z",
+                },
+                {
+                    id: second.id,
+                    speed: 22,
+                    latitude: 51.2,
+                    longitude: 7.2,
+                    recorded_at: "2026-01-01T00:00:00.000Z",
+                },
+            ]);
+            broadcast("vehicles-changed", { at: 1 });
+
+            await streamA.waitUntil((text) => /event: vehicles-changed/.test(text));
+            await streamB.waitUntil((text) => /event: vehicles-changed/.test(text));
+
+            const telemetryA = streamA
+                .events()
+                .filter((event) => event.event === "telemetry")
+                .flatMap((event) => event.data as Array<{ id: number }>);
+            const telemetryB = streamB
+                .events()
+                .filter((event) => event.event === "telemetry")
+                .flatMap((event) => event.data as Array<{ id: number }>);
+
+            assert.deepEqual(
+                telemetryA.map((patch) => patch.id),
+                [first.id],
+            );
+            assert.deepEqual(
+                telemetryB.map((patch) => patch.id),
+                [second.id],
+            );
+            assert.ok(
+                streamA
+                    .events()
+                    .some((event) => event.event === "vehicles-changed"),
+            );
+            assert.ok(
+                streamB
+                    .events()
+                    .some((event) => event.event === "vehicles-changed"),
+            );
+
+            await streamA.reader.cancel();
+            await streamB.reader.cancel();
+        } finally {
+            closeAllSseClients();
             await new Promise<void>((resolve, reject) => {
                 server.close((error) => (error ? reject(error) : resolve()));
             });

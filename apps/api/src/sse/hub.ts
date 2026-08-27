@@ -42,6 +42,63 @@ function sanitizeIds(ids: number[]): number[] {
     return unique;
 }
 
+function isTelemetryPatch(value: unknown): value is { id: number } {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "id" in value &&
+        typeof (value as { id: unknown }).id === "number"
+    );
+}
+
+function payloadForClient(
+    event: SseEvent,
+    client: Client,
+): SseEvent | null {
+    if (event.event !== "telemetry") {
+        return event;
+    }
+
+    if (!Array.isArray(event.data)) {
+        return null;
+    }
+
+    const allowed = new Set(client.focusIds);
+    const patches = event.data.filter(
+        (item) => isTelemetryPatch(item) && allowed.has(item.id),
+    );
+
+    if (patches.length === 0) {
+        return null;
+    }
+
+    return { ...event, data: patches };
+}
+
+function writeToClient(client: Client, event: SseEvent) {
+    const payload = payloadForClient(event, client);
+
+    if (!payload) {
+        return;
+    }
+
+    const ok = client.res.write(formatSse(payload));
+
+    if (!ok) {
+        client.res.once("drain", () => undefined);
+    }
+}
+
+function findClient(res: Response): Client | undefined {
+    for (const client of clients.values()) {
+        if (client.res === res) {
+            return client;
+        }
+    }
+
+    return undefined;
+}
+
 export function broadcast(event: string, data: unknown) {
     const payload: SseEvent = { id: nextId++, event, data };
     buffer.push(payload);
@@ -50,14 +107,8 @@ export function broadcast(event: string, data: unknown) {
         buffer.shift();
     }
 
-    const chunk = formatSse(payload);
-
     for (const client of clients.values()) {
-        const ok = client.res.write(chunk);
-
-        if (!ok) {
-            client.res.once("drain", () => undefined);
-        }
+        writeToClient(client, payload);
     }
 }
 
@@ -72,9 +123,15 @@ export function replay(res: Response, lastEventId: number) {
         return;
     }
 
+    const client = findClient(res);
+
+    if (!client) {
+        return;
+    }
+
     for (const event of buffer) {
         if (event.id > lastEventId) {
-            res.write(formatSse(event));
+            writeToClient(client, event);
         }
     }
 }
