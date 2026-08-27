@@ -36,8 +36,8 @@ Datenfluss:
 
 ```
 GET /api/vehicles  →  { data, meta }
-GET /api/stream    →  TelemetryPatch (Overrides)
-POST /api/stream/focus
+GET /api/stream    →  connected (connection_id), TelemetryPatch
+POST /api/stream/focus  →  { connection_id, ids }
 
 VehicleTable
     ↓
@@ -89,15 +89,15 @@ utils/getPageWindow.ts         – Seitenliste für die Pagination
 ## Features
 
 - **Suche** über Kennzeichen und Fahrer, um 250 ms verzögert, als Query-Parameter an die API.
-- **Filter** als Chips mit Trefferanzahl aus der Facet-Query. Ein erneuter Klick auf den aktiven Filter hebt ihn auf.
-- **Sortierung** pro Spalte, zyklisch `asc → desc → keine`. Die API sortiert über eine Allowlist (`VEHICLE_SORT_KEYS`).
+- **Filter** als Chips mit Trefferanzahl aus der Facet-Query (`alerts`, `low_fuel`, `driving`, `offline`). Ein erneuter Klick auf den aktiven Filter hebt ihn auf.
+- **Sortierung** pro Spalte, zyklisch `asc → desc → keine`. Die API sortiert über eine Allowlist (`VEHICLE_SORT_KEYS`, inkl. `active_alerts`).
 - **Pagination** mit 10/25/50/100 Zeilen pro Seite und einem gleichbleibend breiten Seitenfenster. State in der URL (`?page=`, `?limit=`).
 - **Custom Rendering** je Spalte über `render(value, context)`, z. B. `fuel_level` → `"82%"`.
 - **Zeilenauswahl** über den Bearbeitungsmodus (`isEditing`): ausgewählte Zeilen können gesammelt gelöscht werden. Im Bearbeitungsmodus wählt ein Klick auf die Zeile aus, statt zu navigieren.
 - **Klickbare Zeilen** über `onRowClick`, in der Fahrzeugliste für die Navigation zur Detailseite.
 - **Leerer Zustand**: Zeigt "Keine Ergebnisse", wenn `rows.length === 0` und nicht geladen wird.
 - **Skeleton**: Platzhalterzeilen plus Retry bei 502/503/504, solange die API (z. B. nach einem Neustart) noch nicht erreichbar ist.
-- **Live-Updates**: SSE-Patches für die aktuelle Seite und die Nachbarseiten (Fokus-IDs).
+- **Live-Updates**: SSE-Patches für die aktuelle Seite und die Nachbarseiten. Focus ist pro SSE-Connection (`connection_id` aus dem `connected`-Event).
 
 ## Server-Modus (`hooks/useTable.ts`)
 

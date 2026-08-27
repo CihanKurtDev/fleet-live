@@ -48,7 +48,8 @@ The backend serves paginated vehicle queries over SQLite, and the frontend talks
 * Alert data model
 * Development seed data (small and large)
 * Health endpoint
-* SSE telemetry stream with client focus
+* SSE telemetry stream with per-connection focus
+* Telemetry history API (rolling window per vehicle)
 * Separate frontend and API applications
 * Shared domain package for types, validation and list query contract
 * Field-level validation errors in API responses
@@ -175,9 +176,10 @@ The shared package contains the vehicle domain types and the input validation us
 ## Shared
 
 * `@fleet-live/shared` npm workspace package
-* Vehicle domain types
-* Vehicle input validation
-* Vehicle list query contract (Zod)
+* Vehicle domain types (snake_case)
+* Vehicle input validation (Zod, max lengths)
+* Vehicle list query and telemetry history contract
+* SSE focus contract (`connection_id`)
 
 ## Development
 
@@ -196,21 +198,24 @@ The first development milestone is a reliable REST API for vehicle management.
 
 ## Endpoints
 
-| Method   | Endpoint              | Description                                      |
-| -------- | --------------------- | ------------------------------------------------ |
-| `GET`    | `/api/vehicles`       | Paginated vehicle list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
-| `GET`    | `/api/vehicles/:id`   | Get a vehicle                                    |
-| `POST`   | `/api/vehicles`       | Create a vehicle                                 |
-| `PUT`    | `/api/vehicles/:id`   | Replace a vehicle                                |
-| `PATCH`  | `/api/vehicles/:id`   | Update a vehicle                                 |
-| `DELETE` | `/api/vehicles/:id`   | Delete a vehicle                                 |
-| `GET`    | `/api/stream`         | SSE: telemetry patches and `vehicles-changed`    |
-| `POST`   | `/api/stream/focus`   | Tell the simulator which vehicle ids to tick     |
-| `GET`    | `/api/health`         | Check API health                                 |
+| Method   | Endpoint                        | Description                                      |
+| -------- | ------------------------------- | ------------------------------------------------ |
+| `GET`    | `/api/vehicles`                 | Paginated vehicle list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
+| `GET`    | `/api/vehicles/:id`             | Get a vehicle                                    |
+| `GET`    | `/api/vehicles/:id/telemetry`   | Recent telemetry points (`limit`: 10, 25, 50, 100; default 50) |
+| `POST`   | `/api/vehicles`                 | Create a vehicle (`Location` header on `201`)    |
+| `PUT`    | `/api/vehicles/:id`             | Replace a vehicle                                |
+| `PATCH`  | `/api/vehicles/:id`             | Update a vehicle                                 |
+| `DELETE` | `/api/vehicles/:id`             | Delete a vehicle                                 |
+| `GET`    | `/api/stream`                   | SSE: `connected` (with `connection_id`), telemetry patches, `vehicles-changed` |
+| `POST`   | `/api/stream/focus`             | `{ connection_id, ids }` — focus for that SSE connection |
+| `GET`    | `/api/health`                   | Check API health                                 |
 
-`GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` for the filter chips.
+`GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` for the filter chips (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
 
-Query parameters are defined once in `@fleet-live/shared` (`vehicleListQuerySchema`). Invalid sort keys or limits are rejected with `400`. Default page size is `10`; allowed limits are `10`, `25`, `50` and `100`.
+Query parameters are defined once in `@fleet-live/shared` (`vehicleListQuerySchema`). Invalid sort keys or limits are rejected with `400`. Sort keys and filters are snake_case (`active_alerts`, `low_fuel`). Default page size is `10`; allowed limits are `10`, `25`, `50` and `100`.
+
+`license_plate` is limited to 32 characters, `driver_name` to 80. User-facing `error` and `fields` are German; `code` stays machine-readable (`VALIDATION_ERROR`, `CONFLICT`, …).
 
 The API performs request validation and returns appropriate HTTP status codes for invalid requests, missing resources and conflicts.
 
@@ -219,6 +224,7 @@ Validation errors are returned with the offending fields so that a client can di
 ```json id="4k2m9v"
 {
   "error": "Tankstand muss zwischen 0 und 100 liegen.",
+  "code": "VALIDATION_ERROR",
   "fields": {
     "fuel_level": "Tankstand muss zwischen 0 und 100 liegen."
   }
@@ -242,7 +248,8 @@ Vehicles currently contain information such as:
 Vehicle responses additionally contain:
 
 * Latitude, longitude, speed and timestamp of the last telemetry record
-* The number of currently active alerts
+* `active_alerts` — the number of currently unresolved alerts
+* `created_at`
 
 The telemetry fields are `null` while a vehicle has no telemetry data yet.
 
@@ -306,9 +313,15 @@ Telemetry data includes information such as:
 
 The last telemetry record of a vehicle is included in the vehicle API responses.
 
-A ticker writes new points only for vehicles with status `DRIVING`. The frontend posts the ids of the visible list page (plus neighbours) and the open detail vehicle to `POST /api/stream/focus`. Speed currently random-walks around the last value instead of jumping.
+`GET /api/vehicles/:id/telemetry` returns the recent points as `{ data }` in chronological order, for a future map trail.
 
-A dedicated telemetry history API and map-based movement are still open.
+A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, and the open detail vehicle). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written.
+
+After each insert, older points of that vehicle are deleted so at most `TELEMETRY_KEEP_PER_VEHICLE` rows remain (default 100). This is a rolling window, not a long-term archive.
+
+Speed currently random-walks around the last value instead of jumping.
+
+Map-based movement is still open; the history endpoint is what the trail will read.
 
 The intended flow is:
 
@@ -510,7 +523,8 @@ Useful environment variables for the API (validated on startup):
 | `DATABASE_PATH` | `apps/api/data/fleetlive.db` | Use `:memory:` in tests |
 | `CORS_ORIGIN` | `*` | |
 | `TELEMETRY_TICK_MS` | `400` | `0` disables the simulator |
-| `TELEMETRY_BATCH_SIZE` | `32` | Used when no client focus is set |
+| `TELEMETRY_BATCH_SIZE` | `32` | Cap per tick on the union of connection focus ids |
+| `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Rolling window: max telemetry rows per vehicle |
 | `LOG_LEVEL` | `info` | |
 | `NODE_ENV` | `development` | Rate limiting is production-only |
 
@@ -593,7 +607,7 @@ This project is **not production-ready**.
 The following areas are intentionally incomplete:
 
 * Map integration (detail marker and live movement)
-* Telemetry history / trail (only if a path over time is needed)
+* Map trail UI (history API already exists; rolling window, no long-term archive)
 * Realistic movement / speed limits
 * Authentication
 * Authorization
@@ -628,13 +642,14 @@ These are planned development areas rather than features that are currently impl
 
 ## Phase 3 — Map and live position
 
-Live telemetry (SSE, focused driving vehicles, list/detail patches) is already in place. This phase is the map on top of that last known point — not a separate telemetry milestone.
+Live telemetry (SSE, per-connection focus, list/detail patches) and the telemetry history API are already in place. This phase is the map on top of that last known point — not a separate telemetry milestone.
 
+* [x] Telemetry history API (`GET /api/vehicles/:id/telemetry`, rolling window)
 * [ ] Map on the vehicle detail page
 * [ ] Marker at the last telemetry position
 * [ ] Marker moves with SSE updates
 * [ ] Compact position/speed on or next to the map (full stammdaten stay in the form)
-* [ ] Optional later: fleet map on the list, trail from recent points (history API only if a path is needed)
+* [ ] Optional later: fleet map on the list, trail from recent points (reads the history API)
 
 ## Phase 4 — Companies & Users
 
