@@ -315,7 +315,7 @@ The last telemetry record of a vehicle is included in the vehicle API responses.
 
 `GET /api/vehicles/:id/telemetry` returns the recent points as `{ data }` in chronological order, for a future map trail.
 
-A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, and the open detail vehicle). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written.
+A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, and the open detail vehicle). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written. Telemetry patches are delivered only to connections that included the vehicle in their focus. `vehicles-changed` is still sent to every open stream.
 
 After each insert, older points of that vehicle are deleted so at most `TELEMETRY_KEEP_PER_VEHICLE` rows remain (default 100). This is a rolling window, not a long-term archive.
 
