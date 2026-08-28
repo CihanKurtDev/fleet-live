@@ -1,0 +1,16 @@
+---
+description: API test conventions with node:test and SuperTest
+globs: apps/api/**
+alwaysApply: false
+---
+
+# Testing
+
+- Runner: `node:test` + SuperTest in `apps/api/src/test/`.
+- Command: `npm test` (root → `api` workspace). Uses in-memory SQLite via `src/test/env.ts`.
+- Assert HTTP contracts and behavior (status, `code`, `fields`, list `meta`, SSE events) — not private SQL.
+- Cover error paths (400/404/409) and focus/SSE behavior when touching those areas.
+- Never delete or weaken tests to make them pass. If a test is wrong, fix the assertion in the same change.
+- No frontend unit-test setup exists. Do not add Jest/Vitest unless explicitly asked.
+
+After API changes: `npm test`.

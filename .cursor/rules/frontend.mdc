@@ -1,0 +1,32 @@
+---
+description: React UI conventions for the Vite frontend
+globs: apps/web/**
+alwaysApply: false
+---
+
+# Frontend (`apps/web`)
+
+- React 19 + Vite + React Router (`react-router`, not `react-router-dom`).
+- Styles: colocated CSS Modules (`.module.scss`). Do not add Tailwind or a second styling system.
+- Domain types and form validation come from `@fleet-live/shared`. Do not re-declare vehicle schemas. `src/types/` is table generics (`table.ts`), not domain models.
+- User-facing copy is German.
+
+## Data
+
+- HTTP only through `src/api/` (`client.ts` + resource modules). Components do not `fetch`.
+- List state lives in the URL (`useVehicleListQuery`). Cache, prefetch, and SSE focus stay in hooks (`useVehicleList`, `useVehicleStream`).
+- Live updates: existing EventSource + focus POST. Do not add polling or WebSockets.
+- Handle loading, error, and not-found explicitly (see `VehicleDetailPage`).
+
+## UI split
+
+- `components/ui` stays generic (Table, Button, Modal). No vehicle fields there.
+- Vehicle columns/filters belong in `components/vehicles/` (e.g. `vehicleTableConfig.ts`).
+- Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides.
+- No frontend unit-test runner. Do not add Jest/Vitest unless explicitly asked.
+
+## Map (current phase)
+
+- History API exists (`GET /api/vehicles/:id/telemetry`). Detail-page map UI is not started; no map library is installed.
+- Propose a library and where it mounts (detail page first) before adding a dependency.
+- Do not build a fleet map or trail UI until the detail marker works.

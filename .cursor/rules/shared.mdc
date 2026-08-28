@@ -1,0 +1,15 @@
+---
+description: Shared domain contract used by API and web
+globs: packages/shared/**
+alwaysApply: false
+---
+
+# Shared (`packages/shared`)
+
+This package is the source of truth for types and validation used by both `apps/api` and `apps/web`.
+
+- Keep domain fields **snake_case** (`license_plate`, `fuel_level`, `active_alerts`, `connection_id`).
+- Put Zod schemas and parse helpers here. Do not copy them into the API or the frontend.
+- Validation messages stay German; exported `code`-style identifiers stay English. There is no alerts REST contract — only `active_alerts` on the vehicle.
+- Export new public types/helpers from `src/index.ts`.
+- List query, telemetry history limits, and SSE focus (`STREAM_FOCUS_MAX_IDS`) are part of this contract — changing them is an API change. Update API tests when the contract changes.
