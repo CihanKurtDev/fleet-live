@@ -1,0 +1,34 @@
+---
+description: Express API layering, validation, SSE, and SQLite conventions
+globs: apps/api/**
+alwaysApply: false
+---
+
+# Backend (`apps/api`)
+
+```
+app.ts + routes → Controllers → Models → SQLite
+```
+
+- `app.ts` and `routes/` only wire HTTP to controllers (stream lives in `app.ts`, vehicles in `routes/`).
+- Controllers validate, map HTTP, call models, set status codes. No SQL.
+- Models own SQL via `db/statements.ts` / `db/database.ts`. No `req`/`res`.
+
+## Contract
+
+- Validate with `@fleet-live/shared` (`validateVehicleInput`, `parseVehicleListQuery`, …).
+- Throw `AppError` subclasses from `lib/errors.ts`. User-facing `error`/`fields` are German; `code` is English (`VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`).
+- Unique license plates → `ConflictError` (also via `isUniqueConstraintError` in the error handler).
+- `GET /api/vehicles` returns `{ data, meta }`. `GET /api/vehicles/:id/telemetry` returns `{ data }`. Vehicle JSON is snake_case, including nested telemetry fields.
+- No alerts REST API. Unresolved count is `active_alerts` on the vehicle.
+
+## SSE
+
+- `GET /api/stream` + `POST /api/stream/focus` with `connection_id`.
+- Ticker writes only for the union of focused `DRIVING` vehicles; patches go only to connections that focused that id. `vehicles-changed` goes to every client.
+- Do not compress `/api/stream`. Do not replace SSE with WebSockets.
+
+## After changes
+
+- Broadcast `vehicles-changed` after vehicle mutations.
+- Run `npm test`.

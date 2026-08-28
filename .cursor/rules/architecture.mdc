@@ -1,0 +1,44 @@
+---
+description: Monorepo layout, data flow, and current vs planned features
+alwaysApply: true
+---
+
+# Architecture
+
+```
+fleet-live/
+├── apps/api/          Express 5 + SQLite (node:sqlite)
+├── apps/web/          React 19 + Vite + React Router
+└── packages/shared/   Domain types, Zod validation, list/SSE contracts
+```
+
+Data flow: React `--HTTP + SSE /api-->` Express (`app.ts` + `routes/`) → controllers → models → SQLite.
+
+`@fleet-live/shared` is the contract. Do not duplicate vehicle, list-query, telemetry, or stream schemas in api or web.
+
+## Boundaries
+
+- UI never accesses SQLite or API models.
+- Models never take `req` / `res`.
+- `apps/web/src/components/ui` is generic. Vehicle logic lives in `components/vehicles`, hooks, and `api/`.
+- Live updates are SSE (`GET /api/stream`, `POST /api/stream/focus`), not WebSockets and not list polling.
+
+## Current vs planned
+
+**Implemented:** vehicle CRUD; server-driven list (search/filter/sort/pagination/facets); SSE telemetry with per-connection focus; telemetry history API; vehicle list/detail/CRUD UI.
+
+**Current phase (not started in UI):** map on the vehicle detail page — marker at last telemetry point, then live SSE movement. History API exists. No map library yet.
+
+**Not implemented — do not treat as present:** authentication, authorization, companies, tenant isolation, fleet map, map trail UI, alerts REST/UI, frontend tests, CI/CD.
+
+The `users` table is seed / future domain, not login. The `alerts` table and `active_alerts` count/filter exist; there is no `GET /api/alerts`.
+
+## Source of truth
+
+- Code is what exists. README Current Status / Roadmap is intent and can lag.
+- `apps/docs/table.md` describes the table component, not a feature backlog.
+
+## New work
+
+- Reuse existing patterns before new libraries or layers.
+- User-facing copy (UI and API `error`/`fields`) is German; machine `code` values stay English.
