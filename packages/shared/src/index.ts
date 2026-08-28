@@ -51,6 +51,17 @@ export {
     telemetryHistoryQuerySchema,
 } from "./models/telemetry";
 
+export type { Trip, TripResponse } from "./models/trip";
+
+export type { GeoPoint } from "./geo/polyline";
+
+export {
+    decodePolyline,
+    encodePoint,
+    encodePoints,
+    encodePolyline,
+} from "./geo/polyline";
+
 export type { StreamFocusInput } from "./models/stream";
 
 export {
@@ -58,3 +69,7 @@ export {
     parseStreamFocus,
     streamFocusSchema,
 } from "./models/stream";
+
+export type { SimPatch, SimState } from "./models/sim";
+
+export { parseSimPatch, simPatchSchema } from "./models/sim";

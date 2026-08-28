@@ -11,9 +11,25 @@ export type TelemetryPatch = {
     latitude: number;
     longitude: number;
     recorded_at: string;
+    /** Gemessener Tankstand, solange das Fahrzeug unterwegs ist. */
+    fuel_level: number;
+    /**
+     * Encoded-Polyline-Suffix der dieses Tick gefahrenen Straßenpunkte.
+     * Relativ zum letzten Punkt der offenen Fahrt — an `Trip.path` anhängen,
+     * außer `path_reset` ist gesetzt.
+     */
+    path_delta?: string;
+    /**
+     * Der Suffix gehört zu einer neuen Fahrt. Den bisherigen Verlauf
+     * verwerfen, nicht anhängen.
+     */
+    path_reset?: true;
 };
 
-/** Ein persistierter Telemetriepunkt (History-API). */
+/**
+ * Ein Rohpunkt aus dem kurzen Live-Fenster.
+ * Der dauerhafte Streckenverlauf steckt in `Trip.path`, nicht hier.
+ */
 export type TelemetryPoint = {
     id: number;
     vehicle_id: number;
@@ -50,7 +66,9 @@ export const telemetryHistoryQuerySchema = z.object({
                     (TELEMETRY_HISTORY_LIMITS as readonly number[]).includes(
                         value,
                     ),
-                { message: "Limit muss 10, 25, 50 oder 100 sein." },
+                {
+                    message: `Limit muss ${TELEMETRY_HISTORY_LIMITS.join(", ")} sein.`,
+                },
             )
             .default(50),
     ),
