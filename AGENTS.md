@@ -2,7 +2,7 @@
 
 fleet-live — fleet management app (TypeScript monorepo). Vehicles, telemetry, and a React UI; live updates over SSE.
 
-Current phase: map on the vehicle detail page (history API exists; marker UI not started). Status detail: `.cursor/rules/architecture.mdc`.
+Phase 3 detail map and route simulation are in place; the fleet map is still open. Status detail: `.cursor/rules/architecture.mdc`.
 
 ## General
 

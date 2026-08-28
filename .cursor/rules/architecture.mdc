@@ -25,11 +25,29 @@ Data flow: React `--HTTP + SSE /api-->` Express (`app.ts` + `routes/`) → contr
 
 ## Current vs planned
 
-**Implemented:** vehicle CRUD; server-driven list (search/filter/sort/pagination/facets); SSE telemetry with per-connection focus; telemetry history API; vehicle list/detail/CRUD UI.
+**Implemented:** vehicle CRUD; server-driven list (search/filter/sort/pagination/facets); SSE telemetry with per-connection focus; telemetry history API; trips with the driven path as an encoded polyline (`GET /api/vehicles/:id/trips/latest`); vehicle list/detail/CRUD UI; Leaflet detail map (marker, SSE, trail from the trip); route simulation with a city/highway speed profile and fuel consumption; simulation pause via `GET`/`PATCH /api/sim`.
 
-**Current phase (not started in UI):** map on the vehicle detail page — marker at last telemetry point, then live SSE movement. History API exists. No map library yet.
+**Not implemented — do not treat as present:** authentication, authorization, companies, tenant isolation, fleet map, alerts REST/UI, frontend tests, CI/CD.
 
-**Not implemented — do not treat as present:** authentication, authorization, companies, tenant isolation, fleet map, map trail UI, alerts REST/UI, frontend tests, CI/CD.
+A fleet map on the list page was built and removed on purpose: one page shows too few vehicles and makes the telemetry batching visible. A fleet view needs its own route over all positions, not the current query page.
+
+## Two layers of position data
+
+- `telemetry` is the **hot buffer**: last known position for list and marker, plus the newest movement. Bounded by `TELEMETRY_KEEP_PER_VEHICLE` (100). Rows are meant to expire.
+- `trips` is the **durable record**: one row per drive, the path as an encoded polyline (`@fleet-live/shared` `encodePoint` / `decodePolyline`). A 300 km haul is one row of a few KB.
+- Never size the visible trail by a point count. That was the old bug: how far you could see depended on the tick rate, not on the drive.
+- Appending stays O(1): `path = path || ?` in SQL, predecessor in `last_latitude` / `last_longitude`. The simulator appends the **road vertices** between ticks (`verticesBetween`), not the chord. Do not read the path back into Node per tick.
+- `TripModel.close` simplifies with Ramer-Douglas-Peucker (`lib/geo.ts`, 12 m). `distance_m` keeps the sum of reported segments, not the length of the simplified line.
+- Live map: SSE `path_delta` is an encoded suffix; the marker slides along the new vertices. Telemetry remains the hot position only. `path_reset` starts a new line (new trip) instead of concatenating.
+- The simulator closes the open trip when it reaches a route end and turns around. The return is a new trip, not a second layer on the same path.
+
+## Domain rules
+
+- `status` is what the vehicle reports. The UI shows it read-only. Do not offer start/stop trip in the frontend — a real fleet does not decide that, and the simulator already drives `DRIVING` vehicles. Pause the whole ticker with `PATCH /api/sim`.
+- `DRIVING` opens a trip, any other status closes it (`syncTrip` in the vehicle controller). `TripModel.appendPoint` also opens one lazily, so seeded or imported driving vehicles still get a path.
+- Ending a trip writes a final telemetry point with speed `0` (`TelemetryModel.recordStandstill`).
+- `fuel_level` is measured while `DRIVING` (simulator) and manually maintainable otherwise. Do not overwrite a measured value with a stale form value.
+- A trip has no per-point speed or time by design. Do not add parallel arrays; aggregates (`distance_m`, `max_speed`) live on the trip.
 
 The `users` table is seed / future domain, not login. The `alerts` table and `active_alerts` count/filter exist; there is no `GET /api/alerts`.
 

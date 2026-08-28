@@ -25,8 +25,17 @@ alwaysApply: false
 - Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides.
 - No frontend unit-test runner. Do not add Jest/Vitest unless explicitly asked.
 
-## Map (current phase)
+## Map
 
-- History API exists (`GET /api/vehicles/:id/telemetry`). Detail-page map UI is not started; no map library is installed.
-- Propose a library and where it mounts (detail page first) before adding a dependency.
-- Do not build a fleet map or trail UI until the detail marker works.
+- Leaflet on the detail page only (`VehicleMap`); shared basemap/theme in `leafletMap.ts`.
+- Marker at last telemetry; trail is `Trip.path` (`decodePolyline`), grown live via `subscribeTripPath` / SSE `path_delta`. That suffix is road vertices, not the tick chord. `path_reset` replaces the trail (new trip), it does not append.
+- The marker slides along the new vertices (~400 ms). The trail grows with the marker, never ahead of it. The map stays centered on the vehicle until the user pans or zooms; "Fahrzeug zentrieren" resumes follow and keeps it.
+- Status is not a form field and not a trip toggle.
+- Do not fetch the telemetry history for the trail. That is the hot buffer and it rolls over mid-drive.
+- No map on the list page. It shows only the current page and exposes the telemetry batching.
+- `components/ui` stays map-free.
+
+## Domain copy
+
+- Status labels live in `components/vehicles/vehicleStatus.ts`. Do not render the raw enum.
+- Timestamps from the API are naive UTC. Format them via `utils/dateTime.ts`, never print the raw string.
