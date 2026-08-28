@@ -2,6 +2,10 @@
     position: relative;
 }
 
+.wrapFill {
+    height: 100%;
+}
+
 .recenter {
     position: absolute;
     bottom: 28px;
@@ -119,9 +123,16 @@
     }
 }
 
+.mapFill {
+    height: 100%;
+    border: none;
+    border-radius: 0;
+}
+
 .markerIcon {
     background: none;
     border: none;
+    cursor: pointer;
 }
 
 .marker {
@@ -137,12 +148,14 @@
         color-mix(in srgb, var(--marker-fill, var(--accent)) 50%, transparent);
 }
 
-.wrap[data-status="DRIVING"] .marker {
+.wrap[data-status="DRIVING"] .marker,
+.marker[data-status="DRIVING"] {
     animation: marker-pulse 1.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .wrap[data-status="DRIVING"] .marker {
+    .wrap[data-status="DRIVING"] .marker,
+    .marker[data-status="DRIVING"] {
         animation: none;
     }
 }
@@ -194,10 +207,4 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-}
-
-.empty {
-    margin: 0;
-    color: var(--text);
-    font-size: 14px;
 }

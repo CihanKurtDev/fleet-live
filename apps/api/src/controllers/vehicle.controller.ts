@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import {
+    parseFleetDriversQuery,
+    parseFleetPositionsQuery,
     parseTelemetryHistoryQuery,
     parseVehicleListQuery,
     validateVehicleInput,
@@ -111,6 +113,25 @@ export function getVehicles(req: Request, res: Response) {
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
     res.setHeader("Server-Timing", `db;dur=${duration.toFixed(1)}`);
     res.json(result);
+}
+
+/**
+ * Letzte Positionen für die Flottenkarte. Kein Listen-Paging:
+ * der Ausschnitt kommt über `bbox`, nicht über `page`.
+ */
+export function getVehiclePositions(req: Request, res: Response) {
+    const query = parseFleetPositionsQuery(req.query);
+    const result = VehicleModel.positions(query);
+
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.json(result);
+}
+
+export function getVehicleDrivers(req: Request, res: Response) {
+    const query = parseFleetDriversQuery(req.query);
+
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.json(VehicleModel.drivers(query));
 }
 
 export function getVehicleById(req: Request, res: Response) {

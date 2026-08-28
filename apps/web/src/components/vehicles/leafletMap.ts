@@ -11,7 +11,7 @@ const DARK_LABELS =
 const ATTRIBUTION =
     'Tiles &copy; <a href="https://www.esri.com/">Esri</a>';
 
-export type TilePair = {
+type TilePair = {
     base: L.TileLayer;
     labels: L.TileLayer;
 };
@@ -19,7 +19,7 @@ export type TilePair = {
 export const prefersDark = () =>
     window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-export const createBasemap = (dark: boolean): TilePair => {
+const createBasemap = (dark: boolean): TilePair => {
     const baseUrl = dark ? DARK_BASE : LIGHT_BASE;
     const labelUrl = dark ? DARK_LABELS : LIGHT_LABELS;
     const base = L.tileLayer(baseUrl, {
@@ -33,18 +33,26 @@ export const createBasemap = (dark: boolean): TilePair => {
     return { base, labels };
 };
 
-export const applyMapTheme = (container: HTMLElement) => {
+const applyMapTheme = (container: HTMLElement) => {
     container.dataset.theme = prefersDark() ? "dark" : "light";
 };
 
-export const scheduleInvalidate = (map: L.Map) => {
+const scheduleInvalidate = (
+    map: L.Map,
+    delays?: number[],
+) => {
+    if (delays && delays.length === 0) {
+        return () => undefined;
+    }
+
+    const used = delays ?? [0, 120, 400];
     const invalidate = () => {
         map.invalidateSize();
     };
     const frame = requestAnimationFrame(invalidate);
-    const timeouts = [0, 120, 400].map((delay) =>
-        window.setTimeout(invalidate, delay),
-    );
+    const timeouts = used
+        .filter((delay) => delay > 0)
+        .map((delay) => window.setTimeout(invalidate, delay));
 
     return () => {
         cancelAnimationFrame(frame);
@@ -54,7 +62,10 @@ export const scheduleInvalidate = (map: L.Map) => {
     };
 };
 
-export const createThemedMap = (container: HTMLElement) => {
+export const createThemedMap = (
+    container: HTMLElement,
+    options?: { invalidateDelays?: number[] },
+) => {
     applyMapTheme(container);
 
     const map = L.map(container, {
@@ -73,7 +84,10 @@ export const createThemedMap = (container: HTMLElement) => {
         })
         .addTo(map);
 
-    const cancelInvalidate = scheduleInvalidate(map);
+    const cancelInvalidate = scheduleInvalidate(
+        map,
+        options?.invalidateDelays,
+    );
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const themeListeners: Array<() => void> = [];
 

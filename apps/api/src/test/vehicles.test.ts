@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { VehicleStatus } from "@fleet-live/shared";
-import { decodePolyline, encodePolyline } from "@fleet-live/shared";
+import { decodePolyline, encodePolyline, FLEET_POSITIONS_MAX } from "@fleet-live/shared";
 import request from "supertest";
 import { app } from "../app";
 import { db } from "../db/database";
@@ -254,6 +254,334 @@ describe("GET /api/vehicles", () => {
             .set("If-None-Match", etag);
 
         assert.equal(second.status, 304);
+    });
+});
+
+describe("GET /api/vehicles/positions", () => {
+    function putTelemetry(
+        vehicleId: number,
+        lat: number,
+        lng: number,
+        speed = 40,
+    ) {
+        db.prepare(
+            `
+                INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
+                VALUES (?, ?, ?, ?)
+            `,
+        ).run(vehicleId, lat, lng, speed);
+    }
+
+    it("returns an empty list when nobody has a position", async () => {
+        VehicleModel.create({
+            license_plate: "K-NO 1",
+            driver_name: "Ohne Fix",
+            status: "OFFLINE",
+        });
+
+        const response = await request(app).get("/api/vehicles/positions");
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.body.data, []);
+        assert.equal(response.body.meta.truncated, false);
+    });
+
+    it("omits vehicles without telemetry and keeps the slim shape", async () => {
+        const withFix = VehicleModel.create({
+            license_plate: "K-POS 1",
+            driver_name: "Mit Fix",
+            status: "IDLE",
+        });
+        VehicleModel.create({
+            license_plate: "K-POS 2",
+            driver_name: "Ohne Fix",
+            status: "IDLE",
+        });
+        putTelemetry(withFix.id, 50.9375, 6.9603, 12);
+
+        const response = await request(app).get("/api/vehicles/positions");
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.length, 1);
+        assert.equal(response.body.data[0].license_plate, "K-POS 1");
+        assert.equal(response.body.data[0].driver_name, "Mit Fix");
+        assert.equal(response.body.data[0].latitude, 50.9375);
+        assert.equal(response.body.data[0].longitude, 6.9603);
+        assert.equal(response.body.data[0].speed, 12);
+        assert.equal(response.body.data[0].fuel_level, undefined);
+        assert.equal(response.body.data[0].active_alerts, undefined);
+        assert.equal(response.body.data[0].created_at, undefined);
+    });
+
+    it("filters by bbox and by driving", async () => {
+        const cologne = VehicleModel.create({
+            license_plate: "K-BB 1",
+            driver_name: "Köln",
+            status: "DRIVING",
+        });
+        const munich = VehicleModel.create({
+            license_plate: "M-BB 1",
+            driver_name: "München",
+            status: "DRIVING",
+        });
+        const parked = VehicleModel.create({
+            license_plate: "K-BB 2",
+            driver_name: "Standby",
+            status: "IDLE",
+        });
+        putTelemetry(cologne.id, 50.9375, 6.9603);
+        putTelemetry(munich.id, 48.1351, 11.582);
+        putTelemetry(parked.id, 50.94, 6.97);
+
+        const boxed = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ bbox: "6.8,50.8,7.2,51.1" });
+
+        assert.equal(boxed.status, 200);
+        assert.deepEqual(
+            boxed.body.data.map((row: { license_plate: string }) => row.license_plate),
+            ["K-BB 1", "K-BB 2"],
+        );
+
+        const driving = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ bbox: "6.8,50.8,7.2,51.1", filter: "driving" });
+
+        assert.equal(driving.status, 200);
+        assert.equal(driving.body.data.length, 1);
+        assert.equal(driving.body.data[0].license_plate, "K-BB 1");
+    });
+
+    it("rejects an invalid bbox and an unknown filter", async () => {
+        const malformed = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ bbox: "1,2,3" });
+        assert.equal(malformed.status, 400);
+
+        const inverted = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ bbox: "7.2,50.8,6.8,51.1" });
+        assert.equal(inverted.status, 400);
+
+        const filter = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ filter: "nope" });
+        assert.equal(filter.status, 400);
+    });
+
+    it("filters by driver or plate search", async () => {
+        const clara = VehicleModel.create({
+            license_plate: "K-CL 1",
+            driver_name: "Clara Conrad",
+            status: "IDLE",
+        });
+        const max = VehicleModel.create({
+            license_plate: "K-MX 1",
+            driver_name: "Max Müller",
+            status: "IDLE",
+        });
+        putTelemetry(clara.id, 50.9375, 6.9603);
+        putTelemetry(max.id, 50.94, 6.97);
+
+        const byDriver = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ search: "clara" });
+
+        assert.equal(byDriver.status, 200);
+        assert.equal(byDriver.body.data.length, 1);
+        assert.equal(byDriver.body.data[0].driver_name, "Clara Conrad");
+
+        const byPlate = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ search: "K-MX" });
+
+        assert.equal(byPlate.status, 200);
+        assert.equal(byPlate.body.data.length, 1);
+        assert.equal(byPlate.body.data[0].license_plate, "K-MX 1");
+    });
+
+    it("filters by one or more driver names", async () => {
+        const clara = VehicleModel.create({
+            license_plate: "K-CL 2",
+            driver_name: "Clara Conrad",
+            status: "IDLE",
+        });
+        const max = VehicleModel.create({
+            license_plate: "K-MX 2",
+            driver_name: "Max Müller",
+            status: "IDLE",
+        });
+        const anna = VehicleModel.create({
+            license_plate: "K-AN 1",
+            driver_name: "Anna Schneider",
+            status: "IDLE",
+        });
+        putTelemetry(clara.id, 50.9375, 6.9603);
+        putTelemetry(max.id, 50.94, 6.97);
+        putTelemetry(anna.id, 50.941, 6.971);
+
+        const twoParams = new URLSearchParams();
+        twoParams.append("drivers", "Clara Conrad");
+        twoParams.append("drivers", "Max Müller");
+        const two = await request(app).get(
+            `/api/vehicles/positions?${twoParams}`,
+        );
+
+        assert.equal(two.status, 200);
+        assert.deepEqual(
+            two.body.data.map((row: { driver_name: string }) => row.driver_name),
+            ["Clara Conrad", "Max Müller"],
+        );
+
+        const comma = await request(app)
+            .get("/api/vehicles/positions")
+            .query({ drivers: "Clara Conrad,Anna Schneider" });
+
+        assert.equal(comma.status, 200);
+        assert.equal(comma.body.data.length, 2);
+
+        const tooMany = new URLSearchParams();
+        for (let index = 1; index <= 51; index += 1) {
+            tooMany.append("drivers", `Fahrer ${index}`);
+        }
+        const rejected = await request(app).get(
+            `/api/vehicles/positions?${tooMany}`,
+        );
+
+        assert.equal(rejected.status, 400);
+    });
+
+    it("returns truncated with empty data past FLEET_POSITIONS_MAX", async () => {
+        const insertVehicle = db.prepare(
+            `
+                INSERT INTO vehicles (license_plate, driver_name, fuel_level, status)
+                VALUES (?, ?, 80, 'IDLE')
+            `,
+        );
+        const insertTelemetry = db.prepare(
+            `
+                INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
+                VALUES (?, 50.9, 6.9, 0)
+            `,
+        );
+        const overLimit = FLEET_POSITIONS_MAX + 1;
+
+        db.exec("BEGIN");
+        for (let index = 0; index < overLimit; index += 1) {
+            const result = insertVehicle.run(
+                `K-T ${String(index).padStart(4, "0")}`,
+                `Driver ${index}`,
+            );
+            insertTelemetry.run(Number(result.lastInsertRowid));
+        }
+        db.exec("COMMIT");
+
+        const response = await request(app).get("/api/vehicles/positions");
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.body.data, []);
+        assert.equal(response.body.meta.truncated, true);
+    });
+});
+
+describe("GET /api/vehicles/drivers", () => {
+    it("does not dump the roster without a search", async () => {
+        VehicleModel.create({
+            license_plate: "K-A 1",
+            driver_name: "Anna Schneider",
+            status: "IDLE",
+        });
+        VehicleModel.create({
+            license_plate: "K-B 1",
+            driver_name: "Max Müller",
+            status: "IDLE",
+        });
+
+        const response = await request(app).get("/api/vehicles/drivers");
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.body.data, []);
+        assert.equal(response.body.meta.total, 2);
+        assert.equal(response.body.meta.page, 1);
+        assert.equal(response.body.meta.pageCount, 0);
+    });
+
+    it("searches by name or plate and hydrates selected names", async () => {
+        VehicleModel.create({
+            license_plate: "K-A 1",
+            driver_name: "Anna Schneider",
+            status: "IDLE",
+        });
+        VehicleModel.create({
+            license_plate: "K-B 1",
+            driver_name: "Max Müller",
+            status: "IDLE",
+        });
+
+        const byName = await request(app)
+            .get("/api/vehicles/drivers")
+            .query({ search: "anna" });
+
+        assert.equal(byName.status, 200);
+        assert.deepEqual(byName.body.data, [
+            { name: "Anna Schneider", license_plate: "K-A 1" },
+        ]);
+        assert.equal(byName.body.meta.total, 1);
+        assert.equal(byName.body.meta.pageCount, 1);
+
+        const byPlate = await request(app)
+            .get("/api/vehicles/drivers")
+            .query({ search: "K-B" });
+
+        assert.equal(byPlate.status, 200);
+        assert.deepEqual(byPlate.body.data, [
+            { name: "Max Müller", license_plate: "K-B 1" },
+        ]);
+
+        const selected = await request(app)
+            .get("/api/vehicles/drivers")
+            .query({ names: "Max Müller" });
+
+        assert.equal(selected.status, 200);
+        assert.deepEqual(selected.body.data, [
+            { name: "Max Müller", license_plate: "K-B 1" },
+        ]);
+    });
+
+    it("paginates search hits instead of capping the total at the page size", async () => {
+        for (let i = 0; i < 51; i += 1) {
+            VehicleModel.create({
+                license_plate: `K-P ${String(i).padStart(3, "0")}`,
+                driver_name: `Pat ${String(i).padStart(2, "0")}`,
+                status: "IDLE",
+            });
+        }
+
+        const first = await request(app)
+            .get("/api/vehicles/drivers")
+            .query({ search: "Pat" });
+
+        assert.equal(first.status, 200);
+        assert.equal(first.body.meta.total, 51);
+        assert.equal(first.body.meta.limit, 50);
+        assert.equal(first.body.meta.page, 1);
+        assert.equal(first.body.meta.pageCount, 2);
+        assert.equal(first.body.data.length, 50);
+
+        const second = await request(app)
+            .get("/api/vehicles/drivers")
+            .query({ search: "Pat", page: 2 });
+
+        assert.equal(second.status, 200);
+        assert.equal(second.body.meta.page, 2);
+        assert.equal(second.body.data.length, 1);
+        assert.equal(second.body.data[0].name, "Pat 50");
+
+        const rejected = await request(app)
+            .get("/api/vehicles/drivers")
+            .query({ search: "Pat", page: 0 });
+
+        assert.equal(rejected.status, 400);
     });
 });
 

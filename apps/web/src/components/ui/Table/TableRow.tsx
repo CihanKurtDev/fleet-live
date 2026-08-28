@@ -52,6 +52,17 @@ const TableRowComponent = <RowType,>({
         <tr
             className={className}
             onClick={handleRowClick}
+            onKeyDown={(event) => {
+                if (isEditing || !onClick) {
+                    return;
+                }
+
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    onClick();
+                }
+            }}
+            tabIndex={isEditing || !onClick ? undefined : 0}
             aria-selected={isSelected}
         >
             {isEditing && (

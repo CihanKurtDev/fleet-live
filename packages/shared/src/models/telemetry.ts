@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { emptyToUndefined } from "./queryPreprocess";
 
 export const TELEMETRY_HISTORY_LIMITS = [10, 25, 50, 100] as const;
 
@@ -41,18 +42,6 @@ export type TelemetryPoint = {
 
 export type TelemetryHistoryResponse = {
     data: TelemetryPoint[];
-};
-
-const emptyToUndefined = (value: unknown): unknown => {
-    if (value === "" || value === null || value === undefined) {
-        return undefined;
-    }
-
-    if (Array.isArray(value)) {
-        return emptyToUndefined(value[0]);
-    }
-
-    return value;
 };
 
 export const telemetryHistoryQuerySchema = z.object({

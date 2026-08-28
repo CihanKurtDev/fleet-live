@@ -19,7 +19,7 @@ app.ts + routes → Controllers → Models → SQLite
 - Validate with `@fleet-live/shared` (`validateVehicleInput`, `parseVehicleListQuery`, …).
 - Throw `AppError` subclasses from `lib/errors.ts`. User-facing `error`/`fields` are German; `code` is English (`VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`).
 - Unique license plates → `ConflictError` (also via `isUniqueConstraintError` in the error handler).
-- `GET /api/vehicles` returns `{ data, meta }`. `GET /api/vehicles/:id/telemetry` and `GET /api/vehicles/:id/trips/latest` return `{ data }`. Vehicle JSON is snake_case, including nested telemetry fields.
+- `GET /api/vehicles` returns `{ data, meta }`. `GET /api/vehicles/positions` returns `{ data, meta.truncated }` of last-known positions (slim DTO, optional `bbox=west,south,east,north`, `search`, `drivers` names, and the same `filter` ids as the list). Over `FLEET_POSITIONS_MAX` matches → `truncated` and empty `data` (no sample). `GET /api/vehicles/drivers` returns `{ data: { name, license_plate }[], meta: { total, page, limit, pageCount } }` — search (`search`, `page`) plus optional `names` hydration. `total` is the match count, not the page size; it does not dump the roster. `GET /api/vehicles/:id/telemetry` and `GET /api/vehicles/:id/trips/latest` return `{ data }`. Vehicle JSON is snake_case, including nested telemetry fields.
 - A vehicle without a trip is `{ data: null }`, not a 404. Only a missing vehicle is a 404.
 - No alerts REST API. Unresolved count is `active_alerts` on the vehicle.
 

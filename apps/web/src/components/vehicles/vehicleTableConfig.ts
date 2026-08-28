@@ -1,61 +1,20 @@
-import type { Vehicle } from "@fleet-live/shared";
+import type { Vehicle, VehicleFilterId } from "@fleet-live/shared";
 import type {
     TableColumn,
     TableFilter,
 } from "../../types/table";
 import { vehicleStatusLabel } from "./vehicleStatus";
 
-/** Ab diesem Tankstand gilt ein Fahrzeug als kritisch. */
-const LOW_FUEL_THRESHOLD = 20;
-
-export const vehicleSearchKeys: Array<keyof Vehicle> = [
-    "license_plate",
-    "driver_name",
-];
-
-export const vehicleFilters: TableFilter<Vehicle>[] = [
-    {
-        id: "alerts",
-        displayText: "Warnungen",
-        customSearchFunc: (vehicle) =>
-            vehicle.active_alerts > 0,
-    },
-    {
-        id: "low_fuel",
-        displayText: "Wenig Tank",
-        customSearchFunc: (vehicle) =>
-            vehicle.fuel_level < LOW_FUEL_THRESHOLD,
-    },
-    {
-        id: "driving",
-        displayText: "Auf Fahrt",
-        customSearchFunc: (vehicle) =>
-            vehicle.status === "DRIVING",
-    },
-    {
-        id: "offline",
-        displayText: "Kein Signal",
-        customSearchFunc: (vehicle) =>
-            vehicle.status === "OFFLINE",
-    },
+export const vehicleFilters: Array<
+    TableFilter<Vehicle> & { id: VehicleFilterId }
+> = [
+    { id: "alerts", displayText: "Warnungen" },
+    { id: "low_fuel", displayText: "Wenig Tank" },
+    { id: "driving", displayText: "Auf Fahrt" },
+    { id: "offline", displayText: "Kein Signal" },
 ];
 
 export const vehicleColumns: TableColumn<Vehicle>[] = [
-    /*
-     * Jede Spalte kann optional ein eigenes `sortBy` definieren.
-     *
-     * Ohne `sortBy` wird automatisch der Wert von `key` zum Sortieren verwendet.
-     * Mit `sortBy` kann eine eigene Sortierlogik definiert werden, z. B.:
-     *
-     * sortBy: (vehicle) => {
-     *     // Wert zurückgeben, nach dem tatsächlich sortiert werden soll
-     *     return vehicle.status;
-     * },
-     *
-     * Das ist besonders nützlich, wenn die fachliche Sortierreihenfolge
-     * nicht der normalen alphabetischen/numerischen Reihenfolge entspricht.
-     */
-
     {
         key: "license_plate",
         displayText: "Kennzeichen",
@@ -71,19 +30,6 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         displayText: "Status",
         sortable: true,
         render: (value) => vehicleStatusLabel(value),
-
-        // Beispiel für eine eigene fachliche Sortierreihenfolge:
-        //
-        // sortBy: (vehicle) => {
-        //     const order = {
-        //         OFFLINE: 0,
-        //         DRIVING: 1,
-        //         STOPPED: 2,
-        //         IDLE: 3,
-        //     };
-        //
-        //     return order[vehicle.status];
-        // },
     },
     {
         key: "fuel_level",

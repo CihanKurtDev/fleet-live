@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import type { Trip, VehicleInput } from "@fleet-live/shared";
 import { decodePolyline } from "@fleet-live/shared";
 
@@ -44,6 +44,15 @@ const describeTrip = (trip: Trip): string => {
 export const VehicleDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const from =
+        typeof location.state === "object" &&
+        location.state !== null &&
+        "from" in location.state &&
+        typeof location.state.from === "string"
+            ? location.state.from
+            : "/vehicles";
+    const backToFleet = from.startsWith("/fleet");
     const { updateVehicle, deleteVehicles, subscribeTripPath } =
         useVehicles();
 
@@ -170,15 +179,17 @@ export const VehicleDetailPage = () => {
 
     const handleDelete = async () => {
         await deleteVehicles([vehicle.id]);
-        navigate("/vehicles");
+        navigate(from);
     };
 
     const requestDelete = () => setConfirmDelete(true);
 
     return (
         <section className={styles.page}>
-            <Link className={styles.back} to="/vehicles">
-                Zurück zur Übersicht
+            <Link className={styles.back} to={from}>
+                {backToFleet
+                    ? "Zurück zur Karte"
+                    : "Zurück zur Übersicht"}
             </Link>
 
             <header className={styles.header}>

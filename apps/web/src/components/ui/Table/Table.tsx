@@ -16,6 +16,7 @@ export const Table = <RowType,>({
     isLoading = false,
     skeletonRowCount = 10,
     emptyContent = "Keine Ergebnisse",
+    caption,
 }: TableProps<RowType>) => {
     const columnCount = isEditing
         ? columns.length + 1
@@ -27,6 +28,11 @@ export const Table = <RowType,>({
                 className={styles.table}
                 aria-busy={isLoading}
             >
+                {caption && (
+                    <caption className={styles.visuallyHidden}>
+                        {caption}
+                    </caption>
+                )}
                 <thead>
                     <tr>
                         {isEditing && (

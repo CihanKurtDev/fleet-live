@@ -2,9 +2,8 @@ import { createBrowserRouter, Navigate } from 'react-router';
 import App from './App';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { VehicleDetailPage } from './pages/VehicleDetailPage';
+import { FleetPage } from './pages/FleetPage';
 
-// Noch ohne Loader. Sobald die API angebunden ist, können die
-// Routen hier um loader/action ergänzt werden, ohne die Seiten umzubauen.
 export const router = createBrowserRouter([
     {
         path: '/',
@@ -21,6 +20,10 @@ export const router = createBrowserRouter([
             {
                 path: 'vehicles/:id',
                 Component: VehicleDetailPage,
+            },
+            {
+                path: 'fleet',
+                Component: FleetPage,
             },
         ],
     },

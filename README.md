@@ -16,7 +16,7 @@ This is a personal development project focused on learning and applying full-sta
 
 The application is being developed in several stages.
 
-The **vehicle REST API**, **server-driven vehicle list**, **live telemetry stream** and the **detail map** (marker, live movement, trail) are connected to the React UI.
+The **vehicle REST API**, **server-driven vehicle list**, **live telemetry stream**, the **detail map** (marker, live movement, trail) and the **fleet map** (`/fleet`) are connected to the React UI.
 
 Future iterations will add:
 
@@ -61,6 +61,7 @@ The backend serves paginated vehicle queries over SQLite, and the frontend talks
 * Vehicle detail page
 * Create, edit and delete vehicle UI
 * Leaflet map on the vehicle detail page (marker, SSE movement, trail from the trip)
+* Fleet map (`/fleet`): last positions in the viewport, live movement for driving vehicles in view
 * Trips: the driven path stored per trip as an encoded polyline, simplified when the trip ends
 * Simulated movement on baked road geometries with a city/highway speed profile
 * Simulated fuel consumption while driving
@@ -69,7 +70,6 @@ The backend serves paginated vehicle queries over SQLite, and the frontend talks
 
 ### Planned
 
-* Fleet map (own route over all positions — not the paginated list page)
 * Companies / tenants
 * User accounts
 * Authentication
@@ -202,6 +202,8 @@ The first development milestone is a reliable REST API for vehicle management.
 | Method   | Endpoint                        | Description                                      |
 | -------- | ------------------------------- | ------------------------------------------------ |
 | `GET`    | `/api/vehicles`                 | Paginated vehicle list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
+| `GET`    | `/api/vehicles/positions`       | Last positions for the fleet map (`bbox`, `search`, `filter`) |
+| `GET`    | `/api/vehicles/drivers`         | Search drivers (`search`, `page`; `meta.total` is the match count; optional `names` hydrates a selection) |
 | `GET`    | `/api/vehicles/:id`             | Get a vehicle                                    |
 | `GET`    | `/api/vehicles/:id/telemetry`   | Recent telemetry points (`limit`: 10, 25, 50, 100; default 50) |
 | `GET`    | `/api/vehicles/:id/trips/latest`| Running trip, else the last finished one (`data: null` if never driven) |
@@ -216,6 +218,8 @@ The first development milestone is a reliable REST API for vehicle management.
 | `GET`    | `/api/health`                   | Check API health                                 |
 
 `GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` for the filter chips (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
+
+`GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions (`id`, `license_plate`, `driver_name`, `status`, `latitude`, `longitude`, `speed`, `recorded_at`), not the paginated list. Optional `bbox=west,south,east,north` limits the query to the visible map; `search` matches plate and driver (same as the list); `drivers` is a list of `driver_name` values (`drivers=Anna&drivers=Max` or comma-separated; empty means all); `filter` uses the same ids as the list. Vehicles without telemetry are omitted. If more than `FLEET_POSITIONS_MAX` (2000) would match, `truncated` is true and `data` is empty — the map does not show an arbitrary sample. At most `FLEET_DRIVERS_MAX` (50) names per query.
 
 Query parameters are defined once in `@fleet-live/shared` (`vehicleListQuerySchema`). Invalid sort keys or limits are rejected with `400`. Sort keys and filters are snake_case (`active_alerts`, `low_fuel`). Default page size is `10`; allowed limits are `10`, `25`, `50` and `100`.
 
@@ -280,6 +284,7 @@ List state (search, filter, sort, page, limit) lives in the URL. Reloading keeps
 | `/`             | Redirects to the vehicle list        |
 | `/vehicles`     | Vehicle list and creation dialog     |
 | `/vehicles/:id` | Vehicle details, map/trail, editing and removal |
+| `/fleet`        | Fleet map (last positions, live movement) |
 
 ## Vehicle list
 
@@ -299,9 +304,13 @@ It supports:
 
 Vehicles can be created, edited and deleted through the UI.
 
-The edit form only covers master data. Status is a badge (what the vehicle reports), not a control. Fuel is read-only while driving. The header can pause or resume the simulator.
+The edit form only covers master data. Status is a badge (what the vehicle reports), not a control. Fuel is read-only while driving. The header can pause or resume the simulator and switches between the vehicle list and the fleet map.
 
 The forms validate their input with the same validation function the API uses, which comes from the shared package.
+
+## Fleet map
+
+`/fleet` shows last-known positions for the drivers you pick, in the visible map — not the current list page and not the whole fleet. Status chips and plate search stay off until that selection exists. If the viewport has more than 2000 matches, the map shows no markers — it does not paint a random sample. **Fahrer** opens a modal to pick people (`driver_name`, one vehicle each) by name or plate. That is a view filter, not a saved group. The toolbar shows how many markers are in the snapshot. Driving vehicles in that snapshot receive live SSE ticks (same focus mechanism as the list, capped at 150). There is no trail here — the driven path stays on the detail page. Click a marker to open the vehicle.
 
 See [apps/docs/table.md](apps/docs/table.md) for a detailed description of the table component.
 
@@ -323,7 +332,7 @@ The last telemetry record of a vehicle is included in the vehicle API responses.
 
 `GET /api/vehicles/:id/telemetry` returns the recent points as `{ data }` in chronological order. That is the live buffer (marker, newest movement), not the trail — the trail comes from `GET /api/vehicles/:id/trips/latest`.
 
-A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, and the open detail vehicle). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written. Telemetry patches are delivered only to connections that included the vehicle in their focus. `vehicles-changed` is still sent to every open stream.
+A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, the open detail vehicle, and driving vehicles on the fleet map). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written. Telemetry patches are delivered only to connections that included the vehicle in their focus. `vehicles-changed` is still sent to every open stream.
 
 After each insert, older points of that vehicle are deleted so at most `TELEMETRY_KEEP_PER_VEHICLE` rows remain (default 100). Raw telemetry is only the live buffer for the marker and the newest movement — the driven path lives on the trip (see below), so this limit no longer decides how much of the route is visible.
 
@@ -375,7 +384,7 @@ Telemetry
           Map
 ```
 
-Vehicles appear on the detail map and move over time without real GPS hardware.
+Vehicles appear on the detail map and on the fleet map, and move over time without real GPS hardware.
 
 ---
 
@@ -432,7 +441,7 @@ The planned development path is:
        ↓
 3. API integration + live telemetry
        ↓
-4. Map (detail marker, live movement)
+4. Map (detail marker, live movement, fleet view)
        ↓
 5. Companies
        ↓
@@ -631,7 +640,7 @@ This includes example:
 * Telemetry
 * Alerts
 
-`npm run db:seed:large` replaces the vehicle set with a much larger sample (unique plates) so pagination, search and the live stream can be exercised under load.
+`npm run db:seed:large` replaces the vehicle set with a much larger sample (unique plates and unique driver names — one driver per vehicle) so pagination, search and the live stream can be exercised under load.
 
 ---
 
@@ -683,7 +692,7 @@ Live telemetry (SSE, per-connection focus, list/detail patches) and the telemetr
 * [x] Compact position/speed on or next to the map (full stammdaten stay in the form)
 * [x] Trail from the trip path (encoded polyline, length-independent)
 * [x] Route-based simulation with city/highway speed limits
-* [ ] Fleet map (deliberately not on the list page: a single page shows too few vehicles and exposes the telemetry batching. Would need its own view over all positions.)
+* [x] Fleet map (own route `/fleet` over last positions in the viewport; not the list page)
 
 ## Later — optional
 

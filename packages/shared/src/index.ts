@@ -73,3 +73,25 @@ export {
 export type { SimPatch, SimState } from "./models/sim";
 
 export { parseSimPatch, simPatchSchema } from "./models/sim";
+
+export type {
+    FleetDriver,
+    FleetDriversQuery,
+    FleetDriversResponse,
+    FleetPosition,
+    FleetPositionsQuery,
+    FleetPositionsResponse,
+    GeoBBox,
+} from "./models/fleet";
+
+export {
+    FLEET_DRIVERS_LIST_LIMIT,
+    FLEET_DRIVERS_MAX,
+    FLEET_POSITIONS_MAX,
+    fleetDriversQuerySchema,
+    fleetPositionsQuerySchema,
+    parseFleetDriversQuery,
+    parseFleetPositionsQuery,
+    serializeFleetDriversQuery,
+    serializeFleetPositionsQuery,
+} from "./models/fleet";

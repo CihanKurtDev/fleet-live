@@ -5,8 +5,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { createThemedMap } from "./leafletMap";
+import { MapStatusLegend } from "./MapStatusLegend";
 import {
-    MAP_STATUS_LEGEND,
     VEHICLE_STATUS_COLORS,
     vehicleStatusLabel,
 } from "./vehicleStatus";
@@ -331,24 +331,13 @@ export const VehicleMap = ({
                 role="img"
                 aria-label={`Karte mit Position von ${label}, Status ${statusLabel}`}
             />
-            <ul className={styles.legend} aria-label="Statusfarben">
-                {MAP_STATUS_LEGEND.map((item) => (
-                    <li key={item}>
-                        <span
-                            className={styles.legendDot}
-                            style={{
-                                background: VEHICLE_STATUS_COLORS[item],
-                            }}
-                        />
-                        {vehicleStatusLabel(item)}
-                    </li>
-                ))}
-            </ul>
+            <MapStatusLegend />
             {!following && (
                 <button
                     type="button"
                     className={styles.recenter}
                     onClick={recenter}
+                    aria-label="Karte wieder auf das Fahrzeug zentrieren und Folgen fortsetzen"
                 >
                     Fahrzeug zentrieren
                 </button>

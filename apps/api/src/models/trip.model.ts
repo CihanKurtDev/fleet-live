@@ -184,14 +184,6 @@ export class TripModel {
         return { suffix, reset };
     }
 
-    static appendPoint(
-        vehicleId: number,
-        point: GeoPoint,
-        speed: number,
-    ): { suffix: string; reset: boolean } | undefined {
-        return this.appendPoints(vehicleId, [point], speed);
-    }
-
     /**
      * Beendet die Fahrt und dickt den Verlauf ein. `distance_m` bleibt die
      * Summe der gemeldeten Teilstrecken, nicht die Länge der eingedickten

@@ -13,6 +13,8 @@ interface TableToolbarProps {
     onDeleteSelected?: () => void;
 
     onAddNew?: () => void;
+    addNewLabel?: string;
+    searchAriaLabel?: string;
 }
 
 export const TableToolbar = ({
@@ -24,6 +26,8 @@ export const TableToolbar = ({
     selectedCount = 0,
     onDeleteSelected,
     onAddNew,
+    addNewLabel,
+    searchAriaLabel,
 }: TableToolbarProps) => {
     const canDelete =
         isEditing && selectedCount > 0 && onDeleteSelected;
@@ -51,6 +55,7 @@ export const TableToolbar = ({
                         variant="primary"
                         size="sm"
                         onClick={onAddNew}
+                        aria-label={addNewLabel}
                     >
                         Neu
                     </Button>
@@ -72,7 +77,7 @@ export const TableToolbar = ({
                     type="search"
                     className={styles.searchInput}
                     placeholder={searchPlaceholder}
-                    aria-label={searchPlaceholder}
+                    aria-label={searchAriaLabel ?? searchPlaceholder}
                     value={search}
                     onChange={(event) =>
                         onSearchChange(event.target.value)

@@ -30,10 +30,12 @@ export const VehiclesPage = () => {
             <VehicleTable
                 onDeleteVehicles={deleteVehicles}
                 onAddVehicle={() => setIsCreateOpen(true)}
-                onSelectVehicle={(vehicle) => {
+                    onSelectVehicle={(vehicle) => {
                     rememberVehicle(vehicle);
                     setTelemetryFocus("detail", [vehicle.id]);
-                    navigate(`/vehicles/${vehicle.id}`);
+                    navigate(`/vehicles/${vehicle.id}`, {
+                        state: { from: "/vehicles" },
+                    });
                 }}
             />
 

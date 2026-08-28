@@ -78,9 +78,75 @@ const CITIES = [
 ];
 
 const PREFIXES = ["K", "D", "M", "B", "HH", "S", "F", "HB"];
-const FIRST_NAMES = ["Max", "Anna", "Tim", "Lisa", "Jonas", "Clara", "Peter", "Nina", "Lukas", "Sarah"];
-const LAST_NAMES = ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Hoffmann", "Schäfer"];
+const FIRST_NAMES = [
+    "Max",
+    "Anna",
+    "Tim",
+    "Lisa",
+    "Jonas",
+    "Clara",
+    "Peter",
+    "Nina",
+    "Lukas",
+    "Sarah",
+    "Tobias",
+    "Laura",
+    "Sven",
+    "Melanie",
+    "Felix",
+    "Lea",
+    "David",
+    "Marie",
+    "Paul",
+    "Sophie",
+    "Jan",
+    "Emma",
+    "Ben",
+    "Mia",
+    "Finn",
+];
+const LAST_NAMES = [
+    "Müller",
+    "Schmidt",
+    "Schneider",
+    "Fischer",
+    "Weber",
+    "Meyer",
+    "Wagner",
+    "Becker",
+    "Hoffmann",
+    "Schäfer",
+    "Bauer",
+    "Koch",
+    "Richter",
+    "Klein",
+    "Wolf",
+    "Schröder",
+    "Neumann",
+    "Schwarz",
+    "Zimmermann",
+    "Krüger",
+    "Hartmann",
+    "Lange",
+    "Werner",
+    "Krause",
+];
 const STATUSES = ["DRIVING", "DRIVING", "IDLE", "STOPPED", "OFFLINE"] as const;
+const DRIVER_NAME_CYCLE = FIRST_NAMES.length * LAST_NAMES.length;
+
+/** Cartesian first×last — same `%` on both lists only yields `min(len)` unique names. */
+function driverNameAt(index: number) {
+    const first = FIRST_NAMES[index % FIRST_NAMES.length];
+    const last =
+        LAST_NAMES[
+            Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length
+        ];
+    const generation = Math.floor(index / DRIVER_NAME_CYCLE);
+
+    return generation === 0
+        ? `${first} ${last}`
+        : `${first} ${last} ${generation + 1}`;
+}
 
 function randomInt(min: number, max: number) {
     return min + Math.floor(Math.random() * (max - min + 1));
@@ -150,9 +216,9 @@ function seedLarge() {
         for (let i = 0; i < vehicleCount; i += 1) {
             const prefix = PREFIXES[i % PREFIXES.length];
             const plate = `${prefix}-${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + ((i * 3) % 26))} ${String(i).padStart(5, "0")}`;
-            const driver = `${FIRST_NAMES[i % FIRST_NAMES.length]} ${LAST_NAMES[i % LAST_NAMES.length]}`;
+            const driver = driverNameAt(i);
             const fuel = randomInt(3, 100);
-            const status = STATUSES[i % STATUSES.length];
+            const status = STATUSES[randomInt(0, STATUSES.length - 1)];
 
             const result = insertVehicleStrict.run(
                 plate,
@@ -168,12 +234,17 @@ function seedLarge() {
 
             if (status !== "OFFLINE") {
                 const city = CITIES[i % CITIES.length];
+                // Spread around the city so zoom-in can drop under FLEET_POSITIONS_MAX.
+                const originLat =
+                    city.lat + ((((i * 17) % 401) - 200) * 0.00045);
+                const originLng =
+                    city.lng + ((((i * 29) % 401) - 200) * 0.0006);
 
                 for (let t = 0; t < telemetryPerVehicle; t += 1) {
                     const telemetry = insertTelemetry.run(
                         vehicleId,
-                        city.lat + (t * 0.001),
-                        city.lng + (t * 0.001),
+                        originLat + t * 0.00008,
+                        originLng + t * 0.00008,
                         status === "DRIVING" ? randomInt(30, 120) : 0,
                     );
                     lastTelemetryId.set(
