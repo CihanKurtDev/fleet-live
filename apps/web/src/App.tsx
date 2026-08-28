@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router';
 import { VehiclesProvider } from './context/VehiclesProvider';
+import { SimToggle } from './components/SimToggle';
 import './App.css'
 
 function App() {
@@ -7,6 +8,7 @@ function App() {
         <VehiclesProvider>
             <header className="appHeader">
                 <Link to="/vehicles">fleet-live</Link>
+                <SimToggle />
             </header>
 
             <main>

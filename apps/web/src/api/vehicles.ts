@@ -1,4 +1,5 @@
 import type {
+    TripResponse,
     Vehicle,
     VehicleInput,
     VehicleListQuery,
@@ -22,6 +23,13 @@ export function listVehicles(
 
 export function getVehicle(id: number, signal?: AbortSignal) {
     return request<Vehicle>(`/api/vehicles/${id}`, { signal });
+}
+
+/** Laufende Fahrt, sonst die letzte beendete — inklusive Streckenverlauf. */
+export function getVehicleTrip(id: number, signal?: AbortSignal) {
+    return request<TripResponse>(`/api/vehicles/${id}/trips/latest`, {
+        signal,
+    });
 }
 
 export function createVehicle(input: VehicleInput) {

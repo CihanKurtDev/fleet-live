@@ -3,6 +3,7 @@ import type {
     TableColumn,
     TableFilter,
 } from "../../types/table";
+import { vehicleStatusLabel } from "./vehicleStatus";
 
 /** Ab diesem Tankstand gilt ein Fahrzeug als kritisch. */
 const LOW_FUEL_THRESHOLD = 20;
@@ -27,13 +28,13 @@ export const vehicleFilters: TableFilter<Vehicle>[] = [
     },
     {
         id: "driving",
-        displayText: "Unterwegs",
+        displayText: "Auf Fahrt",
         customSearchFunc: (vehicle) =>
             vehicle.status === "DRIVING",
     },
     {
         id: "offline",
-        displayText: "Offline",
+        displayText: "Kein Signal",
         customSearchFunc: (vehicle) =>
             vehicle.status === "OFFLINE",
     },
@@ -69,6 +70,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "status",
         displayText: "Status",
         sortable: true,
+        render: (value) => vehicleStatusLabel(value),
 
         // Beispiel für eine eigene fachliche Sortierreihenfolge:
         //
@@ -85,9 +87,9 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     },
     {
         key: "fuel_level",
-        displayText: "Tank",
+        displayText: "Tankstand",
         sortable: true,
-        render: (value) => `${value}%`,
+        render: (value) => `${Math.round(value)}%`,
     },
     {
         key: "speed",
@@ -95,7 +97,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         sortable: true,
         render: (value) =>
             value === null
-                ? "-"
+                ? "—"
                 : `${value} km/h`,
     },
     {
@@ -105,6 +107,6 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         render: (value) =>
             value > 0
                 ? `${value}`
-                : "-",
+                : "—",
     },
 ];

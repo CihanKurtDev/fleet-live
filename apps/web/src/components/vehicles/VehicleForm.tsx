@@ -2,35 +2,30 @@ import { useId, useState, type FormEvent } from "react";
 import {
     DRIVER_NAME_MAX,
     LICENSE_PLATE_MAX,
-    VEHICLE_STATUSES,
     validateVehicleInput,
     type VehicleFieldErrors,
     type VehicleInput,
-    type VehicleStatus,
 } from "@fleet-live/shared";
 import { Button } from "../ui/Button/Button";
+import { NEW_VEHICLE_STATUS } from "./vehicleStatus";
 import styles from "./VehicleForm.module.scss";
 
-/** Im Formular bleibt der Tankstand ein String, damit das Feld leerbar ist. */
+/**
+ * Stammdaten sind das, was ein Mensch pflegt. Status und Position meldet das
+ * Fahrzeug; der Tankstand nur dann, wenn es gerade unterwegs ist.
+ *
+ * Der Tankstand bleibt im Formular ein String, damit das Feld leerbar ist.
+ */
 interface FormValues {
     license_plate: string;
     driver_name: string;
     fuel_level: string;
-    status: VehicleStatus;
 }
 
 const EMPTY_VALUES: FormValues = {
     license_plate: "",
     driver_name: "",
     fuel_level: "100",
-    status: "IDLE",
-};
-
-const STATUS_LABELS: Record<VehicleStatus, string> = {
-    IDLE: "Standby",
-    DRIVING: "Unterwegs",
-    STOPPED: "Gestoppt",
-    OFFLINE: "Offline",
 };
 
 const toValues = (input?: VehicleInput): FormValues =>
@@ -38,26 +33,19 @@ const toValues = (input?: VehicleInput): FormValues =>
         ? {
               license_plate: input.license_plate,
               driver_name: input.driver_name,
-              fuel_level: String(input.fuel_level),
-              status: input.status,
+              fuel_level: String(Math.round(input.fuel_level)),
           }
         : EMPTY_VALUES;
-
-const toInput = (
-    values: FormValues,
-): Partial<VehicleInput> => ({
-    license_plate: values.license_plate,
-    driver_name: values.driver_name,
-    fuel_level:
-        values.fuel_level.trim() === ""
-            ? Number.NaN
-            : Number(values.fuel_level),
-    status: values.status,
-});
 
 interface VehicleFormProps {
     /** Vorhanden im Bearbeiten-Modus, leer beim Anlegen. */
     initialValue?: VehicleInput;
+
+    /**
+     * Solange das Fahrzeug fährt, kommt der Tankstand aus der Telemetrie.
+     * Dann wird er nur angezeigt und nicht überschrieben.
+     */
+    isFuelMeasured?: boolean;
 
     submitLabel: string;
     onSubmit: (
@@ -68,6 +56,7 @@ interface VehicleFormProps {
 
 export const VehicleForm = ({
     initialValue,
+    isFuelMeasured = false,
     submitLabel,
     onSubmit,
     onCancel,
@@ -84,9 +73,28 @@ export const VehicleForm = ({
 
     const isEditing = initialValue !== undefined;
 
+    const toInput = (): Partial<VehicleInput> => ({
+        license_plate: values.license_plate,
+        driver_name: values.driver_name,
+        // Ein gemessener Tankstand darf nicht durch einen alten Formularwert
+        // ersetzt werden, während der Simulator ihn weiterschreibt.
+        fuel_level:
+            isFuelMeasured && initialValue
+                ? initialValue.fuel_level
+                : values.fuel_level.trim() === ""
+                  ? Number.NaN
+                  : Number(values.fuel_level),
+        status: initialValue?.status ?? NEW_VEHICLE_STATUS,
+    });
+
+    const editable = ({ license_plate, driver_name, fuel_level }: FormValues) =>
+        isFuelMeasured
+            ? { license_plate, driver_name }
+            : { license_plate, driver_name, fuel_level };
+
     const isDirty =
-        JSON.stringify(values) !==
-        JSON.stringify(toValues(initialValue));
+        JSON.stringify(editable(values)) !==
+        JSON.stringify(editable(toValues(initialValue)));
 
     const setField = <Key extends keyof FormValues>(
         key: Key,
@@ -110,7 +118,7 @@ export const VehicleForm = ({
         event.preventDefault();
         setWasSubmitted(true);
 
-        const input = toInput(values);
+        const input = toInput();
         const validationErrors = validateVehicleInput(input);
 
         if (Object.keys(validationErrors).length > 0) {
@@ -195,61 +203,41 @@ export const VehicleForm = ({
                 )}
             </div>
 
-            <div className={styles.row}>
-                <div className={styles.field}>
-                    <label htmlFor={`${fieldId}-fuel`}>
-                        Tankstand (%)
-                    </label>
-                    <input
-                        id={`${fieldId}-fuel`}
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={values.fuel_level}
-                        onChange={(event) =>
-                            setField(
-                                "fuel_level",
-                                event.target.value,
-                            )
-                        }
-                        aria-invalid={
-                            errorFor("fuel_level") !== undefined
-                        }
-                    />
-                    {errorFor("fuel_level") && (
-                        <p className={styles.error} role="alert">
-                            {errorFor("fuel_level")}
-                        </p>
-                    )}
-                </div>
-
-                <div className={styles.field}>
-                    <label htmlFor={`${fieldId}-status`}>
-                        Status
-                    </label>
-                    <select
-                        id={`${fieldId}-status`}
-                        value={values.status}
-                        onChange={(event) =>
-                            setField(
-                                "status",
-                                event.target
-                                    .value as VehicleStatus,
-                            )
-                        }
-                    >
-                        {VEHICLE_STATUSES.map((status) => (
-                            <option key={status} value={status}>
-                                {STATUS_LABELS[status]}
-                            </option>
-                        ))}
-                    </select>
-                    {errorFor("status") && (
-                        <p className={styles.error} role="alert">
-                            {errorFor("status")}
-                        </p>
-                    )}
-                </div>
+            <div className={styles.field}>
+                <label htmlFor={`${fieldId}-fuel`}>
+                    Tankstand (%)
+                </label>
+                <input
+                    id={`${fieldId}-fuel`}
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={values.fuel_level}
+                    disabled={isFuelMeasured}
+                    onChange={(event) =>
+                        setField(
+                            "fuel_level",
+                            event.target.value,
+                        )
+                    }
+                    aria-invalid={
+                        errorFor("fuel_level") !== undefined
+                    }
+                    aria-describedby={
+                        isFuelMeasured ? `${fieldId}-fuel-hint` : undefined
+                    }
+                />
+                {isFuelMeasured && (
+                    <p className={styles.hint} id={`${fieldId}-fuel-hint`}>
+                        Wird während der Fahrt vom Fahrzeug gemeldet. Von Hand
+                        pflegbar, sobald die Fahrt beendet ist.
+                    </p>
+                )}
+                {errorFor("fuel_level") && (
+                    <p className={styles.error} role="alert">
+                        {errorFor("fuel_level")}
+                    </p>
+                )}
             </div>
 
             <div className={styles.actions}>

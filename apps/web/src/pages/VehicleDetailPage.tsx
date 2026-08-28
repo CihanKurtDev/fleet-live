@@ -1,26 +1,128 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import type { VehicleInput } from "@fleet-live/shared";
+import type { Trip, VehicleInput } from "@fleet-live/shared";
+import { decodePolyline } from "@fleet-live/shared";
 
+import { isAbortError } from "../api/client";
+import { retryTransient } from "../api/retryTransient";
+import { getVehicleTrip } from "../api/vehicles";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
+import {
+    VehicleMap,
+    type MapPoint,
+} from "../components/vehicles/VehicleMap";
+import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { useVehicles } from "../context/vehiclesContext";
 import { useVehicle } from "../hooks/useVehicle";
+import { formatTimestamp } from "../utils/dateTime";
 import styles from "./VehicleDetailPage.module.scss";
 
 const formatCoordinate = (value: number | null) =>
     value === null ? "—" : value.toFixed(4);
 
+const formatKilometers = (meters: number) =>
+    `${(meters / 1_000).toLocaleString("de-DE", {
+        maximumFractionDigits: 1,
+    })} km`;
+
+/**
+ * Strecke und Spitzentempo erst zur beendeten Fahrt: die Werte werden einmal
+ * geladen und würden während der Fahrt eingefroren stehen bleiben.
+ */
+const describeTrip = (trip: Trip): string => {
+    if (trip.ended_at === null) {
+        return `Fahrt läuft seit ${formatTimestamp(trip.started_at)}.`;
+    }
+
+    return `Letzte Fahrt beendet ${formatTimestamp(trip.ended_at)} · ${formatKilometers(
+        trip.distance_m,
+    )} · Spitze ${Math.round(trip.max_speed)} km/h`;
+};
+
 export const VehicleDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { updateVehicle, deleteVehicles } = useVehicles();
+    const { updateVehicle, deleteVehicles, subscribeTripPath } =
+        useVehicles();
 
     const vehicleId = Number(id);
     const parsedId = Number.isInteger(vehicleId) ? vehicleId : null;
     const { vehicle, isLoading, error, notFound } = useVehicle(parsedId);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [tripVehicleId, setTripVehicleId] = useState(parsedId);
+    const [trip, setTrip] = useState<Trip | null>(null);
+    const [livePath, setLivePath] = useState("");
+
+    if (parsedId !== tripVehicleId) {
+        setTripVehicleId(parsedId);
+        setTrip(null);
+        setLivePath("");
+    }
+
+    useEffect(() => {
+        if (parsedId === null) {
+            return;
+        }
+
+        return subscribeTripPath((vehicleId, delta, reset) => {
+            if (vehicleId !== parsedId) {
+                return;
+            }
+
+            if (reset) {
+                setTrip((current) =>
+                    current
+                        ? {
+                              ...current,
+                              path: "",
+                              ended_at: null,
+                              distance_m: 0,
+                              point_count: 0,
+                          }
+                        : current,
+                );
+                setLivePath(delta);
+                return;
+            }
+
+            setLivePath((current) => current + delta);
+        });
+    }, [parsedId, subscribeTripPath]);
+
+    useEffect(() => {
+        if (parsedId === null) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        retryTransient(
+            () => getVehicleTrip(parsedId, controller.signal),
+            controller.signal,
+        )
+            .then((response) => {
+                setTrip(response.data);
+                setLivePath("");
+            })
+            .catch((caught: unknown) => {
+                if (!isAbortError(caught)) {
+                    setTrip(null);
+                }
+            });
+
+        return () => controller.abort();
+    }, [parsedId]);
+
+    const trail = useMemo<MapPoint[]>(
+        () =>
+            decodePolyline((trip?.path ?? "") + livePath).map((point) => ({
+                latitude: point.lat,
+                longitude: point.lng,
+            })),
+        [trip?.path, livePath],
+    );
 
     if (isLoading) {
         return (
@@ -55,6 +157,14 @@ export const VehicleDetailPage = () => {
         );
     }
 
+    const isDriving = vehicle.status === "DRIVING";
+    const position =
+        vehicle.recorded_at !== null &&
+        vehicle.latitude !== null &&
+        vehicle.longitude !== null
+            ? { latitude: vehicle.latitude, longitude: vehicle.longitude }
+            : null;
+
     const handleSubmit = (input: VehicleInput) =>
         updateVehicle(vehicle.id, input);
 
@@ -72,17 +182,27 @@ export const VehicleDetailPage = () => {
             </Link>
 
             <header className={styles.header}>
-                <h1 className={styles.title}>
-                    {vehicle.license_plate}
-                </h1>
+                <div className={styles.heading}>
+                    <h1 className={styles.title}>
+                        {vehicle.license_plate}
+                    </h1>
+                    <span
+                        className={styles.badge}
+                        data-status={vehicle.status}
+                    >
+                        {vehicleStatusLabel(vehicle.status)}
+                    </span>
+                </div>
 
-                <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={requestDelete}
-                >
-                    Fahrzeug löschen
-                </Button>
+                <div className={styles.actions}>
+                    <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={requestDelete}
+                    >
+                        Fahrzeug löschen
+                    </Button>
+                </div>
             </header>
 
             <section className={styles.panel}>
@@ -90,42 +210,61 @@ export const VehicleDetailPage = () => {
                     Letzte Position
                 </h2>
 
-                {vehicle.recorded_at ? (
-                    <dl className={styles.facts}>
-                        <div>
-                            <dt>Breite</dt>
-                            <dd>
-                                {formatCoordinate(
-                                    vehicle.latitude,
-                                )}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Länge</dt>
-                            <dd>
-                                {formatCoordinate(
-                                    vehicle.longitude,
-                                )}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Geschwindigkeit</dt>
-                            <dd>
-                                {vehicle.speed === null
-                                    ? "—"
-                                    : `${vehicle.speed} km/h`}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Gemeldet</dt>
-                            <dd>{vehicle.recorded_at}</dd>
-                        </div>
-                    </dl>
+                {position ? (
+                    <div className={styles.positionBody}>
+                        <VehicleMap
+                            key={vehicle.id}
+                            latitude={position.latitude}
+                            longitude={position.longitude}
+                            label={vehicle.license_plate}
+                            status={vehicle.status}
+                            trail={trail}
+                        />
+                        <dl className={styles.facts}>
+                            <div>
+                                <dt>Breitengrad</dt>
+                                <dd>
+                                    {formatCoordinate(
+                                        position.latitude,
+                                    )}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Längengrad</dt>
+                                <dd>
+                                    {formatCoordinate(
+                                        position.longitude,
+                                    )}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Geschwindigkeit</dt>
+                                <dd>
+                                    {vehicle.speed === null
+                                        ? "—"
+                                        : `${vehicle.speed} km/h`}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Letzte Meldung</dt>
+                                <dd>
+                                    {formatTimestamp(
+                                        vehicle.recorded_at,
+                                    )}
+                                </dd>
+                            </div>
+                        </dl>
+                        <p className={styles.note}>
+                            {trip
+                                ? describeTrip(trip)
+                                : "Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."}
+                        </p>
+                    </div>
                 ) : (
                     <p className={styles.empty}>
-                        {vehicle.status === "DRIVING"
-                            ? "Noch kein Datenpunkt — sobald der Simulator dieses Fahrzeug in einer Scheibe hat, erscheinen hier Position und Tempo."
-                            : `Keine Telemetrie. Der Simulator sendet nur an Fahrzeuge mit Status DRIVING (aktuell: ${vehicle.status}).`}
+                        {isDriving
+                            ? "Noch keine Position gemeldet. Sobald das Fahrzeug Daten sendet, erscheinen hier Karte und Tempo."
+                            : "Dieses Fahrzeug hat noch keine Position gemeldet."}
                     </p>
                 )}
             </section>
@@ -142,6 +281,7 @@ export const VehicleDetailPage = () => {
                         fuel_level: vehicle.fuel_level,
                         status: vehicle.status,
                     }}
+                    isFuelMeasured={isDriving}
                     submitLabel="Speichern"
                     onSubmit={handleSubmit}
                 />
