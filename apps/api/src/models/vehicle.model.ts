@@ -241,7 +241,7 @@ export class VehicleModel {
     static resetForTests() {
         db.exec("DELETE FROM vehicles");
         db.exec(
-            "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts')",
+            "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts', 'trips')",
         );
     }
 }

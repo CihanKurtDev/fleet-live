@@ -3,11 +3,14 @@ import {
     parseTelemetryHistoryQuery,
     parseVehicleListQuery,
     validateVehicleInput,
+    type Vehicle,
     type VehicleFieldErrors,
     type VehicleInput,
+    type VehicleStatus,
 } from "@fleet-live/shared";
 import { VehicleModel } from "../models/vehicle.model";
 import { TelemetryModel } from "../models/telemetry.model";
+import { TripModel } from "../models/trip.model";
 import {
     BadRequestError,
     NotFoundError,
@@ -71,6 +74,34 @@ function notifyVehiclesChanged() {
     broadcast("vehicles-changed", { at: Date.now() });
 }
 
+/**
+ * Hält die Fahrt am Status fest: `DRIVING` öffnet sie, jeder andere Status
+ * beendet sie. Beim Beenden kommt ein Abschlusspunkt mit Tempo 0 dazu, damit
+ * ein stehendes Fahrzeug nicht weiter mit Reisegeschwindigkeit erscheint.
+ */
+function syncTrip(
+    id: number,
+    previousStatus: VehicleStatus | undefined,
+    updated: Vehicle,
+): Vehicle {
+    const wasDriving = previousStatus === "DRIVING";
+    const isDriving = updated.status === "DRIVING";
+
+    if (wasDriving === isDriving) {
+        return updated;
+    }
+
+    if (isDriving) {
+        TripModel.open(id);
+        return updated;
+    }
+
+    TelemetryModel.recordStandstill(id);
+    TripModel.close(id);
+
+    return VehicleModel.getById(id) ?? updated;
+}
+
 export function getVehicles(req: Request, res: Response) {
     const started = performance.now();
     const query = parseVehicleListQuery(req.query);
@@ -108,6 +139,21 @@ export function getVehicleTelemetry(req: Request, res: Response) {
     res.json({ data });
 }
 
+/**
+ * Der Streckenverlauf der laufenden Fahrt, sonst der der letzten beendeten.
+ * `data: null`, solange das Fahrzeug nie gefahren ist — das ist kein Fehler.
+ */
+export function getVehicleTrip(req: Request, res: Response) {
+    const id = parseId(req.params.id);
+
+    if (!VehicleModel.getById(id)) {
+        throw new NotFoundError();
+    }
+
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.json({ data: TripModel.latestForVehicle(id) });
+}
+
 export function createVehicle(req: Request, res: Response) {
     const input = readInput(req.body);
     const errors = validateVehicleInput(input, { partial: true });
@@ -133,6 +179,10 @@ export function createVehicle(req: Request, res: Response) {
         status,
     });
 
+    if (vehicle.status === "DRIVING") {
+        TripModel.open(vehicle.id);
+    }
+
     notifyVehiclesChanged();
     res.status(201).location(`/api/vehicles/${vehicle.id}`).json(vehicle);
 }
@@ -146,6 +196,7 @@ export function replaceVehicle(req: Request, res: Response) {
         throwFieldErrors(errors);
     }
 
+    const previous = VehicleModel.getById(id);
     const vehicle = VehicleModel.replace(
         id,
         trimStrings(input) as VehicleInput,
@@ -156,7 +207,7 @@ export function replaceVehicle(req: Request, res: Response) {
     }
 
     notifyVehiclesChanged();
-    res.json(vehicle);
+    res.json(syncTrip(id, previous?.status, vehicle));
 }
 
 export function updateVehicle(req: Request, res: Response) {
@@ -173,6 +224,7 @@ export function updateVehicle(req: Request, res: Response) {
         throwFieldErrors(errors);
     }
 
+    const previous = VehicleModel.getById(id);
     const vehicle = VehicleModel.update(id, trimStrings(input));
 
     if (!vehicle) {
@@ -180,7 +232,7 @@ export function updateVehicle(req: Request, res: Response) {
     }
 
     notifyVehiclesChanged();
-    res.json(vehicle);
+    res.json(syncTrip(id, previous?.status, vehicle));
 }
 
 export function deleteVehicle(req: Request, res: Response) {

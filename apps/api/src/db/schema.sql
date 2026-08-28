@@ -37,6 +37,29 @@ CREATE TABLE IF NOT EXISTS telemetry (
         ON DELETE CASCADE
 );
 
+-- Eine Fahrt hält den gefahrenen Verlauf dauerhaft als Encoded Polyline.
+-- Damit hängt die sichtbare Strecke an der Fahrt und nicht an der Anzahl
+-- gespeicherter Rohpunkte: eine Zeile trägt auch 500 km.
+CREATE TABLE IF NOT EXISTS trips (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER NOT NULL,
+    started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at TEXT,
+    path TEXT NOT NULL DEFAULT '',
+    point_count INTEGER NOT NULL DEFAULT 0,
+    distance_m REAL NOT NULL DEFAULT 0,
+    max_speed REAL NOT NULL DEFAULT 0,
+
+    -- Letzter kodierter Punkt. Die Polyline speichert Deltas, deshalb braucht
+    -- das Anhängen den Vorgänger, ohne den ganzen Verlauf zu dekodieren.
+    last_latitude REAL,
+    last_longitude REAL,
+
+    FOREIGN KEY (vehicle_id)
+        REFERENCES vehicles(id)
+        ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle_id INTEGER NOT NULL,

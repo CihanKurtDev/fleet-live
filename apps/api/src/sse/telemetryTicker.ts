@@ -3,9 +3,16 @@ import { TelemetryModel } from "../models/telemetry.model";
 import { broadcast, getFocusUnion } from "./hub";
 
 let timer: ReturnType<typeof setInterval> | undefined;
+let intervalMs = 0;
 
-export function startTelemetryTicker(intervalMs: number) {
-    if (timer || intervalMs <= 0) {
+export function isTelemetryTickerRunning(): boolean {
+    return timer !== undefined;
+}
+
+export function startTelemetryTicker(ms: number) {
+    intervalMs = ms;
+
+    if (timer || ms <= 0) {
         return;
     }
 
@@ -25,10 +32,10 @@ export function startTelemetryTicker(intervalMs: number) {
         } catch (error) {
             logger.error({ err: error }, "telemetry tick failed");
         }
-    }, intervalMs);
+    }, ms);
 
     timer.unref?.();
-    logger.info({ intervalMs }, "telemetry ticker started");
+    logger.info({ intervalMs: ms }, "telemetry ticker started");
 }
 
 export function stopTelemetryTicker() {
@@ -38,4 +45,15 @@ export function stopTelemetryTicker() {
 
     clearInterval(timer);
     timer = undefined;
+    logger.info("telemetry ticker stopped");
+}
+
+export function setTelemetryTickerRunning(running: boolean): boolean {
+    if (running) {
+        startTelemetryTicker(intervalMs);
+    } else {
+        stopTelemetryTicker();
+    }
+
+    return isTelemetryTickerRunning();
 }

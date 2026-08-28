@@ -3,11 +3,24 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { VehicleStatus } from "@fleet-live/shared";
+import { decodePolyline, encodePolyline } from "@fleet-live/shared";
 import request from "supertest";
 import { app } from "../app";
 import { db } from "../db/database";
+import { simplifyPath } from "../lib/geo";
 import { TelemetryModel } from "../models/telemetry.model";
+import { TripModel } from "../models/trip.model";
 import { VehicleModel } from "../models/vehicle.model";
+import {
+    CITY_LIMIT_KMH,
+    HIGHWAY_LIMIT_KMH,
+    SIM_ROUTES,
+    haversineMeters,
+    resetSimProgress,
+    seedSimProgress,
+    speedLimitKmh,
+    verticesBetween,
+} from "../sim/routes";
 import { broadcast, closeAllSseClients } from "../sse/hub";
 
 function seedFleet(count = 3) {
@@ -137,6 +150,7 @@ async function openSseStream(port: number) {
 
 afterEach(() => {
     VehicleModel.resetForTests();
+    resetSimProgress();
     closeAllSseClients();
 });
 
@@ -359,6 +373,25 @@ describe("vehicle mutations", () => {
     });
 });
 
+describe("GET /api/sim", () => {
+    it("reports that the ticker is off in tests", async () => {
+        const response = await request(app).get("/api/sim");
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.running, false);
+        assert.equal(response.body.available, false);
+    });
+
+    it("rejects enabling the ticker when TELEMETRY_TICK_MS is 0", async () => {
+        const response = await request(app)
+            .patch("/api/sim")
+            .send({ running: true });
+
+        assert.equal(response.status, 400);
+        assert.equal(response.body.code, "BAD_REQUEST");
+    });
+});
+
 describe("GET /api/vehicles/:id/telemetry", () => {
     it("returns 404 for a missing vehicle", async () => {
         const response = await request(app).get("/api/vehicles/999/telemetry");
@@ -578,5 +611,427 @@ describe("GET /api/stream", () => {
                 server.close((error) => (error ? reject(error) : resolve()));
             });
         }
+    });
+});
+
+describe("telemetry route simulation", () => {
+    it("moves along a corridor instead of jittering in place", () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SIM 1",
+            driver_name: "Route",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.2);
+        const start = { lat: 50.9375, lng: 6.9603 };
+        const points: Array<{ lat: number; lng: number }> = [];
+
+        for (let index = 0; index < 20; index += 1) {
+            const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+            assert.ok(patch);
+            points.push({ lat: patch.latitude, lng: patch.longitude });
+        }
+
+        const last = points[points.length - 1];
+        assert.ok(last);
+        assert.ok(haversineMeters(start, last) > 2_000);
+
+        const mid = points[9];
+        assert.ok(mid);
+        assert.ok(
+            haversineMeters(start, last) > haversineMeters(start, mid),
+        );
+    });
+
+    it("reverses direction after reaching the end of the route", () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SIM 2",
+            driver_name: "Pendel",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.97);
+        const origin = { lat: 50.9375, lng: 6.9603 };
+        let farthest = 0;
+        let lastDistance = 0;
+
+        for (let index = 0; index < 80; index += 1) {
+            const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+            assert.ok(patch);
+            lastDistance = haversineMeters(origin, {
+                lat: patch.latitude,
+                lng: patch.longitude,
+            });
+            farthest = Math.max(farthest, lastDistance);
+        }
+
+        assert.ok(farthest > 20_000);
+        assert.ok(lastDistance < farthest - 1_000);
+    });
+
+    it("starts a new trip when the route reverses", () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SIM 2b",
+            driver_name: "Neue Fahrt",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.97);
+
+        let resets = 0;
+
+        for (let index = 0; index < 80; index += 1) {
+            const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+            assert.ok(patch);
+
+            if (patch.path_reset) {
+                resets += 1;
+            }
+        }
+
+        assert.ok(resets >= 2);
+
+        const latest = TripModel.latestForVehicle(vehicle.id);
+        assert.ok(latest);
+        assert.equal(latest.ended_at, null);
+
+        const counts = db
+            .prepare(
+                `SELECT
+                    COALESCE(SUM(ended_at IS NOT NULL), 0) AS closed,
+                    COALESCE(SUM(ended_at IS NULL), 0) AS open
+                 FROM trips WHERE vehicle_id = ?`,
+            )
+            .get(vehicle.id) as { closed: number; open: number };
+
+        assert.equal(counts.open, 1);
+        assert.ok(counts.closed >= 1);
+        assert.ok(latest.distance_m < 15_000);
+    });
+
+    it("keeps displayed speed within the local limit", () => {
+        assert.equal(speedLimitKmh(0), CITY_LIMIT_KMH);
+        assert.equal(speedLimitKmh(0.5), HIGHWAY_LIMIT_KMH);
+        assert.equal(speedLimitKmh(1), CITY_LIMIT_KMH);
+
+        const cityVehicle = VehicleModel.create({
+            license_plate: "K-SIM 3",
+            driver_name: "Stadt",
+            status: "DRIVING",
+        });
+        seedSimProgress(cityVehicle.id, "koeln-duesseldorf", 0.02);
+
+        const [city] = TelemetryModel.tickDrivingVehicles([
+            cityVehicle.id,
+        ]);
+        assert.ok(city);
+        assert.ok(city.speed <= CITY_LIMIT_KMH);
+        assert.ok(city.speed >= 30);
+
+        const highwayVehicle = VehicleModel.create({
+            license_plate: "K-SIM 4",
+            driver_name: "Autobahn",
+            status: "DRIVING",
+        });
+        seedSimProgress(highwayVehicle.id, "koeln-duesseldorf", 0.5);
+
+        const [highway] = TelemetryModel.tickDrivingVehicles([
+            highwayVehicle.id,
+        ]);
+        assert.ok(highway);
+        assert.ok(highway.speed <= HIGHWAY_LIMIT_KMH);
+        assert.ok(highway.speed >= HIGHWAY_LIMIT_KMH - 15);
+    });
+
+    it("uses fuel while driving", () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SIM 5",
+            driver_name: "Verbrauch",
+            fuel_level: 80,
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.5);
+
+        const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+
+        assert.ok(patch);
+        assert.ok(patch.fuel_level < 80);
+        assert.equal(
+            VehicleModel.getById(vehicle.id)?.fuel_level,
+            patch.fuel_level,
+        );
+    });
+});
+
+describe("trip lifecycle", () => {
+    it("reports standstill when a trip ends", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TRIP 1",
+            driver_name: "Feierabend",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.5);
+        TelemetryModel.tickDrivingVehicles([vehicle.id]);
+
+        assert.ok((VehicleModel.getById(vehicle.id)?.speed ?? 0) > 0);
+
+        const response = await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "STOPPED" });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.status, "STOPPED");
+        assert.equal(response.body.speed, 0);
+    });
+
+    it("keeps the last position when a trip ends", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TRIP 2",
+            driver_name: "Position",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.5);
+        const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+        assert.ok(patch);
+
+        const response = await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "IDLE" });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.latitude, patch.latitude);
+        assert.equal(response.body.longitude, patch.longitude);
+    });
+
+    it("does not invent telemetry for a vehicle that never reported", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TRIP 3",
+            driver_name: "Ohne Signal",
+            status: "DRIVING",
+        });
+
+        const response = await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "STOPPED" });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.speed, null);
+        assert.equal(response.body.recorded_at, null);
+        assert.equal(TelemetryModel.countForVehicle(vehicle.id), 0);
+    });
+
+    it("opens one trip per drive and closes it on stop", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TRIP 4",
+            driver_name: "Zwei Fahrten",
+            status: "IDLE",
+        });
+
+        const countTrips = (openOnly: boolean) =>
+            (
+                db
+                    .prepare(
+                        `SELECT COUNT(*) AS total FROM trips
+                         WHERE vehicle_id = ?
+                           ${openOnly ? "AND ended_at IS NULL" : ""}`,
+                    )
+                    .get(vehicle.id) as { total: number }
+            ).total;
+
+        await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "DRIVING" });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.3);
+        TelemetryModel.tickDrivingVehicles([vehicle.id]);
+
+        assert.equal(countTrips(true), 1);
+
+        // Ein zweiter DRIVING-Patch ist kein Fahrtbeginn.
+        await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "DRIVING" });
+
+        assert.equal(countTrips(true), 1);
+
+        await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "STOPPED" });
+
+        assert.equal(countTrips(true), 0);
+        assert.equal(countTrips(false), 1);
+
+        await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "DRIVING" });
+
+        assert.equal(countTrips(true), 1);
+        assert.equal(countTrips(false), 2);
+    });
+});
+
+describe("GET /api/vehicles/:id/trips/latest", () => {
+    it("returns 404 for a missing vehicle", async () => {
+        const response = await request(app).get(
+            "/api/vehicles/999/trips/latest",
+        );
+
+        assert.equal(response.status, 404);
+    });
+
+    it("returns null for a vehicle that never drove", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TRP 1",
+            driver_name: "Nie gefahren",
+        });
+
+        const response = await request(app).get(
+            `/api/vehicles/${vehicle.id}/trips/latest`,
+        );
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data, null);
+    });
+
+    /**
+     * Der Kern der Fahrten-Ebene: der Verlauf hängt an der Fahrt, nicht am
+     * Rohfenster. Die Tests laufen mit TELEMETRY_KEEP_PER_VEHICLE = 3.
+     */
+    it("keeps the full trip while the raw window rolls over", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TRP 2",
+            driver_name: "Lange Strecke",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.2);
+
+        const ticks = 60;
+        for (let index = 0; index < ticks; index += 1) {
+            TelemetryModel.tickDrivingVehicles([vehicle.id]);
+        }
+
+        assert.ok(TelemetryModel.countForVehicle(vehicle.id) <= 3);
+
+        const response = await request(app).get(
+            `/api/vehicles/${vehicle.id}/trips/latest`,
+        );
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.ended_at, null);
+
+        const path = decodePolyline(response.body.data.path);
+        assert.ok(
+            path.length > ticks,
+            `road vertices should outnumber ticks: ${path.length} vs ${ticks}`,
+        );
+        assert.ok(response.body.data.distance_m > 10_000);
+        assert.ok(response.body.data.max_speed > 50);
+    });
+
+    it("simplifies the path on stop without moving the route", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TRP 3",
+            driver_name: "Eingedickt",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.2);
+
+        for (let index = 0; index < 60; index += 1) {
+            TelemetryModel.tickDrivingVehicles([vehicle.id]);
+        }
+
+        const running = await request(app).get(
+            `/api/vehicles/${vehicle.id}/trips/latest`,
+        );
+        const before = decodePolyline(running.body.data.path);
+        const drivenMeters = running.body.data.distance_m;
+
+        await request(app)
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "STOPPED" });
+
+        const stopped = await request(app).get(
+            `/api/vehicles/${vehicle.id}/trips/latest`,
+        );
+        const after = decodePolyline(stopped.body.data.path);
+
+        assert.ok(stopped.body.data.ended_at);
+        assert.ok(after.length >= 2);
+        assert.ok(after.length < before.length);
+        assert.equal(stopped.body.data.point_count, after.length);
+
+        // Die gefahrene Strecke bleibt die gefahrene Strecke.
+        assert.equal(stopped.body.data.distance_m, drivenMeters);
+
+        // Anfang und Ende der Linie verschieben sich nicht.
+        const first = before[0];
+        const last = before[before.length - 1];
+        assert.ok(first && last);
+        assert.ok(haversineMeters(first, after[0]!) < 1);
+        assert.ok(haversineMeters(last, after[after.length - 1]!) < 1);
+    });
+});
+
+describe("polyline geometry", () => {
+    it("round-trips coordinates within a metre", () => {
+        const points = [
+            { lat: 50.9375, lng: 6.9603 },
+            { lat: 51.2277, lng: 6.7735 },
+            { lat: 52.52, lng: 13.405 },
+            { lat: 48.1351, lng: 11.582 },
+        ];
+
+        const decoded = decodePolyline(encodePolyline(points));
+
+        assert.equal(decoded.length, points.length);
+        for (let index = 0; index < points.length; index += 1) {
+            assert.ok(haversineMeters(decoded[index]!, points[index]!) < 1);
+        }
+    });
+
+    it("encodes a long route far below the size of a point list", () => {
+        const points = Array.from({ length: 2_000 }, (_, index) => ({
+            lat: 50 + index * 0.0002,
+            lng: 7 + index * 0.0003,
+        }));
+
+        const encoded = encodePolyline(points);
+        const asJson = JSON.stringify(points);
+
+        assert.ok(
+            encoded.length * 5 < asJson.length,
+            `encoded ${encoded.length} vs json ${asJson.length}`,
+        );
+    });
+
+    it("drops points on a straight line and keeps corners", () => {
+        const straight = Array.from({ length: 50 }, (_, index) => ({
+            lat: 50 + index * 0.001,
+            lng: 7,
+        }));
+
+        assert.deepEqual(simplifyPath(straight, 12), [
+            straight[0],
+            straight[straight.length - 1],
+        ]);
+
+        const corner = [
+            { lat: 50, lng: 7 },
+            { lat: 50.02, lng: 7 },
+            { lat: 50.02, lng: 7.02 },
+        ];
+
+        assert.equal(simplifyPath(corner, 12).length, 3);
+    });
+});
+
+describe("route vertices", () => {
+    it("returns the road shape between two fractions, not a chord", () => {
+        const route = SIM_ROUTES.find(
+            (entry) => entry.id === "koeln-duesseldorf",
+        );
+        assert.ok(route);
+
+        const slice = verticesBetween(route.points, 0, 0.03);
+        assert.ok(
+            slice.length > 5,
+            `expected a curve, got ${slice.length} points`,
+        );
     });
 });

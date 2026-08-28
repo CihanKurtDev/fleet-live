@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 type TableColumn = {
     name: string;
@@ -34,6 +34,15 @@ CREATE INDEX IF NOT EXISTS idx_alerts_open
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_search
     ON vehicles(search_text);
+
+CREATE INDEX IF NOT EXISTS idx_trips_vehicle_started
+    ON trips(vehicle_id, started_at DESC, id DESC);
+
+-- Ein Fahrzeug kann nur auf einer Fahrt sein. Die Invariante gehört in die
+-- Datenbank, nicht in die Reihenfolge der Controller-Aufrufe.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trips_open
+    ON trips(vehicle_id)
+    WHERE ended_at IS NULL;
 
 CREATE TRIGGER IF NOT EXISTS trg_telemetry_after_insert
 AFTER INSERT ON telemetry
@@ -143,6 +152,14 @@ function migrateToV1(database: DatabaseSync) {
     `);
 }
 
+/**
+ * `trips` legt schema.sql selbst an (CREATE TABLE IF NOT EXISTS läuft bei
+ * jedem Start). Fehlen hier nur die Indizes für bestehende Datenbanken.
+ */
+function migrateToV2(database: DatabaseSync) {
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -151,6 +168,10 @@ export function migrate(database: DatabaseSync) {
 
     if (currentVersion < 1) {
         migrateToV1(database);
+    }
+
+    if (currentVersion < 2) {
+        migrateToV2(database);
     }
 
     if (currentVersion < SCHEMA_VERSION) {
