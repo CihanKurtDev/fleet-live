@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import type { Trip, VehicleInput } from "@fleet-live/shared";
 import { decodePolyline } from "@fleet-live/shared";
@@ -27,6 +27,21 @@ const formatKilometers = (meters: number) =>
         maximumFractionDigits: 1,
     })} km`;
 
+const readBackTarget = (
+    state: unknown,
+): { from: string; fromHistory: boolean } => {
+    if (
+        typeof state === "object" &&
+        state !== null &&
+        "from" in state &&
+        typeof state.from === "string"
+    ) {
+        return { from: state.from, fromHistory: true };
+    }
+
+    return { from: "/vehicles", fromHistory: false };
+};
+
 /**
  * Strecke und Spitzentempo erst zur beendeten Fahrt: die Werte werden einmal
  * geladen und würden während der Fahrt eingefroren stehen bleiben.
@@ -45,13 +60,7 @@ export const VehicleDetailPage = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
-    const from =
-        typeof location.state === "object" &&
-        location.state !== null &&
-        "from" in location.state &&
-        typeof location.state.from === "string"
-            ? location.state.from
-            : "/vehicles";
+    const { from, fromHistory } = readBackTarget(location.state);
     const backToFleet = from.startsWith("/fleet");
     const { updateVehicle, deleteVehicles, subscribeTripPath } =
         useVehicles();
@@ -184,9 +193,25 @@ export const VehicleDetailPage = () => {
 
     const requestDelete = () => setConfirmDelete(true);
 
+    const handleBack = (event: MouseEvent<HTMLAnchorElement>) => {
+        if (
+            !fromHistory ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        navigate(-1);
+    };
+
     return (
         <section className={styles.page}>
-            <Link className={styles.back} to={from}>
+            <Link className={styles.back} to={from} onClick={handleBack}>
                 {backToFleet
                     ? "Zurück zur Karte"
                     : "Zurück zur Übersicht"}

@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet, ScrollRestoration } from 'react-router';
 import { VehiclesProvider } from './context/VehiclesProvider';
 import { SimToggle } from './components/SimToggle';
 import './App.css'
@@ -18,6 +18,7 @@ function App() {
             <main>
                 <Outlet />
             </main>
+            <ScrollRestoration />
         </VehiclesProvider>
     )
 }

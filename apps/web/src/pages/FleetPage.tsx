@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import {
     FLEET_DRIVERS_MAX,
     STREAM_FOCUS_MAX_IDS,
+    fleetPositionsQuerySchema,
     isVehicleFilterId,
     type FleetPosition,
     type GeoBBox,
@@ -50,6 +51,21 @@ const sameBBox = (left: GeoBBox | null, right: GeoBBox) =>
     left.east === right.east &&
     left.north === right.north;
 
+const formatBBox = (bbox: GeoBBox) =>
+    `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`;
+
+const readBBox = (params: URLSearchParams): GeoBBox | null => {
+    const raw = params.get("bbox");
+
+    if (!raw) {
+        return null;
+    }
+
+    const parsed = fleetPositionsQuerySchema.safeParse({ bbox: raw });
+
+    return parsed.success && parsed.data.bbox ? parsed.data.bbox : null;
+};
+
 const applyOverrides = (
     rows: FleetPosition[],
     overrides: Record<number, Partial<Vehicle>>,
@@ -91,7 +107,7 @@ export const FleetPage = () => {
     const [searchDraft, setSearchDraft] = useState(searchParam);
     const debouncedSearch = useDebouncedValue(searchDraft);
 
-    const [bbox, setBbox] = useState<GeoBBox | null>(null);
+    const bbox = readBBox(searchParams);
     const [snapshot, setSnapshot] = useState<FleetPosition[]>([]);
     const [truncated, setTruncated] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -212,7 +228,13 @@ export const FleetPage = () => {
     };
 
     const handleBoundsChange = (next: GeoBBox) => {
-        setBbox((current) => (sameBBox(current, next) ? current : next));
+        if (sameBBox(bbox, next)) {
+            return;
+        }
+
+        patchParams((params) => {
+            params.set("bbox", formatBBox(next));
+        });
     };
 
     const countLabel = `${formatCount(vehicles.length)} ${vehicles.length === 1 ? "Fahrzeug" : "Fahrzeuge"}`;
@@ -325,6 +347,7 @@ export const FleetPage = () => {
             <div className={styles.mapArea}>
                 <FleetMap
                     vehicles={vehicles}
+                    initialBbox={bbox}
                     onBoundsChange={handleBoundsChange}
                     onSelect={(id) =>
                         navigate(`/vehicles/${id}`, {
