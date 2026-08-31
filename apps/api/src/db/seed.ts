@@ -125,10 +125,24 @@ const LAST_NAMES = [
     "Krause",
 ];
 const STATUSES = ["DRIVING", "DRIVING", "IDLE", "STOPPED", "OFFLINE"] as const;
+const DRIVER_NAME_CYCLE = FIRST_NAMES.length * LAST_NAMES.length;
 const COMPANY_COUNT = 3;
 
 function companyIdAt(index: number) {
     return (index % COMPANY_COUNT) + 1;
+}
+
+/** Large-Seed: Demo-Login (Firma 1) sieht die Last; 2/3 nur Isolation. */
+function largeCompanyIdAt(index: number) {
+    if (index % 100 === 0) {
+        return 2;
+    }
+
+    if (index % 100 === 1) {
+        return 3;
+    }
+
+    return 1;
 }
 
 /** Cartesian first×last — same `%` on both lists only yields `min(len)` unique names. */
@@ -229,7 +243,7 @@ function seedLarge() {
                 driver,
                 fuel,
                 status,
-                companyIdAt(i),
+                largeCompanyIdAt(i),
             );
             const vehicleId = Number(result.lastInsertRowid);
 

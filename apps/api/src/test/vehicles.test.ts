@@ -24,6 +24,8 @@ import {
 } from "../sim/routes";
 import { broadcast, closeAllSseClients } from "../sse/hub";
 import { resetSimControlForTests, setCompanySimRunning } from "../lib/simControl";
+import { sqliteDaysAgo, nowSqlite } from "../lib/sqlTime";
+import { config } from "../config";
 
 const TEST_PASSWORD = "secret-pass";
 let api: ReturnType<typeof request.agent>;
@@ -1621,6 +1623,125 @@ describe("trip lifecycle", () => {
 
         assert.equal(countTrips(true), 1);
         assert.equal(countTrips(false), 2);
+    });
+});
+
+function insertClosedTrip(vehicleId: number, endedAt: string) {
+    db.prepare(
+        `
+            INSERT INTO trips (vehicle_id, started_at, ended_at, path)
+            VALUES (?, ?, ?, '')
+        `,
+    ).run(vehicleId, endedAt, endedAt);
+}
+
+function countTripsFor(vehicleId: number) {
+    return (
+        db
+            .prepare("SELECT COUNT(*) AS total FROM trips WHERE vehicle_id = ?")
+            .get(vehicleId) as { total: number }
+    ).total;
+}
+
+describe("trip retention", () => {
+    it("deletes old closed trips for one company and leaves the other company and open trips", async () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-RET A",
+            driver_name: "A",
+            company_id: 1,
+        });
+        const theirs = VehicleModel.create({
+            license_plate: "K-RET B",
+            driver_name: "B",
+            company_id: 2,
+        });
+
+        const stale = sqliteDaysAgo(config.tripRetentionDays + 1);
+        insertClosedTrip(mine.id, stale);
+        insertClosedTrip(theirs.id, stale);
+        TripModel.open(mine.id);
+
+        assert.equal(TripModel.pruneClosedForCompany(1), 1);
+        assert.equal(countTripsFor(mine.id), 1);
+        assert.equal(countTripsFor(theirs.id), 1);
+
+        const other = await loginAs(2);
+        const theirsLatest = await other.agent.get(
+            `/api/vehicles/${theirs.id}/trips/latest`,
+        );
+        assert.equal(theirsLatest.status, 200);
+        assert.equal(theirsLatest.body.data.ended_at, stale);
+
+        const mineLatest = await api.get(
+            `/api/vehicles/${mine.id}/trips/latest`,
+        );
+        assert.equal(mineLatest.status, 200);
+        assert.equal(mineLatest.body.data.ended_at, null);
+    });
+
+    it("does not delete a recently closed trip and prunes stale ones on stop", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-RET C",
+            driver_name: "C",
+            status: "IDLE",
+            company_id: 1,
+        });
+        const stale = sqliteDaysAgo(config.tripRetentionDays + 2);
+        insertClosedTrip(vehicle.id, stale);
+
+        const driving = await api
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "DRIVING" });
+        assert.equal(driving.status, 200);
+
+        const stopped = await api
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "IDLE" });
+
+        assert.equal(stopped.status, 200);
+        assert.equal(countTripsFor(vehicle.id), 1);
+
+        const latest = await api.get(
+            `/api/vehicles/${vehicle.id}/trips/latest`,
+        );
+        assert.equal(latest.status, 200);
+        assert.ok(latest.body.data.ended_at);
+        assert.notEqual(latest.body.data.ended_at, stale);
+        assert.equal(
+            latest.body.data.ended_at.slice(0, 10),
+            nowSqlite().slice(0, 10),
+        );
+    });
+
+    it("does not prune another company when a tick writes", () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-RET D",
+            driver_name: "D",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        const theirs = VehicleModel.create({
+            license_plate: "K-RET E",
+            driver_name: "E",
+            status: "DRIVING",
+            company_id: 2,
+        });
+        const stale = sqliteDaysAgo(config.tripRetentionDays + 1);
+        insertClosedTrip(mine.id, stale);
+        insertClosedTrip(theirs.id, stale);
+        seedSimProgress(mine.id, "koeln-duesseldorf", 0.2);
+
+        TelemetryModel.tickDrivingVehicles([mine.id]);
+
+        const staleLeft = db
+            .prepare(
+                `SELECT COUNT(*) AS total FROM trips
+                 WHERE vehicle_id = ? AND ended_at = ?`,
+            )
+            .get(mine.id, stale) as { total: number };
+        assert.equal(staleLeft.total, 0);
+        assert.equal(countTripsFor(theirs.id), 1);
+        assert.equal(TripModel.latestForVehicle(theirs.id, 2)?.ended_at, stale);
     });
 });
 

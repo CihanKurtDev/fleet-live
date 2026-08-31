@@ -70,6 +70,8 @@ CREATE TABLE IF NOT EXISTS telemetry (
 -- Eine Fahrt hält den gefahrenen Verlauf dauerhaft als Encoded Polyline.
 -- Damit hängt die sichtbare Strecke an der Fahrt und nicht an der Anzahl
 -- gespeicherter Rohpunkte: eine Zeile trägt auch 500 km.
+-- Geschlossene Fahrten älter als TRIP_RETENTION_DAYS werden pro Firma gelöscht
+-- (Join über vehicles, kein company_id hier).
 CREATE TABLE IF NOT EXISTS trips (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle_id INTEGER NOT NULL,

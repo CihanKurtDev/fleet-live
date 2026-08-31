@@ -102,6 +102,7 @@ function syncTrip(
 
     TelemetryModel.recordStandstill(id);
     TripModel.close(id);
+    TripModel.pruneClosedForCompany(companyId);
 
     return VehicleModel.getById(id, companyId) ?? updated;
 }
