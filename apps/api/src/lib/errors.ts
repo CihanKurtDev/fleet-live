@@ -38,6 +38,12 @@ export class UnauthorizedError extends AppError {
     }
 }
 
+export class ForbiddenError extends AppError {
+    constructor(message = "Keine Berechtigung für diese Aktion.") {
+        super(403, "FORBIDDEN", message);
+    }
+}
+
 export class NotFoundError extends AppError {
     constructor(message = "Fahrzeug nicht gefunden.") {
         super(404, "NOT_FOUND", message);

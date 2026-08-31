@@ -32,7 +32,8 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Fleet map (`/fleet`): last positions in the viewport for the session company
 * Route simulation (baked geometries, city/highway profile, fuel); pause per company (`GET`/`PATCH /api/sim`)
 * Companies; users belong to exactly one company
-* Session login (`POST /api/auth/login`), cookie `fleet_session` (HttpOnly, SameSite=Lax, Secure in production)
+* Session login
+* Roles: `dispatcher` (write + sim pause) and `viewer` (read only)
 * Tenant isolation: `company_id` from the session, never from the client body; plates unique per company; SSE and sim scoped to that company; trips via `trip → vehicle → company`
 * API integration tests (`node:test` + SuperTest)
 
@@ -41,7 +42,6 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Movement comes from the simulator, not GPS hardware
 * Seed login is shown on the login page only in Vite `DEV` (`cihan@example.com` / `development-only-password`)
 * SQLite file database
-* One role: any logged-in user can manage that company’s vehicles and pause that company’s simulation
 * One company per user (no membership table, no company switcher)
 * Alerts: table + `active_alerts` count/filter only — no REST, no UI, seeded dummy rows
 * OSM tiles via Leaflet
@@ -57,8 +57,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 
 ### Roadmap (not implemented)
 
-* Alerts REST/UI (next)
-* Roles (viewer vs dispatcher)
+* Alerts REST/UI
 * Invite / password reset / registration
 * Optional multi-company membership
 * Production database, CI/CD, observability
@@ -284,6 +283,7 @@ Implemented:
 * scrypt password hashes
 * HttpOnly session cookie
 * Isolation by `company_id` on the user (one company per account)
+* Roles: `dispatcher` may mutate vehicles and pause the sim; `viewer` may only read
 * SSE connections and sim pause bound to that company
 
 Not the same as production auth: no reset, lockout, invite, roles, or multi-company membership. CORS `*` is a local default; cookies work because the Vite proxy is same-origin.
@@ -324,7 +324,7 @@ npm test
 
 List-query bench: `npm run bench` (see `apps/api/scripts/bench.ts`).
 
-After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (Rheinland Logistik, `company_id` 1). Seed also creates companies 2 and 3 and spreads vehicles across them.
+After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (dispatcher, Rheinland Logistik). `viewer@example.com` uses the same password and can only read. Seed also creates companies 2 and 3 and spreads vehicles across them.
 
 | Variable | Default | Notes |
 | -------- | ------- | ----- |
@@ -384,7 +384,7 @@ Controllers validate and map HTTP. Models run SQL. This stays intentionally thin
 Not production-ready. Incomplete by design:
 
 * Production-grade auth (reset, lockout, CSRF for cross-origin cookies)
-* Roles and multi-company users
+* Multi-company users
 * Alerts REST/UI
 * Frontend tests
 * CI/CD, production database, observability
@@ -413,7 +413,7 @@ Not production-ready. Incomplete by design:
 * [x] User belongs to one company
 * [x] Session login
 * [x] Tenant isolation (`company_id` from session; plates unique per company; SSE and sim scoped; trips via vehicle)
-* [ ] Roles (authorization beyond “logged in + same company”)
+* [x] Roles (`dispatcher` writes; `viewer` reads)
 * [ ] Per-tenant retention for trips and telemetry
 
 ## Phase 5 — still open

@@ -31,6 +31,7 @@ export function login(req: Request, res: Response) {
         name: user.name,
         email: user.email,
         company_id: user.company_id,
+        role: user.role,
     });
 }
 

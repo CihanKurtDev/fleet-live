@@ -1,4 +1,5 @@
 import express from "express";
+import { requireDispatcher } from "../middleware/requireDispatcher";
 import {
     createVehicle,
     deleteVehicle,
@@ -20,9 +21,9 @@ router.get("/drivers", getVehicleDrivers);
 router.get("/:id/telemetry", getVehicleTelemetry);
 router.get("/:id/trips/latest", getVehicleTrip);
 router.get("/:id", getVehicleById);
-router.post("/", createVehicle);
-router.put("/:id", replaceVehicle);
-router.patch("/:id", updateVehicle);
-router.delete("/:id", deleteVehicle);
+router.post("/", requireDispatcher, createVehicle);
+router.put("/:id", requireDispatcher, replaceVehicle);
+router.patch("/:id", requireDispatcher, updateVehicle);
+router.delete("/:id", requireDispatcher, deleteVehicle);
 
 export default router;

@@ -155,16 +155,31 @@ export const LoginPage = () => {
                         <p>
                             <span>Passwort</span> development-only-password
                         </p>
-                        <button
-                            type="button"
-                            className={styles.hintFill}
-                            onClick={() => {
-                                setEmail("cihan@example.com");
-                                setPassword("development-only-password");
-                            }}
-                        >
-                            Übernehmen
-                        </button>
+                        <p>
+                            <span>Nur lesen</span> viewer@example.com
+                        </p>
+                        <div className={styles.hintActions}>
+                            <button
+                                type="button"
+                                className={styles.hintFill}
+                                onClick={() => {
+                                    setEmail("cihan@example.com");
+                                    setPassword("development-only-password");
+                                }}
+                            >
+                                Dispatcher übernehmen
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.hintFill}
+                                onClick={() => {
+                                    setEmail("viewer@example.com");
+                                    setPassword("development-only-password");
+                                }}
+                            >
+                                Viewer übernehmen
+                            </button>
+                        </div>
                     </aside>
                 )}
             </div>

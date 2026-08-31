@@ -26,6 +26,7 @@ describe("POST /api/auth/login", () => {
         assert.equal(response.status, 200);
         assert.equal(response.body.email, "test@example.com");
         assert.equal(response.body.company_id, 1);
+        assert.equal(response.body.role, "dispatcher");
         assert.equal(response.body.password_hash, undefined);
         const cookie = response.headers["set-cookie"]?.join(";") ?? "";
         assert.match(cookie, /fleet_session=/);

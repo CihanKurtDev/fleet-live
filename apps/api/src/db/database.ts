@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { config } from "../config";
+import { ensureDevAccounts } from "./devAccounts";
 import { migrate } from "./migrate";
 
 const schemaPath = join(__dirname, "schema.sql");
@@ -32,6 +33,10 @@ db.exec("PRAGMA optimize = 0x10002");
 const schema = readFileSync(schemaPath, "utf8");
 db.exec(schema);
 migrate(db);
+
+if (!config.isTest && !config.isProduction && !isMemoryDatabase) {
+    ensureDevAccounts(db);
+}
 
 export function closeDatabase() {
     try {

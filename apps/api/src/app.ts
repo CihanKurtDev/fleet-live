@@ -9,6 +9,7 @@ import { logger } from "./logger";
 import { requestId } from "./middleware/requestId";
 import { attachSession } from "./middleware/attachSession";
 import { requireAuth } from "./middleware/requireAuth";
+import { requireDispatcher } from "./middleware/requireDispatcher";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 import vehicleRoutes from "./routes/vehicle.routes";
@@ -68,7 +69,7 @@ export function createApp() {
     });
 
     app.get("/api/sim", requireAuth, getSim);
-    app.patch("/api/sim", requireAuth, updateSim);
+    app.patch("/api/sim", requireAuth, requireDispatcher, updateSim);
     app.get("/api/stream", requireAuth, streamEvents);
     app.post("/api/stream/focus", requireAuth, setStreamFocus);
     app.use("/api/auth", authRoutes);

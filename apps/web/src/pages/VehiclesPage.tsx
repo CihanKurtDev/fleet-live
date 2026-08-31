@@ -6,11 +6,14 @@ import { VehicleTable } from "../components/vehicles/VehicleTable";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
+import { useAuth } from "../hooks/useAuth";
 import { rememberVehicle } from "../api/vehicleCache";
 import { setTelemetryFocus } from "../api/telemetryFocus";
 
 export const VehiclesPage = () => {
     const { createVehicle, deleteVehicles } = useVehicles();
+    const { user } = useAuth();
+    const canWrite = user?.role === "dispatcher";
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -29,8 +32,8 @@ export const VehiclesPage = () => {
     return (
         <>
             <VehicleTable
-                onDeleteVehicles={deleteVehicles}
-                onAddVehicle={() => setIsCreateOpen(true)}
+                onDeleteVehicles={canWrite ? deleteVehicles : undefined}
+                onAddVehicle={canWrite ? () => setIsCreateOpen(true) : undefined}
                 onSelectVehicle={(vehicle) => {
                     rememberVehicle(vehicle);
                     setTelemetryFocus("detail", [vehicle.id]);
