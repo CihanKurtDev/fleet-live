@@ -61,8 +61,20 @@ const SELECT_ONE = `
 `;
 
 const INSERT_VEHICLE = `
-    INSERT INTO vehicles (license_plate, driver_name, fuel_level, status)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO vehicles (
+        license_plate,
+        driver_name,
+        fuel_level,
+        status,
+        company_id
+    )
+    VALUES (
+        ?,
+        ?,
+        ?,
+        ?,
+        (SELECT id FROM companies ORDER BY id LIMIT 1)
+    )
 `;
 
 const UPDATE_VEHICLE = `

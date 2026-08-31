@@ -20,9 +20,10 @@ const insertVehicle = db.prepare(`
         license_plate,
         driver_name,
         fuel_level,
-        status
+        status,
+        company_id
     )
-    VALUES (?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?)
 `);
 
 const insertTelemetry = db.prepare(`
@@ -132,7 +133,11 @@ const LAST_NAMES = [
     "Krause",
 ];
 const STATUSES = ["DRIVING", "DRIVING", "IDLE", "STOPPED", "OFFLINE"] as const;
-const DRIVER_NAME_CYCLE = FIRST_NAMES.length * LAST_NAMES.length;
+const COMPANY_COUNT = 3;
+
+function companyIdAt(index: number) {
+    return (index % COMPANY_COUNT) + 1;
+}
 
 /** Cartesian first×last — same `%` on both lists only yields `min(len)` unique names. */
 function driverNameAt(index: number) {
@@ -155,8 +160,14 @@ function randomInt(min: number, max: number) {
 function seedSample() {
     insertUser.run("Cihan Kurt", "cihan@example.com", "development-only-password");
 
-    for (const vehicle of sampleVehicles) {
-        insertVehicle.run(vehicle.plate, vehicle.driver, vehicle.fuel, vehicle.status);
+    for (const [index, vehicle] of sampleVehicles.entries()) {
+        insertVehicle.run(
+            vehicle.plate,
+            vehicle.driver,
+            vehicle.fuel,
+            vehicle.status,
+            companyIdAt(index),
+        );
 
         const row = db
             .prepare("SELECT id FROM vehicles WHERE license_plate = ?")
@@ -195,9 +206,10 @@ function seedLarge() {
             license_plate,
             driver_name,
             fuel_level,
-            status
+            status,
+            company_id
         )
-        VALUES (?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
     `);
 
     dropMaintenanceTriggers(db);
@@ -225,6 +237,7 @@ function seedLarge() {
                 driver,
                 fuel,
                 status,
+                companyIdAt(i),
             );
             const vehicleId = Number(result.lastInsertRowid);
 

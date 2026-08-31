@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 type TableColumn = {
     name: string;
@@ -24,6 +24,9 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_fuel
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_plate
     ON vehicles(license_plate);
+
+CREATE INDEX IF NOT EXISTS idx_vehicles_company
+    ON vehicles(company_id);
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_vehicle_recorded
     ON telemetry(vehicle_id, recorded_at DESC, id DESC);
@@ -160,6 +163,38 @@ function migrateToV2(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+/**
+ * Mandant am Fahrzeug. Bestehende DBs bekommen drei Seed-Firmen und
+ * `company_id` (Default 1). Neue DBs legen die Tabelle über schema.sql an;
+ * die Firmenzeilen braucht auch der API-Create, solange es kein Login gibt.
+ */
+function migrateToV3(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS companies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT OR IGNORE INTO companies (id, name) VALUES
+            (1, 'Rheinland Logistik'),
+            (2, 'Alpen Spedition'),
+            (3, 'Nordost Transport');
+    `);
+
+    const names = columnNames(database, "vehicles");
+
+    if (!names.has("company_id")) {
+        database.exec(`
+            ALTER TABLE vehicles
+            ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1
+            REFERENCES companies(id)
+        `);
+    }
+
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -172,6 +207,10 @@ export function migrate(database: DatabaseSync) {
 
     if (currentVersion < 2) {
         migrateToV2(database);
+    }
+
+    if (currentVersion < 3) {
+        migrateToV3(database);
     }
 
     if (currentVersion < SCHEMA_VERSION) {
