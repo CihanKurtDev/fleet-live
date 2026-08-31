@@ -8,8 +8,15 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS companies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
     license_plate TEXT NOT NULL UNIQUE,
     driver_name TEXT NOT NULL,
     fuel_level REAL NOT NULL DEFAULT 100
@@ -21,7 +28,10 @@ CREATE TABLE IF NOT EXISTS vehicles (
     active_alerts INTEGER NOT NULL DEFAULT 0,
     search_text TEXT GENERATED ALWAYS AS (
         lower(license_plate || ' ' || driver_name)
-    ) VIRTUAL
+    ) VIRTUAL,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
 );
 
 CREATE TABLE IF NOT EXISTS telemetry (

@@ -454,8 +454,14 @@ describe("GET /api/vehicles/positions", () => {
     it("returns truncated with empty data past FLEET_POSITIONS_MAX", async () => {
         const insertVehicle = db.prepare(
             `
-                INSERT INTO vehicles (license_plate, driver_name, fuel_level, status)
-                VALUES (?, ?, 80, 'IDLE')
+                INSERT INTO vehicles (
+                    license_plate,
+                    driver_name,
+                    fuel_level,
+                    status,
+                    company_id
+                )
+                VALUES (?, ?, 80, 'IDLE', 1)
             `,
         );
         const insertTelemetry = db.prepare(
@@ -598,6 +604,10 @@ describe("vehicle mutations", () => {
         assert.equal(created.body.license_plate, "K-NEU 1");
         assert.equal(created.body.active_alerts, 0);
         assert.ok(created.body.created_at);
+        const assigned = db
+            .prepare("SELECT company_id FROM vehicles WHERE id = ?")
+            .get(created.body.id) as { company_id: number };
+        assert.equal(assigned.company_id, 1);
         assert.equal(
             created.headers.location,
             `/api/vehicles/${created.body.id}`,
