@@ -121,7 +121,9 @@ export const VehicleTable = ({
                 searchAriaLabel="Kennzeichen oder Fahrer suchen"
                 addNewLabel="Fahrzeug anlegen"
                 isEditing={isEditing}
-                onToggleEditMode={toggleEditMode}
+                onToggleEditMode={
+                    onDeleteVehicles ? toggleEditMode : undefined
+                }
                 selectedCount={selectedIds.length}
                 onDeleteSelected={
                     onDeleteVehicles

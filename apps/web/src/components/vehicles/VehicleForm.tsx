@@ -46,6 +46,7 @@ interface VehicleFormProps {
      * Dann wird er nur angezeigt und nicht überschrieben.
      */
     isFuelMeasured?: boolean;
+    readOnly?: boolean;
 
     submitLabel: string;
     onSubmit: (
@@ -57,6 +58,7 @@ interface VehicleFormProps {
 export const VehicleForm = ({
     initialValue,
     isFuelMeasured = false,
+    readOnly = false,
     submitLabel,
     onSubmit,
     onCancel,
@@ -116,6 +118,10 @@ export const VehicleForm = ({
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
+
+        if (readOnly) {
+            return;
+        }
         setWasSubmitted(true);
 
         const input = toInput();
@@ -160,6 +166,7 @@ export const VehicleForm = ({
                     type="text"
                     maxLength={LICENSE_PLATE_MAX}
                     value={values.license_plate}
+                    disabled={readOnly}
                     onChange={(event) =>
                         setField(
                             "license_plate",
@@ -186,6 +193,7 @@ export const VehicleForm = ({
                     type="text"
                     maxLength={DRIVER_NAME_MAX}
                     value={values.driver_name}
+                    disabled={readOnly}
                     onChange={(event) =>
                         setField(
                             "driver_name",
@@ -213,7 +221,7 @@ export const VehicleForm = ({
                     min={0}
                     max={100}
                     value={values.fuel_level}
-                    disabled={isFuelMeasured}
+                    disabled={readOnly || isFuelMeasured}
                     onChange={(event) =>
                         setField(
                             "fuel_level",
@@ -240,26 +248,28 @@ export const VehicleForm = ({
                 )}
             </div>
 
-            <div className={styles.actions}>
-                {onCancel && (
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={onCancel}
-                    >
-                        Abbrechen
-                    </Button>
-                )}
+            {!readOnly && (
+                <div className={styles.actions}>
+                    {onCancel && (
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={onCancel}
+                        >
+                            Abbrechen
+                        </Button>
+                    )}
 
-                <Button
-                    type="submit"
-                    size="sm"
-                    disabled={isSubmitting || (isEditing && !isDirty)}
-                >
-                    {submitLabel}
-                </Button>
-            </div>
+                    <Button
+                        type="submit"
+                        size="sm"
+                        disabled={isSubmitting || (isEditing && !isDirty)}
+                    >
+                        {submitLabel}
+                    </Button>
+                </div>
+            )}
         </form>
     );
 };

@@ -22,7 +22,7 @@ function AppShell() {
                         </NavLink>
                     </nav>
                 )}
-                {user && <SimToggle />}
+                {user && user.role === "dispatcher" && <SimToggle />}
                 <SessionMenu />
             </header>
 

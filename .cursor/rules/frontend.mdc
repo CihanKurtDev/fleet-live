@@ -22,7 +22,7 @@ alwaysApply: false
 
 - `components/ui` stays generic (Table, Button, Modal). No vehicle fields there.
 - Vehicle columns/filters belong in `components/vehicles/` (e.g. `vehicleTableConfig.ts`).
-- Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides.
+- Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides. Write actions (create/edit/delete, sim pause) are for `dispatcher`; `viewer` is read-only.
 - No frontend unit-test runner. Do not add Jest/Vitest unless explicitly asked.
 
 ## Map

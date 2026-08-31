@@ -10,7 +10,7 @@ alwaysApply: false
 app.ts + routes → Controllers → Models → SQLite
 ```
 
-- `app.ts` and `routes/` only wire HTTP to controllers (stream and sim live in `app.ts`, vehicles in `routes/`).
+- `app.ts` and `routes/` only wire HTTP to controllers (stream and sim live in `app.ts`, vehicles in `routes/`). Vehicle writes and `PATCH /api/sim` use `requireDispatcher` after `requireAuth`.
 - Controllers validate, map HTTP, call models, set status codes. No SQL.
 - Models own SQL via `db/statements.ts` / `db/database.ts`. No `req`/`res`.
 
@@ -37,7 +37,7 @@ app.ts + routes → Controllers → Models → SQLite
 - Reaching a simulated route end closes the trip (status stays `DRIVING`). The way back is a new trip.
 - The path grows in SQL (`path = path || ?`). Do not load `trips.path` per tick; only `close` decodes it, once, to simplify.
 - Geometry helpers (`haversineMeters`, `pathLengthMeters`, `simplifyPath`) live in `lib/geo.ts`. Models must not import from `sim/`.
-- The simulator lives in `sim/routes.ts`. Kinematics use `SIM_SECONDS_PER_TICK`, never `config.telemetryTickMs` (that is `0` in tests). Pause/resume is `GET`/`PATCH /api/sim` per session company; it does not change vehicle status and does not pause other companies.
+- The simulator lives in `sim/routes.ts`. Kinematics use `SIM_SECONDS_PER_TICK`, never `config.telemetryTickMs` (that is `0` in tests). Pause/resume is `GET`/`PATCH /api/sim` per session company; `PATCH` requires `dispatcher`. It does not change vehicle status and does not pause other companies.
 - Wall-clock trip duration is meaningless while `TIME_SCALE` compresses time. Do not derive an average speed from it.
 
 ## After changes

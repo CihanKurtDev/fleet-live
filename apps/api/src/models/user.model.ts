@@ -6,20 +6,20 @@ import { hashPassword } from "../lib/password";
 type UserRow = AuthUser & { password_hash: string };
 
 const SELECT_PUBLIC = `
-    SELECT id, name, email, company_id
+    SELECT id, name, email, company_id, role
     FROM users
     WHERE id = ?
 `;
 
 const SELECT_BY_EMAIL = `
-    SELECT id, name, email, company_id, password_hash
+    SELECT id, name, email, company_id, role, password_hash
     FROM users
     WHERE email = ?
 `;
 
 const INSERT_USER = `
-    INSERT INTO users (name, email, password_hash, company_id)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO users (name, email, password_hash, company_id, role)
+    VALUES (?, ?, ?, ?, ?)
 `;
 
 const UPDATE_PASSWORD = `
@@ -42,12 +42,14 @@ export const UserModel = {
         email: string;
         password: string;
         company_id: number;
+        role?: AuthUser["role"];
     }): AuthUser {
         const result = stmt(INSERT_USER).run(
             input.name,
             input.email,
             hashPassword(input.password),
             input.company_id,
+            input.role ?? "dispatcher",
         );
 
         const created = this.getById(Number(result.lastInsertRowid));

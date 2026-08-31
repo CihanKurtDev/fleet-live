@@ -15,6 +15,7 @@ import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { useVehicles } from "../context/vehiclesContext";
+import { useAuth } from "../hooks/useAuth";
 import { useVehicle } from "../hooks/useVehicle";
 import { formatTimestamp } from "../utils/dateTime";
 import styles from "./VehicleDetailPage.module.scss";
@@ -64,6 +65,8 @@ export const VehicleDetailPage = () => {
     const backToFleet = from.startsWith("/fleet");
     const { updateVehicle, deleteVehicles, subscribeTripPath } =
         useVehicles();
+    const { user } = useAuth();
+    const canWrite = user?.role === "dispatcher";
 
     const vehicleId = Number(id);
     const parsedId = Number.isInteger(vehicleId) ? vehicleId : null;
@@ -230,15 +233,17 @@ export const VehicleDetailPage = () => {
                     </span>
                 </div>
 
-                <div className={styles.actions}>
-                    <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={requestDelete}
-                    >
-                        Fahrzeug löschen
-                    </Button>
-                </div>
+                {canWrite && (
+                    <div className={styles.actions}>
+                        <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={requestDelete}
+                        >
+                            Fahrzeug löschen
+                        </Button>
+                    </div>
+                )}
             </header>
 
             <section className={styles.panel}>
@@ -318,13 +323,14 @@ export const VehicleDetailPage = () => {
                         status: vehicle.status,
                     }}
                     isFuelMeasured={isDriving}
+                    readOnly={!canWrite}
                     submitLabel="Speichern"
                     onSubmit={handleSubmit}
                 />
             </section>
 
             <ConfirmDialog
-                open={confirmDelete}
+                open={canWrite && confirmDelete}
                 onClose={() => setConfirmDelete(false)}
                 title="Fahrzeug löschen?"
                 confirmLabel="Löschen"

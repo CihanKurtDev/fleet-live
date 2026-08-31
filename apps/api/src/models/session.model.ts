@@ -8,7 +8,7 @@ const INSERT_SESSION = `
 `;
 
 const SELECT_USER_BY_TOKEN = `
-    SELECT u.id, u.name, u.email, u.company_id
+    SELECT u.id, u.name, u.email, u.company_id, u.role
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE s.token = ?

@@ -1,10 +1,15 @@
 import { z } from "zod";
 
+export const USER_ROLES = ["dispatcher", "viewer"] as const;
+
+export type UserRole = (typeof USER_ROLES)[number];
+
 export type AuthUser = {
     id: number;
     name: string;
     email: string;
     company_id: number;
+    role: UserRole;
 };
 
 export type LoginInput = {

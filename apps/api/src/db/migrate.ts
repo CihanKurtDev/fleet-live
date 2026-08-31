@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 type TableColumn = {
     name: string;
@@ -342,6 +342,25 @@ function migrateToV6(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+function ensureUsersRole(database: DatabaseSync) {
+    const names = columnNames(database, "users");
+
+    if (!names.has("role")) {
+        database.exec(`
+            ALTER TABLE users
+            ADD COLUMN role TEXT NOT NULL DEFAULT 'dispatcher'
+        `);
+    }
+}
+
+/**
+ * Rolle am User: dispatcher schreibt, viewer liest.
+ */
+function migrateToV7(database: DatabaseSync) {
+    ensureUsersRole(database);
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -372,10 +391,15 @@ export function migrate(database: DatabaseSync) {
         migrateToV6(database);
     }
 
+    if (currentVersion < 7) {
+        migrateToV7(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
     ensureVehiclesCompanyId(database);
+    ensureUsersRole(database);
 
     if (currentVersion < SCHEMA_VERSION) {
         database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);

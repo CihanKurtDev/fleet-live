@@ -3,23 +3,9 @@ import {
     applyMaintenanceTriggers,
     dropMaintenanceTriggers,
 } from "./migrate";
-import { hashPassword } from "../lib/password";
+import { upsertDevAccounts } from "./devAccounts";
 
 const largeMode = process.argv.includes("--large");
-
-const insertUser = db.prepare(`
-    INSERT INTO users (
-        name,
-        email,
-        password_hash,
-        company_id
-    )
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(email) DO UPDATE SET
-        name = excluded.name,
-        password_hash = excluded.password_hash,
-        company_id = excluded.company_id
-`);
 
 const insertVehicle = db.prepare(`
     INSERT OR IGNORE INTO vehicles (
@@ -164,12 +150,7 @@ function randomInt(min: number, max: number) {
 }
 
 function seedSample() {
-    insertUser.run(
-        "Cihan Kurt",
-        "cihan@example.com",
-        hashPassword("development-only-password"),
-        1,
-    );
+    upsertDevAccounts(db);
 
     for (const [index, vehicle] of sampleVehicles.entries()) {
         insertVehicle.run(
@@ -227,12 +208,7 @@ function seedLarge() {
 
     db.exec("BEGIN");
     try {
-        insertUser.run(
-            "Cihan Kurt",
-            "cihan@example.com",
-            hashPassword("development-only-password"),
-            1,
-        );
+        upsertDevAccounts(db);
 
         // Vorherige Teilläufe (FK-Fehler nach COMMIT alle 1000 Zeilen)
         // würden sonst verwaiste lastInsertRowid=0 und doppelte Kennzeichen erzeugen.

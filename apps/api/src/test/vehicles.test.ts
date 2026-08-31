@@ -29,15 +29,16 @@ const TEST_PASSWORD = "secret-pass";
 let api: ReturnType<typeof request.agent>;
 let sessionCookie = "";
 
-async function loginAs(companyId: number) {
-    const email = `dispatcher-${companyId}@example.com`;
+async function loginAs(companyId: number, role: "dispatcher" | "viewer" = "dispatcher") {
+    const email = `${role}-${companyId}@example.com`;
 
     if (!UserModel.findByEmail(email)) {
         UserModel.create({
-            name: `Dispatcher ${companyId}`,
+            name: `${role} ${companyId}`,
             email,
             password: TEST_PASSWORD,
             company_id: companyId,
+            role,
         });
     }
 
@@ -1039,6 +1040,68 @@ describe("tenant isolation", () => {
                 server.close((error) => (error ? reject(error) : resolve()));
             });
         }
+    });
+});
+
+describe("roles", () => {
+    it("lets a viewer read but not mutate vehicles or the sim", async () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-VW 1",
+            driver_name: "Sichtbar",
+            company_id: 1,
+        });
+        const foreign = VehicleModel.create({
+            license_plate: "K-VW 2",
+            driver_name: "Fremd",
+            company_id: 2,
+        });
+
+        const viewer = await loginAs(1, "viewer");
+
+        const list = await viewer.agent.get("/api/vehicles");
+        assert.equal(list.status, 200);
+        assert.equal(list.body.meta.total, 1);
+        assert.equal(list.body.data[0].id, mine.id);
+
+        const detail = await viewer.agent.get(`/api/vehicles/${mine.id}`);
+        assert.equal(detail.status, 200);
+
+        const hidden = await viewer.agent.get(`/api/vehicles/${foreign.id}`);
+        assert.equal(hidden.status, 404);
+
+        const created = await viewer.agent.post("/api/vehicles").send({
+            license_plate: "K-VW 3",
+            driver_name: "Neu",
+        });
+        assert.equal(created.status, 403);
+        assert.equal(created.body.code, "FORBIDDEN");
+
+        const patched = await viewer.agent
+            .patch(`/api/vehicles/${mine.id}`)
+            .send({ driver_name: "Geändert" });
+        assert.equal(patched.status, 403);
+
+        const replaced = await viewer.agent.put(`/api/vehicles/${mine.id}`).send({
+            license_plate: "K-VW 1",
+            driver_name: "Geändert",
+            fuel_level: 40,
+            status: "IDLE",
+        });
+        assert.equal(replaced.status, 403);
+
+        const deleted = await viewer.agent.delete(`/api/vehicles/${mine.id}`);
+        assert.equal(deleted.status, 403);
+
+        const sim = await viewer.agent.get("/api/sim");
+        assert.equal(sim.status, 200);
+
+        const paused = await viewer.agent.patch("/api/sim").send({ running: false });
+        assert.equal(paused.status, 403);
+
+        const stillThere = db
+            .prepare("SELECT driver_name FROM vehicles WHERE id = ?")
+            .get(mine.id) as { driver_name: string };
+        assert.equal(stillThere.driver_name, "Sichtbar");
     });
 });
 
