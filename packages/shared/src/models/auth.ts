@@ -10,6 +10,7 @@ export type AuthUser = {
 export type LoginInput = {
     email: string;
     password: string;
+    remember?: boolean;
 };
 
 const loginSchema = z.object({
@@ -23,6 +24,7 @@ const loginSchema = z.object({
         .string({ error: "Passwort ist erforderlich." })
         .min(1, "Passwort ist erforderlich.")
         .max(200, "Passwort darf höchstens 200 Zeichen haben."),
+    remember: z.boolean().optional().default(false),
 });
 
 export function parseLoginInput(input: unknown): LoginInput {

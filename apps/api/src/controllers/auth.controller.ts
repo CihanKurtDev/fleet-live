@@ -23,8 +23,8 @@ export function login(req: Request, res: Response) {
         UserModel.setPasswordHash(user.id, hashPassword(input.password));
     }
 
-    const token = SessionModel.create(user.id);
-    setSessionCookie(res, token);
+    const token = SessionModel.create(user.id, input.remember);
+    setSessionCookie(res, token, input.remember);
 
     res.json({
         id: user.id,

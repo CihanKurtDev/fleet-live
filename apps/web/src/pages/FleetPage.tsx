@@ -103,7 +103,6 @@ export const FleetPage = () => {
         () => readDrivers(searchParams),
         [searchParams],
     );
-    const hasSelection = selectedDrivers.length > 0;
     const [searchDraft, setSearchDraft] = useState(searchParam);
     const debouncedSearch = useDebouncedValue(searchDraft);
 
@@ -119,31 +118,27 @@ export const FleetPage = () => {
     }, [searchParam]);
 
     useEffect(() => {
-        if (!hasSelection || debouncedSearch === searchParam) {
+        if (debouncedSearch === searchParam) {
             return;
         }
 
-        const params = new URLSearchParams(searchParams);
+        setSearchParams(
+            (current) => {
+                const params = new URLSearchParams(current);
 
-        if (debouncedSearch) {
-            params.set("search", debouncedSearch);
-        } else {
-            params.delete("search");
-        }
+                if (debouncedSearch) {
+                    params.set("search", debouncedSearch);
+                } else {
+                    params.delete("search");
+                }
 
-        setSearchParams(params, { replace: true });
-    }, [debouncedSearch, hasSelection, searchParam, searchParams, setSearchParams]);
+                return params;
+            },
+            { replace: true },
+        );
+    }, [debouncedSearch, searchParam, setSearchParams]);
 
     useEffect(() => {
-        if (!hasSelection) {
-            setSnapshot([]);
-            setTruncated(false);
-            setHasLoaded(false);
-            setIsLoading(false);
-            setError(null);
-            return;
-        }
-
         if (!bbox) {
             return;
         }
@@ -188,7 +183,7 @@ export const FleetPage = () => {
             });
 
         return () => controller.abort();
-    }, [bbox, filter, hasSelection, searchParam, selectedDrivers, listEpoch]);
+    }, [bbox, filter, searchParam, selectedDrivers, listEpoch]);
 
     const vehicles = useMemo(
         () => applyOverrides(snapshot, vehicleOverrides),
@@ -247,18 +242,8 @@ export const FleetPage = () => {
                     type="search"
                     className={styles.search}
                     placeholder="Kennzeichen"
-                    aria-label={
-                        hasSelection
-                            ? "Kennzeichen in der Auswahl"
-                            : "Kennzeichen"
-                    }
-                    title={
-                        hasSelection
-                            ? undefined
-                            : "Zuerst Fahrer wählen"
-                    }
+                    aria-label="Kennzeichen"
                     value={searchDraft}
-                    disabled={!hasSelection}
                     onChange={(event) => setSearchDraft(event.target.value)}
                 />
 
@@ -267,11 +252,6 @@ export const FleetPage = () => {
                     onChange={(names) =>
                         patchParams((params) => {
                             writeDrivers(params, names);
-
-                            if (names.length === 0) {
-                                params.delete("search");
-                                params.delete("filter");
-                            }
                         })
                     }
                 />
@@ -280,21 +260,11 @@ export const FleetPage = () => {
                     className={styles.chips}
                     role="group"
                     aria-label="Status"
-                    aria-disabled={!hasSelection}
-                    title={
-                        hasSelection ? undefined : "Zuerst Fahrer wählen"
-                    }
                 >
                     <button
                         type="button"
                         className={styles.chip}
-                        aria-pressed={hasSelection && filter === undefined}
-                        disabled={!hasSelection}
-                        title={
-                            hasSelection
-                                ? undefined
-                                : "Zuerst Fahrer wählen"
-                        }
+                        aria-pressed={filter === undefined}
                         onClick={() => setFilter(undefined)}
                     >
                         Alle
@@ -304,13 +274,7 @@ export const FleetPage = () => {
                             key={item.id}
                             type="button"
                             className={styles.chip}
-                            aria-pressed={hasSelection && filter === item.id}
-                            disabled={!hasSelection}
-                            title={
-                                hasSelection
-                                    ? undefined
-                                    : "Zuerst Fahrer wählen"
-                            }
+                            aria-pressed={filter === item.id}
                             onClick={() =>
                                 setFilter(
                                     filter === item.id ? undefined : item.id,
@@ -323,15 +287,14 @@ export const FleetPage = () => {
                 </div>
 
                 <div className={styles.meta}>
-                    {hasSelection &&
-                        isLoading &&
+                    {isLoading &&
                         snapshot.length === 0 &&
                         !truncated && (
                             <p className={styles.note}>
                                 Positionen werden geladen…
                             </p>
                         )}
-                    {hasSelection && hasLoaded && !error && !truncated && (
+                    {hasLoaded && !error && !truncated && (
                         <p className={styles.count} aria-live="polite">
                             {countLabel}
                         </p>
@@ -361,13 +324,7 @@ export const FleetPage = () => {
                         })
                     }
                 />
-                {!hasSelection && !error && (
-                    <p className={styles.empty} role="status">
-                        Wähle Fahrer, um Fahrzeuge auf der Karte zu sehen.
-                    </p>
-                )}
-                {hasSelection &&
-                    hasLoaded &&
+                {hasLoaded &&
                     vehicles.length === 0 &&
                     !error && (
                         <p className={styles.empty} role="status">

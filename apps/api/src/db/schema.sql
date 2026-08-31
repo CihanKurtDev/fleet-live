@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id INTEGER NOT NULL,
-    license_plate TEXT NOT NULL UNIQUE,
+    license_plate TEXT NOT NULL,
     driver_name TEXT NOT NULL,
     fuel_level REAL NOT NULL DEFAULT 100
         CHECK (fuel_level >= 0 AND fuel_level <= 100),
@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS vehicles (
     ) VIRTUAL,
 
     FOREIGN KEY (company_id)
-        REFERENCES companies(id)
+        REFERENCES companies(id),
+
+    UNIQUE (company_id, license_plate)
 );
 
 CREATE TABLE IF NOT EXISTS telemetry (

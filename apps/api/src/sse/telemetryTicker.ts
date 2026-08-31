@@ -1,9 +1,36 @@
 import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
 import { broadcast, getFocusUnion } from "./hub";
+import type { TelemetryPatch } from "@fleet-live/shared";
 
 let timer: ReturnType<typeof setInterval> | undefined;
 let intervalMs = 0;
+
+function broadcastPatches(
+    patches: Array<TelemetryPatch & { company_id: number }>,
+) {
+    if (patches.length === 0) {
+        return;
+    }
+
+    const byCompany = new Map<number, TelemetryPatch[]>();
+
+    for (const patch of patches) {
+        const { company_id, ...wire } = patch;
+        const group = byCompany.get(company_id);
+
+        if (group) {
+            group.push(wire);
+            continue;
+        }
+
+        byCompany.set(company_id, [wire]);
+    }
+
+    for (const [companyId, group] of byCompany) {
+        broadcast("telemetry", group, companyId);
+    }
+}
 
 export function isTelemetryTickerRunning(): boolean {
     return timer !== undefined;
@@ -24,11 +51,7 @@ export function startTelemetryTicker(ms: number) {
                 return;
             }
 
-            const patches = TelemetryModel.tickDrivingVehicles(focusIds);
-
-            if (patches.length > 0) {
-                broadcast("telemetry", patches);
-            }
+            broadcastPatches(TelemetryModel.tickDrivingVehicles(focusIds));
         } catch (error) {
             logger.error({ err: error }, "telemetry tick failed");
         }
