@@ -10,9 +10,10 @@ const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users (
         name,
         email,
-        password_hash
+        password_hash,
+        company_id
     )
-    VALUES (?, ?, ?)
+    VALUES (?, ?, ?, ?)
 `);
 
 const insertVehicle = db.prepare(`
@@ -158,7 +159,12 @@ function randomInt(min: number, max: number) {
 }
 
 function seedSample() {
-    insertUser.run("Cihan Kurt", "cihan@example.com", "development-only-password");
+    insertUser.run(
+        "Cihan Kurt",
+        "cihan@example.com",
+        "development-only-password",
+        1,
+    );
 
     for (const [index, vehicle] of sampleVehicles.entries()) {
         insertVehicle.run(
@@ -216,7 +222,12 @@ function seedLarge() {
 
     db.exec("BEGIN");
     try {
-        insertUser.run("Cihan Kurt", "cihan@example.com", "development-only-password");
+        insertUser.run(
+            "Cihan Kurt",
+            "cihan@example.com",
+            "development-only-password",
+            1,
+        );
 
         // Vorherige Teilläufe (FK-Fehler nach COMMIT alle 1000 Zeilen)
         // würden sonst verwaiste lastInsertRowid=0 und doppelte Kennzeichen erzeugen.

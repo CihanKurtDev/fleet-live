@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 type TableColumn = {
     name: string;
@@ -27,6 +27,9 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_plate
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_company
     ON vehicles(company_id);
+
+CREATE INDEX IF NOT EXISTS idx_users_company
+    ON users(company_id);
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_vehicle_recorded
     ON telemetry(vehicle_id, recorded_at DESC, id DESC);
@@ -195,6 +198,24 @@ function migrateToV3(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+/**
+ * Ein User gehört zu genau einer Firma. Bestehende Zeilen bekommen
+ * `company_id` 1 (Rheinland Logistik). Login kommt später.
+ */
+function migrateToV4(database: DatabaseSync) {
+    const names = columnNames(database, "users");
+
+    if (!names.has("company_id")) {
+        database.exec(`
+            ALTER TABLE users
+            ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1
+            REFERENCES companies(id)
+        `);
+    }
+
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -211,6 +232,10 @@ export function migrate(database: DatabaseSync) {
 
     if (currentVersion < 3) {
         migrateToV3(database);
+    }
+
+    if (currentVersion < 4) {
+        migrateToV4(database);
     }
 
     if (currentVersion < SCHEMA_VERSION) {
