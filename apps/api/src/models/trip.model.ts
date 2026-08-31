@@ -4,9 +4,10 @@ import {
     encodePoints,
     encodePolyline,
 } from "@fleet-live/shared";
+import { config } from "../config";
 import { stmt } from "../db/statements";
 import { haversineMeters, simplifyPath } from "../lib/geo";
-import { nowSqlite } from "../lib/sqlTime";
+import { nowSqlite, sqliteDaysAgo } from "../lib/sqlTime";
 
 /**
  * Unterhalb dieser Distanz ist ein neuer Punkt Messrauschen und kein Stück
@@ -86,6 +87,15 @@ const CLOSE_TRIP = `
     UPDATE trips
     SET ended_at = ?, path = ?, point_count = ?
     WHERE id = ?
+`;
+
+const PRUNE_CLOSED_FOR_COMPANY = `
+    DELETE FROM trips
+    WHERE ended_at IS NOT NULL
+      AND ended_at < ?
+      AND vehicle_id IN (
+          SELECT id FROM vehicles WHERE company_id = ?
+      )
 `;
 
 type OpenTripRow = {
@@ -216,6 +226,23 @@ export class TripModel {
             simplified.length,
             open.id,
         );
+    }
+
+    /**
+     * Löscht geschlossene Fahrten älter als `TRIP_RETENTION_DAYS` dieser Firma.
+     * Offene Fahrten und andere Firmen bleiben. Kein `company_id` auf `trips`.
+     */
+    static pruneClosedForCompany(companyId: number): number {
+        if (config.tripRetentionDays <= 0) {
+            return 0;
+        }
+
+        const result = stmt(PRUNE_CLOSED_FOR_COMPANY).run(
+            sqliteDaysAgo(config.tripRetentionDays),
+            companyId,
+        );
+
+        return Number(result.changes);
     }
 
     /** Die laufende Fahrt, sonst die letzte beendete. */

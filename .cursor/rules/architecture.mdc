@@ -25,7 +25,7 @@ Data flow: React `--HTTP + SSE /api-->` Express (`app.ts` + `routes/`) → contr
 
 ## Current vs planned
 
-**Implemented:** vehicle CRUD; server-driven list (search/filter/sort/pagination/facets); SSE telemetry with per-connection focus; telemetry history API; trips with the driven path as an encoded polyline (`GET /api/vehicles/:id/trips/latest`); vehicle list/detail/CRUD UI; Leaflet detail map (marker, SSE, trail from the trip); fleet map (`/fleet`, last positions in the viewport, live ticks for driving vehicles in view); route simulation with a city/highway speed profile and fuel consumption; simulation pause via `GET`/`PATCH /api/sim`; companies; session login (`POST /api/auth/login`); tenant isolation by `company_id`; roles (`dispatcher` / `viewer`).
+**Implemented:** vehicle CRUD; server-driven list (search/filter/sort/pagination/facets); SSE telemetry with per-connection focus; telemetry history API; trips with the driven path as an encoded polyline (`GET /api/vehicles/:id/trips/latest`); vehicle list/detail/CRUD UI; Leaflet detail map (marker, SSE, trail from the trip); fleet map (`/fleet`, last positions in the viewport, live ticks for driving vehicles in view); route simulation with a city/highway speed profile and fuel consumption; simulation pause via `GET`/`PATCH /api/sim`; companies; session login (`POST /api/auth/login`); tenant isolation by `company_id`; roles (`dispatcher` / `viewer`); per-company retention for closed trips (`TRIP_RETENTION_DAYS`).
 
 **Not implemented — do not treat as present:** alerts REST/UI, frontend tests, CI/CD.
 
@@ -34,7 +34,7 @@ The fleet map is `/fleet`, not the list page. After login it loads last position
 ## Two layers of position data
 
 - `telemetry` is the **hot buffer**: last known position for list and marker, plus the newest movement. Bounded by `TELEMETRY_KEEP_PER_VEHICLE` (100). Rows are meant to expire.
-- `trips` is the **durable record**: one row per drive, the path as an encoded polyline (`@fleet-live/shared` `encodePoint` / `decodePolyline`). A 300 km haul is one row of a few KB.
+- `trips` is the **durable record**: one row per drive, the path as an encoded polyline (`@fleet-live/shared` `encodePoint` / `decodePolyline`). A 300 km haul is one row of a few KB. Closed trips older than `TRIP_RETENTION_DAYS` (default 90) are deleted per company (`TripModel.pruneClosedForCompany` joins `vehicles`; no `company_id` on `trips`). Open trips are kept. Prune runs after trip close and after a telemetry tick for companies in that batch.
 - Never size the visible trail by a point count. That was the old bug: how far you could see depended on the tick rate, not on the drive.
 - Appending stays O(1): `path = path || ?` in SQL, predecessor in `last_latitude` / `last_longitude`. The simulator appends the **road vertices** between ticks (`verticesBetween`), not the chord. Do not read the path back into Node per tick.
 - `TripModel.close` simplifies with Ramer-Douglas-Peucker (`lib/geo.ts`, 12 m). `distance_m` keeps the sum of reported segments, not the length of the simplified line.

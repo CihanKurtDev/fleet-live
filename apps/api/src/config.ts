@@ -43,6 +43,12 @@ const environmentSchema = z.object({
         .max(500)
         .default(100),
 
+    /**
+     * Geschlossene Fahrten älter als so viele Tage werden pro Firma gelöscht.
+     * 0 schaltet die Trip-Retention aus. Roh-Telemetrie bleibt das Rolling Window.
+     */
+    TRIP_RETENTION_DAYS: z.coerce.number().int().min(0).max(3650).default(90),
+
     LOG_LEVEL: z
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
         .default("info"),
@@ -76,6 +82,7 @@ export const config = {
     telemetryTickMs: env.TELEMETRY_TICK_MS,
     telemetryBatchSize: env.TELEMETRY_BATCH_SIZE,
     telemetryKeepPerVehicle: env.TELEMETRY_KEEP_PER_VEHICLE,
+    tripRetentionDays: env.TRIP_RETENTION_DAYS,
     logLevel: env.LOG_LEVEL,
 } as const;
 

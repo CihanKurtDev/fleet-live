@@ -52,7 +52,6 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * No frontend tests
 * No CI/CD
 * `CORS_ORIGIN` defaults to `*`; rate limiting is production-only (`NODE_ENV=production`)
-* No retention policy for trips or raw telemetry
 * No observability beyond request logs
 
 ### Roadmap (not implemented)
@@ -224,7 +223,7 @@ Hot buffer: vehicle, latitude, longitude, speed, `recorded_at`. Last point is on
 
 A ticker writes only for focused `DRIVING` vehicles whose company has not paused the sim. The `connected` event includes `connection_id`. The UI posts `{ connection_id, ids }` (list page plus neighbours, open detail vehicle, driving vehicles on the fleet map). Each connection has its own focus; the ticker uses the union **of that company’s running simulations**. Without focus, nothing is written. Telemetry patches go only to connections that focused that id **and** belong to the same company. `vehicles-changed` goes only to that company’s connections.
 
-At most `TELEMETRY_KEEP_PER_VEHICLE` raw rows remain per vehicle (default 100). Ending a trip writes speed `0` at the last position.
+At most `TELEMETRY_KEEP_PER_VEHICLE` raw rows remain per vehicle (default 100). That **is** the telemetry retention. Ending a trip writes speed `0` at the last position.
 
 Focused `DRIVING` vehicles follow baked OSRM polylines. Speed follows a city/highway profile with light noise. A time scale keeps a typical corridor in the 1–2 minute range.
 
@@ -240,12 +239,13 @@ Each reported position is appended to `trips.path` as an [encoded polyline](http
 
 Access is `trip → vehicle → company`. There is no `company_id` on `trips` and no `GET /api/trips/:id`.
 
+Closed trips older than `TRIP_RETENTION_DAYS` (default 90) are deleted **per company**. Open trips stay. Prune runs after a trip is closed and after a telemetry tick for companies in that batch. `TRIP_RETENTION_DAYS=0` turns prune off.
+
 Deliberate trade-offs:
 
 * No per-point speed or time on the polyline; aggregates live on the trip.
 * Distance and top speed are shown for finished trips only (fetched once).
 * The row is rewritten on every append; chunking would be the fix at larger scale.
-* No retention policy yet (technical debt, not a missing tenant column).
 
 ---
 
@@ -324,7 +324,7 @@ npm test
 
 List-query bench: `npm run bench` (see `apps/api/scripts/bench.ts`).
 
-After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (dispatcher, Rheinland Logistik). `viewer@example.com` uses the same password and can only read. Seed also creates companies 2 and 3 and spreads vehicles across them.
+After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (dispatcher, Rheinland Logistik). `viewer@example.com` uses the same password and can only read. Sample seed spreads vehicles across companies 2 and 3. `db:seed:large` puts almost all vehicles on company 1 so the demo login sees the load; companies 2 and 3 get about 1 % each for isolation.
 
 | Variable | Default | Notes |
 | -------- | ------- | ----- |
@@ -334,6 +334,7 @@ After `db:seed`, in development the login page can fill `cihan@example.com` / `d
 | `TELEMETRY_TICK_MS` | `400` | `0` disables the simulator |
 | `TELEMETRY_BATCH_SIZE` | `32` | Cap per tick on the union of focus ids |
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Live buffer only |
+| `TRIP_RETENTION_DAYS` | `90` | Closed trips older than this, per company; `0` disables |
 | `LOG_LEVEL` | `info` | |
 | `NODE_ENV` | `development` | Rate limiting is production-only |
 
@@ -388,7 +389,6 @@ Not production-ready. Incomplete by design:
 * Alerts REST/UI
 * Frontend tests
 * CI/CD, production database, observability
-* Trip/telemetry retention
 * CORS/rate-limit hardening for a real deployment
 
 ---
@@ -414,7 +414,7 @@ Not production-ready. Incomplete by design:
 * [x] Session login
 * [x] Tenant isolation (`company_id` from session; plates unique per company; SSE and sim scoped; trips via vehicle)
 * [x] Roles (`dispatcher` writes; `viewer` reads)
-* [ ] Per-tenant retention for trips and telemetry
+* [x] Per-tenant retention for trips and telemetry
 
 ## Phase 5 — still open
 

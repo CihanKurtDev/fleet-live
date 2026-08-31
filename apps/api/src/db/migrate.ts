@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 type TableColumn = {
     name: string;
@@ -49,6 +49,9 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_search
 
 CREATE INDEX IF NOT EXISTS idx_trips_vehicle_started
     ON trips(vehicle_id, started_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_trips_vehicle_ended
+    ON trips(vehicle_id, ended_at);
 
 -- Ein Fahrzeug kann nur auf einer Fahrt sein. Die Invariante gehört in die
 -- Datenbank, nicht in die Reihenfolge der Controller-Aufrufe.
@@ -361,6 +364,11 @@ function migrateToV7(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+/** Index fürs Löschen geschlossener Fahrten pro Fahrzeug. */
+function migrateToV8(database: DatabaseSync) {
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -393,6 +401,10 @@ export function migrate(database: DatabaseSync) {
 
     if (currentVersion < 7) {
         migrateToV7(database);
+    }
+
+    if (currentVersion < 8) {
+        migrateToV8(database);
     }
 
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist

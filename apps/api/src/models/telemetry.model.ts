@@ -172,6 +172,12 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
         throw error;
     }
 
+    const companies = new Set(vehicles.map((vehicle) => vehicle.company_id));
+
+    for (const companyId of companies) {
+        TripModel.pruneClosedForCompany(companyId);
+    }
+
     return patches;
 }
 
