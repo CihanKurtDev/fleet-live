@@ -32,6 +32,12 @@ export class BadRequestError extends AppError {
     }
 }
 
+export class UnauthorizedError extends AppError {
+    constructor(message = "Anmeldung erforderlich.") {
+        super(401, "UNAUTHORIZED", message);
+    }
+}
+
 export class NotFoundError extends AppError {
     constructor(message = "Fahrzeug nicht gefunden.") {
         super(404, "NOT_FOUND", message);

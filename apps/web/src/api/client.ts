@@ -64,6 +64,7 @@ export async function request<T>(
             ? { "Content-Type": "application/json" }
             : undefined,
         body: options.body ? JSON.stringify(options.body) : undefined,
+        credentials: "include",
         signal,
     });
 

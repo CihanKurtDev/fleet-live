@@ -3,6 +3,7 @@ import App from './App';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { VehicleDetailPage } from './pages/VehicleDetailPage';
 import { FleetPage } from './pages/FleetPage';
+import { LoginPage } from './pages/LoginPage';
 
 export const router = createBrowserRouter([
     {
@@ -24,6 +25,10 @@ export const router = createBrowserRouter([
             {
                 path: 'fleet',
                 Component: FleetPage,
+            },
+            {
+                path: 'login',
+                Component: LoginPage,
             },
         ],
     },

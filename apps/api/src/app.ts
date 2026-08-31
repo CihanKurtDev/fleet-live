@@ -6,20 +6,14 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 import { config } from "./config";
 import { logger } from "./logger";
+import { requestId } from "./middleware/requestId";
+import { attachSession } from "./middleware/attachSession";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
-import { requestId } from "./middleware/requestId";
 import vehicleRoutes from "./routes/vehicle.routes";
+import authRoutes from "./routes/auth.routes";
 import { setStreamFocus, streamEvents } from "./controllers/stream.controller";
 import { getSim, updateSim } from "./controllers/sim.controller";
-
-declare global {
-    namespace Express {
-        interface Request {
-            id: string;
-        }
-    }
-}
 
 export function createApp() {
     const app = express();
@@ -56,6 +50,7 @@ export function createApp() {
         }),
     );
     app.use(express.json({ limit: "16kb" }));
+    app.use(attachSession);
     app.use(
         "/api",
         rateLimit({
@@ -75,6 +70,7 @@ export function createApp() {
     app.patch("/api/sim", updateSim);
     app.get("/api/stream", streamEvents);
     app.post("/api/stream/focus", setStreamFocus);
+    app.use("/api/auth", authRoutes);
     app.use("/api/vehicles", vehicleRoutes);
 
     app.use(notFound);

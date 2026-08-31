@@ -3,17 +3,22 @@ import {
     applyMaintenanceTriggers,
     dropMaintenanceTriggers,
 } from "./migrate";
+import { hashPassword } from "../lib/password";
 
 const largeMode = process.argv.includes("--large");
 
 const insertUser = db.prepare(`
-    INSERT OR IGNORE INTO users (
+    INSERT INTO users (
         name,
         email,
         password_hash,
         company_id
     )
     VALUES (?, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET
+        name = excluded.name,
+        password_hash = excluded.password_hash,
+        company_id = excluded.company_id
 `);
 
 const insertVehicle = db.prepare(`
@@ -162,7 +167,7 @@ function seedSample() {
     insertUser.run(
         "Cihan Kurt",
         "cihan@example.com",
-        "development-only-password",
+        hashPassword("development-only-password"),
         1,
     );
 
@@ -225,7 +230,7 @@ function seedLarge() {
         insertUser.run(
             "Cihan Kurt",
             "cihan@example.com",
-            "development-only-password",
+            hashPassword("development-only-password"),
             1,
         );
 

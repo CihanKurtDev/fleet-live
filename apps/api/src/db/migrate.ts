@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 type TableColumn = {
     name: string;
@@ -30,6 +30,12 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_company
 
 CREATE INDEX IF NOT EXISTS idx_users_company
     ON users(company_id);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_token
+    ON sessions(token);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_expires
+    ON sessions(expires_at);
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_vehicle_recorded
     ON telemetry(vehicle_id, recorded_at DESC, id DESC);
@@ -185,17 +191,30 @@ function migrateToV3(database: DatabaseSync) {
             (3, 'Nordost Transport');
     `);
 
+    ensureVehiclesCompanyId(database);
+    applyMaintenanceTriggers(database);
+}
+
+function ensureVehiclesCompanyId(database: DatabaseSync) {
     const names = columnNames(database, "vehicles");
 
     if (!names.has("company_id")) {
         database.exec(`
             ALTER TABLE vehicles
             ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1
-            REFERENCES companies(id)
         `);
     }
+}
 
-    applyMaintenanceTriggers(database);
+function ensureUsersCompanyId(database: DatabaseSync) {
+    const names = columnNames(database, "users");
+
+    if (!names.has("company_id")) {
+        database.exec(`
+            ALTER TABLE users
+            ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1
+        `);
+    }
 }
 
 /**
@@ -203,15 +222,24 @@ function migrateToV3(database: DatabaseSync) {
  * `company_id` 1 (Rheinland Logistik). Login kommt später.
  */
 function migrateToV4(database: DatabaseSync) {
-    const names = columnNames(database, "users");
+    ensureUsersCompanyId(database);
+    applyMaintenanceTriggers(database);
+}
 
-    if (!names.has("company_id")) {
-        database.exec(`
-            ALTER TABLE users
-            ADD COLUMN company_id INTEGER NOT NULL DEFAULT 1
-            REFERENCES companies(id)
-        `);
-    }
+function migrateToV5(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at TEXT NOT NULL,
+
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        );
+    `);
 
     applyMaintenanceTriggers(database);
 }
@@ -237,6 +265,15 @@ export function migrate(database: DatabaseSync) {
     if (currentVersion < 4) {
         migrateToV4(database);
     }
+
+    if (currentVersion < 5) {
+        migrateToV5(database);
+    }
+
+    // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
+    // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
+    ensureUsersCompanyId(database);
+    ensureVehiclesCompanyId(database);
 
     if (currentVersion < SCHEMA_VERSION) {
         database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);

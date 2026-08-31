@@ -38,6 +38,20 @@
   color: var(--text-h);
 }
 
+.appSession {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.appSession:hover {
+  color: var(--text-h);
+}
+
 main {
   flex: 1;
   min-height: 0;

@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:large": "tsx src/db/seed.ts --large",
-    "test": "tsx --test src/test/vehicles.test.ts",
+    "test": "tsx --test --test-concurrency=1 src/test/vehicles.test.ts src/test/auth.test.ts",
     "bench": "tsx scripts/bench.ts"
   },
   "keywords": [],

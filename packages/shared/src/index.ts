@@ -70,6 +70,10 @@ export {
     streamFocusSchema,
 } from "./models/stream";
 
+export type { AuthUser, LoginInput } from "./models/auth";
+
+export { parseLoginInput } from "./models/auth";
+
 export type { SimPatch, SimState } from "./models/sim";
 
 export { parseSimPatch, simPatchSchema } from "./models/sim";
