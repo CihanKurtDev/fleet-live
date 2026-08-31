@@ -43,7 +43,7 @@ The fleet map is `/fleet`, not the list page. After login it loads last position
 
 ## Domain rules
 
-- `status` is what the vehicle reports. The UI shows it read-only. Do not offer start/stop trip in the frontend — a real fleet does not decide that, and the simulator already drives `DRIVING` vehicles. Pause the whole ticker with `PATCH /api/sim`.
+- `status` is what the vehicle reports. The UI shows it read-only. Do not offer start/stop trip in the frontend — a real fleet does not decide that, and the simulator already drives `DRIVING` vehicles. Pause **this company’s** simulation with `PATCH /api/sim` (not the whole process).
 - `DRIVING` opens a trip, any other status closes it (`syncTrip` in the vehicle controller). `TripModel.appendPoints` also opens one lazily, so seeded or imported driving vehicles still get a path.
 - Ending a trip writes a final telemetry point with speed `0` (`TelemetryModel.recordStandstill`).
 - `fuel_level` is measured while `DRIVING` (simulator) and manually maintainable otherwise. Do not overwrite a measured value with a stale form value.
@@ -53,7 +53,7 @@ The `users` table backs login. Isolation is company, not driver. The `alerts` ta
 
 ## Source of truth
 
-- Code is what exists. README Current Status / Roadmap is intent and can lag.
+- Code is what exists. If README and code disagree, code wins. README Current Status / Roadmap should describe the running system, not a future plan.
 - `apps/docs/table.md` describes the table component, not a feature backlog.
 
 ## New work
