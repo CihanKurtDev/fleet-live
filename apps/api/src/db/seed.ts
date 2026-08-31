@@ -125,6 +125,7 @@ const LAST_NAMES = [
     "Krause",
 ];
 const STATUSES = ["DRIVING", "DRIVING", "IDLE", "STOPPED", "OFFLINE"] as const;
+const DRIVER_NAME_CYCLE = FIRST_NAMES.length * LAST_NAMES.length;
 const COMPANY_COUNT = 3;
 
 function companyIdAt(index: number) {
