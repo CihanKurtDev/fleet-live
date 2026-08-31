@@ -46,12 +46,14 @@ const markerTooltip = (vehicle: FleetPosition) =>
 
 type FleetMapProps = {
     vehicles: FleetPosition[];
+    initialBbox?: GeoBBox | null;
     onBoundsChange: (bbox: GeoBBox) => void;
     onSelect: (id: number) => void;
 };
 
 export const FleetMap = ({
     vehicles,
+    initialBbox = null,
     onBoundsChange,
     onSelect,
 }: FleetMapProps) => {
@@ -59,6 +61,7 @@ export const FleetMap = ({
     const mapRef = useRef<L.Map | null>(null);
     const canvasRef = useRef<L.Canvas | null>(null);
     const markersRef = useRef(new Map<number, MarkerRecord>());
+    const initialBboxRef = useRef(initialBbox);
     const onBoundsChangeRef = useRef(onBoundsChange);
     onBoundsChangeRef.current = onBoundsChange;
     const onSelectRef = useRef(onSelect);
@@ -97,7 +100,20 @@ export const FleetMap = ({
 
         map.on("dragend", onUserView);
         map.on("zoomend", onUserView);
-        map.setView(GERMANY_CENTER, GERMANY_ZOOM);
+        const start = initialBboxRef.current;
+
+        if (start) {
+            map.fitBounds(
+                L.latLngBounds(
+                    [start.south, start.west],
+                    [start.north, start.east],
+                ),
+                { animate: false },
+            );
+        } else {
+            map.setView(GERMANY_CENTER, GERMANY_ZOOM);
+        }
+
         map.invalidateSize();
         mapRef.current = map;
         canvasRef.current = canvas;
