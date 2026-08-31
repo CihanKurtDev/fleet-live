@@ -37,6 +37,27 @@ const applyMapTheme = (container: HTMLElement) => {
     container.dataset.theme = prefersDark() ? "dark" : "light";
 };
 
+const isHistoryMouseButton = (event: MouseEvent) =>
+    event.button === 3 || event.button === 4;
+
+const allowBrowserHistoryButtons = (container: HTMLElement) => {
+    const onHistoryButton = (event: MouseEvent) => {
+        if (!isHistoryMouseButton(event)) {
+            return;
+        }
+
+        event.stopImmediatePropagation();
+    };
+
+    container.addEventListener("mousedown", onHistoryButton, true);
+    container.addEventListener("mouseup", onHistoryButton, true);
+
+    return () => {
+        container.removeEventListener("mousedown", onHistoryButton, true);
+        container.removeEventListener("mouseup", onHistoryButton, true);
+    };
+};
+
 const scheduleInvalidate = (
     map: L.Map,
     delays?: number[],
@@ -67,6 +88,7 @@ export const createThemedMap = (
     options?: { invalidateDelays?: number[] },
 ) => {
     applyMapTheme(container);
+    const detachHistoryButtons = allowBrowserHistoryButtons(container);
 
     const map = L.map(container, {
         attributionControl: true,
@@ -112,6 +134,7 @@ export const createThemedMap = (
         },
         destroy() {
             cancelInvalidate();
+            detachHistoryButtons();
             media.removeEventListener("change", onScheme);
             map.remove();
         },
