@@ -34,17 +34,19 @@ const SELECT_OPEN_FULL = `
 
 const SELECT_LATEST = `
     SELECT
-        id,
-        vehicle_id,
-        started_at,
-        ended_at,
-        path,
-        point_count,
-        distance_m,
-        max_speed
-    FROM trips
-    WHERE vehicle_id = ?
-    ORDER BY ended_at IS NULL DESC, started_at DESC, id DESC
+        t.id,
+        t.vehicle_id,
+        t.started_at,
+        t.ended_at,
+        t.path,
+        t.point_count,
+        t.distance_m,
+        t.max_speed
+    FROM trips t
+    INNER JOIN vehicles v ON v.id = t.vehicle_id
+    WHERE t.vehicle_id = ?
+      AND v.company_id = ?
+    ORDER BY t.ended_at IS NULL DESC, t.started_at DESC, t.id DESC
     LIMIT 1
 `;
 
@@ -217,8 +219,13 @@ export class TripModel {
     }
 
     /** Die laufende Fahrt, sonst die letzte beendete. */
-    static latestForVehicle(vehicleId: number): Trip | null {
-        const row = stmt(SELECT_LATEST).get(vehicleId) as Trip | undefined;
+    static latestForVehicle(
+        vehicleId: number,
+        companyId: number,
+    ): Trip | null {
+        const row = stmt(SELECT_LATEST).get(vehicleId, companyId) as
+            | Trip
+            | undefined;
 
         return row ?? null;
     }

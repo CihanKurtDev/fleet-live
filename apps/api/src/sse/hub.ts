@@ -6,11 +6,13 @@ type SseEvent = {
     id: number;
     event: string;
     data: unknown;
+    companyId: number;
 };
 
 type Client = {
     res: Response;
     focusIds: number[];
+    companyId: number;
 };
 
 const MAX_BUFFER = 64;
@@ -55,6 +57,10 @@ function payloadForClient(
     event: SseEvent,
     client: Client,
 ): SseEvent | null {
+    if (event.companyId !== client.companyId) {
+        return null;
+    }
+
     if (event.event !== "telemetry") {
         return event;
     }
@@ -99,8 +105,12 @@ function findClient(res: Response): Client | undefined {
     return undefined;
 }
 
-export function broadcast(event: string, data: unknown) {
-    const payload: SseEvent = { id: nextId++, event, data };
+export function broadcast(
+    event: string,
+    data: unknown,
+    companyId: number,
+) {
+    const payload: SseEvent = { id: nextId++, event, data, companyId };
     buffer.push(payload);
 
     if (buffer.length > MAX_BUFFER) {
@@ -112,9 +122,9 @@ export function broadcast(event: string, data: unknown) {
     }
 }
 
-export function subscribe(res: Response): string {
+export function subscribe(res: Response, companyId: number): string {
     const connectionId = randomUUID();
-    clients.set(connectionId, { res, focusIds: [] });
+    clients.set(connectionId, { res, focusIds: [], companyId });
     return connectionId;
 }
 
@@ -148,10 +158,11 @@ export function unsubscribe(res: Response) {
 export function setConnectionFocus(
     connectionId: string,
     ids: number[],
+    companyId: number,
 ): number | false {
     const client = clients.get(connectionId);
 
-    if (!client) {
+    if (!client || client.companyId !== companyId) {
         return false;
     }
 
@@ -184,6 +195,7 @@ export function closeAllSseClients() {
     }
 
     clients.clear();
+    buffer.length = 0;
 }
 
 export function connectedClientCount() {

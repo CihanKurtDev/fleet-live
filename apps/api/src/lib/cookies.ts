@@ -40,10 +40,18 @@ const cookieFlags = () => {
     return parts.join("; ");
 };
 
-export function setSessionCookie(response: Response, token: string) {
+export function setSessionCookie(
+    response: Response,
+    token: string,
+    persist: boolean,
+) {
+    const maxAge = persist
+        ? `; Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}`
+        : "";
+
     response.setHeader(
         "Set-Cookie",
-        `${SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${Math.floor(SESSION_MAX_AGE_MS / 1000)}; ${cookieFlags()}`,
+        `${SESSION_COOKIE}=${encodeURIComponent(token)}${maxAge}; ${cookieFlags()}`,
     );
 }
 

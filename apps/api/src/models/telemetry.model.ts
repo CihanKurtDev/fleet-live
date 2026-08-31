@@ -5,9 +5,11 @@ import { stmt } from "../db/statements";
 import { nowSqlite } from "../lib/sqlTime";
 import { nextSimTick } from "../sim/routes";
 import { TripModel } from "./trip.model";
+import { isCompanySimRunning } from "../lib/simControl";
 
 type DrivingVehicle = {
     id: number;
+    company_id: number;
     latitude: number;
     longitude: number;
     speed: number | null;
@@ -17,6 +19,7 @@ type DrivingVehicle = {
 const SELECT_DRIVING_BY_IDS = `
     SELECT
         v.id,
+        v.company_id,
         COALESCE(t.latitude, 50.9375) AS latitude,
         COALESCE(t.longitude, 6.9603) AS longitude,
         t.speed,
@@ -95,7 +98,9 @@ function takeBatch<T>(items: T[], limit: number): T[] {
     return batch;
 }
 
-function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
+type TickedPatch = TelemetryPatch & { company_id: number };
+
+function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
     if (vehicles.length === 0) {
         return [];
     }
@@ -104,7 +109,7 @@ function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
     const prune = stmt(PRUNE_TELEMETRY);
     const updateFuel = stmt(UPDATE_FUEL);
     const recordedAt = nowSqlite();
-    const patches: TelemetryPatch[] = [];
+    const patches: TickedPatch[] = [];
     const keep = config.telemetryKeepPerVehicle;
 
     db.exec("BEGIN");
@@ -144,6 +149,7 @@ function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
 
             patches.push({
                 id: vehicle.id,
+                company_id: vehicle.company_id,
                 speed,
                 latitude,
                 longitude,
@@ -173,7 +179,7 @@ export class TelemetryModel {
     static tickDrivingVehicles(
         focusIds: number[] = [],
         limit = config.telemetryBatchSize,
-    ): TelemetryPatch[] {
+    ): TickedPatch[] {
         if (focusIds.length === 0) {
             return [];
         }
@@ -181,8 +187,11 @@ export class TelemetryModel {
         const focused = stmt(SELECT_DRIVING_BY_IDS).all(
             JSON.stringify(focusIds),
         ) as DrivingVehicle[];
+        const runnable = focused.filter((vehicle) =>
+            isCompanySimRunning(vehicle.company_id),
+        );
 
-        return writePatches(takeBatch(focused, limit));
+        return writePatches(takeBatch(runnable, limit));
     }
 
     /**

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Navigate, useLocation, useNavigate } from "react-router";
 import { login } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
@@ -8,9 +8,11 @@ import styles from "./LoginPage.module.scss";
 
 export const LoginPage = () => {
     const navigate = useNavigate();
-    const { setUser } = useAuth();
+    const location = useLocation();
+    const { user, setUser } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [remember, setRemember] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,9 +24,18 @@ export const LoginPage = () => {
 
         try {
             setIsSubmitting(true);
-            const user = await login({ email, password });
+            const user = await login({ email, password, remember });
             setUser(user);
-            navigate("/vehicles", { replace: true });
+            const from = (
+                location.state as {
+                    from?: { pathname: string; search: string };
+                } | null
+            )?.from;
+            const next =
+                from && from.pathname !== "/login"
+                    ? `${from.pathname}${from.search}`
+                    : "/vehicles";
+            navigate(next, { replace: true });
         } catch (caught: unknown) {
             if (caught instanceof ApiError) {
                 setError(caught.message);
@@ -44,6 +55,10 @@ export const LoginPage = () => {
     const passwordError = fieldErrors.password;
     const formError =
         error && !emailError && !passwordError ? error : null;
+
+    if (user) {
+        return <Navigate to="/vehicles" replace />;
+    }
 
     return (
         <section className={styles.page}>
@@ -107,6 +122,16 @@ export const LoginPage = () => {
                             </p>
                         )}
                     </div>
+                    <label className={styles.remember}>
+                        <input
+                            type="checkbox"
+                            checked={remember}
+                            onChange={(event) =>
+                                setRemember(event.target.checked)
+                            }
+                        />
+                        Angemeldet bleiben
+                    </label>
                     {formError && (
                         <p className={styles.banner} role="alert">
                             {formError}
@@ -121,10 +146,27 @@ export const LoginPage = () => {
                         {isSubmitting ? "Wird angemeldet…" : "Anmelden"}
                     </Button>
                 </form>
-
-                <Link className={styles.back} to="/vehicles">
-                    Ohne Anmeldung weiter
-                </Link>
+                {import.meta.env.DEV && (
+                    <aside className={styles.hint}>
+                        <p className={styles.hintTitle}>Demo-Zugang</p>
+                        <p>
+                            <span>E-Mail</span> cihan@example.com
+                        </p>
+                        <p>
+                            <span>Passwort</span> development-only-password
+                        </p>
+                        <button
+                            type="button"
+                            className={styles.hintFill}
+                            onClick={() => {
+                                setEmail("cihan@example.com");
+                                setPassword("development-only-password");
+                            }}
+                        >
+                            Übernehmen
+                        </button>
+                    </aside>
+                )}
             </div>
         </section>
     );

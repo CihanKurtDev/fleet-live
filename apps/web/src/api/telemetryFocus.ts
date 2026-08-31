@@ -24,6 +24,7 @@ function publish() {
     void fetch("/api/stream/focus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ connection_id: connectionId, ids }),
     }).catch(() => undefined);
 }

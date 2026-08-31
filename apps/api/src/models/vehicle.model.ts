@@ -20,7 +20,9 @@ export type VehicleCreateInput = Pick<
     VehicleInput,
     "license_plate" | "driver_name"
 > &
-    Partial<Pick<VehicleInput, "fuel_level" | "status">>;
+    Partial<Pick<VehicleInput, "fuel_level" | "status">> & {
+        company_id?: number;
+    };
 
 export type VehiclePutInput = VehicleInput;
 
@@ -68,22 +70,16 @@ const INSERT_VEHICLE = `
         status,
         company_id
     )
-    VALUES (
-        ?,
-        ?,
-        ?,
-        ?,
-        (SELECT id FROM companies ORDER BY id LIMIT 1)
-    )
+    VALUES (?, ?, ?, ?, ?)
 `;
 
 const UPDATE_VEHICLE = `
     UPDATE vehicles
     SET license_plate = ?, driver_name = ?, fuel_level = ?, status = ?
-    WHERE id = ?
+    WHERE id = ? AND company_id = ?
 `;
 
-const DELETE_VEHICLE = `DELETE FROM vehicles WHERE id = ?`;
+const DELETE_VEHICLE = `DELETE FROM vehicles WHERE id = ? AND company_id = ?`;
 
 function searchMatchSql(searchPlaceholder: string, likePlaceholder: string) {
     return `(${searchPlaceholder} = '' OR v.search_text LIKE ${likePlaceholder} ESCAPE '#')`;
@@ -99,7 +95,8 @@ const FACET_SQL = `
         COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
         COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
     FROM vehicles v
-    WHERE ${LIST_SEARCH_SQL}
+    WHERE v.company_id = ?3
+      AND ${LIST_SEARCH_SQL}
 `;
 
 type ListRow = Vehicle & { total: number };
@@ -127,7 +124,7 @@ function toVehicle(row: ListRow): Vehicle {
 }
 
 export class VehicleModel {
-    static list(query: VehicleListQuery): VehicleListResponse {
+    static list(query: VehicleListQuery, companyId: number): VehicleListResponse {
         const search = query.search;
         const like = toLikePattern(search);
         const offset = (query.page - 1) * query.limit;
@@ -157,15 +154,17 @@ export class VehicleModel {
                 COUNT(*) OVER () AS total
             FROM vehicles v
             LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
-            WHERE ${LIST_SEARCH_SQL}
+            WHERE v.company_id = ?3
+              AND ${LIST_SEARCH_SQL}
               ${filterSql}
             ORDER BY ${nullsLast}${sortColumn} ${sortDirection}, v.id ASC
-            LIMIT ?3 OFFSET ?4
+            LIMIT ?4 OFFSET ?5
         `;
 
         const rows = stmt(listSql).all(
             search,
             like,
+            companyId,
             query.limit,
             offset,
         ) as ListRow[];
@@ -176,14 +175,16 @@ export class VehicleModel {
             const countSql = `
                 SELECT COUNT(*) AS total
                 FROM vehicles v
-                WHERE ${LIST_SEARCH_SQL}
+                WHERE v.company_id = ?3
+                  AND ${LIST_SEARCH_SQL}
                   ${filterSql}
             `;
-            total = (stmt(countSql).get(search, like) as { total: number })
-                .total;
+            total = (
+                stmt(countSql).get(search, like, companyId) as { total: number }
+            ).total;
         }
 
-        const counts = stmt(FACET_SQL).get(search, like) as FacetRow;
+        const counts = stmt(FACET_SQL).get(search, like, companyId) as FacetRow;
         const pageCount = Math.max(1, Math.ceil(total / query.limit));
 
         return {
@@ -209,7 +210,10 @@ export class VehicleModel {
      * `bbox` schränkt auf den sichtbaren Ausschnitt ein. Mehr Treffer als
      * `FLEET_POSITIONS_MAX` → `truncated`, keine Punkte (kein ID-Sample).
      */
-    static positions(query: FleetPositionsQuery): FleetPositionsResponse {
+    static positions(
+        query: FleetPositionsQuery,
+        companyId: number,
+    ): FleetPositionsResponse {
         const search = query.search ?? "";
         const like = toLikePattern(search);
         const selectedDrivers = query.drivers ?? [];
@@ -236,7 +240,8 @@ export class VehicleModel {
                 t.recorded_at
             FROM vehicles v
             INNER JOIN telemetry t ON t.id = v.last_telemetry_id
-            WHERE ${searchMatchSql("?", "?")}
+            WHERE v.company_id = ?
+              AND ${searchMatchSql("?", "?")}
               ${filterSql}
               ${driverSql}
               ${bboxSql}
@@ -245,6 +250,7 @@ export class VehicleModel {
         `;
         const limit = FLEET_POSITIONS_MAX + 1;
         const params = [
+            companyId,
             search,
             like,
             ...selectedDrivers,
@@ -267,10 +273,16 @@ export class VehicleModel {
         };
     }
 
-    static drivers(query: FleetDriversQuery): FleetDriversResponse {
+    static drivers(
+        query: FleetDriversQuery,
+        companyId: number,
+    ): FleetDriversResponse {
         const roster = Number(
-            (stmt(`SELECT COUNT(*) AS n FROM vehicles`).get() as { n: number })
-                .n,
+            (
+                stmt(`SELECT COUNT(*) AS n FROM vehicles WHERE company_id = ?`).get(
+                    companyId,
+                ) as { n: number }
+            ).n,
         );
         const names = query.names ?? [];
         const search = query.search ?? "";
@@ -293,11 +305,12 @@ export class VehicleModel {
                 `
                 SELECT v.driver_name AS name, v.license_plate
                 FROM vehicles v
-                WHERE v.driver_name IN (${placeholders})
+                WHERE v.company_id = ?
+                  AND v.driver_name IN (${placeholders})
                 ORDER BY v.driver_name COLLATE NOCASE, v.license_plate COLLATE NOCASE
                 LIMIT ?
                 `,
-            ).all(...names, limit) as FleetDriver[];
+            ).all(companyId, ...names, limit) as FleetDriver[];
 
             return {
                 data,
@@ -314,11 +327,14 @@ export class VehicleModel {
                 v.license_plate,
                 COUNT(*) OVER () AS total
             FROM vehicles v
-            WHERE v.search_text LIKE ? ESCAPE '#'
+            WHERE v.company_id = ?
+              AND v.search_text LIKE ? ESCAPE '#'
             ORDER BY v.driver_name COLLATE NOCASE, v.license_plate COLLATE NOCASE
             LIMIT ? OFFSET ?
             `,
-        ).all(like, limit, offset) as Array<FleetDriver & { total: number }>;
+        ).all(companyId, like, limit, offset) as Array<
+            FleetDriver & { total: number }
+        >;
 
         let total = rows[0]?.total ?? 0;
 
@@ -329,9 +345,10 @@ export class VehicleModel {
                         `
                         SELECT COUNT(*) AS n
                         FROM vehicles v
-                        WHERE v.search_text LIKE ? ESCAPE '#'
+                        WHERE v.company_id = ?
+                          AND v.search_text LIKE ? ESCAPE '#'
                         `,
-                    ).get(like) as { n: number }
+                    ).get(companyId, like) as { n: number }
                 ).n,
             );
         }
@@ -347,8 +364,42 @@ export class VehicleModel {
         };
     }
 
-    static getById(id: number): Vehicle | undefined {
-        return stmt(SELECT_ONE).get(id) as Vehicle | undefined;
+    static getById(id: number, companyId: number): Vehicle | undefined {
+        return stmt(`${SELECT_ONE} AND v.company_id = ?`).get(
+            id,
+            companyId,
+        ) as Vehicle | undefined;
+    }
+
+    static ownedIds(ids: number[], companyId: number): number[] {
+        const unique: number[] = [];
+        const seen = new Set<number>();
+
+        for (const id of ids) {
+            if (!Number.isInteger(id) || id < 1 || seen.has(id)) {
+                continue;
+            }
+
+            seen.add(id);
+            unique.push(id);
+        }
+
+        if (unique.length === 0) {
+            return [];
+        }
+
+        const placeholders = unique.map(() => "?").join(",");
+        const rows = stmt(
+            `
+            SELECT id
+            FROM vehicles
+            WHERE company_id = ?
+              AND id IN (${placeholders})
+            `,
+        ).all(companyId, ...unique) as Array<{ id: number }>;
+        const allowed = new Set(rows.map((row) => row.id));
+
+        return unique.filter((id) => allowed.has(id));
     }
 
     static create(input: VehicleCreateInput): Vehicle {
@@ -357,32 +408,45 @@ export class VehicleModel {
             input.driver_name,
             input.fuel_level ?? 100,
             input.status ?? "IDLE",
+            input.company_id ?? 1,
         );
 
-        const created = this.getById(Number(result.lastInsertRowid));
+        const created = this.getById(
+            Number(result.lastInsertRowid),
+            input.company_id ?? 1,
+        );
         if (!created) {
             throw new Error("Created vehicle was not found.");
         }
         return created;
     }
 
-    static replace(id: number, input: VehiclePutInput): Vehicle | undefined {
+    static replace(
+        id: number,
+        input: VehiclePutInput,
+        companyId: number,
+    ): Vehicle | undefined {
         const result = stmt(UPDATE_VEHICLE).run(
             input.license_plate,
             input.driver_name,
             input.fuel_level,
             input.status,
             id,
+            companyId,
         );
 
         if (result.changes === 0) {
             return undefined;
         }
-        return this.getById(id);
+        return this.getById(id, companyId);
     }
 
-    static update(id: number, input: VehiclePatchInput): Vehicle | undefined {
-        const current = this.getById(id);
+    static update(
+        id: number,
+        input: VehiclePatchInput,
+        companyId: number,
+    ): Vehicle | undefined {
+        const current = this.getById(id, companyId);
         if (!current) {
             return undefined;
         }
@@ -393,16 +457,17 @@ export class VehicleModel {
             input.fuel_level ?? current.fuel_level,
             input.status ?? current.status,
             id,
+            companyId,
         );
 
         if (result.changes === 0) {
             return undefined;
         }
-        return this.getById(id);
+        return this.getById(id, companyId);
     }
 
-    static delete(id: number): boolean {
-        const result = stmt(DELETE_VEHICLE).run(id);
+    static delete(id: number, companyId: number): boolean {
+        const result = stmt(DELETE_VEHICLE).run(id, companyId);
         return result.changes > 0;
     }
 

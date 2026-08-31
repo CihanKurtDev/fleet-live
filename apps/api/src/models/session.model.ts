@@ -4,7 +4,7 @@ import { stmt } from "../db/statements";
 
 const INSERT_SESSION = `
     INSERT INTO sessions (user_id, token, expires_at)
-    VALUES (?, ?, datetime('now', '+7 days'))
+    VALUES (?, ?, datetime('now', ?))
 `;
 
 const SELECT_USER_BY_TOKEN = `
@@ -23,9 +23,13 @@ const DELETE_EXPIRED = `
 `;
 
 export const SessionModel = {
-    create(userId: number): string {
+    create(userId: number, persist: boolean): string {
         const token = randomBytes(32).toString("hex");
-        stmt(INSERT_SESSION).run(userId, token);
+        stmt(INSERT_SESSION).run(
+            userId,
+            token,
+            persist ? "+7 days" : "+12 hours",
+        );
 
         return token;
     },

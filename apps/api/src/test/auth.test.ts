@@ -27,7 +27,30 @@ describe("POST /api/auth/login", () => {
         assert.equal(response.body.email, "test@example.com");
         assert.equal(response.body.company_id, 1);
         assert.equal(response.body.password_hash, undefined);
-        assert.match(response.headers["set-cookie"]?.join(";") ?? "", /fleet_session=/);
+        const cookie = response.headers["set-cookie"]?.join(";") ?? "";
+        assert.match(cookie, /fleet_session=/);
+        assert.doesNotMatch(cookie, /Max-Age=/);
+    });
+
+    it("persists the cookie for seven days when remember is set", async () => {
+        UserModel.create({
+            name: "Test User",
+            email: "test@example.com",
+            password: "secret-pass",
+            company_id: 1,
+        });
+
+        const response = await request(app).post("/api/auth/login").send({
+            email: "test@example.com",
+            password: "secret-pass",
+            remember: true,
+        });
+
+        assert.equal(response.status, 200);
+        assert.match(
+            response.headers["set-cookie"]?.join(";") ?? "",
+            /Max-Age=604800/,
+        );
     });
 
     it("rejects a wrong password without saying which field failed", async () => {

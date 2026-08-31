@@ -182,13 +182,13 @@ export const FleetDriverPicker = ({
 
     const label =
         selected.length === 0
-            ? "Fahrer wählen"
+            ? "Fahrer filtern"
             : selected.length === 1
               ? selected[0]
               : `${formatCount(selected.length)} Fahrer`;
     const triggerLabel =
         selected.length === 0
-            ? "Fahrer wählen"
+            ? "Fahrer filtern"
             : selected.length === 1
               ? `Fahrer: ${selected[0]}`
               : `${formatCount(selected.length)} Fahrer ausgewählt`;

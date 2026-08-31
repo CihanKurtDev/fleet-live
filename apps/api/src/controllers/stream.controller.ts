@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { parseStreamFocus } from "@fleet-live/shared";
-import { BadRequestError } from "../lib/errors";
+import { BadRequestError, UnauthorizedError } from "../lib/errors";
+import { VehicleModel } from "../models/vehicle.model";
 import {
     replay,
     setConnectionFocus,
@@ -9,6 +10,10 @@ import {
 } from "../sse/hub";
 
 export function streamEvents(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Connection", "keep-alive");
@@ -17,7 +22,7 @@ export function streamEvents(req: Request, res: Response) {
 
     res.write("retry: 3000\n\n");
 
-    const connectionId = subscribe(res);
+    const connectionId = subscribe(res, req.user.company_id);
     res.write(
         `event: connected\ndata: ${JSON.stringify({ connection_id: connectionId })}\n\n`,
     );
@@ -44,8 +49,17 @@ export function streamEvents(req: Request, res: Response) {
 }
 
 export function setStreamFocus(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
     const { connection_id, ids } = parseStreamFocus(req.body);
-    const count = setConnectionFocus(connection_id, ids);
+    const owned = VehicleModel.ownedIds(ids, req.user.company_id);
+    const count = setConnectionFocus(
+        connection_id,
+        owned,
+        req.user.company_id,
+    );
 
     if (count === false) {
         throw new BadRequestError("Unbekannte Verbindung.");

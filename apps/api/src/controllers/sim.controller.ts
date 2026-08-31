@@ -1,21 +1,31 @@
 import type { Request, Response } from "express";
 import { parseSimPatch } from "@fleet-live/shared";
-import { BadRequestError } from "../lib/errors";
-import {
-    isTelemetryTickerRunning,
-    setTelemetryTickerRunning,
-} from "../sse/telemetryTicker";
+import { BadRequestError, UnauthorizedError } from "../lib/errors";
 import { config } from "../config";
+import {
+    isCompanySimRunning,
+    setCompanySimRunning,
+} from "../lib/simControl";
 
-function simState() {
+function sessionCompany(req: Request): number {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    return req.user.company_id;
+}
+
+function simState(companyId: number) {
+    const available = config.telemetryTickMs > 0;
+
     return {
-        running: isTelemetryTickerRunning(),
-        available: config.telemetryTickMs > 0,
+        running: available && isCompanySimRunning(companyId),
+        available,
     };
 }
 
-export function getSim(_req: Request, res: Response) {
-    res.json(simState());
+export function getSim(req: Request, res: Response) {
+    res.json(simState(sessionCompany(req)));
 }
 
 export function updateSim(req: Request, res: Response) {
@@ -25,6 +35,7 @@ export function updateSim(req: Request, res: Response) {
         throw new BadRequestError("Simulation ist deaktiviert.");
     }
 
-    setTelemetryTickerRunning(running);
-    res.json(simState());
+    const companyId = sessionCompany(req);
+    setCompanySimRunning(companyId, running);
+    res.json(simState(companyId));
 }

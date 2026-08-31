@@ -1,6 +1,6 @@
 import "./env";
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import type { VehicleStatus } from "@fleet-live/shared";
 import { decodePolyline, encodePolyline, FLEET_POSITIONS_MAX } from "@fleet-live/shared";
@@ -11,6 +11,7 @@ import { simplifyPath } from "../lib/geo";
 import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
 import { VehicleModel } from "../models/vehicle.model";
+import { UserModel } from "../models/user.model";
 import {
     CITY_LIMIT_KMH,
     HIGHWAY_LIMIT_KMH,
@@ -22,6 +23,38 @@ import {
     verticesBetween,
 } from "../sim/routes";
 import { broadcast, closeAllSseClients } from "../sse/hub";
+import { resetSimControlForTests, setCompanySimRunning } from "../lib/simControl";
+
+const TEST_PASSWORD = "secret-pass";
+let api: ReturnType<typeof request.agent>;
+let sessionCookie = "";
+
+async function loginAs(companyId: number) {
+    const email = `dispatcher-${companyId}@example.com`;
+
+    if (!UserModel.findByEmail(email)) {
+        UserModel.create({
+            name: `Dispatcher ${companyId}`,
+            email,
+            password: TEST_PASSWORD,
+            company_id: companyId,
+        });
+    }
+
+    const agent = request.agent(app);
+    const response = await agent.post("/api/auth/login").send({
+        email,
+        password: TEST_PASSWORD,
+    });
+
+    assert.equal(response.status, 200);
+
+    const raw = response.headers["set-cookie"];
+    const header = Array.isArray(raw) ? raw[0] : raw;
+    assert.ok(header);
+
+    return { agent, cookie: String(header).split(";")[0] };
+}
 
 function seedFleet(count = 3) {
     const created = [];
@@ -98,8 +131,10 @@ function parseSseEvents(
     return events;
 }
 
-async function openSseStream(port: number) {
-    const response = await fetch(`http://127.0.0.1:${port}/api/stream`);
+async function openSseStream(port: number, cookie = sessionCookie) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/stream`, {
+        headers: { Cookie: cookie },
+    });
     assert.equal(response.status, 200);
 
     const reader = response.body?.getReader();
@@ -148,17 +183,88 @@ async function openSseStream(port: number) {
     };
 }
 
+beforeEach(async () => {
+    const session = await loginAs(1);
+    api = session.agent;
+    sessionCookie = session.cookie;
+});
+
 afterEach(() => {
     VehicleModel.resetForTests();
+    UserModel.resetForTests();
     resetSimProgress();
+    resetSimControlForTests();
     closeAllSseClients();
 });
 
 describe("GET /api/vehicles", () => {
+    it("requires a session", async () => {
+        const response = await request(app).get("/api/vehicles");
+
+        assert.equal(response.status, 401);
+        assert.equal(response.body.code, "UNAUTHORIZED");
+    });
+
+    it("hides vehicles of other companies", async () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-OWN 1",
+            driver_name: "Eigene",
+            company_id: 1,
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-OTH 1",
+            driver_name: "Fremde",
+            company_id: 2,
+        });
+
+        const list = await api.get("/api/vehicles");
+        assert.equal(list.status, 200);
+        assert.equal(list.body.meta.total, 1);
+        assert.equal(list.body.data[0].id, mine.id);
+
+        const hidden = await api.get(`/api/vehicles/${other.id}`);
+        assert.equal(hidden.status, 404);
+
+        db.prepare(
+            `
+                INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
+                VALUES (?, ?, ?, ?)
+            `,
+        ).run(other.id, 50.9, 6.9, 40);
+
+        const positions = await api.get("/api/vehicles/positions");
+        assert.equal(positions.status, 200);
+        assert.equal(
+            positions.body.data.some((row: { id: number }) => row.id === other.id),
+            false,
+        );
+
+        const otherSession = await loginAs(2);
+        const visible = await otherSession.agent.get(
+            `/api/vehicles/${other.id}`,
+        );
+        assert.equal(visible.status, 200);
+        assert.equal(visible.body.id, other.id);
+    });
+
+    it("ignores company_id from the client and assigns the session company", async () => {
+        const created = await api.post("/api/vehicles").send({
+            license_plate: "K-CLI 1",
+            driver_name: "Client",
+            company_id: 2,
+        });
+
+        assert.equal(created.status, 201);
+        const assigned = db
+            .prepare("SELECT company_id FROM vehicles WHERE id = ?")
+            .get(created.body.id) as { company_id: number };
+        assert.equal(assigned.company_id, 1);
+    });
+
     it("paginates and returns facet counts", async () => {
         seedFleet(12);
 
-        const response = await request(app)
+        const response = await api
             .get("/api/vehicles")
             .query({ page: 1, limit: 10 });
 
@@ -179,7 +285,7 @@ describe("GET /api/vehicles", () => {
     it("returns an empty page past the end and keeps the total", async () => {
         seedFleet(3);
 
-        const response = await request(app)
+        const response = await api
             .get("/api/vehicles")
             .query({ page: 9, limit: 10 });
 
@@ -190,7 +296,7 @@ describe("GET /api/vehicles", () => {
     });
 
     it("rejects a limit outside the allowlist", async () => {
-        const response = await request(app)
+        const response = await api
             .get("/api/vehicles")
             .query({ limit: 7 });
 
@@ -199,7 +305,7 @@ describe("GET /api/vehicles", () => {
     });
 
     it("rejects sort injection attempts", async () => {
-        const response = await request(app)
+        const response = await api
             .get("/api/vehicles")
             .query({ sort: "id;DROP TABLE vehicles" });
 
@@ -220,7 +326,7 @@ describe("GET /api/vehicles", () => {
             status: "IDLE",
         });
 
-        const filtered = await request(app)
+        const filtered = await api
             .get("/api/vehicles")
             .query({ search: "clara", filter: "low_fuel" });
 
@@ -230,7 +336,7 @@ describe("GET /api/vehicles", () => {
         assert.equal(filtered.body.meta.counts.all, 1);
         assert.equal(filtered.body.meta.counts.low_fuel, 1);
 
-        const sorted = await request(app)
+        const sorted = await api
             .get("/api/vehicles")
             .query({ sort: "active_alerts", dir: "desc" });
 
@@ -240,7 +346,7 @@ describe("GET /api/vehicles", () => {
     it("responds 304 when If-None-Match matches the ETag", async () => {
         seedFleet(3);
 
-        const first = await request(app)
+        const first = await api
             .get("/api/vehicles")
             .set("Accept-Encoding", "identity");
 
@@ -248,7 +354,7 @@ describe("GET /api/vehicles", () => {
         const etag = first.headers.etag;
         assert.ok(etag);
 
-        const second = await request(app)
+        const second = await api
             .get("/api/vehicles")
             .set("Accept-Encoding", "identity")
             .set("If-None-Match", etag);
@@ -279,7 +385,7 @@ describe("GET /api/vehicles/positions", () => {
             status: "OFFLINE",
         });
 
-        const response = await request(app).get("/api/vehicles/positions");
+        const response = await api.get("/api/vehicles/positions");
 
         assert.equal(response.status, 200);
         assert.deepEqual(response.body.data, []);
@@ -299,7 +405,7 @@ describe("GET /api/vehicles/positions", () => {
         });
         putTelemetry(withFix.id, 50.9375, 6.9603, 12);
 
-        const response = await request(app).get("/api/vehicles/positions");
+        const response = await api.get("/api/vehicles/positions");
 
         assert.equal(response.status, 200);
         assert.equal(response.body.data.length, 1);
@@ -333,7 +439,7 @@ describe("GET /api/vehicles/positions", () => {
         putTelemetry(munich.id, 48.1351, 11.582);
         putTelemetry(parked.id, 50.94, 6.97);
 
-        const boxed = await request(app)
+        const boxed = await api
             .get("/api/vehicles/positions")
             .query({ bbox: "6.8,50.8,7.2,51.1" });
 
@@ -343,7 +449,7 @@ describe("GET /api/vehicles/positions", () => {
             ["K-BB 1", "K-BB 2"],
         );
 
-        const driving = await request(app)
+        const driving = await api
             .get("/api/vehicles/positions")
             .query({ bbox: "6.8,50.8,7.2,51.1", filter: "driving" });
 
@@ -353,17 +459,17 @@ describe("GET /api/vehicles/positions", () => {
     });
 
     it("rejects an invalid bbox and an unknown filter", async () => {
-        const malformed = await request(app)
+        const malformed = await api
             .get("/api/vehicles/positions")
             .query({ bbox: "1,2,3" });
         assert.equal(malformed.status, 400);
 
-        const inverted = await request(app)
+        const inverted = await api
             .get("/api/vehicles/positions")
             .query({ bbox: "7.2,50.8,6.8,51.1" });
         assert.equal(inverted.status, 400);
 
-        const filter = await request(app)
+        const filter = await api
             .get("/api/vehicles/positions")
             .query({ filter: "nope" });
         assert.equal(filter.status, 400);
@@ -383,7 +489,7 @@ describe("GET /api/vehicles/positions", () => {
         putTelemetry(clara.id, 50.9375, 6.9603);
         putTelemetry(max.id, 50.94, 6.97);
 
-        const byDriver = await request(app)
+        const byDriver = await api
             .get("/api/vehicles/positions")
             .query({ search: "clara" });
 
@@ -391,7 +497,7 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(byDriver.body.data.length, 1);
         assert.equal(byDriver.body.data[0].driver_name, "Clara Conrad");
 
-        const byPlate = await request(app)
+        const byPlate = await api
             .get("/api/vehicles/positions")
             .query({ search: "K-MX" });
 
@@ -423,7 +529,7 @@ describe("GET /api/vehicles/positions", () => {
         const twoParams = new URLSearchParams();
         twoParams.append("drivers", "Clara Conrad");
         twoParams.append("drivers", "Max Müller");
-        const two = await request(app).get(
+        const two = await api.get(
             `/api/vehicles/positions?${twoParams}`,
         );
 
@@ -433,7 +539,7 @@ describe("GET /api/vehicles/positions", () => {
             ["Clara Conrad", "Max Müller"],
         );
 
-        const comma = await request(app)
+        const comma = await api
             .get("/api/vehicles/positions")
             .query({ drivers: "Clara Conrad,Anna Schneider" });
 
@@ -444,7 +550,7 @@ describe("GET /api/vehicles/positions", () => {
         for (let index = 1; index <= 51; index += 1) {
             tooMany.append("drivers", `Fahrer ${index}`);
         }
-        const rejected = await request(app).get(
+        const rejected = await api.get(
             `/api/vehicles/positions?${tooMany}`,
         );
 
@@ -482,7 +588,7 @@ describe("GET /api/vehicles/positions", () => {
         }
         db.exec("COMMIT");
 
-        const response = await request(app).get("/api/vehicles/positions");
+        const response = await api.get("/api/vehicles/positions");
 
         assert.equal(response.status, 200);
         assert.deepEqual(response.body.data, []);
@@ -503,7 +609,7 @@ describe("GET /api/vehicles/drivers", () => {
             status: "IDLE",
         });
 
-        const response = await request(app).get("/api/vehicles/drivers");
+        const response = await api.get("/api/vehicles/drivers");
 
         assert.equal(response.status, 200);
         assert.deepEqual(response.body.data, []);
@@ -524,7 +630,7 @@ describe("GET /api/vehicles/drivers", () => {
             status: "IDLE",
         });
 
-        const byName = await request(app)
+        const byName = await api
             .get("/api/vehicles/drivers")
             .query({ search: "anna" });
 
@@ -535,7 +641,7 @@ describe("GET /api/vehicles/drivers", () => {
         assert.equal(byName.body.meta.total, 1);
         assert.equal(byName.body.meta.pageCount, 1);
 
-        const byPlate = await request(app)
+        const byPlate = await api
             .get("/api/vehicles/drivers")
             .query({ search: "K-B" });
 
@@ -544,7 +650,7 @@ describe("GET /api/vehicles/drivers", () => {
             { name: "Max Müller", license_plate: "K-B 1" },
         ]);
 
-        const selected = await request(app)
+        const selected = await api
             .get("/api/vehicles/drivers")
             .query({ names: "Max Müller" });
 
@@ -563,7 +669,7 @@ describe("GET /api/vehicles/drivers", () => {
             });
         }
 
-        const first = await request(app)
+        const first = await api
             .get("/api/vehicles/drivers")
             .query({ search: "Pat" });
 
@@ -574,7 +680,7 @@ describe("GET /api/vehicles/drivers", () => {
         assert.equal(first.body.meta.pageCount, 2);
         assert.equal(first.body.data.length, 50);
 
-        const second = await request(app)
+        const second = await api
             .get("/api/vehicles/drivers")
             .query({ search: "Pat", page: 2 });
 
@@ -583,7 +689,7 @@ describe("GET /api/vehicles/drivers", () => {
         assert.equal(second.body.data.length, 1);
         assert.equal(second.body.data[0].name, "Pat 50");
 
-        const rejected = await request(app)
+        const rejected = await api
             .get("/api/vehicles/drivers")
             .query({ search: "Pat", page: 0 });
 
@@ -593,7 +699,7 @@ describe("GET /api/vehicles/drivers", () => {
 
 describe("vehicle mutations", () => {
     it("creates a vehicle with Location and rejects a duplicate plate with 409", async () => {
-        const created = await request(app).post("/api/vehicles").send({
+        const created = await api.post("/api/vehicles").send({
             license_plate: "K-NEU 1",
             driver_name: "Neu Fahrer",
             fuel_level: 50,
@@ -613,7 +719,7 @@ describe("vehicle mutations", () => {
             `/api/vehicles/${created.body.id}`,
         );
 
-        const duplicate = await request(app).post("/api/vehicles").send({
+        const duplicate = await api.post("/api/vehicles").send({
             license_plate: "K-NEU 1",
             driver_name: "Anderer Fahrer",
             fuel_level: 40,
@@ -632,7 +738,7 @@ describe("vehicle mutations", () => {
     });
 
     it("rejects missing required fields and oversized strings", async () => {
-        const missing = await request(app).post("/api/vehicles").send({
+        const missing = await api.post("/api/vehicles").send({
             fuel_level: 40,
         });
 
@@ -640,7 +746,7 @@ describe("vehicle mutations", () => {
         assert.equal(missing.body.fields.license_plate, "Kennzeichen ist erforderlich.");
         assert.equal(missing.body.fields.driver_name, "Fahrer ist erforderlich.");
 
-        const tooLong = await request(app).post("/api/vehicles").send({
+        const tooLong = await api.post("/api/vehicles").send({
             license_plate: "K".repeat(33),
             driver_name: "A".repeat(81),
             fuel_level: 40,
@@ -653,19 +759,19 @@ describe("vehicle mutations", () => {
     });
 
     it("rejects an invalid id", async () => {
-        const response = await request(app).get("/api/vehicles/abc");
+        const response = await api.get("/api/vehicles/abc");
         assert.equal(response.status, 400);
         assert.equal(response.body.error, "Ungültige Fahrzeug-ID.");
     });
 
     it("returns 404 for a missing vehicle", async () => {
-        const response = await request(app).get("/api/vehicles/999");
+        const response = await api.get("/api/vehicles/999");
         assert.equal(response.status, 404);
         assert.equal(response.body.error, "Fahrzeug nicht gefunden.");
     });
 
     it("replaces, patches and deletes a vehicle", async () => {
-        const created = await request(app).post("/api/vehicles").send({
+        const created = await api.post("/api/vehicles").send({
             license_plate: "K-ED 1",
             driver_name: "Edit Fahrer",
             fuel_level: 40,
@@ -674,7 +780,7 @@ describe("vehicle mutations", () => {
 
         const id = created.body.id;
 
-        const replaced = await request(app).put(`/api/vehicles/${id}`).send({
+        const replaced = await api.put(`/api/vehicles/${id}`).send({
             license_plate: "K-ED 2",
             driver_name: "Neuer Fahrer",
             fuel_level: 70,
@@ -685,7 +791,7 @@ describe("vehicle mutations", () => {
         assert.equal(replaced.body.license_plate, "K-ED 2");
         assert.equal(replaced.body.status, "DRIVING");
 
-        const emptyPatch = await request(app)
+        const emptyPatch = await api
             .patch(`/api/vehicles/${id}`)
             .send({});
 
@@ -695,7 +801,7 @@ describe("vehicle mutations", () => {
             "Mindestens ein Feld ist erforderlich.",
         );
 
-        const patched = await request(app)
+        const patched = await api
             .patch(`/api/vehicles/${id}`)
             .send({ fuel_level: 12 });
 
@@ -703,17 +809,249 @@ describe("vehicle mutations", () => {
         assert.equal(patched.body.fuel_level, 12);
         assert.equal(patched.body.license_plate, "K-ED 2");
 
-        const deleted = await request(app).delete(`/api/vehicles/${id}`);
+        const deleted = await api.delete(`/api/vehicles/${id}`);
         assert.equal(deleted.status, 204);
 
-        const missing = await request(app).get(`/api/vehicles/${id}`);
+        const missing = await api.get(`/api/vehicles/${id}`);
         assert.equal(missing.status, 404);
     });
 });
 
+describe("tenant isolation", () => {
+    async function otherCompanyVehicle() {
+        return VehicleModel.create({
+            license_plate: "K-FRD 1",
+            driver_name: "Fremd",
+            fuel_level: 40,
+            status: "DRIVING",
+            company_id: 2,
+        });
+    }
+
+    it("allows the same plate at another company and rejects it in the same company", async () => {
+        const mine = await api.post("/api/vehicles").send({
+            license_plate: "K-DUP 1",
+            driver_name: "Eins",
+        });
+        assert.equal(mine.status, 201);
+
+        const other = await loginAs(2);
+        const theirs = await other.agent.post("/api/vehicles").send({
+            license_plate: "K-DUP 1",
+            driver_name: "Zwei",
+        });
+        assert.equal(theirs.status, 201);
+        assert.notEqual(theirs.body.id, mine.body.id);
+
+        const again = await api.post("/api/vehicles").send({
+            license_plate: "K-DUP 1",
+            driver_name: "Noch Eins",
+        });
+        assert.equal(again.status, 409);
+    });
+
+    it("returns 404 for another company's vehicle on mutate, telemetry and trip", async () => {
+        const other = await otherCompanyVehicle();
+        TripModel.open(other.id);
+        db.prepare(
+            `
+                INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
+                VALUES (?, ?, ?, ?)
+            `,
+        ).run(other.id, 50.9, 6.9, 40);
+
+        const patched = await api
+            .patch(`/api/vehicles/${other.id}`)
+            .send({ driver_name: "Gehackt" });
+        assert.equal(patched.status, 404);
+
+        const replaced = await api.put(`/api/vehicles/${other.id}`).send({
+            license_plate: "K-HCK 1",
+            driver_name: "Gehackt",
+            fuel_level: 10,
+            status: "IDLE",
+        });
+        assert.equal(replaced.status, 404);
+
+        const deleted = await api.delete(`/api/vehicles/${other.id}`);
+        assert.equal(deleted.status, 404);
+
+        const telemetry = await api.get(`/api/vehicles/${other.id}/telemetry`);
+        assert.equal(telemetry.status, 404);
+
+        const trip = await api.get(`/api/vehicles/${other.id}/trips/latest`);
+        assert.equal(trip.status, 404);
+
+        const stillThere = db
+            .prepare("SELECT driver_name FROM vehicles WHERE id = ?")
+            .get(other.id) as { driver_name: string };
+        assert.equal(stillThere.driver_name, "Fremd");
+    });
+
+    it("does not tick a paused company's vehicles", () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-SIM A",
+            driver_name: "A",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        const theirs = VehicleModel.create({
+            license_plate: "K-SIM B",
+            driver_name: "B",
+            status: "DRIVING",
+            company_id: 2,
+        });
+        seedSimProgress(mine.id, "koeln-duesseldorf", 0.2);
+        seedSimProgress(theirs.id, "koeln-duesseldorf", 0.2);
+
+        setCompanySimRunning(2, false);
+        const patches = TelemetryModel.tickDrivingVehicles([
+            mine.id,
+            theirs.id,
+        ]);
+
+        assert.equal(patches.length, 1);
+        assert.equal(patches[0]?.id, mine.id);
+    });
+
+    it("does not send another company's vehicles-changed or telemetry over SSE", async () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-SSE A",
+            driver_name: "A",
+            company_id: 1,
+        });
+        const theirs = VehicleModel.create({
+            license_plate: "K-SSE B",
+            driver_name: "B",
+            company_id: 2,
+        });
+        const other = await loginAs(2);
+        const server = app.listen(0);
+
+        await new Promise<void>((resolve, reject) => {
+            server.once("listening", () => resolve());
+            server.once("error", reject);
+        });
+
+        try {
+            const { port } = server.address() as AddressInfo;
+            const streamMine = await openSseStream(port, sessionCookie);
+            const streamTheirs = await openSseStream(port, other.cookie);
+
+            await streamMine.waitUntil((text) => /event: connected/.test(text));
+            await streamTheirs.waitUntil((text) =>
+                /event: connected/.test(text),
+            );
+
+            const connectionMine = streamMine.events().find(
+                (event) => event.event === "connected",
+            )?.data as { connection_id: string };
+            const connectionTheirs = streamTheirs.events().find(
+                (event) => event.event === "connected",
+            )?.data as { connection_id: string };
+
+            await api.post("/api/stream/focus").send({
+                connection_id: connectionMine.connection_id,
+                ids: [mine.id, theirs.id],
+            });
+            await other.agent.post("/api/stream/focus").send({
+                connection_id: connectionTheirs.connection_id,
+                ids: [mine.id, theirs.id],
+            });
+
+            const stolen = await other.agent.post("/api/stream/focus").send({
+                connection_id: connectionMine.connection_id,
+                ids: [theirs.id],
+            });
+            assert.equal(stolen.status, 400);
+
+            broadcast(
+                "telemetry",
+                [
+                    {
+                        id: mine.id,
+                        speed: 11,
+                        latitude: 50.1,
+                        longitude: 6.1,
+                        recorded_at: "2026-01-01T00:00:00.000Z",
+                    },
+                ],
+                1,
+            );
+            broadcast(
+                "telemetry",
+                [
+                    {
+                        id: theirs.id,
+                        speed: 22,
+                        latitude: 51.2,
+                        longitude: 7.2,
+                        recorded_at: "2026-01-01T00:00:00.000Z",
+                    },
+                ],
+                2,
+            );
+            broadcast("vehicles-changed", { at: 1 }, 1);
+
+            await streamMine.waitUntil(
+                (text) =>
+                    /event: telemetry/.test(text) &&
+                    /event: vehicles-changed/.test(text),
+            );
+            await streamTheirs.waitUntil((text) =>
+                /event: telemetry/.test(text),
+            );
+
+            const telemetryMine = streamMine
+                .events()
+                .filter((event) => event.event === "telemetry")
+                .flatMap((event) => event.data as Array<{ id: number }>);
+            const telemetryTheirs = streamTheirs
+                .events()
+                .filter((event) => event.event === "telemetry")
+                .flatMap((event) => event.data as Array<{ id: number }>);
+
+            assert.deepEqual(
+                telemetryMine.map((patch) => patch.id),
+                [mine.id],
+            );
+            assert.deepEqual(
+                telemetryTheirs.map((patch) => patch.id),
+                [theirs.id],
+            );
+            assert.ok(
+                streamMine
+                    .events()
+                    .some((event) => event.event === "vehicles-changed"),
+            );
+            assert.equal(
+                streamTheirs
+                    .events()
+                    .some((event) => event.event === "vehicles-changed"),
+                false,
+            );
+
+            await streamMine.reader.cancel();
+            await streamTheirs.reader.cancel();
+        } finally {
+            closeAllSseClients();
+            await new Promise<void>((resolve, reject) => {
+                server.close((error) => (error ? reject(error) : resolve()));
+            });
+        }
+    });
+});
+
 describe("GET /api/sim", () => {
-    it("reports that the ticker is off in tests", async () => {
+    it("requires a session", async () => {
         const response = await request(app).get("/api/sim");
+
+        assert.equal(response.status, 401);
+        assert.equal(response.body.code, "UNAUTHORIZED");
+    });
+
+    it("reports that the ticker is off in tests", async () => {
+        const response = await api.get("/api/sim");
 
         assert.equal(response.status, 200);
         assert.equal(response.body.running, false);
@@ -721,7 +1059,7 @@ describe("GET /api/sim", () => {
     });
 
     it("rejects enabling the ticker when TELEMETRY_TICK_MS is 0", async () => {
-        const response = await request(app)
+        const response = await api
             .patch("/api/sim")
             .send({ running: true });
 
@@ -732,7 +1070,7 @@ describe("GET /api/sim", () => {
 
 describe("GET /api/vehicles/:id/telemetry", () => {
     it("returns 404 for a missing vehicle", async () => {
-        const response = await request(app).get("/api/vehicles/999/telemetry");
+        const response = await api.get("/api/vehicles/999/telemetry");
         assert.equal(response.status, 404);
     });
 
@@ -742,7 +1080,7 @@ describe("GET /api/vehicles/:id/telemetry", () => {
             driver_name: "Ohne Punkte",
         });
 
-        const response = await request(app).get(
+        const response = await api.get(
             `/api/vehicles/${vehicle.id}/telemetry`,
         );
 
@@ -763,7 +1101,7 @@ describe("GET /api/vehicles/:id/telemetry", () => {
 
         assert.ok(TelemetryModel.countForVehicle(vehicle.id) <= 3);
 
-        const response = await request(app)
+        const response = await api
             .get(`/api/vehicles/${vehicle.id}/telemetry`)
             .query({ limit: 10 });
 
@@ -791,7 +1129,19 @@ describe("GET /api/stream", () => {
 
         try {
             const { port } = server.address() as AddressInfo;
-            const response = await fetch(`http://127.0.0.1:${port}/api/stream`);
+            const anonymous = await fetch(
+                `http://127.0.0.1:${port}/api/stream`,
+            );
+            assert.equal(anonymous.status, 401);
+
+            const vehicle = VehicleModel.create({
+                license_plate: "K-SSE 1",
+                driver_name: "Streamer",
+            });
+            const response = await fetch(
+                `http://127.0.0.1:${port}/api/stream`,
+                { headers: { Cookie: sessionCookie } },
+            );
 
             assert.equal(response.status, 200);
             assert.match(
@@ -814,15 +1164,18 @@ describe("GET /api/stream", () => {
             };
             assert.equal(typeof payload.connection_id, "string");
 
-            const focused = await request(app)
+            const focused = await api
                 .post("/api/stream/focus")
-                .send({ connection_id: payload.connection_id, ids: [1] });
+                .send({
+                    connection_id: payload.connection_id,
+                    ids: [vehicle.id],
+                });
 
             assert.equal(focused.status, 200);
             assert.equal(focused.body.ok, true);
             assert.equal(focused.body.count, 1);
 
-            const unknown = await request(app)
+            const unknown = await api
                 .post("/api/stream/focus")
                 .send({
                     connection_id: "00000000-0000-4000-8000-000000000001",
@@ -832,7 +1185,7 @@ describe("GET /api/stream", () => {
             assert.equal(unknown.status, 400);
             assert.equal(unknown.body.error, "Unbekannte Verbindung.");
 
-            const invalid = await request(app)
+            const invalid = await api
                 .post("/api/stream/focus")
                 .send({ ids: [1] });
 
@@ -876,13 +1229,13 @@ describe("GET /api/stream", () => {
             assert.equal(typeof connectionA.connection_id, "string");
             assert.equal(typeof connectionB.connection_id, "string");
 
-            const focusedA = await request(app)
+            const focusedA = await api
                 .post("/api/stream/focus")
                 .send({
                     connection_id: connectionA.connection_id,
                     ids: [first.id],
                 });
-            const focusedB = await request(app)
+            const focusedB = await api
                 .post("/api/stream/focus")
                 .send({
                     connection_id: connectionB.connection_id,
@@ -892,23 +1245,27 @@ describe("GET /api/stream", () => {
             assert.equal(focusedA.status, 200);
             assert.equal(focusedB.status, 200);
 
-            broadcast("telemetry", [
-                {
-                    id: first.id,
-                    speed: 11,
-                    latitude: 50.1,
-                    longitude: 6.1,
-                    recorded_at: "2026-01-01T00:00:00.000Z",
-                },
-                {
-                    id: second.id,
-                    speed: 22,
-                    latitude: 51.2,
-                    longitude: 7.2,
-                    recorded_at: "2026-01-01T00:00:00.000Z",
-                },
-            ]);
-            broadcast("vehicles-changed", { at: 1 });
+            broadcast(
+                "telemetry",
+                [
+                    {
+                        id: first.id,
+                        speed: 11,
+                        latitude: 50.1,
+                        longitude: 6.1,
+                        recorded_at: "2026-01-01T00:00:00.000Z",
+                    },
+                    {
+                        id: second.id,
+                        speed: 22,
+                        latitude: 51.2,
+                        longitude: 7.2,
+                        recorded_at: "2026-01-01T00:00:00.000Z",
+                    },
+                ],
+                1,
+            );
+            broadcast("vehicles-changed", { at: 1 }, 1);
 
             await streamA.waitUntil((text) => /event: vehicles-changed/.test(text));
             await streamB.waitUntil((text) => /event: vehicles-changed/.test(text));
@@ -1026,7 +1383,7 @@ describe("telemetry route simulation", () => {
 
         assert.ok(resets >= 2);
 
-        const latest = TripModel.latestForVehicle(vehicle.id);
+        const latest = TripModel.latestForVehicle(vehicle.id, 1);
         assert.ok(latest);
         assert.equal(latest.ended_at, null);
 
@@ -1092,7 +1449,7 @@ describe("telemetry route simulation", () => {
         assert.ok(patch);
         assert.ok(patch.fuel_level < 80);
         assert.equal(
-            VehicleModel.getById(vehicle.id)?.fuel_level,
+            VehicleModel.getById(vehicle.id, 1)?.fuel_level,
             patch.fuel_level,
         );
     });
@@ -1108,9 +1465,9 @@ describe("trip lifecycle", () => {
         seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.5);
         TelemetryModel.tickDrivingVehicles([vehicle.id]);
 
-        assert.ok((VehicleModel.getById(vehicle.id)?.speed ?? 0) > 0);
+        assert.ok((VehicleModel.getById(vehicle.id, 1)?.speed ?? 0) > 0);
 
-        const response = await request(app)
+        const response = await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "STOPPED" });
 
@@ -1129,7 +1486,7 @@ describe("trip lifecycle", () => {
         const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
         assert.ok(patch);
 
-        const response = await request(app)
+        const response = await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "IDLE" });
 
@@ -1145,7 +1502,7 @@ describe("trip lifecycle", () => {
             status: "DRIVING",
         });
 
-        const response = await request(app)
+        const response = await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "STOPPED" });
 
@@ -1173,7 +1530,7 @@ describe("trip lifecycle", () => {
                     .get(vehicle.id) as { total: number }
             ).total;
 
-        await request(app)
+        await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "DRIVING" });
         seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.3);
@@ -1182,20 +1539,20 @@ describe("trip lifecycle", () => {
         assert.equal(countTrips(true), 1);
 
         // Ein zweiter DRIVING-Patch ist kein Fahrtbeginn.
-        await request(app)
+        await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "DRIVING" });
 
         assert.equal(countTrips(true), 1);
 
-        await request(app)
+        await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "STOPPED" });
 
         assert.equal(countTrips(true), 0);
         assert.equal(countTrips(false), 1);
 
-        await request(app)
+        await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "DRIVING" });
 
@@ -1206,7 +1563,7 @@ describe("trip lifecycle", () => {
 
 describe("GET /api/vehicles/:id/trips/latest", () => {
     it("returns 404 for a missing vehicle", async () => {
-        const response = await request(app).get(
+        const response = await api.get(
             "/api/vehicles/999/trips/latest",
         );
 
@@ -1219,7 +1576,7 @@ describe("GET /api/vehicles/:id/trips/latest", () => {
             driver_name: "Nie gefahren",
         });
 
-        const response = await request(app).get(
+        const response = await api.get(
             `/api/vehicles/${vehicle.id}/trips/latest`,
         );
 
@@ -1246,7 +1603,7 @@ describe("GET /api/vehicles/:id/trips/latest", () => {
 
         assert.ok(TelemetryModel.countForVehicle(vehicle.id) <= 3);
 
-        const response = await request(app).get(
+        const response = await api.get(
             `/api/vehicles/${vehicle.id}/trips/latest`,
         );
 
@@ -1274,17 +1631,17 @@ describe("GET /api/vehicles/:id/trips/latest", () => {
             TelemetryModel.tickDrivingVehicles([vehicle.id]);
         }
 
-        const running = await request(app).get(
+        const running = await api.get(
             `/api/vehicles/${vehicle.id}/trips/latest`,
         );
         const before = decodePolyline(running.body.data.path);
         const drivenMeters = running.body.data.distance_m;
 
-        await request(app)
+        await api
             .patch(`/api/vehicles/${vehicle.id}`)
             .send({ status: "STOPPED" });
 
-        const stopped = await request(app).get(
+        const stopped = await api.get(
             `/api/vehicles/${vehicle.id}/trips/latest`,
         );
         const after = decodePolyline(stopped.body.data.path);

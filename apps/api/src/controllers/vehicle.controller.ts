@@ -16,6 +16,7 @@ import { TripModel } from "../models/trip.model";
 import {
     BadRequestError,
     NotFoundError,
+    UnauthorizedError,
     ValidationError,
 } from "../lib/errors";
 import { broadcast } from "../sse/hub";
@@ -72,8 +73,8 @@ function trimStrings(input: Partial<VehicleInput>): Partial<VehicleInput> {
     };
 }
 
-function notifyVehiclesChanged() {
-    broadcast("vehicles-changed", { at: Date.now() });
+function notifyVehiclesChanged(companyId: number) {
+    broadcast("vehicles-changed", { at: Date.now() }, companyId);
 }
 
 /**
@@ -85,6 +86,7 @@ function syncTrip(
     id: number,
     previousStatus: VehicleStatus | undefined,
     updated: Vehicle,
+    companyId: number,
 ): Vehicle {
     const wasDriving = previousStatus === "DRIVING";
     const isDriving = updated.status === "DRIVING";
@@ -101,13 +103,21 @@ function syncTrip(
     TelemetryModel.recordStandstill(id);
     TripModel.close(id);
 
-    return VehicleModel.getById(id) ?? updated;
+    return VehicleModel.getById(id, companyId) ?? updated;
+}
+
+function sessionCompany(req: Request): number {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    return req.user.company_id;
 }
 
 export function getVehicles(req: Request, res: Response) {
     const started = performance.now();
     const query = parseVehicleListQuery(req.query);
-    const result = VehicleModel.list(query);
+    const result = VehicleModel.list(query, sessionCompany(req));
     const duration = performance.now() - started;
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
@@ -121,7 +131,7 @@ export function getVehicles(req: Request, res: Response) {
  */
 export function getVehiclePositions(req: Request, res: Response) {
     const query = parseFleetPositionsQuery(req.query);
-    const result = VehicleModel.positions(query);
+    const result = VehicleModel.positions(query, sessionCompany(req));
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
     res.json(result);
@@ -131,12 +141,12 @@ export function getVehicleDrivers(req: Request, res: Response) {
     const query = parseFleetDriversQuery(req.query);
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
-    res.json(VehicleModel.drivers(query));
+    res.json(VehicleModel.drivers(query, sessionCompany(req)));
 }
 
 export function getVehicleById(req: Request, res: Response) {
     const id = parseId(req.params.id);
-    const vehicle = VehicleModel.getById(id);
+    const vehicle = VehicleModel.getById(id, sessionCompany(req));
 
     if (!vehicle) {
         throw new NotFoundError();
@@ -149,7 +159,7 @@ export function getVehicleById(req: Request, res: Response) {
 export function getVehicleTelemetry(req: Request, res: Response) {
     const id = parseId(req.params.id);
 
-    if (!VehicleModel.getById(id)) {
+    if (!VehicleModel.getById(id, sessionCompany(req))) {
         throw new NotFoundError();
     }
 
@@ -167,12 +177,12 @@ export function getVehicleTelemetry(req: Request, res: Response) {
 export function getVehicleTrip(req: Request, res: Response) {
     const id = parseId(req.params.id);
 
-    if (!VehicleModel.getById(id)) {
+    if (!VehicleModel.getById(id, sessionCompany(req))) {
         throw new NotFoundError();
     }
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
-    res.json({ data: TripModel.latestForVehicle(id) });
+    res.json({ data: TripModel.latestForVehicle(id, sessionCompany(req)) });
 }
 
 export function createVehicle(req: Request, res: Response) {
@@ -198,13 +208,14 @@ export function createVehicle(req: Request, res: Response) {
         driver_name: driver_name!,
         fuel_level,
         status,
+        company_id: sessionCompany(req),
     });
 
     if (vehicle.status === "DRIVING") {
         TripModel.open(vehicle.id);
     }
 
-    notifyVehiclesChanged();
+    notifyVehiclesChanged(sessionCompany(req));
     res.status(201).location(`/api/vehicles/${vehicle.id}`).json(vehicle);
 }
 
@@ -217,18 +228,20 @@ export function replaceVehicle(req: Request, res: Response) {
         throwFieldErrors(errors);
     }
 
-    const previous = VehicleModel.getById(id);
+    const companyId = sessionCompany(req);
+    const previous = VehicleModel.getById(id, companyId);
     const vehicle = VehicleModel.replace(
         id,
         trimStrings(input) as VehicleInput,
+        companyId,
     );
 
     if (!vehicle) {
         throw new NotFoundError();
     }
 
-    notifyVehiclesChanged();
-    res.json(syncTrip(id, previous?.status, vehicle));
+    notifyVehiclesChanged(companyId);
+    res.json(syncTrip(id, previous?.status, vehicle, companyId));
 }
 
 export function updateVehicle(req: Request, res: Response) {
@@ -245,25 +258,27 @@ export function updateVehicle(req: Request, res: Response) {
         throwFieldErrors(errors);
     }
 
-    const previous = VehicleModel.getById(id);
-    const vehicle = VehicleModel.update(id, trimStrings(input));
+    const companyId = sessionCompany(req);
+    const previous = VehicleModel.getById(id, companyId);
+    const vehicle = VehicleModel.update(id, trimStrings(input), companyId);
 
     if (!vehicle) {
         throw new NotFoundError();
     }
 
-    notifyVehiclesChanged();
-    res.json(syncTrip(id, previous?.status, vehicle));
+    notifyVehiclesChanged(companyId);
+    res.json(syncTrip(id, previous?.status, vehicle, companyId));
 }
 
 export function deleteVehicle(req: Request, res: Response) {
     const id = parseId(req.params.id);
-    const deleted = VehicleModel.delete(id);
+    const companyId = sessionCompany(req);
+    const deleted = VehicleModel.delete(id, companyId);
 
     if (!deleted) {
         throw new NotFoundError();
     }
 
-    notifyVehiclesChanged();
+    notifyVehiclesChanged(companyId);
     res.status(204).send();
 }

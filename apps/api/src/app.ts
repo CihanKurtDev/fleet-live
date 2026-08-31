@@ -8,6 +8,7 @@ import { config } from "./config";
 import { logger } from "./logger";
 import { requestId } from "./middleware/requestId";
 import { attachSession } from "./middleware/attachSession";
+import { requireAuth } from "./middleware/requireAuth";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 import vehicleRoutes from "./routes/vehicle.routes";
@@ -66,12 +67,12 @@ export function createApp() {
         res.json({ status: "ok" });
     });
 
-    app.get("/api/sim", getSim);
-    app.patch("/api/sim", updateSim);
-    app.get("/api/stream", streamEvents);
-    app.post("/api/stream/focus", setStreamFocus);
+    app.get("/api/sim", requireAuth, getSim);
+    app.patch("/api/sim", requireAuth, updateSim);
+    app.get("/api/stream", requireAuth, streamEvents);
+    app.post("/api/stream/focus", requireAuth, setStreamFocus);
     app.use("/api/auth", authRoutes);
-    app.use("/api/vehicles", vehicleRoutes);
+    app.use("/api/vehicles", requireAuth, vehicleRoutes);
 
     app.use(notFound);
     app.use(errorHandler);

@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 type TableColumn = {
     name: string;
@@ -22,8 +22,8 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_status
 CREATE INDEX IF NOT EXISTS idx_vehicles_fuel
     ON vehicles(fuel_level);
 
-CREATE INDEX IF NOT EXISTS idx_vehicles_plate
-    ON vehicles(license_plate);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_company_plate
+    ON vehicles(company_id, license_plate);
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_company
     ON vehicles(company_id);
@@ -244,6 +244,104 @@ function migrateToV5(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+function licensePlateIsGloballyUnique(database: DatabaseSync): boolean {
+    const indexes = database.prepare("PRAGMA index_list(vehicles)").all() as Array<{
+        name: string;
+        unique: number;
+    }>;
+
+    for (const index of indexes) {
+        if (!index.unique) {
+            continue;
+        }
+
+        const columns = database
+            .prepare(`PRAGMA index_info(${JSON.stringify(index.name)})`)
+            .all() as Array<{ name: string }>;
+
+        if (columns.length === 1 && columns[0]?.name === "license_plate") {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Kennzeichen sind unique pro Firma, nicht global. Sonst blockiert
+ * Firma A das Anlegen desselben Kennzeichens bei Firma B.
+ */
+function migrateToV6(database: DatabaseSync) {
+    if (licensePlateIsGloballyUnique(database)) {
+        const sequence = database
+            .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'vehicles'")
+            .get() as { seq: number } | undefined;
+
+        database.exec("PRAGMA foreign_keys = OFF");
+        database.exec(`
+            CREATE TABLE vehicles_v6 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                license_plate TEXT NOT NULL,
+                driver_name TEXT NOT NULL,
+                fuel_level REAL NOT NULL DEFAULT 100
+                    CHECK (fuel_level >= 0 AND fuel_level <= 100),
+                status TEXT NOT NULL DEFAULT 'IDLE'
+                    CHECK (status IN ('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_telemetry_id INTEGER,
+                active_alerts INTEGER NOT NULL DEFAULT 0,
+                search_text TEXT GENERATED ALWAYS AS (
+                    lower(license_plate || ' ' || driver_name)
+                ) VIRTUAL,
+
+                FOREIGN KEY (company_id)
+                    REFERENCES companies(id),
+
+                UNIQUE (company_id, license_plate)
+            );
+
+            INSERT INTO vehicles_v6 (
+                id,
+                company_id,
+                license_plate,
+                driver_name,
+                fuel_level,
+                status,
+                created_at,
+                last_telemetry_id,
+                active_alerts
+            )
+            SELECT
+                id,
+                company_id,
+                license_plate,
+                driver_name,
+                fuel_level,
+                status,
+                created_at,
+                last_telemetry_id,
+                active_alerts
+            FROM vehicles;
+
+            DROP TABLE vehicles;
+            ALTER TABLE vehicles_v6 RENAME TO vehicles;
+        `);
+
+        if (sequence) {
+            database
+                .prepare(
+                    "INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES ('vehicles', ?)",
+                )
+                .run(sequence.seq);
+        }
+
+        database.exec("PRAGMA foreign_keys = ON");
+    }
+
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -268,6 +366,10 @@ export function migrate(database: DatabaseSync) {
 
     if (currentVersion < 5) {
         migrateToV5(database);
+    }
+
+    if (currentVersion < 6) {
+        migrateToV6(database);
     }
 
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
