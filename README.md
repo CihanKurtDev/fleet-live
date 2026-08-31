@@ -2,234 +2,168 @@
 
 A full-stack fleet management application built with **TypeScript, Node.js, Express, React and SQLite**.
 
-The project is being developed incrementally, starting with the backend and domain model, followed by the frontend and eventually vehicle visualization, multi-tenancy and authentication.
+> **Status: Work in progress.** Phases 1–4 are in place (vehicles, UI, live map, login and company isolation). The app is a personal engineering project, not a finished product.
 
-> **Status: Work in progress**
-
-This is a personal development project focused on learning and applying full-stack software engineering concepts through a realistic application rather than a tutorial-sized example.
+This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. GPS is simulated. Alerts exist only as a count on the vehicle.
 
 ---
 
 ## Overview
 
-`fleet-live` is intended to become a fleet management application for monitoring vehicles, their locations, telemetry and alerts.
+`fleet-live` monitors vehicles, last positions, live movement and trip paths for **one company per logged-in user**.
 
-The application is being developed in several stages.
+The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream and sim requests are `401`. Other companies’ vehicles are `404`, not listed.
 
-The **vehicle REST API**, **server-driven vehicle list**, **live telemetry stream**, the **detail map** (marker, live movement, trail) and the **fleet map** (`/fleet`) are connected to the React UI.
-
-Future iterations will add:
-
-* Companies and users
-* Authentication and authorization
-* Multi-tenant data isolation
-
-The project is intentionally being developed step by step rather than implementing all of these concerns at once.
+**Next product step:** alerts REST API and UI. Table, seed rows and `active_alerts` already exist.
 
 ---
 
 ## Current Status
 
-The backend serves paginated vehicle queries over SQLite, and the frontend talks to that API. Driving vehicles receive simulated telemetry over SSE.
-
 ### Implemented
 
-* TypeScript backend
-* Express API
-* SQLite database (WAL, statement cache, lightweight migrations)
-* Vehicle model
-* Vehicle CRUD API
-* Server-driven list query (search, filter, sort, pagination, facet counts)
-* Input validation
-* HTTP status handling and structured API errors
-* Database relationships
-* Telemetry data model
-* Alert data model
-* Development seed data (small and large)
-* Health endpoint
-* SSE telemetry stream with per-connection focus
-* Telemetry history API (rolling window per vehicle)
-* Trip data model with the driven path as an encoded polyline
-* Separate frontend and API applications
-* Shared domain package for types, validation and list query contract
-* Field-level validation errors in API responses
-* Last telemetry and active alert count in vehicle responses
-* React frontend with client-side routing
-* Generic, reusable table component
-* Vehicle list backed by the API (URL state, cache, prefetch, skeleton)
-* Live table and detail updates for focused driving vehicles
-* Vehicle detail page
-* Create, edit and delete vehicle UI
-* Leaflet map on the vehicle detail page (marker, SSE movement, trail from the trip)
-* Fleet map (`/fleet`): last positions in the viewport, live movement for driving vehicles in view
-* Trips: the driven path stored per trip as an encoded polyline, simplified when the trip ends
-* Simulated movement on baked road geometries with a city/highway speed profile
-* Simulated fuel consumption while driving
-* Simulation pause/resume (`GET`/`PATCH /api/sim`)
+* TypeScript monorepo: `apps/api`, `apps/web`, `packages/shared`
+* Express 5 API, SQLite (WAL, statement cache, lightweight migrations)
+* Vehicle CRUD; server-driven list (search, filter, sort, pagination, facet counts)
+* Shared Zod contract (`@fleet-live/shared`); field-level German `error`/`fields`; English `code`
+* Telemetry hot buffer (rolling window) and trip paths as encoded polylines
+* SSE with per-connection focus; telemetry patches and `vehicles-changed` scoped to the session company
+* Leaflet detail map (marker, SSE movement, trail from the trip)
+* Fleet map (`/fleet`): last positions in the viewport for the session company
+* Route simulation (baked geometries, city/highway profile, fuel); pause per company (`GET`/`PATCH /api/sim`)
+* Companies; users belong to exactly one company
+* Session login (`POST /api/auth/login`), cookie `fleet_session` (HttpOnly, SameSite=Lax, Secure in production)
+* Tenant isolation: `company_id` from the session, never from the client body; plates unique per company; SSE and sim scoped to that company; trips via `trip → vehicle → company`
 * API integration tests (`node:test` + SuperTest)
 
-### Planned
+### Consciously simplified / demo
 
-* Companies / tenants
-* User accounts
-* Authentication
-* Authorization
-* Tenant-level data isolation
+* Movement comes from the simulator, not GPS hardware
+* Seed login is shown on the login page only in Vite `DEV` (`cihan@example.com` / `development-only-password`)
+* SQLite file database
+* One role: any logged-in user can manage that company’s vehicles and pause that company’s simulation
+* One company per user (no membership table, no company switcher)
+* Alerts: table + `active_alerts` count/filter only — no REST, no UI, seeded dummy rows
+* OSM tiles via Leaflet
+
+### Technical debt (not production-ready)
+
+* Cookie session is correct for **same-origin** (Vite proxies `/api`). That is not production auth: no password reset, lockout, invite, or CSRF strategy for a cross-origin cookie deployment
+* No frontend tests
+* No CI/CD
+* `CORS_ORIGIN` defaults to `*`; rate limiting is production-only (`NODE_ENV=production`)
+* No retention policy for trips or raw telemetry
+* No observability beyond request logs
+
+### Roadmap (not implemented)
+
+* Alerts REST/UI (next)
+* Roles (viewer vs dispatcher)
+* Invite / password reset / registration
+* Optional multi-company membership
+* Production database, CI/CD, observability
+* Speed-limit alerts (need map-derived limits, not the sim’s 50/120 profile)
 
 ---
 
 # Architecture
 
-The repository is structured as a small monorepo containing separate frontend and backend applications plus a shared package.
-
-```text id="7m7g6m"
+```text
 fleet-live/
 ├── apps/
-│   ├── api/
-│   │   └── src/
-│   │       ├── controllers/
-│   │       ├── db/
-│   │       ├── middleware/
-│   │       ├── models/
-│   │       ├── routes/
-│   │       ├── sse/
-│   │       ├── test/
-│   │       ├── app.ts
-│   │       ├── config.ts
-│   │       └── server.ts
-│   │
-│   └── web/
-│       └── src/
-│           ├── api/
-│           ├── components/
-│           │   ├── ui/
-│           │   └── vehicles/
-│           ├── context/
-│           ├── hooks/
-│           ├── pages/
-│           ├── types/
-│           ├── utils/
-│           └── router.tsx
-│
-├── packages/
-│   └── shared/
-│       └── src/
-│           └── models/
-│
-└── package.json
+│   ├── api/          Express 5 + SQLite (node:sqlite)
+│   └── web/          React 19 + Vite + React Router
+└── packages/
+    └── shared/       Domain types, Zod validation, list/SSE/auth contracts
 ```
 
-The intended architecture is:
-
-```text id="c0xg5w"
+```text
                     ┌─────────────────┐
                     │  React Frontend │
-                    │     (web)       │
                     └────────┬────────┘
                              │
-                    HTTP + SSE (/api)
+                    HTTP + SSE (/api)  cookie session
                              │
                              ▼
                     ┌─────────────────┐
                     │  Express API    │
-                    │     (api)       │
                     └────────┬────────┘
                              │
                     ┌────────┴────────┐
-                    │                 │
                     ▼                 ▼
                Controllers         Models
                                       │
                                       ▼
                                    SQLite
 
-
                     ┌─────────────────┐
-                    │  Shared package │
-                    │    (shared)     │
+                    │ @fleet-live/shared │
                     └─────────────────┘
-                 used by both web and api
 ```
 
-The API is separated into routes, controllers and models to keep HTTP handling and database access separated.
+Routes/controllers handle HTTP. Models own SQL and do not take `req`/`res`. The UI never touches SQLite.
 
-The shared package contains the vehicle domain types and the input validation used by both the API and the frontend, so that both sides agree on the same rules.
+`@fleet-live/shared` is the contract. Do not duplicate vehicle, list-query, telemetry, stream or login schemas in api or web.
+
+Company membership is read from the session. Child rows (telemetry, trips, alerts) hang off `vehicle_id`. HTTP access checks the vehicle’s company first. Trip reads also join `vehicles` (`trip → vehicle → company`). There is no `company_id` on `trips`.
 
 ---
 
 # Tech Stack
 
-## Backend
+**Backend:** Node.js, TypeScript, Express 5, SQLite (`node:sqlite`)
 
-* Node.js
-* TypeScript
-* Express 5
-* SQLite
+**Frontend:** React 19, TypeScript, Vite, React Router, Sass / CSS Modules, Leaflet
 
-## Frontend
+**Shared:** `@fleet-live/shared` — snake_case domain types, Zod, list/fleet/SSE/sim/auth contracts, polyline codec
 
-* React
-* TypeScript
-* Vite
-* React Router
-* Sass / CSS Modules
-
-## Shared
-
-* `@fleet-live/shared` npm workspace package
-* Vehicle domain types (snake_case)
-* Vehicle input validation (Zod, max lengths)
-* Vehicle list query and telemetry history contract
-* SSE focus contract (`connection_id`)
-
-## Development
-
-* npm Workspaces
-* tsx
-* ESLint
-* TypeScript
-* node:test + SuperTest (API)
-* autocannon bench script
+**Development:** npm workspaces, tsx, ESLint, `node:test` + SuperTest (API), autocannon bench
 
 ---
 
-# Vehicle API
+# API
 
-The first development milestone is a reliable REST API for vehicle management.
+Vehicle, stream and sim routes require a session. `GET /api/health` does not. User-facing `error`/`fields` are German; `code` is English.
 
-## Endpoints
+## Auth
 
-| Method   | Endpoint                        | Description                                      |
-| -------- | ------------------------------- | ------------------------------------------------ |
-| `GET`    | `/api/vehicles`                 | Paginated vehicle list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
-| `GET`    | `/api/vehicles/positions`       | Last positions for the fleet map (`bbox`, `search`, `filter`) |
-| `GET`    | `/api/vehicles/drivers`         | Search drivers (`search`, `page`; `meta.total` is the match count; optional `names` hydrates a selection) |
-| `GET`    | `/api/vehicles/:id`             | Get a vehicle                                    |
-| `GET`    | `/api/vehicles/:id/telemetry`   | Recent telemetry points (`limit`: 10, 25, 50, 100; default 50) |
-| `GET`    | `/api/vehicles/:id/trips/latest`| Running trip, else the last finished one (`data: null` if never driven) |
-| `POST`   | `/api/vehicles`                 | Create a vehicle (`Location` header on `201`)    |
-| `PUT`    | `/api/vehicles/:id`             | Replace a vehicle                                |
-| `PATCH`  | `/api/vehicles/:id`             | Update a vehicle                                 |
-| `DELETE` | `/api/vehicles/:id`             | Delete a vehicle                                 |
-| `GET`    | `/api/stream`                   | SSE: `connected` (with `connection_id`), telemetry patches, `vehicles-changed` |
-| `POST`   | `/api/stream/focus`             | `{ connection_id, ids }` — focus for that SSE connection |
-| `GET`    | `/api/sim`                      | Simulator ticker: `{ running, available }`       |
-| `PATCH`  | `/api/sim`                      | `{ running }` — pause or resume the ticker       |
-| `GET`    | `/api/health`                   | Check API health                                 |
+| Method | Endpoint | Description |
+| ------ | -------- | ----------- |
+| `POST` | `/api/auth/login` | `{ email, password, remember? }` — sets `fleet_session` |
+| `POST` | `/api/auth/logout` | Clears the session |
+| `GET`  | `/api/auth/me` | Current user (`id`, `name`, `email`, `company_id`) or `401` |
 
-`GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` for the filter chips (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
+`remember: true` persists the cookie for seven days; otherwise the session lasts twelve hours (and the cookie is session-scoped). Wrong password returns `401` without saying which field failed.
 
-`GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions (`id`, `license_plate`, `driver_name`, `status`, `latitude`, `longitude`, `speed`, `recorded_at`), not the paginated list. Optional `bbox=west,south,east,north` limits the query to the visible map; `search` matches plate and driver (same as the list); `drivers` is a list of `driver_name` values (`drivers=Anna&drivers=Max` or comma-separated; empty means all); `filter` uses the same ids as the list. Vehicles without telemetry are omitted. If more than `FLEET_POSITIONS_MAX` (2000) would match, `truncated` is true and `data` is empty — the map does not show an arbitrary sample. At most `FLEET_DRIVERS_MAX` (50) names per query.
+## Vehicles and live data
 
-Query parameters are defined once in `@fleet-live/shared` (`vehicleListQuerySchema`). Invalid sort keys or limits are rejected with `400`. Sort keys and filters are snake_case (`active_alerts`, `low_fuel`). Default page size is `10`; allowed limits are `10`, `25`, `50` and `100`.
+| Method   | Endpoint                         | Description |
+| -------- | -------------------------------- | ----------- |
+| `GET`    | `/api/vehicles`                  | Paginated list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
+| `GET`    | `/api/vehicles/positions`        | Last positions for the fleet map (`bbox`, `search`, `filter`, `drivers`) |
+| `GET`    | `/api/vehicles/drivers`          | Driver search (`search`, `page`; optional `names` hydrates a selection) |
+| `GET`    | `/api/vehicles/:id`              | One vehicle (`404` if missing **or** other company) |
+| `GET`    | `/api/vehicles/:id/telemetry`    | Recent points (`limit`: 10, 25, 50, 100; default 50) |
+| `GET`    | `/api/vehicles/:id/trips/latest` | Running trip, else last finished (`data: null` if never driven) |
+| `POST`   | `/api/vehicles`                  | Create (`Location` on `201`); `company_id` from the session |
+| `PUT`    | `/api/vehicles/:id`              | Replace |
+| `PATCH`  | `/api/vehicles/:id`              | Update |
+| `DELETE` | `/api/vehicles/:id`              | Delete |
+| `GET`    | `/api/stream`                    | SSE: `connected` (`connection_id`), telemetry, `vehicles-changed` |
+| `POST`   | `/api/stream/focus`              | `{ connection_id, ids }` — only vehicles of this company; connection must belong to this company |
+| `GET`    | `/api/sim`                       | `{ running, available }` for **this** company |
+| `PATCH`  | `/api/sim`                       | `{ running }` — pause/resume this company’s simulation |
+| `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
-`license_plate` is limited to 32 characters, `driver_name` to 80. User-facing `error` and `fields` are German; `code` stays machine-readable (`VALIDATION_ERROR`, `CONFLICT`, …).
+`GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
 
-The API performs request validation and returns appropriate HTTP status codes for invalid requests, missing resources and conflicts.
+`GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions, not the list page. Optional `bbox=west,south,east,north`; `search` matches plate and driver; `drivers` is a view filter (empty means the company snapshot in the bbox, not “no markers”). Over `FLEET_POSITIONS_MAX` (2000) matches → `truncated` and empty `data` (no sample).
 
-Validation errors are returned with the offending fields so that a client can display them next to the corresponding input:
+Query parameters live in `@fleet-live/shared`. Invalid sort keys or limits are `400`. Default page size `10`; allowed limits `10`, `25`, `50`, `100`. `license_plate` max 32 characters, `driver_name` max 80. Plates are unique **per company**.
 
-```json id="4k2m9v"
+Validation example:
+
+```json
 {
   "error": "Tankstand muss zwischen 0 und 100 liegen.",
   "code": "VALIDATION_ERROR",
@@ -239,268 +173,120 @@ Validation errors are returned with the offending fields so that a client can di
 }
 ```
 
-Vehicle responses also include the most recent telemetry record and the number of unresolved alerts.
+Vehicle JSON includes last telemetry (or `null`) and `active_alerts`.
 
 ---
 
 # Vehicle Model
 
-Vehicles currently contain information such as:
+Master data a person maintains: license plate and driver. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
 
-* License plate
-* Driver
-* Fuel level
-* Status
-* Creation timestamp
+Responses also include last position/speed/`recorded_at`, `active_alerts`, and `created_at`.
 
-Only license plate and driver are master data a person maintains. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) and is changed through starting or ending a trip, not by picking a value in a form. `fuel_level` is a measurement while the vehicle is driving; for vehicles without live reporting it stays manually maintainable.
-
-Vehicle responses additionally contain:
-
-* Latitude, longitude, speed and timestamp of the last telemetry record
-* `active_alerts` — the number of currently unresolved alerts
-* `created_at`
-
-The telemetry fields are `null` while a vehicle has no telemetry data yet.
-
-The current database model is intentionally simple.
-
-The goal of the first development stage is to establish reliable vehicle CRUD operations before introducing more complex business concepts.
+`company_id` is assigned from the session on create. The client cannot choose it.
 
 ---
 
 # Frontend
 
-The frontend is a React application for managing the vehicle fleet.
+Vite proxies `/api` to `http://localhost:3000` so the browser uses same-origin `fetch` / EventSource with `credentials: "include"`.
 
-Vite proxies `/api` to `http://localhost:3000` so the browser can use same-origin requests and EventSource.
+List state lives in the URL. Reloading keeps the view; a fresh visit to `/vehicles` starts on page 1.
 
-List state (search, filter, sort, page, limit) lives in the URL. Reloading keeps the current view; a fresh visit to `/vehicles` starts on page 1.
+| Route           | Description |
+| --------------- | ----------- |
+| `/login`        | Session login |
+| `/`             | Redirects to `/vehicles` (auth required) |
+| `/vehicles`     | List and create dialog |
+| `/vehicles/:id` | Detail, map/trail, edit, delete |
+| `/fleet`        | Fleet map |
 
-## Routes
-
-| Route           | Description                          |
-| --------------- | ------------------------------------ |
-| `/`             | Redirects to the vehicle list        |
-| `/vehicles`     | Vehicle list and creation dialog     |
-| `/vehicles/:id` | Vehicle details, map/trail, editing and removal |
-| `/fleet`        | Fleet map (last positions, live movement) |
+Unauthenticated visits to vehicle/fleet routes go to `/login`.
 
 ## Vehicle list
 
-The vehicle list is built on a generic table component that receives its columns and filters through a configuration and contains no vehicle-specific logic itself.
-
-Search, filters, sorting and pagination run **on the server**. The table renders the current page, facet counts from `meta`, a loading skeleton while the API is unreachable (for example during a restart), and live telemetry patches for the current page plus neighbouring pages.
-
-It supports:
-
-* Search across license plate and driver (`search_text`)
-* Filters for alerts, low fuel, driving and offline vehicles
-* Sorting per column (allowlisted keys)
-* Pagination
-* Selecting rows and deleting several vehicles at once
+Generic table; vehicle columns/filters are configuration, not table internals. Search, filters, sort and pagination run **on the server**. Live patches apply to the current page plus neighbours.
 
 ## Vehicle management
 
-Vehicles can be created, edited and deleted through the UI.
-
-The edit form only covers master data. Status is a badge (what the vehicle reports), not a control. Fuel is read-only while driving. The header can pause or resume the simulator and switches between the vehicle list and the fleet map.
-
-The forms validate their input with the same validation function the API uses, which comes from the shared package.
+Create, edit, delete. Status is a badge. Fuel is read-only while driving. The header pauses/resumes **this company’s** simulator and switches list ↔ map.
 
 ## Fleet map
 
-`/fleet` shows last-known positions for the drivers you pick, in the visible map — not the current list page and not the whole fleet. Status chips and plate search stay off until that selection exists. If the viewport has more than 2000 matches, the map shows no markers — it does not paint a random sample. **Fahrer** opens a modal to pick people (`driver_name`, one vehicle each) by name or plate. That is a view filter, not a saved group. The toolbar shows how many markers are in the snapshot. Driving vehicles in that snapshot receive live SSE ticks (same focus mechanism as the list, capped at 150). There is no trail here — the driven path stays on the detail page. Click a marker to open the vehicle.
+`/fleet` loads last positions for the **session company** in the visible bbox. The driver picker is an optional view filter, not a requirement. Status chips and plate search apply to that snapshot. More than 2000 matches → no markers (`truncated`), not a sample. **Fahrer** is a modal (`driver_name`, one vehicle each). Driving vehicles in the snapshot get SSE ticks (focus cap 150). No trails here — the path stays on the detail page.
 
-See [apps/docs/table.md](apps/docs/table.md) for a detailed description of the table component.
+See [apps/docs/table.md](apps/docs/table.md) for the table component.
 
 ---
 
 # Telemetry
 
-The database already contains a telemetry model associated with vehicles.
+Hot buffer: vehicle, latitude, longitude, speed, `recorded_at`. Last point is on the vehicle JSON. `GET /api/vehicles/:id/telemetry` returns `{ data }` in chronological order — marker and newest movement, not the trail.
 
-Telemetry data includes information such as:
+A ticker writes only for focused `DRIVING` vehicles whose company has not paused the sim. The `connected` event includes `connection_id`. The UI posts `{ connection_id, ids }` (list page plus neighbours, open detail vehicle, driving vehicles on the fleet map). Each connection has its own focus; the ticker uses the union **of that company’s running simulations**. Without focus, nothing is written. Telemetry patches go only to connections that focused that id **and** belong to the same company. `vehicles-changed` goes only to that company’s connections.
 
-* Vehicle
-* Latitude
-* Longitude
-* Speed
-* Recorded timestamp
+At most `TELEMETRY_KEEP_PER_VEHICLE` raw rows remain per vehicle (default 100). Ending a trip writes speed `0` at the last position.
 
-The last telemetry record of a vehicle is included in the vehicle API responses.
-
-`GET /api/vehicles/:id/telemetry` returns the recent points as `{ data }` in chronological order. That is the live buffer (marker, newest movement), not the trail — the trail comes from `GET /api/vehicles/:id/trips/latest`.
-
-A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, the open detail vehicle, and driving vehicles on the fleet map). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written. Telemetry patches are delivered only to connections that included the vehicle in their focus. `vehicles-changed` is still sent to every open stream.
-
-After each insert, older points of that vehicle are deleted so at most `TELEMETRY_KEEP_PER_VEHICLE` rows remain (default 100). Raw telemetry is only the live buffer for the marker and the newest movement — the driven path lives on the trip (see below), so this limit no longer decides how much of the route is visible.
-
-Ending a trip writes a final point with speed `0` at the last known position, so a parked vehicle does not keep its cruising speed.
-
-Focused `DRIVING` vehicles follow baked OSRM polylines (no routing at runtime). Progress is distance along the route from a city/highway/city speed profile; displayed km/h tracks that limit with light noise. A time scale keeps a typical corridor in the 1–2 minute range.
+Focused `DRIVING` vehicles follow baked OSRM polylines. Speed follows a city/highway profile with light noise. A time scale keeps a typical corridor in the 1–2 minute range.
 
 ## Trips
 
-A trip is the durable record of one drive: it opens when a vehicle starts driving and closes when it stops.
+A trip is the durable record of one drive. A rolling window of raw points is the wrong unit for a route: visible length would depend on tick rate, not on the drive.
 
-The problem it solves: a rolling window of raw points is the wrong unit for a route. How many kilometres it covers depends on the reporting interval and the speed, not on the drive, so the trail visibly crawls away behind a vehicle on a long haul — and forwarding companies drive hundreds of kilometres.
+Each reported position is appended to `trips.path` as an [encoded polyline](https://developers.google.com/maps/documentation/utilities/polylinealgorithm) (precision 5):
 
-The number of vertices needed to *draw* a path is not proportional to its length. A 300 km motorway run is geometrically simple. So each reported position is appended to `trips.path` as an [encoded polyline](https://developers.google.com/maps/documentation/utilities/polylinealgorithm) (precision 5, roughly 6 bytes per point) and the raw row is free to expire:
+* **Append is O(1)** (`path = path || ?`; predecessor in `last_latitude` / `last_longitude`). Points closer than 20 m are dropped.
+* **Close simplifies** with Ramer-Douglas-Peucker at 12 m.
+* **`distance_m`** is the sum of reported segments, not the simplified line.
 
-* **Appending is O(1).** The row keeps its last point in `last_latitude` / `last_longitude`, because polyline deltas need the predecessor. The string grows in SQL (`path = path || ?`), so the existing path is never read back into Node. Positions closer than 20 m to the previous one are dropped as noise.
-* **Closing simplifies.** On stop the path is decoded, run through Ramer-Douglas-Peucker at 12 m (below the width of a motorway, so the drawn line does not change) and re-encoded. Motorway legs shrink by roughly an order of magnitude.
-* **`distance_m` stays the sum of the reported segments**, not the length of the simplified line. The vehicle drove the full distance.
-
-A 300 km trip is therefore one row of a few KB and one request, instead of thousands of rows and a guessed `LIMIT`. The detail map reads `GET /api/vehicles/:id/trips/latest` once and extends the line from the SSE stream.
+Access is `trip → vehicle → company`. There is no `company_id` on `trips` and no `GET /api/trips/:id`.
 
 Deliberate trade-offs:
 
-* A polyline carries no per-point speed or timestamp. Detail resolution stays in the live window; the trip keeps `distance_m` and `max_speed`, which is what a fleet report asks for.
-* Distance and top speed are shown for finished trips only. They are fetched once, so during a drive the numbers would sit frozen on screen.
-* The row is rewritten on every append. At this scale that is fine; if it ever hurts, the fix is chunking the path into append-only segment rows.
-* No route-level retention policy yet. Trips are small, but a per-tenant retention rule belongs to Phase 4, where the data becomes company-owned and legally relevant.
-
-The intended flow is:
-
-```text id="y6js5u"
-Vehicle
-   │
-   ▼
-Telemetry
-   │
-   ├── Latitude
-   ├── Longitude
-   ├── Speed
-   └── Timestamp
-          │
-          ▼
-     API / Simulator
-          │
-          ▼
-       Frontend
-          │
-          ▼
-          Map
-```
-
-Vehicles appear on the detail map and on the fleet map, and move over time without real GPS hardware.
+* No per-point speed or time on the polyline; aggregates live on the trip.
+* Distance and top speed are shown for finished trips only (fetched once).
+* The row is rewritten on every append; chunking would be the fix at larger scale.
+* No retention policy yet (technical debt, not a missing tenant column).
 
 ---
 
 # Alerts
 
-The database also contains an alert model associated with vehicles.
+The `alerts` table and `active_alerts` on the vehicle exist. The list can filter and highlight by that count.
 
-Alerts are intended to represent events such as abnormal vehicle behaviour or other conditions that should be surfaced to users.
+There is **no** `GET /api/alerts` and no alerts UI. Seeded rows are demo data.
 
-The number of unresolved alerts per vehicle is already exposed through the vehicle API and used in the frontend to highlight and filter affected vehicles.
-
-There is no alerts REST API or UI yet — only `active_alerts` on the vehicle.
-
-**Optional later:** speeding (and similar driving events) as alert types. That needs a real speed limit per road segment (map data), not the simulator’s city/highway profile. The trip polyline has no per-point speed; live speed stays in the telemetry window.
+**Optional later:** speeding and similar types need map-derived speed limits, not the simulator profile. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
 
 ---
 
 # Database
 
-SQLite is currently used as the database.
-
-The current schema contains:
-
-```text id="8d0q3g"
-users
-vehicles
-telemetry
-trips
-alerts
+```text
+companies
+users          → company_id
+sessions       → user_id
+vehicles       → company_id   UNIQUE (company_id, license_plate)
+telemetry      → vehicle_id
+trips          → vehicle_id   (one open trip per vehicle)
+alerts         → vehicle_id
 ```
 
-Vehicles are related to telemetry, trips and alerts through foreign keys.
-
-A partial unique index on `trips(vehicle_id) WHERE ended_at IS NULL` keeps the "one drive at a time" rule in the database rather than in the order of controller calls.
-
-The database also contains indexes for frequently accessed telemetry data.
-
-A development seed script is provided to create example data.
+A partial unique index on `trips(vehicle_id) WHERE ended_at IS NULL` enforces one drive at a time.
 
 ---
 
-# Development Approach
+# Authentication and tenants
 
-The project is intentionally being developed incrementally.
+Implemented:
 
-Instead of implementing authentication, companies and multi-tenancy immediately, the focus is on getting the underlying vehicle and map functionality correct first.
+* Login / logout / me
+* scrypt password hashes
+* HttpOnly session cookie
+* Isolation by `company_id` on the user (one company per account)
+* SSE connections and sim pause bound to that company
 
-The planned development path is:
-
-```text id="qf5k7h"
-1. Vehicle API
-       ↓
-2. Vehicle frontend
-       ↓
-3. API integration + live telemetry
-       ↓
-4. Map (detail marker, live movement, fleet view)
-       ↓
-5. Companies
-       ↓
-6. Users
-       ↓
-7. Authentication
-       ↓
-8. Authorization & multi-tenancy
-```
-
-This order keeps the complexity manageable and allows each layer to be tested before adding the next one.
-
----
-
-# Multi-Tenancy
-
-Multi-tenancy is planned as a later stage of the project.
-
-The intended domain model is currently being explored, but the general idea is:
-
-```text id="q6q4l5"
-Company
-   │
-   ├── Users
-   │
-   └── Vehicles
-          ├── Telemetry
-          ├── Trips
-          └── Alerts
-```
-
-A company would own its vehicles, while users would belong to one or more companies depending on the final authorization model.
-
-The exact user/company relationship has **not been finalized yet**.
-
-### Important
-
-Multi-tenancy is **not implemented yet**.
-
-Vehicles are currently not isolated by company/tenant, and authentication/authorization is not implemented.
-
-This is intentionally deferred until the basic fleet functionality is working.
-
----
-
-# Authentication
-
-Authentication is also planned for a later stage.
-
-The current `users` table represents part of the future domain model but does **not** mean that authentication is already implemented.
-
-The planned authentication layer will eventually be responsible for:
-
-* User login
-* Identity
-* Sessions/tokens
-* Authorization
-* Company membership
-* Tenant access
+Not the same as production auth: no reset, lockout, invite, roles, or multi-company membership. CORS `*` is a local default; cookies work because the Vite proxy is same-origin.
 
 ---
 
@@ -511,37 +297,20 @@ The planned authentication layer will eventually be responsible for:
 * Node.js
 * npm
 
-## Install dependencies
-
-```bash id="8cg7on"
+```bash
 npm install
-```
-
-## Start development environment
-
-```bash id="q7gx2y"
 npm run dev
 ```
 
-## Start API
+API only: `npm run dev:api`. Web only: `npm run dev:web`.
 
-```bash id="1c6q7a"
-npm run dev:api
-```
+Seed:
 
-## Start frontend
-
-```bash id="1ol4re"
-npm run dev:web
-```
-
-## Seed development database
-
-```bash id="8hl4gd"
+```bash
 npm run db:seed
 ```
 
-Large dataset (tens of thousands of vehicles, for list/SSE performance):
+Large set (tens of thousands of vehicles, unique plates and driver names):
 
 ```bash
 npm run db:seed:large
@@ -553,37 +322,41 @@ API tests:
 npm test
 ```
 
-List-query bench (against a running API is not required; see `apps/api/scripts/bench.ts`):
+List-query bench: `npm run bench` (see `apps/api/scripts/bench.ts`).
 
-```bash
-npm run bench
-```
-
-Useful environment variables for the API (validated on startup):
+After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (Rheinland Logistik, `company_id` 1). Seed also creates companies 2 and 3 and spreads vehicles across them.
 
 | Variable | Default | Notes |
 | -------- | ------- | ----- |
 | `PORT` | `3000` | |
-| `DATABASE_PATH` | `apps/api/data/fleetlive.db` | Use `:memory:` in tests |
-| `CORS_ORIGIN` | `*` | |
+| `DATABASE_PATH` | `apps/api/data/fleetlive.db` | `:memory:` in tests |
+| `CORS_ORIGIN` | `*` | Same-origin in dev via Vite proxy |
 | `TELEMETRY_TICK_MS` | `400` | `0` disables the simulator |
-| `TELEMETRY_BATCH_SIZE` | `32` | Cap per tick on the union of connection focus ids |
-| `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Rolling window of raw points per vehicle (live buffer only) |
+| `TELEMETRY_BATCH_SIZE` | `32` | Cap per tick on the union of focus ids |
+| `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Live buffer only |
 | `LOG_LEVEL` | `info` | |
 | `NODE_ENV` | `development` | Rate limiting is production-only |
 
 ---
 
-# Example API Request
+# Example: login then create a vehicle
 
-Create a vehicle:
-
-```http id="v9ojyv"
-POST /api/vehicles
+```http
+POST /api/auth/login
 Content-Type: application/json
+
+{
+  "email": "cihan@example.com",
+  "password": "development-only-password",
+  "remember": true
+}
 ```
 
-```json id="9xqz1p"
+```http
+POST /api/vehicles
+Content-Type: application/json
+Cookie: fleet_session=…
+
 {
   "license_plate": "K-XY 123",
   "driver_name": "Max Mustermann",
@@ -592,75 +365,31 @@ Content-Type: application/json
 }
 ```
 
-The API validates the request and persists the vehicle in SQLite.
+`company_id` in the body is ignored.
 
 ---
 
 # API Design
 
-The backend follows a simple layered structure:
-
-```text id="g7p7h1"
-Routes
-  │
-  ▼
-Controllers
-  │
-  ▼
-Models
-  │
-  ▼
-SQLite
+```text
+Routes → Controllers → Models → SQLite
 ```
 
-### Routes
-
-Responsible for defining HTTP endpoints.
-
-### Controllers
-
-Responsible for request handling, validation and HTTP responses.
-
-### Models
-
-Responsible for database operations.
-
-This separation is intentionally lightweight and is intended to keep the API easy to extend as the project grows.
-
----
-
-# Database Seeding
-
-The development seed script creates example fleet data for local development.
-
-This includes example:
-
-* Users
-* Vehicles
-* Telemetry
-* Alerts
-
-`npm run db:seed:large` replaces the vehicle set with a much larger sample (unique plates and unique driver names — one driver per vehicle) so pagination, search and the live stream can be exercised under load.
+Controllers validate and map HTTP. Models run SQL. This stays intentionally thin.
 
 ---
 
 # Current Limitations
 
-This project is **not production-ready**.
+Not production-ready. Incomplete by design:
 
-The following areas are intentionally incomplete:
-
-* Authentication
-* Authorization
-* Multi-tenancy
-* Frontend unit tests
-* Production deployment
-* CI/CD
-* Production database
-* Observability
-* Production security hardening
-
-These are planned development areas rather than features that are currently implemented.
+* Production-grade auth (reset, lockout, CSRF for cross-origin cookies)
+* Roles and multi-company users
+* Alerts REST/UI
+* Frontend tests
+* CI/CD, production database, observability
+* Trip/telemetry retention
+* CORS/rate-limit hardening for a real deployment
 
 ---
 
@@ -668,81 +397,48 @@ These are planned development areas rather than features that are currently impl
 
 ## Phase 1 — Vehicles
 
-* [x] Database schema
-* [x] Vehicle model
-* [x] Vehicle CRUD API
-* [x] Input validation
-* [x] Development seed data
+* [x] Schema, vehicle model, CRUD, validation, seed
 
 ## Phase 2 — Frontend
 
-* [x] Vehicle list (search, filters, sorting, pagination)
-* [x] Vehicle details page
-* [x] Create/edit/delete vehicle UI
-* [x] API integration (server-driven list, no mock data)
+* [x] Server-driven list, detail, create/edit/delete, no mock data
 
 ## Phase 3 — Map and live position
 
-Live telemetry (SSE, per-connection focus, list/detail patches) and the telemetry history API are already in place. This phase is the map on top of that last known point — not a separate telemetry milestone.
+* [x] Telemetry history, detail map, SSE movement, trip trail, route sim, fleet map `/fleet`
 
-* [x] Telemetry history API (`GET /api/vehicles/:id/telemetry`, rolling window)
-* [x] Map on the vehicle detail page (Leaflet)
-* [x] Marker at the last telemetry position
-* [x] Marker moves with SSE updates
-* [x] Compact position/speed on or next to the map (full stammdaten stay in the form)
-* [x] Trail from the trip path (encoded polyline, length-independent)
-* [x] Route-based simulation with city/highway speed limits
-* [x] Fleet map (own route `/fleet` over last positions in the viewport; not the list page)
+## Phase 4 — Companies, login, isolation
 
-## Later — optional
+* [x] Company model
+* [x] User belongs to one company
+* [x] Session login
+* [x] Tenant isolation (`company_id` from session; plates unique per company; SSE and sim scoped; trips via vehicle)
+* [ ] Roles (authorization beyond “logged in + same company”)
+* [ ] Per-tenant retention for trips and telemetry
 
-Not on the main path (companies, auth, tenants). Capture here so it is not forgotten.
+## Phase 5 — still open
 
-* [ ] Speed-limit alerts (“too fast” / similar). Requires map-derived limits on the route; do not treat the sim’s 50/120 profile as legal limits. Belongs with alerts, not as extra vertices on the trip polyline.
+Phase 4 already isolates data by company. What remains is product and operations, not a second isolation rewrite:
 
-## Phase 4 — Companies & Users
+* [ ] Alerts REST/UI
+* [ ] Invite / password reset
+* [ ] Optional multi-company membership
+* [ ] Frontend tests, CI/CD, production database, observability
 
-* [ ] Company model
-* [ ] User/company relationship
-* [ ] Authentication
-* [ ] Authorization
-* [ ] `company_id` on vehicles and trips, index `(company_id, started_at DESC)`
-* [ ] Per-tenant retention for trips and raw telemetry (movement data is legally sensitive)
+## Optional
 
-## Phase 5 — Multi-Tenancy
-
-* [ ] Tenant-aware data model
-* [ ] Tenant-aware API
-* [ ] Data isolation
-* [ ] Authorization checks
+* [ ] Speed-limit alerts. Needs map-derived limits; do not treat the sim’s 50/120 profile as legal limits.
 
 ---
 
 # Project Status
 
-**Work in progress.**
+**Work in progress.** Personal full-stack project: vehicle API first, then UI, live map, then login and company isolation. Treat it as an evolving codebase, not a product you would give a dispatcher tomorrow.
 
-`fleet-live` is a personal full-stack development project.
-
-The project is deliberately being built in small steps, starting with the vehicle API and gradually adding the frontend, visualization, telemetry and eventually authentication and multi-tenancy.
-
-The current implementation should therefore be viewed as an evolving engineering project rather than a finished product.
+If README and code disagree, **code wins**. Agent notes: `.cursor/rules/architecture.mdc`, `AGENTS.md`.
 
 ---
 
 ## Why this project?
 
-The goal is to build something that is closer to a real-world application than a small tutorial project.
-
-Fleet management provides a useful domain for exploring:
-
-* REST APIs
-* relational data
-* TypeScript
-* frontend/backend separation
-* geospatial visualization
-* real-time updates
-* data simulation
-* authentication
-* authorization
-* multi-tenant architecture
+Closer to a real application than a tutorial. The domain covers REST, relational data, TypeScript, frontend/backend split, maps, SSE, simulation, sessions and tenant isolation.

@@ -14,7 +14,7 @@ Phase 4 (login and company isolation) is in place. Status detail: `.cursor/rules
 
 ## Source of truth
 
-- Code is what exists. README Current Status / Roadmap is intent (and can lag).
+- Code is what exists. If README and code disagree, code wins. README Current Status / Roadmap should describe the running system.
 - `apps/docs/table.md` is the table-component spec, not a backlog. Do not add client-side vehicle-list sorting because `sortRows.ts` exists.
 - README mentions alerts as a domain (table, `active_alerts`, filter). That is not an alerts REST API.
 
