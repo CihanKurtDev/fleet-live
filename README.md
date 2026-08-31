@@ -40,7 +40,8 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 ### Consciously simplified / demo
 
 * Movement comes from the simulator, not GPS hardware
-* Seed login is shown on the login page only in Vite `DEV` (`cihan@example.com` / `development-only-password`)
+* Seed login is shown on the login page only in Vite `DEV`: `cihan@example.com` (dispatcher) and `viewer@example.com` (read-only), both `development-only-password`, both company 1
+* Companies 2 and 3 exist in seed for isolation. There is no demo login for them — cross-tenant checks are API tests, or a company-1 user opening another company’s vehicle id (`404`)
 * SQLite file database
 * One company per user (no membership table, no company switcher)
 * Alerts: table + `active_alerts` count/filter only — no REST, no UI, seeded dummy rows
@@ -48,10 +49,12 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 
 ### Technical debt (not production-ready)
 
-* Cookie session is correct for **same-origin** (Vite proxies `/api`). That is not production auth: no password reset, lockout, invite, or CSRF strategy for a cross-origin cookie deployment
+* Cookie session is correct for **same-origin** (Vite proxies `/api`). That is not production auth: no password reset, lockout, invite, or CSRF strategy for a cross-origin cookie deployment. Before splitting web and API onto different hosts, set `CORS_ORIGIN` to the web origin and allow credentials — do not switch to JWT for that
+* An expired session is detected on load (`GET /api/auth/me`). Later `401`s do not send the UI back to `/login`
+* Sim pause is in-memory per company; an API restart resumes every tenant
 * No frontend tests
 * No CI/CD
-* `CORS_ORIGIN` defaults to `*`; rate limiting is production-only (`NODE_ENV=production`)
+* `CORS_ORIGIN` defaults to `*`; rate limiting is production-only (`NODE_ENV=production`) and is not login-specific
 * No observability beyond request logs
 
 ### Roadmap (not implemented)
@@ -129,7 +132,7 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | ------ | -------- | ----------- |
 | `POST` | `/api/auth/login` | `{ email, password, remember? }` — sets `fleet_session` |
 | `POST` | `/api/auth/logout` | Clears the session |
-| `GET`  | `/api/auth/me` | Current user (`id`, `name`, `email`, `company_id`) or `401` |
+| `GET`  | `/api/auth/me` | Current user (`id`, `name`, `email`, `company_id`, `role`) or `401` |
 
 `remember: true` persists the cookie for seven days; otherwise the session lasts twelve hours (and the cookie is session-scoped). Wrong password returns `401` without saying which field failed.
 
@@ -286,7 +289,7 @@ Implemented:
 * Roles: `dispatcher` may mutate vehicles and pause the sim; `viewer` may only read
 * SSE connections and sim pause bound to that company
 
-Not the same as production auth: no reset, lockout, invite, roles, or multi-company membership. CORS `*` is a local default; cookies work because the Vite proxy is same-origin.
+Not the same as production auth: no reset, lockout, invite, or multi-company membership. CORS `*` is a local default; cookies work because the Vite proxy is same-origin. A split-host deploy needs an explicit origin plus credentialed CORS, not a token redesign.
 
 ---
 
@@ -324,7 +327,7 @@ npm test
 
 List-query bench: `npm run bench` (see `apps/api/scripts/bench.ts`).
 
-After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (dispatcher, Rheinland Logistik). `viewer@example.com` uses the same password and can only read. Sample seed spreads vehicles across companies 2 and 3. `db:seed:large` puts almost all vehicles on company 1 so the demo login sees the load; companies 2 and 3 get about 1 % each for isolation.
+After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (dispatcher, Rheinland Logistik). `viewer@example.com` uses the same password and can only read. Both accounts are company 1. Sample seed still creates vehicles for companies 2 and 3, but those firms have no demo user — isolation in the UI is a foreign vehicle id returning “not found”. `db:seed:large` puts almost all vehicles on company 1 so the demo login sees the load; companies 2 and 3 get about 1 % each for isolation tests. Existing databases that were only migrated (no reseed) keep every old vehicle on company 1.
 
 | Variable | Default | Notes |
 | -------- | ------- | ----- |
@@ -387,9 +390,10 @@ Not production-ready. Incomplete by design:
 * Production-grade auth (reset, lockout, CSRF for cross-origin cookies)
 * Multi-company users
 * Alerts REST/UI
-* Frontend tests
+* Frontend tests (no runner yet — do not add Jest/Vitest as a checklist item)
 * CI/CD, production database, observability
-* CORS/rate-limit hardening for a real deployment
+* CORS/credentials and rate-limit hardening for a real deployment (including login)
+* Durable sim pause (today: process memory)
 
 ---
 
@@ -414,7 +418,7 @@ Not production-ready. Incomplete by design:
 * [x] Session login
 * [x] Tenant isolation (`company_id` from session; plates unique per company; SSE and sim scoped; trips via vehicle)
 * [x] Roles (`dispatcher` writes; `viewer` reads)
-* [x] Per-tenant retention for trips and telemetry
+* [x] Per-company retention for closed trips (`TRIP_RETENTION_DAYS`); telemetry stays the rolling window
 
 ## Phase 5 — still open
 
