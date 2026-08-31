@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import type { VehicleInput } from "@fleet-live/shared";
 
 import { VehicleTable } from "../components/vehicles/VehicleTable";
@@ -12,6 +12,7 @@ import { setTelemetryFocus } from "../api/telemetryFocus";
 export const VehiclesPage = () => {
     const { createVehicle, deleteVehicles } = useVehicles();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -30,11 +31,13 @@ export const VehiclesPage = () => {
             <VehicleTable
                 onDeleteVehicles={deleteVehicles}
                 onAddVehicle={() => setIsCreateOpen(true)}
-                    onSelectVehicle={(vehicle) => {
+                onSelectVehicle={(vehicle) => {
                     rememberVehicle(vehicle);
                     setTelemetryFocus("detail", [vehicle.id]);
                     navigate(`/vehicles/${vehicle.id}`, {
-                        state: { from: "/vehicles" },
+                        state: {
+                            from: `${location.pathname}${location.search}`,
+                        },
                     });
                 }}
             />
