@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Vehicle } from "./vehicle";
+import { emptyToUndefined, firstQueryString } from "./queryPreprocess";
 
 export const VEHICLE_SORT_KEYS = [
     "license_plate",
@@ -23,21 +24,9 @@ export type VehicleSortKey = (typeof VEHICLE_SORT_KEYS)[number];
 export type VehicleFilterId = (typeof VEHICLE_FILTERS)[number];
 export type VehiclePageLimit = (typeof VEHICLE_PAGE_LIMITS)[number];
 
-const emptyToUndefined = (value: unknown): unknown => {
-    if (value === "" || value === null || value === undefined) {
-        return undefined;
-    }
-
-    if (Array.isArray(value)) {
-        return emptyToUndefined(value[0]);
-    }
-
-    return value;
-};
-
 export const vehicleListQuerySchema = z.object({
     search: z.preprocess(
-        (value) => (value == null ? "" : Array.isArray(value) ? value[0] : value),
+        firstQueryString,
         z.string().trim().max(100, "Suche darf höchstens 100 Zeichen haben.").default(""),
     ),
     filter: z.preprocess(

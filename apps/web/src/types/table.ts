@@ -79,4 +79,7 @@ export interface TableProps<RowType> {
 
     /** Ersetzt „Keine Ergebnisse“, wenn die Tabelle leer und nicht am Laden ist. */
     emptyContent?: ReactNode;
+
+    /** Sichtbar nur für Screenreader. Ohne Caption kein `<caption>`. */
+    caption?: string;
 }

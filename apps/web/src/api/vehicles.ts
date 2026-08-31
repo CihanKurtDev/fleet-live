@@ -1,10 +1,15 @@
 import type {
+    FleetDriversQuery,
+    FleetDriversResponse,
+    FleetPositionsQuery,
+    FleetPositionsResponse,
+    TripResponse,
     Vehicle,
     VehicleInput,
     VehicleListQuery,
     VehicleListResponse,
 } from "@fleet-live/shared";
-import { serializeVehicleListQuery } from "@fleet-live/shared";
+import { serializeFleetDriversQuery, serializeFleetPositionsQuery, serializeVehicleListQuery } from "@fleet-live/shared";
 import { request } from "./client";
 
 export function listVehicles(
@@ -22,6 +27,40 @@ export function listVehicles(
 
 export function getVehicle(id: number, signal?: AbortSignal) {
     return request<Vehicle>(`/api/vehicles/${id}`, { signal });
+}
+
+/** Letzte Positionen im Kartenausschnitt — nicht die paginierte Liste. */
+export function listVehiclePositions(
+    query: FleetPositionsQuery,
+    signal?: AbortSignal,
+) {
+    const params = serializeFleetPositionsQuery(query);
+    const suffix = params.toString();
+
+    return request<FleetPositionsResponse>(
+        `/api/vehicles/positions${suffix ? `?${suffix}` : ""}`,
+        { signal },
+    );
+}
+
+export function listDrivers(
+    query: FleetDriversQuery,
+    signal?: AbortSignal,
+) {
+    const params = serializeFleetDriversQuery(query);
+    const suffix = params.toString();
+
+    return request<FleetDriversResponse>(
+        `/api/vehicles/drivers${suffix ? `?${suffix}` : ""}`,
+        { signal },
+    );
+}
+
+/** Laufende Fahrt, sonst die letzte beendete — inklusive Streckenverlauf. */
+export function getVehicleTrip(id: number, signal?: AbortSignal) {
+    return request<TripResponse>(`/api/vehicles/${id}/trips/latest`, {
+        signal,
+    });
 }
 
 export function createVehicle(input: VehicleInput) {

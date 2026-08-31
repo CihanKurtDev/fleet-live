@@ -29,11 +29,25 @@ export const TableHeader = <RowType,>({
                         key={String(column.key)}
                         scope="col"
                         className={styles.tableHeader}
+                        aria-sort={
+                            direction === "asc"
+                                ? "ascending"
+                                : direction === "desc"
+                                  ? "descending"
+                                  : "none"
+                        }
                     >
                         {column.sortable && onSort ? (
                             <button
                                 type="button"
                                 className={styles.sortButton}
+                                aria-label={
+                                    direction === "asc"
+                                        ? `${column.displayText}, aufsteigend sortiert. Absteigend sortieren.`
+                                        : direction === "desc"
+                                          ? `${column.displayText}, absteigend sortiert. Sortierung aufheben.`
+                                          : `${column.displayText} sortieren`
+                                }
                                 onClick={() => onSort(column.key)}
                             >
                                 <span>

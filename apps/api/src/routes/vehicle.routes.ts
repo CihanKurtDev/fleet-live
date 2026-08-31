@@ -3,7 +3,10 @@ import {
     createVehicle,
     deleteVehicle,
     getVehicleById,
+    getVehicleDrivers,
+    getVehiclePositions,
     getVehicleTelemetry,
+    getVehicleTrip,
     getVehicles,
     replaceVehicle,
     updateVehicle,
@@ -12,7 +15,10 @@ import {
 const router = express.Router();
 
 router.get("/", getVehicles);
+router.get("/positions", getVehiclePositions);
+router.get("/drivers", getVehicleDrivers);
 router.get("/:id/telemetry", getVehicleTelemetry);
+router.get("/:id/trips/latest", getVehicleTrip);
 router.get("/:id", getVehicleById);
 router.post("/", createVehicle);
 router.put("/:id", replaceVehicle);

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type {
     TelemetryPatch,
     Vehicle,
@@ -13,7 +13,10 @@ import {
 } from "../api/vehicles";
 import { forgetVehicles, rememberVehicle } from "../api/vehicleCache";
 import { invalidateVehicleListCache } from "../api/vehicleListCache";
-import { VehiclesContext } from "./vehiclesContext";
+import {
+    VehiclesContext,
+    type TripPathDeltaHandler,
+} from "./vehiclesContext";
 import { useVehicleStream } from "../hooks/useVehicleStream";
 
 const fieldErrorsFromApi = (
@@ -47,6 +50,17 @@ export const VehiclesProvider = ({
     const [vehicleOverrides, setVehicleOverrides] = useState<
         Record<number, Partial<Vehicle>>
     >({});
+    const pathDeltaListeners = useRef(new Set<TripPathDeltaHandler>());
+
+    const subscribeTripPath = useCallback(
+        (handler: TripPathDeltaHandler) => {
+            pathDeltaListeners.current.add(handler);
+            return () => {
+                pathDeltaListeners.current.delete(handler);
+            };
+        },
+        [],
+    );
 
     const refetchLists = useCallback(() => {
         invalidateVehicleListCache();
@@ -68,6 +82,7 @@ export const VehiclesProvider = ({
                     latitude: patch.latitude,
                     longitude: patch.longitude,
                     recorded_at: patch.recorded_at,
+                    fuel_level: patch.fuel_level,
                 };
             }
 
@@ -83,6 +98,15 @@ export const VehiclesProvider = ({
 
             return next;
         });
+
+        for (const patch of patches) {
+            if (patch.path_delta) {
+                const reset = patch.path_reset === true;
+                for (const listener of pathDeltaListeners.current) {
+                    listener(patch.id, patch.path_delta, reset);
+                }
+            }
+        }
     }, []);
 
     useVehicleStream({
@@ -143,6 +167,7 @@ export const VehiclesProvider = ({
             createVehicle,
             updateVehicle,
             deleteVehicles,
+            subscribeTripPath,
         }),
         [
             listEpoch,
@@ -151,6 +176,7 @@ export const VehiclesProvider = ({
             createVehicle,
             updateVehicle,
             deleteVehicles,
+            subscribeTripPath,
         ],
     );
 

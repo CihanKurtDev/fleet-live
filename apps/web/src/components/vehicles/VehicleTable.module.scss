@@ -5,6 +5,13 @@
     transition: opacity 120ms ease;
 }
 
+.title {
+    margin: 16px 0 12px;
+    font-size: 22px;
+    font-weight: 650;
+    color: var(--text-h);
+}
+
 .isFetching {
     opacity: 0.72;
 }

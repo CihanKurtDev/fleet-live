@@ -2,12 +2,16 @@ import type { TelemetryPatch, TelemetryPoint } from "@fleet-live/shared";
 import { config } from "../config";
 import { db } from "../db/database";
 import { stmt } from "../db/statements";
+import { nowSqlite } from "../lib/sqlTime";
+import { nextSimTick } from "../sim/routes";
+import { TripModel } from "./trip.model";
 
 type DrivingVehicle = {
     id: number;
     latitude: number;
     longitude: number;
     speed: number | null;
+    fuel_level: number;
 };
 
 const SELECT_DRIVING_BY_IDS = `
@@ -15,12 +19,25 @@ const SELECT_DRIVING_BY_IDS = `
         v.id,
         COALESCE(t.latitude, 50.9375) AS latitude,
         COALESCE(t.longitude, 6.9603) AS longitude,
-        t.speed
+        t.speed,
+        v.fuel_level
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
     WHERE v.status = 'DRIVING'
       AND v.id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
 `;
+
+const SELECT_LAST_POSITION = `
+    SELECT
+        v.fuel_level,
+        t.latitude,
+        t.longitude
+    FROM vehicles v
+    LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
+    WHERE v.id = ?
+`;
+
+const UPDATE_FUEL = `UPDATE vehicles SET fuel_level = ? WHERE id = ?`;
 
 const INSERT_TELEMETRY = `
     INSERT INTO telemetry (vehicle_id, latitude, longitude, speed, recorded_at)
@@ -47,20 +64,18 @@ const SELECT_HISTORY = `
     LIMIT ?
 `;
 
+/** Verbrauch der Simulation: 100 % reichen für rund 400 km. */
+const FUEL_PERCENT_PER_KM = 0.25;
+/** Unter dieser Marke wird getankt, damit die Flotte nicht dauerhaft leer steht. */
+const REFUEL_BELOW_PERCENT = 5;
+
 let batchCursor = 0;
 
-function nowSqlite(): string {
-    return new Date().toISOString().slice(0, 19).replace("T", " ");
-}
+function nextFuelLevel(current: number, meters: number): number {
+    const used = (meters / 1_000) * FUEL_PERCENT_PER_KM;
+    const remaining = current - used;
 
-/**
- * Tempo ändert sich in kleinen Schritten, nicht als Würfelwurf 30–120.
- * Später kommt die Geschwindigkeit aus der tatsächlichen Bewegung auf der Karte.
- */
-function nextSpeed(current: number | null): number {
-    const cruising = current !== null && current > 15 ? current : 55 + Math.random() * 25;
-    const delta = (Math.random() - 0.5) * 10;
-    return Math.round(Math.min(128, Math.max(18, cruising + delta)));
+    return remaining <= REFUEL_BELOW_PERCENT ? 100 : remaining;
 }
 
 function takeBatch<T>(items: T[], limit: number): T[] {
@@ -87,6 +102,7 @@ function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
 
     const insert = stmt(INSERT_TELEMETRY);
     const prune = stmt(PRUNE_TELEMETRY);
+    const updateFuel = stmt(UPDATE_FUEL);
     const recordedAt = nowSqlite();
     const patches: TelemetryPatch[] = [];
     const keep = config.telemetryKeepPerVehicle;
@@ -94,11 +110,16 @@ function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
     db.exec("BEGIN");
     try {
         for (const vehicle of vehicles) {
-            const speed = nextSpeed(vehicle.speed);
-            const latitude =
-                vehicle.latitude + (Math.random() - 0.5) * 0.0008;
-            const longitude =
-                vehicle.longitude + (Math.random() - 0.5) * 0.0008;
+            const next = nextSimTick(
+                vehicle.id,
+                {
+                    lat: vehicle.latitude,
+                    lng: vehicle.longitude,
+                },
+                vehicle.speed,
+            );
+            const { lat: latitude, lng: longitude, speed, path } = next;
+            const fuelLevel = nextFuelLevel(vehicle.fuel_level, next.meters);
 
             insert.run(
                 vehicle.id,
@@ -109,6 +130,17 @@ function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
             );
 
             prune.run(vehicle.id, vehicle.id, keep);
+            updateFuel.run(fuelLevel, vehicle.id);
+
+            const pathDelta = TripModel.appendPoints(
+                vehicle.id,
+                path,
+                speed,
+            );
+
+            if (next.turnedAround) {
+                TripModel.close(vehicle.id);
+            }
 
             patches.push({
                 id: vehicle.id,
@@ -116,6 +148,15 @@ function writePatches(vehicles: DrivingVehicle[]): TelemetryPatch[] {
                 latitude,
                 longitude,
                 recorded_at: recordedAt,
+                fuel_level: fuelLevel,
+                ...(pathDelta
+                    ? {
+                          path_delta: pathDelta.suffix,
+                          ...(pathDelta.reset
+                              ? { path_reset: true }
+                              : {}),
+                      }
+                    : {}),
             });
         }
 
@@ -142,6 +183,48 @@ export class TelemetryModel {
         ) as DrivingVehicle[];
 
         return writePatches(takeBatch(focused, limit));
+    }
+
+    /**
+     * Schreibt einen letzten Punkt mit Tempo 0, wenn eine Fahrt endet.
+     * Ohne das behält ein Fahrzeug im Feierabend seine Reisegeschwindigkeit.
+     */
+    static recordStandstill(vehicleId: number): TelemetryPatch | undefined {
+        const row = stmt(SELECT_LAST_POSITION).get(vehicleId) as
+            | {
+                  fuel_level: number;
+                  latitude: number | null;
+                  longitude: number | null;
+              }
+            | undefined;
+
+        if (!row || row.latitude === null || row.longitude === null) {
+            return undefined;
+        }
+
+        const recordedAt = nowSqlite();
+
+        stmt(INSERT_TELEMETRY).run(
+            vehicleId,
+            row.latitude,
+            row.longitude,
+            0,
+            recordedAt,
+        );
+        stmt(PRUNE_TELEMETRY).run(
+            vehicleId,
+            vehicleId,
+            config.telemetryKeepPerVehicle,
+        );
+
+        return {
+            id: vehicleId,
+            speed: 0,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            recorded_at: recordedAt,
+            fuel_level: row.fuel_level,
+        };
     }
 
     static listForVehicle(vehicleId: number, limit: number): TelemetryPoint[] {

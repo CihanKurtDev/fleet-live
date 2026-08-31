@@ -27,7 +27,3 @@ export function stmt(sql: string): Statement {
 
     return statement;
 }
-
-export function clearStatementCache() {
-    cache.clear();
-}

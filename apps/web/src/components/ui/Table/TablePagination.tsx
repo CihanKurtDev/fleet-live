@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { formatCount } from "../../../utils/formatCount";
 import { getPageWindow } from "../../../utils/getPageWindow";
 import styles from "./TablePagination.module.scss";
 
@@ -186,8 +187,9 @@ export const TablePagination = ({
                 </button>
             </nav>
 
-            <p className={styles.range}>
-                {firstRow}-{lastRow} von {total}
+            <p className={styles.range} aria-live="polite">
+                {formatCount(firstRow)}–{formatCount(lastRow)} von{" "}
+                {formatCount(total)}
             </p>
         </div>
     );

@@ -11,6 +11,7 @@ import { notFound } from "./middleware/notFound";
 import { requestId } from "./middleware/requestId";
 import vehicleRoutes from "./routes/vehicle.routes";
 import { setStreamFocus, streamEvents } from "./controllers/stream.controller";
+import { getSim, updateSim } from "./controllers/sim.controller";
 
 declare global {
     namespace Express {
@@ -70,6 +71,8 @@ export function createApp() {
         res.json({ status: "ok" });
     });
 
+    app.get("/api/sim", getSim);
+    app.patch("/api/sim", updateSim);
     app.get("/api/stream", streamEvents);
     app.post("/api/stream/focus", setStreamFocus);
     app.use("/api/vehicles", vehicleRoutes);

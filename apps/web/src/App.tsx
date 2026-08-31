@@ -1,12 +1,18 @@
-import { Link, Outlet } from 'react-router';
+import { Link, NavLink, Outlet } from 'react-router';
 import { VehiclesProvider } from './context/VehiclesProvider';
+import { SimToggle } from './components/SimToggle';
 import './App.css'
 
 function App() {
     return (
         <VehiclesProvider>
             <header className="appHeader">
-                <Link to="/vehicles">fleet-live</Link>
+                <Link className="appBrand" to="/vehicles">fleet-live</Link>
+                <nav className="appNav" aria-label="Hauptnavigation">
+                    <NavLink to="/vehicles">Fahrzeuge</NavLink>
+                    <NavLink to="/fleet" aria-label="Flottenkarte">Karte</NavLink>
+                </nav>
+                <SimToggle />
             </header>
 
             <main>

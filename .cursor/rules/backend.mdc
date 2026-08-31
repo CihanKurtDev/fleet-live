@@ -10,7 +10,7 @@ alwaysApply: false
 app.ts + routes → Controllers → Models → SQLite
 ```
 
-- `app.ts` and `routes/` only wire HTTP to controllers (stream lives in `app.ts`, vehicles in `routes/`).
+- `app.ts` and `routes/` only wire HTTP to controllers (stream and sim live in `app.ts`, vehicles in `routes/`).
 - Controllers validate, map HTTP, call models, set status codes. No SQL.
 - Models own SQL via `db/statements.ts` / `db/database.ts`. No `req`/`res`.
 
@@ -19,14 +19,26 @@ app.ts + routes → Controllers → Models → SQLite
 - Validate with `@fleet-live/shared` (`validateVehicleInput`, `parseVehicleListQuery`, …).
 - Throw `AppError` subclasses from `lib/errors.ts`. User-facing `error`/`fields` are German; `code` is English (`VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`).
 - Unique license plates → `ConflictError` (also via `isUniqueConstraintError` in the error handler).
-- `GET /api/vehicles` returns `{ data, meta }`. `GET /api/vehicles/:id/telemetry` returns `{ data }`. Vehicle JSON is snake_case, including nested telemetry fields.
+- `GET /api/vehicles` returns `{ data, meta }`. `GET /api/vehicles/positions` returns `{ data, meta.truncated }` of last-known positions (slim DTO, optional `bbox=west,south,east,north`, `search`, `drivers` names, and the same `filter` ids as the list). Over `FLEET_POSITIONS_MAX` matches → `truncated` and empty `data` (no sample). `GET /api/vehicles/drivers` returns `{ data: { name, license_plate }[], meta: { total, page, limit, pageCount } }` — search (`search`, `page`) plus optional `names` hydration. `total` is the match count, not the page size; it does not dump the roster. `GET /api/vehicles/:id/telemetry` and `GET /api/vehicles/:id/trips/latest` return `{ data }`. Vehicle JSON is snake_case, including nested telemetry fields.
+- A vehicle without a trip is `{ data: null }`, not a 404. Only a missing vehicle is a 404.
 - No alerts REST API. Unresolved count is `active_alerts` on the vehicle.
 
 ## SSE
 
 - `GET /api/stream` + `POST /api/stream/focus` with `connection_id`.
 - Ticker writes only for the union of focused `DRIVING` vehicles; patches go only to connections that focused that id. `vehicles-changed` goes to every client.
+- A tick writes position, speed and the consumed `fuel_level`; the patch carries all of them.
 - Do not compress `/api/stream`. Do not replace SSE with WebSockets.
+
+## Trips
+
+- `syncTrip` in the vehicle controller owns the lifecycle: into `DRIVING` opens a trip, out of it appends a telemetry point with speed `0` (`recordStandstill`), closes the trip and returns the re-read vehicle.
+- Each tick appends the road vertices of that step to the open trip (`TripModel.appendPoints`) inside the tick transaction. SSE may include `path_delta` (encoded suffix) so the map can grow the line without refetching. The first suffix of a new trip sets `path_reset`.
+- Reaching a simulated route end closes the trip (status stays `DRIVING`). The way back is a new trip.
+- The path grows in SQL (`path = path || ?`). Do not load `trips.path` per tick; only `close` decodes it, once, to simplify.
+- Geometry helpers (`haversineMeters`, `pathLengthMeters`, `simplifyPath`) live in `lib/geo.ts`. Models must not import from `sim/`.
+- The simulator lives in `sim/routes.ts`. Kinematics use `SIM_SECONDS_PER_TICK`, never `config.telemetryTickMs` (that is `0` in tests). Pause/resume is `GET`/`PATCH /api/sim`; it does not change vehicle status.
+- Wall-clock trip duration is meaningless while `TIME_SCALE` compresses time. Do not derive an average speed from it.
 
 ## After changes
 

@@ -1,13 +1,14 @@
 .appHeader {
   display: flex;
   align-items: center;
+  gap: 16px;
 
   padding: 16px;
   border-bottom: 1px solid var(--border);
   text-align: left;
 }
 
-.appHeader a {
+.appBrand {
   font-family: var(--heading);
   font-size: 20px;
   font-weight: 500;
@@ -16,6 +17,31 @@
   letter-spacing: -0.3px;
 }
 
-.appHeader a:hover {
+.appBrand:hover {
   color: var(--accent);
+}
+
+.appNav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.appNav a {
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.appNav a:hover,
+.appNav a.active {
+  color: var(--text-h);
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
 }

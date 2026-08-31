@@ -112,10 +112,14 @@ export const VehicleTable = ({
                     : styles.vehicleTable
             }
         >
+            <h1 className={styles.title}>Fahrzeuge</h1>
+
             <TableToolbar
                 search={tableState.search}
                 onSearchChange={setSearch}
                 searchPlaceholder="Kennzeichen oder Fahrer suchen..."
+                searchAriaLabel="Kennzeichen oder Fahrer suchen"
+                addNewLabel="Fahrzeug anlegen"
                 isEditing={isEditing}
                 onToggleEditMode={toggleEditMode}
                 selectedCount={selectedIds.length}
@@ -132,6 +136,7 @@ export const VehicleTable = ({
                     filters={filtersWithCounts}
                     activeFilterId={tableState.filterId}
                     onFilterChange={setFilter}
+                    allCount={meta?.counts.all}
                 />
             )}
 
@@ -159,6 +164,7 @@ export const VehicleTable = ({
                 onRowClick={onSelectVehicle}
                 sortConfig={tableState.sortConfig}
                 onSort={handleSort}
+                caption="Fahrzeugliste"
                 isLoading={isLoading}
                 skeletonRowCount={Math.min(tableState.limit, 10)}
                 emptyContent={
@@ -190,7 +196,11 @@ export const VehicleTable = ({
                                 )}
                             </div>
                         </div>
-                    ) : undefined
+                    ) : tableState.search || tableState.filterId ? (
+                        "Keine Fahrzeuge passen zu Suche und Filter."
+                    ) : (
+                        "Keine Fahrzeuge vorhanden."
+                    )
                 }
             />
 

@@ -31,7 +31,11 @@ const environmentSchema = z.object({
      */
     TELEMETRY_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(32),
 
-    /** Rolling Window: so viele Telemetriepunkte bleiben pro Fahrzeug. */
+    /**
+     * Rolling Window: so viele Telemetriepunkte bleiben pro Fahrzeug.
+     * Nur der Live-Puffer — der gefahrene Verlauf hängt an der Fahrt
+     * (`trips.path`) und nicht an dieser Grenze.
+     */
     TELEMETRY_KEEP_PER_VEHICLE: z.coerce
         .number()
         .int()

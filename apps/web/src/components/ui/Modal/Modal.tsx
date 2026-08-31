@@ -6,6 +6,7 @@ interface ModalProps {
     onClose: () => void;
     title: string;
     children: ReactNode;
+    size?: "md" | "lg";
 }
 
 export const Modal = ({
@@ -13,6 +14,7 @@ export const Modal = ({
     onClose,
     title,
     children,
+    size = "md",
 }: ModalProps) => {
     const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -37,7 +39,11 @@ export const Modal = ({
     return (
         <dialog
             ref={dialogRef}
-            className={styles.dialog}
+            className={
+                size === "lg"
+                    ? `${styles.dialog} ${styles.dialogLg}`
+                    : styles.dialog
+            }
             aria-label={title}
             onClose={onClose}
             onClick={(event) => {

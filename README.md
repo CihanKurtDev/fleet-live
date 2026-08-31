@@ -16,11 +16,10 @@ This is a personal development project focused on learning and applying full-sta
 
 The application is being developed in several stages.
 
-The **vehicle REST API**, **server-driven vehicle list** and **live telemetry stream** are connected to the React UI. The current stage focuses on map visualization and more realistic movement.
+The **vehicle REST API**, **server-driven vehicle list**, **live telemetry stream**, the **detail map** (marker, live movement, trail) and the **fleet map** (`/fleet`) are connected to the React UI.
 
 Future iterations will add:
 
-* Vehicle visualization on a map
 * Companies and users
 * Authentication and authorization
 * Multi-tenant data isolation
@@ -50,6 +49,7 @@ The backend serves paginated vehicle queries over SQLite, and the frontend talks
 * Health endpoint
 * SSE telemetry stream with per-connection focus
 * Telemetry history API (rolling window per vehicle)
+* Trip data model with the driven path as an encoded polyline
 * Separate frontend and API applications
 * Shared domain package for types, validation and list query contract
 * Field-level validation errors in API responses
@@ -60,12 +60,13 @@ The backend serves paginated vehicle queries over SQLite, and the frontend talks
 * Live table and detail updates for focused driving vehicles
 * Vehicle detail page
 * Create, edit and delete vehicle UI
+* Leaflet map on the vehicle detail page (marker, SSE movement, trail from the trip)
+* Fleet map (`/fleet`): last positions in the viewport, live movement for driving vehicles in view
+* Trips: the driven path stored per trip as an encoded polyline, simplified when the trip ends
+* Simulated movement on baked road geometries with a city/highway speed profile
+* Simulated fuel consumption while driving
+* Simulation pause/resume (`GET`/`PATCH /api/sim`)
 * API integration tests (`node:test` + SuperTest)
-
-### Currently being developed
-
-* Map visualization
-* More realistic movement (speed limits, routes)
 
 ### Planned
 
@@ -201,17 +202,24 @@ The first development milestone is a reliable REST API for vehicle management.
 | Method   | Endpoint                        | Description                                      |
 | -------- | ------------------------------- | ------------------------------------------------ |
 | `GET`    | `/api/vehicles`                 | Paginated vehicle list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
+| `GET`    | `/api/vehicles/positions`       | Last positions for the fleet map (`bbox`, `search`, `filter`) |
+| `GET`    | `/api/vehicles/drivers`         | Search drivers (`search`, `page`; `meta.total` is the match count; optional `names` hydrates a selection) |
 | `GET`    | `/api/vehicles/:id`             | Get a vehicle                                    |
 | `GET`    | `/api/vehicles/:id/telemetry`   | Recent telemetry points (`limit`: 10, 25, 50, 100; default 50) |
+| `GET`    | `/api/vehicles/:id/trips/latest`| Running trip, else the last finished one (`data: null` if never driven) |
 | `POST`   | `/api/vehicles`                 | Create a vehicle (`Location` header on `201`)    |
 | `PUT`    | `/api/vehicles/:id`             | Replace a vehicle                                |
 | `PATCH`  | `/api/vehicles/:id`             | Update a vehicle                                 |
 | `DELETE` | `/api/vehicles/:id`             | Delete a vehicle                                 |
 | `GET`    | `/api/stream`                   | SSE: `connected` (with `connection_id`), telemetry patches, `vehicles-changed` |
 | `POST`   | `/api/stream/focus`             | `{ connection_id, ids }` — focus for that SSE connection |
+| `GET`    | `/api/sim`                      | Simulator ticker: `{ running, available }`       |
+| `PATCH`  | `/api/sim`                      | `{ running }` — pause or resume the ticker       |
 | `GET`    | `/api/health`                   | Check API health                                 |
 
 `GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` for the filter chips (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
+
+`GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions (`id`, `license_plate`, `driver_name`, `status`, `latitude`, `longitude`, `speed`, `recorded_at`), not the paginated list. Optional `bbox=west,south,east,north` limits the query to the visible map; `search` matches plate and driver (same as the list); `drivers` is a list of `driver_name` values (`drivers=Anna&drivers=Max` or comma-separated; empty means all); `filter` uses the same ids as the list. Vehicles without telemetry are omitted. If more than `FLEET_POSITIONS_MAX` (2000) would match, `truncated` is true and `data` is empty — the map does not show an arbitrary sample. At most `FLEET_DRIVERS_MAX` (50) names per query.
 
 Query parameters are defined once in `@fleet-live/shared` (`vehicleListQuerySchema`). Invalid sort keys or limits are rejected with `400`. Sort keys and filters are snake_case (`active_alerts`, `low_fuel`). Default page size is `10`; allowed limits are `10`, `25`, `50` and `100`.
 
@@ -245,6 +253,8 @@ Vehicles currently contain information such as:
 * Status
 * Creation timestamp
 
+Only license plate and driver are master data a person maintains. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) and is changed through starting or ending a trip, not by picking a value in a form. `fuel_level` is a measurement while the vehicle is driving; for vehicles without live reporting it stays manually maintainable.
+
 Vehicle responses additionally contain:
 
 * Latitude, longitude, speed and timestamp of the last telemetry record
@@ -273,7 +283,8 @@ List state (search, filter, sort, page, limit) lives in the URL. Reloading keeps
 | --------------- | ------------------------------------ |
 | `/`             | Redirects to the vehicle list        |
 | `/vehicles`     | Vehicle list and creation dialog     |
-| `/vehicles/:id` | Vehicle details, editing and removal |
+| `/vehicles/:id` | Vehicle details, map/trail, editing and removal |
+| `/fleet`        | Fleet map (last positions, live movement) |
 
 ## Vehicle list
 
@@ -293,7 +304,13 @@ It supports:
 
 Vehicles can be created, edited and deleted through the UI.
 
+The edit form only covers master data. Status is a badge (what the vehicle reports), not a control. Fuel is read-only while driving. The header can pause or resume the simulator and switches between the vehicle list and the fleet map.
+
 The forms validate their input with the same validation function the API uses, which comes from the shared package.
+
+## Fleet map
+
+`/fleet` shows last-known positions for the drivers you pick, in the visible map — not the current list page and not the whole fleet. Status chips and plate search stay off until that selection exists. If the viewport has more than 2000 matches, the map shows no markers — it does not paint a random sample. **Fahrer** opens a modal to pick people (`driver_name`, one vehicle each) by name or plate. That is a view filter, not a saved group. The toolbar shows how many markers are in the snapshot. Driving vehicles in that snapshot receive live SSE ticks (same focus mechanism as the list, capped at 150). There is no trail here — the driven path stays on the detail page. Click a marker to open the vehicle.
 
 See [apps/docs/table.md](apps/docs/table.md) for a detailed description of the table component.
 
@@ -313,15 +330,36 @@ Telemetry data includes information such as:
 
 The last telemetry record of a vehicle is included in the vehicle API responses.
 
-`GET /api/vehicles/:id/telemetry` returns the recent points as `{ data }` in chronological order, for a future map trail.
+`GET /api/vehicles/:id/telemetry` returns the recent points as `{ data }` in chronological order. That is the live buffer (marker, newest movement), not the trail — the trail comes from `GET /api/vehicles/:id/trips/latest`.
 
-A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, and the open detail vehicle). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written. Telemetry patches are delivered only to connections that included the vehicle in their focus. `vehicles-changed` is still sent to every open stream.
+A ticker writes new points only for focused vehicles with status `DRIVING`. The SSE `connected` event includes a `connection_id`. The frontend posts `{ connection_id, ids }` to `POST /api/stream/focus` (visible list page plus neighbours, the open detail vehicle, and driving vehicles on the fleet map). Each connection has its own focus list; the ticker uses the union. Without focus, nothing is written. Telemetry patches are delivered only to connections that included the vehicle in their focus. `vehicles-changed` is still sent to every open stream.
 
-After each insert, older points of that vehicle are deleted so at most `TELEMETRY_KEEP_PER_VEHICLE` rows remain (default 100). This is a rolling window, not a long-term archive.
+After each insert, older points of that vehicle are deleted so at most `TELEMETRY_KEEP_PER_VEHICLE` rows remain (default 100). Raw telemetry is only the live buffer for the marker and the newest movement — the driven path lives on the trip (see below), so this limit no longer decides how much of the route is visible.
 
-Speed currently random-walks around the last value instead of jumping.
+Ending a trip writes a final point with speed `0` at the last known position, so a parked vehicle does not keep its cruising speed.
 
-Map-based movement is still open; the history endpoint is what the trail will read.
+Focused `DRIVING` vehicles follow baked OSRM polylines (no routing at runtime). Progress is distance along the route from a city/highway/city speed profile; displayed km/h tracks that limit with light noise. A time scale keeps a typical corridor in the 1–2 minute range.
+
+## Trips
+
+A trip is the durable record of one drive: it opens when a vehicle starts driving and closes when it stops.
+
+The problem it solves: a rolling window of raw points is the wrong unit for a route. How many kilometres it covers depends on the reporting interval and the speed, not on the drive, so the trail visibly crawls away behind a vehicle on a long haul — and forwarding companies drive hundreds of kilometres.
+
+The number of vertices needed to *draw* a path is not proportional to its length. A 300 km motorway run is geometrically simple. So each reported position is appended to `trips.path` as an [encoded polyline](https://developers.google.com/maps/documentation/utilities/polylinealgorithm) (precision 5, roughly 6 bytes per point) and the raw row is free to expire:
+
+* **Appending is O(1).** The row keeps its last point in `last_latitude` / `last_longitude`, because polyline deltas need the predecessor. The string grows in SQL (`path = path || ?`), so the existing path is never read back into Node. Positions closer than 20 m to the previous one are dropped as noise.
+* **Closing simplifies.** On stop the path is decoded, run through Ramer-Douglas-Peucker at 12 m (below the width of a motorway, so the drawn line does not change) and re-encoded. Motorway legs shrink by roughly an order of magnitude.
+* **`distance_m` stays the sum of the reported segments**, not the length of the simplified line. The vehicle drove the full distance.
+
+A 300 km trip is therefore one row of a few KB and one request, instead of thousands of rows and a guessed `LIMIT`. The detail map reads `GET /api/vehicles/:id/trips/latest` once and extends the line from the SSE stream.
+
+Deliberate trade-offs:
+
+* A polyline carries no per-point speed or timestamp. Detail resolution stays in the live window; the trip keeps `distance_m` and `max_speed`, which is what a fleet report asks for.
+* Distance and top speed are shown for finished trips only. They are fetched once, so during a drive the numbers would sit frozen on screen.
+* The row is rewritten on every append. At this scale that is fine; if it ever hurts, the fix is chunking the path into append-only segment rows.
+* No route-level retention policy yet. Trips are small, but a per-tenant retention rule belongs to Phase 4, where the data becomes company-owned and legally relevant.
 
 The intended flow is:
 
@@ -346,7 +384,7 @@ Telemetry
           Map
 ```
 
-This will allow vehicles to appear on a map and move over time without requiring real GPS hardware.
+Vehicles appear on the detail map and on the fleet map, and move over time without real GPS hardware.
 
 ---
 
@@ -358,7 +396,9 @@ Alerts are intended to represent events such as abnormal vehicle behaviour or ot
 
 The number of unresolved alerts per vehicle is already exposed through the vehicle API and used in the frontend to highlight and filter affected vehicles.
 
-The alert system will be expanded as the vehicle and telemetry functionality matures.
+There is no alerts REST API or UI yet — only `active_alerts` on the vehicle.
+
+**Optional later:** speeding (and similar driving events) as alert types. That needs a real speed limit per road segment (map data), not the simulator’s city/highway profile. The trip polyline has no per-point speed; live speed stays in the telemetry window.
 
 ---
 
@@ -372,10 +412,13 @@ The current schema contains:
 users
 vehicles
 telemetry
+trips
 alerts
 ```
 
-Vehicles are related to telemetry and alerts through foreign keys.
+Vehicles are related to telemetry, trips and alerts through foreign keys.
+
+A partial unique index on `trips(vehicle_id) WHERE ended_at IS NULL` keeps the "one drive at a time" rule in the database rather than in the order of controller calls.
 
 The database also contains indexes for frequently accessed telemetry data.
 
@@ -387,7 +430,7 @@ A development seed script is provided to create example data.
 
 The project is intentionally being developed incrementally.
 
-Instead of implementing authentication, companies, multi-tenancy and map visualization immediately, the focus is on getting the underlying vehicle functionality correct first.
+Instead of implementing authentication, companies and multi-tenancy immediately, the focus is on getting the underlying vehicle and map functionality correct first.
 
 The planned development path is:
 
@@ -398,7 +441,7 @@ The planned development path is:
        ↓
 3. API integration + live telemetry
        ↓
-4. Map (detail marker, then live movement; fleet map later)
+4. Map (detail marker, live movement, fleet view)
        ↓
 5. Companies
        ↓
@@ -426,6 +469,7 @@ Company
    │
    └── Vehicles
           ├── Telemetry
+          ├── Trips
           └── Alerts
 ```
 
@@ -524,7 +568,7 @@ Useful environment variables for the API (validated on startup):
 | `CORS_ORIGIN` | `*` | |
 | `TELEMETRY_TICK_MS` | `400` | `0` disables the simulator |
 | `TELEMETRY_BATCH_SIZE` | `32` | Cap per tick on the union of connection focus ids |
-| `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Rolling window: max telemetry rows per vehicle |
+| `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Rolling window of raw points per vehicle (live buffer only) |
 | `LOG_LEVEL` | `info` | |
 | `NODE_ENV` | `development` | Rate limiting is production-only |
 
@@ -596,7 +640,7 @@ This includes example:
 * Telemetry
 * Alerts
 
-`npm run db:seed:large` replaces the vehicle set with a much larger sample (unique plates) so pagination, search and the live stream can be exercised under load.
+`npm run db:seed:large` replaces the vehicle set with a much larger sample (unique plates and unique driver names — one driver per vehicle) so pagination, search and the live stream can be exercised under load.
 
 ---
 
@@ -606,9 +650,6 @@ This project is **not production-ready**.
 
 The following areas are intentionally incomplete:
 
-* Map integration (detail marker and live movement)
-* Map trail UI (history API already exists; rolling window, no long-term archive)
-* Realistic movement / speed limits
 * Authentication
 * Authorization
 * Multi-tenancy
@@ -645,11 +686,19 @@ These are planned development areas rather than features that are currently impl
 Live telemetry (SSE, per-connection focus, list/detail patches) and the telemetry history API are already in place. This phase is the map on top of that last known point — not a separate telemetry milestone.
 
 * [x] Telemetry history API (`GET /api/vehicles/:id/telemetry`, rolling window)
-* [ ] Map on the vehicle detail page
-* [ ] Marker at the last telemetry position
-* [ ] Marker moves with SSE updates
-* [ ] Compact position/speed on or next to the map (full stammdaten stay in the form)
-* [ ] Optional later: fleet map on the list, trail from recent points (reads the history API)
+* [x] Map on the vehicle detail page (Leaflet)
+* [x] Marker at the last telemetry position
+* [x] Marker moves with SSE updates
+* [x] Compact position/speed on or next to the map (full stammdaten stay in the form)
+* [x] Trail from the trip path (encoded polyline, length-independent)
+* [x] Route-based simulation with city/highway speed limits
+* [x] Fleet map (own route `/fleet` over last positions in the viewport; not the list page)
+
+## Later — optional
+
+Not on the main path (companies, auth, tenants). Capture here so it is not forgotten.
+
+* [ ] Speed-limit alerts (“too fast” / similar). Requires map-derived limits on the route; do not treat the sim’s 50/120 profile as legal limits. Belongs with alerts, not as extra vertices on the trip polyline.
 
 ## Phase 4 — Companies & Users
 
@@ -657,6 +706,8 @@ Live telemetry (SSE, per-connection focus, list/detail patches) and the telemetr
 * [ ] User/company relationship
 * [ ] Authentication
 * [ ] Authorization
+* [ ] `company_id` on vehicles and trips, index `(company_id, started_at DESC)`
+* [ ] Per-tenant retention for trips and raw telemetry (movement data is legally sensitive)
 
 ## Phase 5 — Multi-Tenancy
 
