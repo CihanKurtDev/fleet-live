@@ -10,6 +10,7 @@ import type {
     TableFilter,
 } from "../../types/table";
 import { DriverNameLink } from "../drivers/DriverNameLink";
+import { WarningChip } from "../alerts/WarningChip";
 import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
 import { vehicleStatusLabel } from "./vehicleStatus";
 import styles from "./vehicleTableConfig.module.scss";
@@ -22,12 +23,6 @@ export const vehicleFilters: Array<
     { id: "driving", displayText: "Auf Fahrt" },
     { id: "offline", displayText: "Kein Signal" },
 ];
-
-const WARNING_CHIP_LABELS: Record<AlertType, string> = {
-    SPEEDING: "Tempo",
-    LOW_FUEL: "Tank",
-    OFFLINE: "Funk",
-};
 
 function warningTypes(row: Vehicle): AlertType[] {
     const types = new Set(row.open_alert_types ?? []);
@@ -107,13 +102,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
             return (
                 <span className={styles.chips}>
                     {types.map((type) => (
-                        <span
-                            key={type}
-                            className={styles.chip}
-                            data-type={type}
-                        >
-                            {WARNING_CHIP_LABELS[type]}
-                        </span>
+                        <WarningChip key={type} type={type} />
                     ))}
                 </span>
             );

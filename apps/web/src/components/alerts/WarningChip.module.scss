@@ -1,0 +1,30 @@
+.chip {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--code-bg);
+
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-h);
+    white-space: nowrap;
+
+    &[data-type="SPEEDING"] {
+        border-color: color-mix(in srgb, #dc2626 45%, var(--border));
+        color: #dc2626;
+    }
+
+    &[data-type="LOW_FUEL"] {
+        border-color: color-mix(in srgb, #d97706 50%, var(--border));
+        color: #d97706;
+    }
+
+    &[data-type="OFFLINE"] {
+        border-color: color-mix(in srgb, #94a3b8 55%, var(--border));
+        color: #94a3b8;
+    }
+}

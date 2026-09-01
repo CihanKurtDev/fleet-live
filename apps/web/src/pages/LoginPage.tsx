@@ -34,7 +34,7 @@ export const LoginPage = () => {
             const next =
                 from && from.pathname !== "/login"
                     ? `${from.pathname}${from.search}`
-                    : "/vehicles";
+                    : "/";
             navigate(next, { replace: true });
         } catch (caught: unknown) {
             if (caught instanceof ApiError) {
@@ -57,7 +57,7 @@ export const LoginPage = () => {
         error && !emailError && !passwordError ? error : null;
 
     if (user) {
-        return <Navigate to="/vehicles" replace />;
+        return <Navigate to="/" replace />;
     }
 
     return (

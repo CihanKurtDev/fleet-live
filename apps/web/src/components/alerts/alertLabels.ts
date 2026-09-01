@@ -6,6 +6,12 @@ export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
     OFFLINE: "Kein Signal",
 };
 
+export const ALERT_TYPE_CHIPS: Record<AlertType, string> = {
+    SPEEDING: "Tempo",
+    LOW_FUEL: "Tank",
+    OFFLINE: "Funk",
+};
+
 export const ALERT_SEVERITY_LABELS: Record<AlertSeverity, string> = {
     LOW: "Niedrig",
     MEDIUM: "Mittel",
