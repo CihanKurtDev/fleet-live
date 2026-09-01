@@ -7,6 +7,7 @@ import {
     OFFLINE_AFTER_MS,
 } from "@fleet-live/shared";
 import { app } from "../app";
+import { db } from "../db/database";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
@@ -140,6 +141,34 @@ describe("live LOW_FUEL", () => {
         const inbox = await openInbox(api, "LOW_FUEL");
         assert.equal(inbox.body.data.length, 1);
         assert.equal(inbox.body.data[0].vehicle_id, response.body.id);
+    });
+
+    it("keeps a single open LOW_FUEL row even if a second insert is attempted", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-FU 4",
+            driver_name: "Doppelt",
+            company_id: 1,
+            status: "DRIVING",
+            fuel_level: 10,
+        });
+        drivingPatch(vehicle.id, 1, 10, 4_000_000);
+
+        assert.throws(
+            () => {
+                db.prepare(
+                    `
+                    INSERT INTO alerts (vehicle_id, type, severity, message)
+                    VALUES (?, 'LOW_FUEL', 'MEDIUM', 'doppelt')
+                `,
+                ).run(vehicle.id);
+            },
+            (error: unknown) =>
+                error instanceof Error &&
+                error.message.includes("UNIQUE constraint failed"),
+        );
+
+        const inbox = await openInbox(api, "LOW_FUEL");
+        assert.equal(inbox.body.data.length, 1);
     });
 });
 

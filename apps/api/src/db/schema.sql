@@ -124,3 +124,7 @@ CREATE TABLE IF NOT EXISTS alerts (
         REFERENCES vehicles(id)
         ON DELETE CASCADE
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_per_type
+    ON alerts(vehicle_id, type)
+    WHERE ended_at IS NULL;
