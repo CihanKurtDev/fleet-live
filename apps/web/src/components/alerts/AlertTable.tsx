@@ -193,12 +193,16 @@ export const AlertTable = ({
                         activeFilterId={tableState.filterId}
                         onFilterChange={setFilter}
                         allCount={meta?.counts.all}
+                        groupLabel="Status"
+                        ariaLabel="Status"
                     />
                     <TableFilterBar
                         filters={typeFiltersWithCounts}
                         activeFilterId={query.type ?? null}
                         onFilterChange={setType}
                         allCount={meta?.type_counts?.all}
+                        allLabel="Alle Typen"
+                        groupLabel="Ereignisart"
                         ariaLabel="Ereignisart"
                     />
                 </div>

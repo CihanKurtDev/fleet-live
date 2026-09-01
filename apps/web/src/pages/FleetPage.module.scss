@@ -22,9 +22,9 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-shrink: 0;
-    padding: 12px 16px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     text-align: left;
 }
@@ -57,49 +57,6 @@
     &:disabled {
         opacity: 0.45;
         cursor: not-allowed;
-    }
-}
-
-.chips {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-}
-
-.chip {
-    height: 28px;
-    padding: 0 10px;
-
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--bg);
-
-    font: inherit;
-    font-size: 13px;
-    line-height: 1;
-    color: var(--text);
-    cursor: pointer;
-
-    &:hover {
-        border-color: var(--accent-border);
-        color: var(--text-h);
-    }
-
-    &[aria-pressed="true"] {
-        border-color: var(--accent-border);
-        background: var(--accent-bg);
-        color: var(--text-h);
-    }
-
-    &:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-
-        &:hover {
-            border-color: var(--border);
-            color: var(--text);
-        }
     }
 }
 

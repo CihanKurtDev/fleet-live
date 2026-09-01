@@ -139,6 +139,8 @@ export const VehicleTable = ({
                     activeFilterId={tableState.filterId}
                     onFilterChange={setFilter}
                     allCount={meta?.counts.all}
+                    groupLabel="Status"
+                    ariaLabel="Status"
                 />
             )}
 

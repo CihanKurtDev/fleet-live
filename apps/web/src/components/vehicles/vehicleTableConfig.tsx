@@ -1,4 +1,10 @@
-import { speedBand, type Vehicle, type VehicleFilterId } from "@fleet-live/shared";
+import {
+    ALERT_TYPES,
+    speedBand,
+    type AlertType,
+    type Vehicle,
+    type VehicleFilterId,
+} from "@fleet-live/shared";
 import type {
     TableColumn,
     TableFilter,
@@ -16,6 +22,22 @@ export const vehicleFilters: Array<
     { id: "driving", displayText: "Auf Fahrt" },
     { id: "offline", displayText: "Kein Signal" },
 ];
+
+const WARNING_CHIP_LABELS: Record<AlertType, string> = {
+    SPEEDING: "Tempo",
+    LOW_FUEL: "Tank",
+    OFFLINE: "Funk",
+};
+
+function warningTypes(row: Vehicle): AlertType[] {
+    const types = new Set(row.open_alert_types ?? []);
+
+    if (row.speeding_open) {
+        types.add("SPEEDING");
+    }
+
+    return ALERT_TYPES.filter((type) => types.has(type));
+}
 
 export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
@@ -75,6 +97,26 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "active_alerts",
         displayText: "Warnungen",
         sortable: true,
-        render: (value) => (value > 0 ? value : "—"),
+        render: (_value, { row }) => {
+            const types = warningTypes(row);
+
+            if (types.length === 0) {
+                return "—";
+            }
+
+            return (
+                <span className={styles.chips}>
+                    {types.map((type) => (
+                        <span
+                            key={type}
+                            className={styles.chip}
+                            data-type={type}
+                        >
+                            {WARNING_CHIP_LABELS[type]}
+                        </span>
+                    ))}
+                </span>
+            );
+        },
     },
 ];

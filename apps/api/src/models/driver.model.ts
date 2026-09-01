@@ -4,6 +4,7 @@ import type {
     DriverIncidentCounts,
     DriverListQuery,
     DriverListResponse,
+    DriverSortKey,
     DriverVehicle,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
@@ -84,6 +85,13 @@ const AGG_SELECT = `
     COUNT(a.id) AS all_incidents
 `;
 
+const SORT_SQL: Record<DriverSortKey, string> = {
+    name: "d.name COLLATE NOCASE",
+    vehicle_count: "vehicle_count",
+    open_warnings: "open_warnings",
+    counts: "all_incidents",
+};
+
 export class DriverModel {
     static upsert(companyId: number, name: string): number {
         stmt(INSERT_OR_IGNORE).run(companyId, name);
@@ -115,6 +123,9 @@ export class DriverModel {
             search === ""
                 ? ""
                 : "AND lower(d.name) LIKE ? ESCAPE '#'";
+        const sortKey = query.sort ?? "name";
+        const sortColumn = SORT_SQL[sortKey];
+        const sortDirection = query.dir === "desc" ? "DESC" : "ASC";
 
         const listSql = `
             SELECT
@@ -126,7 +137,7 @@ export class DriverModel {
             WHERE d.company_id = ?
               ${searchSql}
             GROUP BY d.id
-            ORDER BY d.name COLLATE NOCASE, d.id
+            ORDER BY ${sortColumn} ${sortDirection}, d.id ASC
             LIMIT ? OFFSET ?
         `;
 

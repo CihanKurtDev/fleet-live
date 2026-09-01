@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import type { Driver } from "@fleet-live/shared";
 import {
     driverListQuerySchema,
+    isDriverSortKey,
     serializeDriverListQuery,
     type DriverListQuery,
 } from "@fleet-live/shared";
@@ -14,6 +15,8 @@ function parseParams(searchParams: URLSearchParams): DriverListQuery {
         search: searchParams.get("search") ?? "",
         page: searchParams.get("page") ?? undefined,
         limit: searchParams.get("limit") ?? undefined,
+        sort: searchParams.get("sort") ?? undefined,
+        dir: searchParams.get("dir") ?? undefined,
     };
 
     const parsed = driverListQuerySchema.safeParse(raw);
@@ -32,6 +35,12 @@ function parseParams(searchParams: URLSearchParams): DriverListQuery {
         driverListQuerySchema.pick({ limit: true }).safeParse({
             limit: raw.limit,
         }),
+        driverListQuerySchema.pick({ sort: true }).safeParse({
+            sort: raw.sort,
+        }),
+        driverListQuerySchema.pick({ dir: true }).safeParse({
+            dir: raw.dir,
+        }),
     ];
 
     for (const result of candidates) {
@@ -47,6 +56,8 @@ type QueryPatch = {
     search?: string;
     page?: number;
     limit?: DriverListQuery["limit"];
+    sort?: DriverListQuery["sort"] | null;
+    dir?: DriverListQuery["dir"];
 };
 
 export const useDriverListQuery = () => {
@@ -78,6 +89,11 @@ export const useDriverListQuery = () => {
                         search: updates.search ?? previous.search,
                         page: updates.page ?? previous.page,
                         limit: updates.limit ?? previous.limit,
+                        dir: updates.dir ?? previous.dir,
+                        sort:
+                            updates.sort === null
+                                ? undefined
+                                : (updates.sort ?? previous.sort),
                         ...(options.resetPage ? { page: 1 } : {}),
                     };
 
@@ -113,10 +129,44 @@ export const useDriverListQuery = () => {
         [patch],
     );
 
+    const handleSort = useCallback(
+        (key: keyof Driver) => {
+            if (!isDriverSortKey(key)) {
+                return;
+            }
+
+            patch(
+                (() => {
+                    const current = query.sort ?? "name";
+
+                    if (current !== key) {
+                        return { sort: key, dir: "asc" as const };
+                    }
+
+                    if (query.dir === "asc") {
+                        return { sort: key, dir: "desc" as const };
+                    }
+
+                    return { sort: null, dir: "asc" as const };
+                })(),
+                { replace: true },
+            );
+        },
+        [patch, query.sort, query.dir],
+    );
+
     const tableState: TableStateProps<Driver> = {
         search: query.search,
         filterId: null,
-        sortConfig: null,
+        sortConfig: query.sort
+            ? {
+                  key: query.sort,
+                  direction: query.dir,
+              }
+            : {
+                  key: "name",
+                  direction: "asc",
+              },
         page: query.page,
         limit: query.limit,
     };
@@ -131,6 +181,7 @@ export const useDriverListQuery = () => {
         apiQuery,
         tableState,
         setSearch,
+        handleSort,
         setPage,
         setLimit,
     };

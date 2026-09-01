@@ -1,10 +1,29 @@
-.filterBar {
+.group {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
 
-    padding-bottom: 12px;
+.groupLabel {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.filterBar {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    max-width: 100%;
+
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--code-bg);
 }
 
 .chip {
@@ -12,12 +31,13 @@
     align-items: center;
     gap: 8px;
 
-    height: 28px;
-    padding: 0 10px;
+    height: 32px;
+    padding: 0 12px;
 
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--bg);
+    border: 0;
+    border-right: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
 
     font: inherit;
     font-size: 13px;
@@ -28,24 +48,30 @@
 
     transition:
         background-color 120ms ease,
-        border-color 120ms ease,
         color 120ms ease;
 
+    &:last-child {
+        border-right: 0;
+    }
+
     &:hover {
-        border-color: var(--accent-border);
         color: var(--text-h);
+        background: var(--bg);
     }
 
     &:focus-visible {
         outline: none;
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        box-shadow: inset 0 0 0 2px var(--accent-border);
     }
 }
 
 .chipActive {
-    border-color: var(--accent-border);
     background: var(--accent-bg);
     color: var(--text-h);
+
+    &:hover {
+        background: var(--accent-bg);
+    }
 }
 
 .count {
@@ -59,12 +85,12 @@
     box-sizing: border-box;
 
     border-radius: 999px;
-    background: var(--code-bg);
+    background: var(--bg);
 
     font-size: 11px;
     font-variant-numeric: tabular-nums;
 }
 
 .chipActive .count {
-    background: var(--bg);
+    background: var(--code-bg);
 }

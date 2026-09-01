@@ -18,6 +18,7 @@ export const driverColumns: TableColumn<Driver>[] = [
     {
         key: "name",
         displayText: "Fahrer",
+        sortable: true,
         render: (value, { row }) => (
             <DriverNameLink driverId={row.id} name={value} />
         ),
@@ -25,16 +26,19 @@ export const driverColumns: TableColumn<Driver>[] = [
     {
         key: "vehicle_count",
         displayText: "Fahrzeug(e)",
+        sortable: true,
         render: (_value, { row }) => vehicleLabel(row),
     },
     {
         key: "counts",
         displayText: "Verstöße",
-        render: (value) => value.all,
+        sortable: true,
+        render: (value) => `${value.all} gesamt`,
     },
     {
         key: "open_warnings",
         displayText: "Davon offen",
-        render: (value) => value,
+        sortable: true,
+        render: (value) => `${value} offen`,
     },
 ];

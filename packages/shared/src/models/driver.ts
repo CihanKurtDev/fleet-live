@@ -49,6 +49,15 @@ export type DriverDetailResponse = {
     data: DriverDetail;
 };
 
+export const DRIVER_SORT_KEYS = [
+    "name",
+    "vehicle_count",
+    "open_warnings",
+    "counts",
+] as const;
+
+export type DriverSortKey = (typeof DRIVER_SORT_KEYS)[number];
+
 export const driverListQuerySchema = z.object({
     search: z.preprocess(
         firstQueryString,
@@ -78,6 +87,14 @@ export const driverListQuerySchema = z.object({
             )
             .default(10),
     ),
+    sort: z.preprocess(
+        emptyToUndefined,
+        z.enum(DRIVER_SORT_KEYS, { error: "Ungültiges Sortierfeld." }).optional(),
+    ),
+    dir: z.preprocess(
+        emptyToUndefined,
+        z.enum(["asc", "desc"], { error: "Ungültige Sortierrichtung." }).default("asc"),
+    ),
 });
 
 export type DriverListQuery = z.infer<typeof driverListQuerySchema>;
@@ -95,6 +112,11 @@ export function serializeDriverListQuery(
         params.set("search", query.search);
     }
 
+    if (query.sort) {
+        params.set("sort", query.sort);
+        params.set("dir", query.dir);
+    }
+
     if (query.page !== 1) {
         params.set("page", String(query.page));
     }
@@ -108,3 +130,10 @@ export function serializeDriverListQuery(
 
 /** Compile-time check that incident counts cover every alert type. */
 export const DRIVER_INCIDENT_TYPES = ALERT_TYPES;
+
+export function isDriverSortKey(value: unknown): value is DriverSortKey {
+    return (
+        typeof value === "string" &&
+        (DRIVER_SORT_KEYS as readonly string[]).includes(value)
+    );
+}

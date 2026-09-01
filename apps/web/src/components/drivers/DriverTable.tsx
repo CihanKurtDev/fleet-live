@@ -15,7 +15,7 @@ interface DriverTableProps {
 }
 
 export const DriverTable = ({ onSelectDriver }: DriverTableProps) => {
-    const { apiQuery, tableState, setSearch, setPage, setLimit } =
+    const { apiQuery, tableState, setSearch, handleSort, setPage, setLimit } =
         useDriverListQuery();
     const { data, isLoading, isFetching, error, pageCount, total } =
         useDriverList(apiQuery);
@@ -27,7 +27,7 @@ export const DriverTable = ({ onSelectDriver }: DriverTableProps) => {
         tableState,
         setSearch,
         setFilter: () => undefined,
-        handleSort: () => undefined,
+        handleSort,
         setPage,
         setLimit,
     });
@@ -48,8 +48,7 @@ export const DriverTable = ({ onSelectDriver }: DriverTableProps) => {
         >
             <h1 className={styles.title}>Fahrer</h1>
             <p className={styles.lead}>
-                Verstöße zählen alle Incidents eines Fahrers, auch erledigte.
-                Offene Warnungen gehören in die Inbox.
+                Offene Warnungen sind die Inbox; Verstöße die Historie.
             </p>
 
             <TableToolbar
@@ -75,6 +74,8 @@ export const DriverTable = ({ onSelectDriver }: DriverTableProps) => {
                 rows={paginatedRows}
                 getRowKey={(driver) => driver.id}
                 onRowClick={onSelectDriver}
+                sortConfig={tableState.sortConfig}
+                onSort={handleSort}
                 caption="Fahrerliste"
                 isLoading={isLoading}
                 skeletonRowCount={Math.min(tableState.limit, 10)}

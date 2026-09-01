@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AlertType } from "./alert";
 
 export const VEHICLE_STATUSES = [
     "IDLE",
@@ -41,6 +42,11 @@ export type Vehicle = {
      * unabhängig davon ob der Dispatcher die Inbox-Zeile schon erledigt hat.
      */
     speeding_open: boolean;
+    /**
+     * Offene Inbox-Typen (`resolved_at` null). Die Tempo-Anzeige kommt zusätzlich
+     * aus `speeding_open`, auch wenn die Inbox-Zeile schon erledigt ist.
+     */
+    open_alert_types: AlertType[];
     created_at: string;
     driver_id: number;
 };

@@ -227,6 +227,7 @@ describe("SPEEDING events", () => {
         const whileOpen = await api.get(`/api/vehicles/${vehicle.id}`);
         assert.equal(whileOpen.body.speeding_open, true);
         assert.equal(whileOpen.body.active_alerts, 1);
+        assert.deepEqual(whileOpen.body.open_alert_types, ["SPEEDING"]);
 
         const belowAt = start + SPEEDING_OPEN_AFTER_MS + 3_000 + TICK_MS;
         patchAt(vehicle.id, 1, CITY_LIMIT, belowAt);

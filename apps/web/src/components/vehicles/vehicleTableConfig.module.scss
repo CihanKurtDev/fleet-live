@@ -6,3 +6,29 @@
         font-weight: 650;
     }
 }
+
+.chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--code-bg);
+
+    font-size: 12px;
+    line-height: 1;
+    color: var(--text-h);
+    white-space: nowrap;
+
+    &[data-type="SPEEDING"] {
+        border-color: color-mix(in srgb, #dc2626 40%, var(--border));
+    }
+}

@@ -99,7 +99,7 @@ export const VehicleAlertList = ({
     return (
         <>
             <div className={styles.header}>
-                <h2 className={styles.panelTitle}>Warnungen</h2>
+                <h2 className={styles.panelTitle}>Offene Warnungen</h2>
                 <Link className={styles.inboxLink} to={inboxHref}>
                     Zur Inbox
                 </Link>

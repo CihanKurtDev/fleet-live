@@ -1,18 +1,24 @@
 .driverTable {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     text-align: left;
     padding: 0 16px;
     transition: opacity 120ms ease;
 }
 
 .title {
-    margin: 16px 0 8px;
+    flex-shrink: 0;
+    margin: 12px 0 4px;
     font-size: 22px;
     font-weight: 650;
     color: var(--text-h);
 }
 
 .lead {
-    margin: 0 0 12px;
+    flex-shrink: 0;
+    margin: 0 0 4px;
     font-size: 14px;
     color: var(--text);
 }
@@ -22,12 +28,14 @@
 }
 
 .error {
+    flex-shrink: 0;
     margin: 8px 0 0;
     color: var(--danger, #b42318);
     font-size: 14px;
 }
 
 .status {
+    flex-shrink: 0;
     margin: 8px 0 0;
     color: var(--text);
     font-size: 13px;

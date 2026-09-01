@@ -106,6 +106,9 @@ describe("live LOW_FUEL", () => {
         assert.equal(stillOpen.body.data[0].details.fuel_level, 8);
         assert.equal(stillOpen.body.data[0].message, "Tankstand 8 %");
 
+        const detail = await api.get(`/api/vehicles/${vehicle.id}`);
+        assert.deepEqual(detail.body.open_alert_types, ["LOW_FUEL"]);
+
         drivingPatch(vehicle.id, 1, LOW_FUEL_THRESHOLD_PERCENT, start + 800);
         const after = await openInbox(api, "LOW_FUEL");
         assert.equal(after.body.data.length, 1);

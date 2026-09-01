@@ -132,6 +132,15 @@ export {
     speedBand,
 } from "./models/speedBand";
 
+export {
+    DRIVER_INCIDENT_TYPES,
+    DRIVER_SORT_KEYS,
+    driverListQuerySchema,
+    isDriverSortKey,
+    parseDriverListQuery,
+    serializeDriverListQuery,
+} from "./models/driver";
+
 export type {
     Driver,
     DriverDetail,
@@ -140,14 +149,8 @@ export type {
     DriverListMeta,
     DriverListQuery,
     DriverListResponse,
+    DriverSortKey,
     DriverVehicle,
-} from "./models/driver";
-
-export {
-    DRIVER_INCIDENT_TYPES,
-    driverListQuerySchema,
-    parseDriverListQuery,
-    serializeDriverListQuery,
 } from "./models/driver";
 
 export type {
