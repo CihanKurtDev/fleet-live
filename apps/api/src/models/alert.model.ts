@@ -326,6 +326,22 @@ export class AlertModel {
         };
     }
 
+    static listOpenNewest(companyId: number, limit: number): Alert[] {
+        const rows = stmt(
+            `
+            SELECT ${ALERT_COLUMNS}
+            FROM alerts a
+            INNER JOIN vehicles v ON v.id = a.vehicle_id
+            WHERE v.company_id = ?
+              AND a.resolved_at IS NULL
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT ?
+            `,
+        ).all(companyId, limit) as AlertSqlRow[];
+
+        return rows.map(toAlert);
+    }
+
     static getById(id: number, companyId: number): Alert | undefined {
         const row = stmt(SELECT_ONE).get(id, companyId) as
             | AlertSqlRow

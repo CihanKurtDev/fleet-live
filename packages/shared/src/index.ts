@@ -154,6 +154,20 @@ export type {
 } from "./models/driver";
 
 export type {
+    BriefingCounts,
+    BriefingData,
+    BriefingDriver,
+    BriefingOfflineVehicle,
+    BriefingResponse,
+} from "./models/briefing";
+
+export {
+    BRIEFING_DRIVER_LIMIT,
+    BRIEFING_OFFLINE_LIMIT,
+    BRIEFING_OPEN_ALERT_LIMIT,
+} from "./models/briefing";
+
+export type {
     FleetDriver,
     FleetDriversQuery,
     FleetDriversResponse,
