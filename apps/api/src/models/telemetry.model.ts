@@ -40,7 +40,7 @@ const SELECT_LAST_POSITION = `
     WHERE v.id = ?
 `;
 
-const UPDATE_FUEL = `UPDATE vehicles SET fuel_level = ? WHERE id = ?`;
+const UPDATE_FUEL_AND_LIMIT = `UPDATE vehicles SET fuel_level = ?, speed_limit_kmh = ? WHERE id = ?`;
 
 const INSERT_TELEMETRY = `
     INSERT INTO telemetry (vehicle_id, latitude, longitude, speed, recorded_at)
@@ -107,7 +107,7 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
 
     const insert = stmt(INSERT_TELEMETRY);
     const prune = stmt(PRUNE_TELEMETRY);
-    const updateFuel = stmt(UPDATE_FUEL);
+    const updateFuelAndLimit = stmt(UPDATE_FUEL_AND_LIMIT);
     const recordedAt = nowSqlite();
     const patches: TickedPatch[] = [];
     const keep = config.telemetryKeepPerVehicle;
@@ -123,7 +123,8 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
                 },
                 vehicle.speed,
             );
-            const { lat: latitude, lng: longitude, speed, path } = next;
+            const { lat: latitude, lng: longitude, speed, path, limit_kmh } =
+                next;
             const fuelLevel = nextFuelLevel(vehicle.fuel_level, next.meters);
 
             insert.run(
@@ -135,7 +136,7 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
             );
 
             prune.run(vehicle.id, vehicle.id, keep);
-            updateFuel.run(fuelLevel, vehicle.id);
+            updateFuelAndLimit.run(fuelLevel, limit_kmh, vehicle.id);
 
             const pathDelta = TripModel.appendPoints(
                 vehicle.id,
@@ -151,6 +152,7 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
                 id: vehicle.id,
                 company_id: vehicle.company_id,
                 speed,
+                speed_limit_kmh: limit_kmh,
                 latitude,
                 longitude,
                 recorded_at: recordedAt,

@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 type TableColumn = {
     name: string;
@@ -480,6 +480,23 @@ function migrateToV10(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+function ensureVehiclesSpeedLimit(database: DatabaseSync) {
+    const names = columnNames(database, "vehicles");
+
+    if (names.size === 0) {
+        return;
+    }
+
+    if (!names.has("speed_limit_kmh")) {
+        database.exec("ALTER TABLE vehicles ADD COLUMN speed_limit_kmh REAL");
+    }
+}
+
+function migrateToV11(database: DatabaseSync) {
+    ensureVehiclesSpeedLimit(database);
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -526,6 +543,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV10(database);
     }
 
+    if (currentVersion < 11) {
+        migrateToV11(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -535,6 +556,7 @@ export function migrate(database: DatabaseSync) {
     ensureDriversTable(database);
     ensureVehiclesDriverId(database);
     ensureAlertsEventColumns(database);
+    ensureVehiclesSpeedLimit(database);
     applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {

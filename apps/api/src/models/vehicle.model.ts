@@ -64,6 +64,7 @@ const SELECT_ONE = `
         t.latitude,
         t.longitude,
         t.speed,
+        v.speed_limit_kmh,
         t.recorded_at,
         v.active_alerts,
         ${SPEEDING_OPEN_SQL},
@@ -138,6 +139,11 @@ function toVehicle(row: ListRow): Vehicle {
     return {
         ...vehicle,
         speeding_open: Boolean(speeding_open),
+        speed_limit_kmh:
+            vehicle.speed_limit_kmh === null ||
+            vehicle.speed_limit_kmh === undefined
+                ? null
+                : Number(vehicle.speed_limit_kmh),
     };
 }
 
@@ -167,6 +173,7 @@ export class VehicleModel {
                 t.latitude,
                 t.longitude,
                 t.speed,
+                v.speed_limit_kmh,
                 t.recorded_at,
                 v.active_alerts,
                 ${SPEEDING_OPEN_SQL},

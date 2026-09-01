@@ -186,6 +186,7 @@ export const VehicleDetailPage = () => {
         speed: vehicle.speed,
         status: vehicle.status,
         speeding_open: vehicle.speeding_open,
+        limit_kmh: vehicle.speed_limit_kmh,
     });
     const position =
         vehicle.recorded_at !== null &&

@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_telemetry_id INTEGER,
     active_alerts INTEGER NOT NULL DEFAULT 0,
+    speed_limit_kmh REAL,
     search_text TEXT GENERATED ALWAYS AS (
         lower(license_plate || ' ' || driver_name)
     ) VIRTUAL,

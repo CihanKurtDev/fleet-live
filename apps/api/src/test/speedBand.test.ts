@@ -4,9 +4,10 @@ import { describe, it } from "node:test";
 import {
     formatAlertEvent,
     speedBand,
-    SPEED_HIGH_CRITICAL_KMH,
-    SPEED_HIGH_WARNING_KMH,
+    SPEED_CRITICAL_OVER_LIMIT_KMH,
 } from "@fleet-live/shared";
+
+const CITY_LIMIT = 50;
 
 describe("speedBand", () => {
     it("is normal when not driving, even at 0", () => {
@@ -31,30 +32,44 @@ describe("speedBand", () => {
         });
     });
 
-    it("is orange over the high threshold until an event is open", () => {
+    it("is orange only over the current class limit", () => {
         assert.deepEqual(
-            speedBand({ speed: SPEED_HIGH_WARNING_KMH - 1, status: "DRIVING" }),
+            speedBand({
+                speed: CITY_LIMIT,
+                status: "DRIVING",
+                limit_kmh: CITY_LIMIT,
+            }),
             { band: "normal", reason: null },
         );
         assert.deepEqual(
-            speedBand({ speed: SPEED_HIGH_WARNING_KMH, status: "DRIVING" }),
+            speedBand({
+                speed: CITY_LIMIT + 1,
+                status: "DRIVING",
+                limit_kmh: CITY_LIMIT,
+            }),
             { band: "warning", reason: "high" },
         );
         assert.deepEqual(
             speedBand({
-                speed: SPEED_HIGH_CRITICAL_KMH,
+                speed: 120,
                 status: "DRIVING",
+                limit_kmh: 120,
             }),
-            { band: "warning", reason: "high" },
+            { band: "normal", reason: null },
+        );
+        assert.deepEqual(
+            speedBand({ speed: 95, status: "DRIVING" }),
+            { band: "normal", reason: null },
         );
     });
 
     it("is red while a SPEEDING event is open", () => {
         assert.deepEqual(
             speedBand({
-                speed: SPEED_HIGH_WARNING_KMH,
+                speed: CITY_LIMIT,
                 status: "DRIVING",
                 speeding_open: true,
+                limit_kmh: CITY_LIMIT,
             }),
             { band: "critical", reason: "high" },
         );
@@ -69,10 +84,17 @@ describe("speedBand", () => {
     });
 
     it("does not colour low speed", () => {
-        assert.deepEqual(speedBand({ speed: 5, status: "DRIVING" }), {
-            band: "normal",
-            reason: null,
-        });
+        assert.deepEqual(
+            speedBand({
+                speed: 5,
+                status: "DRIVING",
+                limit_kmh: CITY_LIMIT,
+            }),
+            {
+                band: "normal",
+                reason: null,
+            },
+        );
     });
 });
 
@@ -83,12 +105,12 @@ describe("formatAlertEvent", () => {
                 type: "SPEEDING",
                 message: "Geschwindigkeit überschritten.",
                 details: {
-                    limit_kmh: 90,
-                    max_speed_kmh: 118,
+                    limit_kmh: CITY_LIMIT,
+                    max_speed_kmh: CITY_LIMIT + SPEED_CRITICAL_OVER_LIMIT_KMH + 5,
                     duration_s: 18,
                 },
             }),
-            "118 km/h bei Limit 90 · 18 s",
+            "75 km/h bei Limit 50 · 18 s",
         );
     });
 

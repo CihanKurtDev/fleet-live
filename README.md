@@ -2,9 +2,9 @@
 
 A full-stack fleet management application built with **TypeScript, Node.js, Express, React and SQLite**.
 
-> **Status: Work in progress.** Phases 1–5 are in place (vehicles, UI, live map, login, isolation, alerts, drivers). The live-ops core exists; it is not yet a product a dispatcher would buy. Next is Phase 6 (trustworthy exceptions), not invite/CI.
+> **Status: Work in progress.** Phases 1–5 are in place; Phase 6.1 (road-class SPEEDING) is in place. Next is Phase 6.2 (inbox filter by type), not invite/CI.
 
-This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. GPS is simulated. SPEEDING warnings are live ticker events (8 s over 90 km/h); list colour uses the same threshold. LOW_FUEL and OFFLINE remain seeded.
+This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. GPS is simulated. SPEEDING warnings are live ticker events (8 s over the current sim road-class limit); list colour uses the same limit. LOW_FUEL and OFFLINE remain seeded.
 
 ---
 
@@ -14,7 +14,7 @@ This is closer to a real fleet system than a tutorial: server-driven lists, SSE 
 
 The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream, sim and alert requests are `401`. Other companies’ vehicles are `404`, not listed.
 
-**Next product step:** Phase 6 — make SPEEDING and list colour use the current sim road-class limit (city 50 / highway 120), not the flat 90 km/h demo threshold. The inbox is unusable until that lands. Do not start invite, multi-company membership, or CI/CD.
+**Next product step:** Phase 6.2 — filter the inbox by alert `type` (`SPEEDING` / `LOW_FUEL` / `OFFLINE`). Do not start invite, multi-company membership, or CI/CD.
 
 ---
 
@@ -37,7 +37,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Tenant isolation: `company_id` from the session, never from the client body; plates unique per company; SSE and sim scoped to that company; trips via `trip → vehicle → company`
 * Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts`); live SPEEDING events from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
 * Drivers as entities (`drivers` table, `vehicle.driver_id`); list/detail `/drivers` with incident counts
-* Live speed indicator (`speedBand`: orange over 90 until the event opens, red while `speeding_open`)
+* Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
 * API integration tests (`node:test` + SuperTest)
 
 ### Consciously simplified / demo
@@ -48,7 +48,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * SQLite file database
 * One company per user (no membership table, no company switcher)
 * Alerts: SPEEDING is written by the ticker (one open row per vehicle); LOW_FUEL/OFFLINE are still seed-only. Not OSM, not a general rule engine
-* Live tempo colour uses the same 90 km/h demo threshold (`speedBand` + `speeding_open`) — not the sim’s 50/120 profile and not map limits. No low-speed colour
+* Live tempo colour uses the current sim road-class limit (`speedBand` + `speed_limit_kmh` + `speeding_open`) — not map/OSM limits. A minority of simulated vehicles exceed their class so SPEEDING still fires. No low-speed colour
 * OSM tiles via Leaflet
 
 ### Technical debt (not production-ready)
@@ -63,7 +63,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 
 ### Roadmap (not implemented)
 
-See [Roadmap](#roadmap). Immediate work is Phase 6 (exceptions that a dispatcher can trust). Production auth, CI/CD and OSM speed limits come later.
+See [Roadmap](#roadmap). Immediate work is Phase 6.2 (inbox type filter). Production auth, CI/CD and OSM speed limits come later.
 
 ---
 
@@ -182,7 +182,7 @@ Validation example:
 }
 ```
 
-Vehicle JSON includes last telemetry (or `null`), `active_alerts`, `speeding_open` (unfinished SPEEDING event), and `driver_id`. Write API still takes `driver_name`; the model upserts a driver in that company.
+Vehicle JSON includes last telemetry (or `null`), `speed_limit_kmh`, `active_alerts`, `speeding_open` (unfinished SPEEDING event), and `driver_id`. Write API still takes `driver_name`; the model upserts a driver in that company.
 
 ---
 
@@ -190,7 +190,7 @@ Vehicle JSON includes last telemetry (or `null`), `active_alerts`, `speeding_ope
 
 Master data a person maintains: license plate and driver. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
 
-Responses also include last position/speed/`recorded_at`, `active_alerts`, `speeding_open`, and `created_at`.
+Responses also include last position/speed/`speed_limit_kmh`/`recorded_at`, `active_alerts`, `speeding_open`, and `created_at`.
 
 `company_id` is assigned from the session on create. The client cannot choose it.
 
@@ -267,7 +267,7 @@ Deliberate trade-offs:
 
 Three layers share the same `alerts` rows; they are not three tables:
 
-* **Indicator** — `speedBand` plus `speeding_open`. Orange while over 90 km/h without an open event; red while a SPEEDING row has `ended_at` null. Only `DRIVING`. After the event ends the cell is normal even if the inbox row is still unresolved.
+* **Indicator** — `speedBand` plus `speeding_open`. Orange while over the current `speed_limit_kmh` without an open event; red while a SPEEDING row has `ended_at` null. Only `DRIVING`. After the event ends the cell is normal even if the inbox row is still unresolved.
 * **Warning** — `alerts` where `resolved_at IS NULL`. Operative inbox `/alerts`. Dispatcher acknowledges with `PATCH`. Event end (`ended_at`) is not the same as resolved.
 * **Violation history** — all `alerts` rows, including resolved. Counted per driver on `/drivers`. `resolved_at` means “seen”, not “did not happen”.
 
@@ -275,9 +275,9 @@ The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → comp
 
 `GET /api/alerts` is the company inbox (`{ data, meta }`). Default `filter=open`. Optional `vehicle_id` or `driver_id` (404 if missing or another company). `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`). A second close is idempotent. Viewer may read, not resolve. After a close the API broadcasts `vehicles-changed` so the list count updates.
 
-The ticker writes SPEEDING: 8 s consecutive over 90 km/h, one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Seed still inserts LOW_FUEL/OFFLINE only. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
+The ticker writes SPEEDING: 8 s consecutive over the current sim road-class limit (`speedLimitKmh`: city 50 / highway 120), one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Every 8th simulated vehicle may exceed its class so events still occur. Seed still inserts LOW_FUEL/OFFLINE only. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
 
-**Next (Phase 6.1):** replace the flat 90 with the sim road-class limit. OSM/map-derived legal limits come later and only replace that limit, not the 8 s / hysteresis machine. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
+OSM/map-derived legal limits come later and only replace that limit, not the 8 s / hysteresis machine. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
 
 ---
 
@@ -415,11 +415,10 @@ Controllers validate and map HTTP. Models run SQL. This stays intentionally thin
 
 Not production-ready. Product gaps (Phases 6–13) first, then operations (Phase 14):
 
-* SPEEDING uses a flat 90 km/h demo threshold while the sim drives city 50 / highway 120 — the inbox fills with legal highway speed
 * Only `GET /api/vehicles/:id/trips/latest` — no trip archive in the UI
+* SPEEDING is live against the sim road class; LOW_FUEL / OFFLINE are seed-only
 * Vehicle/driver master data is plate + name + fuel
 * Fleet map draws nothing when the viewport exceeds `FLEET_POSITIONS_MAX`
-* LOW_FUEL / OFFLINE are seed-only
 * Production-grade auth (reset, lockout, CSRF for cross-origin cookies)
 * Multi-company users
 * Frontend tests (no runner yet — do not add Jest/Vitest as a checklist item)
@@ -462,11 +461,11 @@ Do not treat the sim’s 50/120 profile as legal OSM limits. Do not start Phase 
 * [x] Drivers entity, driver pages, live speed indicator
 * [x] Live SPEEDING events (ticker, 8 s over 90) aligned with list colour
 
-## Phase 6 — Trustworthy exceptions **← next**
+## Phase 6 — Trustworthy exceptions **← next (6.2)**
 
-The inbox must be something a dispatcher would open. Today thousands of rows are “120 km/h at limit 90” because the Autobahn profile is 120.
+The inbox must be something a dispatcher would open.
 
-* [ ] **6.1 Road-class limit (do this first).** `SpeedingEventModel` / `speedBand` / ticker use the current sim segment limit (`speedLimitKmh`: city 50, highway 120), not `SPEED_HIGH_WARNING_KMH = 90`. `details.limit_kmh` is that segment limit. Copy stays a route limit, not StVO. A minority of simulated vehicles must be allowed to exceed their class (otherwise SPEEDING never fires). List colour uses the same limit. Affected: `packages/shared` `speedBand`, `apps/api` `lib/speeding.ts`, `models/speedingEvent.model.ts`, sim tick, `apps/api/src/test/speedingEvents.test.ts` / `speedBand.test.ts`.
+* [x] **6.1 Road-class limit.** `SpeedingEventModel` / `speedBand` / ticker use the current sim segment limit (`speedLimitKmh`: city 50, highway 120). `details.limit_kmh` and `vehicle.speed_limit_kmh` are that segment limit. Copy stays a route limit, not StVO. Every 8th simulated vehicle may exceed its class. List colour uses the same limit.
 * [ ] **6.2 Inbox filter by `type`** (`SPEEDING` / `LOW_FUEL` / `OFFLINE`) on `GET /api/alerts` and `/alerts`.
 * [ ] **6.3 Live LOW_FUEL** from the ticker (e.g. under 15% while `DRIVING`), not seed-only. Same `alerts` table, one open row per vehicle per type.
 * [ ] **6.4 Live OFFLINE** when a `DRIVING`/`IDLE` vehicle stops reporting for a threshold. Seed OFFLINE remains until this exists.
@@ -538,7 +537,7 @@ Only after Phases 6–8. The product has to be true before it has to be hosted.
 
 # Project Status
 
-**Work in progress.** Live-ops core (list, map, trip trail, login, isolation, inbox, drivers) is in place. Next build is Phase 6.1: SPEEDING against the sim road class so the inbox is a work list. Treat the codebase as that product path, not as invite/CI work and not as a dispatcher-ready purchase.
+**Work in progress.** Live-ops core is in place and SPEEDING follows the sim road class. Next build is Phase 6.2: filter the inbox by alert type. Treat the codebase as that product path, not as invite/CI work and not as a dispatcher-ready purchase.
 
 If README and code disagree, **code wins**. Agent notes: `.cursor/rules/architecture.mdc`, `AGENTS.md`.
 

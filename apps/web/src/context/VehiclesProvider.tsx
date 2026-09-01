@@ -83,6 +83,9 @@ export const VehiclesProvider = ({
                     longitude: patch.longitude,
                     recorded_at: patch.recorded_at,
                     fuel_level: patch.fuel_level,
+                    ...(patch.speed_limit_kmh !== undefined
+                        ? { speed_limit_kmh: patch.speed_limit_kmh }
+                        : {}),
                     ...(patch.speeding_open !== undefined
                         ? { speeding_open: patch.speeding_open }
                         : {}),
