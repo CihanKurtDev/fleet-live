@@ -2,7 +2,7 @@
 
 fleet-live — fleet management app (TypeScript monorepo). Vehicles, telemetry, and a React UI; live updates over SSE.
 
-Phases 1–5 and 6.1 (road-class SPEEDING) are in place. **Next is Phase 6.2** (inbox filter by alert type). Do not start invite, multi-company membership, or CI/CD. Status detail: `.cursor/rules/architecture.mdc`. Roadmap: README.
+Phases 1–5, 6.1 (road-class SPEEDING) and 6.2 (inbox type filter) are in place. **Next is Phase 6.3** (live LOW_FUEL from the ticker). Do not start invite, multi-company membership, or CI/CD. Status detail: `.cursor/rules/architecture.mdc`. Roadmap: `.cursor/ROADMAP.md` (local, gitignored — not on GitHub). The public README only describes the running system and what dispatchers will notice next.
 
 ## General
 
@@ -14,9 +14,9 @@ Phases 1–5 and 6.1 (road-class SPEEDING) are in place. **Next is Phase 6.2** (
 
 ## Source of truth
 
-- Code is what exists. If README and code disagree, code wins. README Current Status / Roadmap should describe the running system.
+- Code is what exists. If README and code disagree, code wins. README describes the running system and user-visible upcoming work, not the engineering backlog.
 - `apps/docs/table.md` is the table-component spec, not a backlog. Do not add client-side vehicle-list sorting because `sortRows.ts` exists.
-- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts`). SPEEDING rows are live ticker events (8 s over the current sim road-class limit); LOW_FUEL/OFFLINE remain seeded. That is not OSM and not a general rule engine. Phase 6.2 adds an inbox type filter.
+- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts` with optional `type`). SPEEDING rows are live ticker events (8 s over the current sim road-class limit); LOW_FUEL/OFFLINE remain seeded. That is not OSM and not a general rule engine. Phase 6.3 writes live LOW_FUEL.
 
 ## Workflow
 

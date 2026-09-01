@@ -2,9 +2,9 @@
 
 A full-stack fleet management application built with **TypeScript, Node.js, Express, React and SQLite**.
 
-> **Status: Work in progress.** Phases 1–5 are in place; Phase 6.1 (road-class SPEEDING) is in place. Next is Phase 6.2 (inbox filter by type), not invite/CI.
+> **Status: Work in progress.** Live SPEEDING warnings, an inbox with type filters, fleet map, trip trails, and company login are in place. GPS is simulated.
 
-This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. GPS is simulated. SPEEDING warnings are live ticker events (8 s over the current sim road-class limit); list colour uses the same limit. LOW_FUEL and OFFLINE remain seeded.
+This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. SPEEDING warnings are live ticker events (8 s over the current sim road-class limit); list colour uses the same limit. LOW_FUEL and OFFLINE remain seeded.
 
 ---
 
@@ -13,8 +13,6 @@ This is closer to a real fleet system than a tutorial: server-driven lists, SSE 
 `fleet-live` monitors vehicles, last positions, live movement and trip paths for **one company per logged-in user**.
 
 The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream, sim and alert requests are `401`. Other companies’ vehicles are `404`, not listed.
-
-**Next product step:** Phase 6.2 — filter the inbox by alert `type` (`SPEEDING` / `LOW_FUEL` / `OFFLINE`). Do not start invite, multi-company membership, or CI/CD.
 
 ---
 
@@ -35,7 +33,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Session login
 * Roles: `dispatcher` (write + sim pause + resolve alerts) and `viewer` (read only)
 * Tenant isolation: `company_id` from the session, never from the client body; plates unique per company; SSE and sim scoped to that company; trips via `trip → vehicle → company`
-* Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts`); live SPEEDING events from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
+* Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts` with open/resolved and `type` chips); live SPEEDING events from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
 * Drivers as entities (`drivers` table, `vehicle.driver_id`); list/detail `/drivers` with incident counts
 * Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
 * API integration tests (`node:test` + SuperTest)
@@ -61,9 +59,16 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * `CORS_ORIGIN` defaults to `*`; rate limiting is production-only (`NODE_ENV=production`) and is not login-specific
 * No observability beyond request logs
 
-### Roadmap (not implemented)
+### Coming next
 
-See [Roadmap](#roadmap). Immediate work is Phase 6.2 (inbox type filter). Production auth, CI/CD and OSM speed limits come later.
+What dispatchers will notice in the product — not an engineering backlog:
+
+* Tank and no-signal warnings while vehicles are out (today only speeding is live)
+* A briefing on the home page, and the open-warning count in the nav
+* Past trips on the vehicle, not only the current drive
+* Yard fields such as VIN, HU, depot; drivers you can maintain without the vehicle form
+* A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
+* Depot geofences, due-date reminders (HU, licence, UVV), and a CSV for the boss
 
 ---
 
@@ -154,7 +159,7 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | `POST`   | `/api/stream/focus`              | `{ connection_id, ids }` — only vehicles of this company; connection must belong to this company |
 | `GET`    | `/api/sim`                       | `{ running, available }` for **this** company |
 | `PATCH`  | `/api/sim`                       | `{ running }` — pause/resume this company’s simulation |
-| `GET`    | `/api/alerts`                    | Paginated alerts (`filter` open/resolved/all, `vehicle_id`, `driver_id`, `page`, `limit`) |
+| `GET`    | `/api/alerts`                    | Paginated alerts (`filter` open/resolved/all, optional `type`, `vehicle_id`, `driver_id`, `page`, `limit`) |
 | `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }` — close; `dispatcher` only |
 | `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`) with type counts |
 | `GET`    | `/api/drivers/:id`               | Driver, vehicles, incident counts (`404` if missing **or** other company) |
@@ -162,7 +167,7 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 
 `GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
 
-`GET /api/alerts` returns `{ data, meta }` of alerts joined with plate, driver name and `driver_id`. Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Default `filter=open` is `resolved_at IS NULL` (independent of `ended_at`). `meta.counts` is `open` / `resolved` / `all`. Optional `vehicle_id` or `driver_id` (404 if missing or other company).
+`GET /api/alerts` returns `{ data, meta }` of alerts joined with plate, driver name and `driver_id`. Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Default `filter=open` is `resolved_at IS NULL` (independent of `ended_at`). Optional `type` is `SPEEDING` / `LOW_FUEL` / `OFFLINE` (omit = all types). `meta.counts` is `open` / `resolved` / `all` and ignores `type`. `meta.type_counts` is per-type and respects `filter`. Optional `vehicle_id` or `driver_id` (404 if missing or other company).
 
 `GET /api/drivers` returns `{ data, meta }` of drivers for the session company. Counts include **all** alert rows (open and resolved). `open_warnings` is the unresolved subset. `vehicle_plate` is set when the driver has exactly one vehicle. `GET /api/drivers/:id` adds assigned vehicles.
 
@@ -209,7 +214,7 @@ List state lives in the URL. Reloading keeps the view; a fresh visit to `/vehicl
 | `/vehicles`     | List and create dialog |
 | `/vehicles/:id` | Detail, map/trail, alerts, edit, delete |
 | `/fleet`        | Fleet map |
-| `/alerts`       | Warning inbox (open/resolved, optional `vehicle_id` / `driver_id`) |
+| `/alerts`       | Warning inbox (open/resolved, optional `type`, `vehicle_id` / `driver_id`) |
 | `/drivers`      | Driver list (incident counts) |
 | `/drivers/:id`  | Driver detail, vehicles, violation history |
 
@@ -273,11 +278,11 @@ Three layers share the same `alerts` rows; they are not three tables:
 
 The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → company`. `driver_id` on the DTO is the vehicle’s current driver (join). `active_alerts` is the unresolved count (triggers) and remains on the vehicle JSON and list filter.
 
-`GET /api/alerts` is the company inbox (`{ data, meta }`). Default `filter=open`. Optional `vehicle_id` or `driver_id` (404 if missing or another company). `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`). A second close is idempotent. Viewer may read, not resolve. After a close the API broadcasts `vehicles-changed` so the list count updates.
+`GET /api/alerts` is the company inbox (`{ data, meta }`). Default `filter=open`. Optional `type` (`SPEEDING` / `LOW_FUEL` / `OFFLINE`), `vehicle_id` or `driver_id` (404 if missing or another company). `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`). A second close is idempotent. Viewer may read, not resolve. After a close the API broadcasts `vehicles-changed` so the list count updates.
 
 The ticker writes SPEEDING: 8 s consecutive over the current sim road-class limit (`speedLimitKmh`: city 50 / highway 120), one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Every 8th simulated vehicle may exceed its class so events still occur. Seed still inserts LOW_FUEL/OFFLINE only. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
 
-OSM/map-derived legal limits come later and only replace that limit, not the 8 s / hysteresis machine. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
+Live speed stays in the telemetry window; the trip polyline has no per-point speed.
 
 ---
 
@@ -413,133 +418,20 @@ Controllers validate and map HTTP. Models run SQL. This stays intentionally thin
 
 # Current Limitations
 
-Not production-ready. Product gaps (Phases 6–13) first, then operations (Phase 14):
+Not production-ready:
 
-* Only `GET /api/vehicles/:id/trips/latest` — no trip archive in the UI
-* SPEEDING is live against the sim road class; LOW_FUEL / OFFLINE are seed-only
-* Vehicle/driver master data is plate + name + fuel
+* Cookie session is same-origin only; no password reset, lockout, or invite
+* Sim pause lives in process memory; an API restart resumes every tenant
 * Fleet map draws nothing when the viewport exceeds `FLEET_POSITIONS_MAX`
-* Production-grade auth (reset, lockout, CSRF for cross-origin cookies)
-* Multi-company users
-* Frontend tests (no runner yet — do not add Jest/Vitest as a checklist item)
-* CI/CD, production database, observability
-* CORS/credentials and rate-limit hardening for a real deployment (including login)
-* Durable sim pause (today: process memory)
-
----
-
-# Roadmap
-
-A dispatcher buys answers, not tracking. **10/10 as a purchase product** for this app means: the inbox is a work list, the day starts on a briefing, any recent trip can be proven, Stammdaten are enough to run a yard, the map works at fleet scale, geofences answer “still at the depot?”, HU/licence dates are visible, and a CSV exists for the boss. It is **not** a TMS, tachograph, or driver app.
-
-Do not treat the sim’s 50/120 profile as legal OSM limits. Do not start Phase 14 (invite/CI) while the inbox is unusable.
-
-## Phase 1 — Vehicles
-
-* [x] Schema, vehicle model, CRUD, validation, seed
-
-## Phase 2 — Frontend
-
-* [x] Server-driven list, detail, create/edit/delete, no mock data
-
-## Phase 3 — Map and live position
-
-* [x] Telemetry history, detail map, SSE movement, trip trail, route sim, fleet map `/fleet`
-
-## Phase 4 — Companies, login, isolation
-
-* [x] Company model
-* [x] User belongs to one company
-* [x] Session login
-* [x] Tenant isolation (`company_id` from session; plates unique per company; SSE and sim scoped; trips via vehicle)
-* [x] Roles (`dispatcher` writes; `viewer` reads)
-* [x] Per-company retention for closed trips (`TRIP_RETENTION_DAYS`); telemetry stays the rolling window
-
-## Phase 5 — Alerts and drivers
-
-* [x] Alerts REST/UI
-* [x] Drivers entity, driver pages, live speed indicator
-* [x] Live SPEEDING events (ticker, 8 s over 90) aligned with list colour
-
-## Phase 6 — Trustworthy exceptions **← next (6.2)**
-
-The inbox must be something a dispatcher would open.
-
-* [x] **6.1 Road-class limit.** `SpeedingEventModel` / `speedBand` / ticker use the current sim segment limit (`speedLimitKmh`: city 50, highway 120). `details.limit_kmh` and `vehicle.speed_limit_kmh` are that segment limit. Copy stays a route limit, not StVO. Every 8th simulated vehicle may exceed its class. List colour uses the same limit.
-* [ ] **6.2 Inbox filter by `type`** (`SPEEDING` / `LOW_FUEL` / `OFFLINE`) on `GET /api/alerts` and `/alerts`.
-* [ ] **6.3 Live LOW_FUEL** from the ticker (e.g. under 15% while `DRIVING`), not seed-only. Same `alerts` table, one open row per vehicle per type.
-* [ ] **6.4 Live OFFLINE** when a `DRIVING`/`IDLE` vehicle stops reporting for a threshold. Seed OFFLINE remains until this exists.
-
-OSM/map-derived legal limits are **not** this phase. They replace the sim class limit later without changing the 8 s / hysteresis state machine.
-
-## Phase 7 — Shift briefing
-
-* [ ] `/` is a company briefing, not a redirect to `/vehicles`: counts (driving, idle, offline, open warnings, low fuel) plus a short work list (newest open alerts, no-signal).
-* [ ] Warnungen nav shows the open count.
-* [ ] Viewer may read; only dispatcher resolves.
-
-## Phase 8 — Trip archive
-
-* [ ] `GET /api/vehicles/:id/trips` (paginated closed + open). Keep `…/trips/latest`.
-* [ ] Detail page: list of trips; opening a closed trip draws that polyline (not only the live one).
-* [ ] Closed-trip facts already on the row (`distance_m`, `max_speed`, times) — show them. No per-point speed arrays.
-
-## Phase 9 — Stammdaten a yard actually maintains
-
-* [ ] Vehicle fields: `vin`, `vehicle_type`, `hu_due_on`, `depot` (or site name), `cost_center`. Session `company_id` still owns the row. German validation messages.
-* [ ] Forms and list columns for those fields; HU due becomes a reminder in Phase 12.
-* [ ] Drivers: default sort `open_warnings` desc (page 1 = problem drivers). Dispatcher create/rename without going through the vehicle form. Phone is enough contact for this phase.
-
-## Phase 10 — Map at fleet scale
-
-* [ ] Viewport over `FLEET_POSITIONS_MAX`: cluster/density or a clear “zoom or filter” that still orients — not an empty Europe.
-* [ ] Plate search that finds one vehicle should fit the map to that marker.
-
-## Phase 11 — Geofences
-
-* [ ] Company sites (at least depot). Polygon or radius.
-* [ ] Enter/leave writes `alerts` (new type, same inbox).
-* [ ] Fleet filter or briefing line: “still in depot”.
-
-## Phase 12 — German minimum compliance
-
-* [ ] HU (and optionally AU) due date → reminder alert when due/overdue.
-* [ ] Driver: licence expiry + last check date (Führerscheinkontrolle light — dates, not document upload).
-* [ ] UVV due date on the vehicle. No workshop work-order system.
-
-## Phase 13 — Export and fuel as a number
-
-* [ ] CSV export for the current company: vehicles, alerts, trips (dispatcher).
-* [ ] Trip or period fuel used from the existing sim consumption — not a second telemetry stream.
-* [ ] One printable/CSV period summary (km, open vs resolved warnings, fuel).
-
-## Phase 14 — Production (sell / host)
-
-Only after Phases 6–8. The product has to be true before it has to be hosted.
-
-* [ ] Invite / password reset / lockout
-* [ ] Mid-session `401` returns the UI to `/login`
-* [ ] Durable sim pause
-* [ ] CORS/credentials and login rate limit for a real deploy
-* [ ] CI/CD, production database, observability
-* [ ] Frontend tests only when a runner is explicitly added
-
-## Out of scope for 10/10 of this product
-
-* Multi-company membership / company switcher
-* TMS, tour planning, customer orders
-* Tachograph / Lenkzeiten
-* Driver mobile app
-* Hardware GPS
-* OSM speed limits (optional after 6.1; do not block briefing or trips)
+* No frontend tests, CI/CD, production database, or observability
+* CORS `*` is a local default; a split-host deploy needs an explicit origin plus credentials
+* One company per user (no membership table, no company switcher)
 
 ---
 
 # Project Status
 
-**Work in progress.** Live-ops core is in place and SPEEDING follows the sim road class. Next build is Phase 6.2: filter the inbox by alert type. Treat the codebase as that product path, not as invite/CI work and not as a dispatcher-ready purchase.
-
-If README and code disagree, **code wins**. Agent notes: `.cursor/rules/architecture.mdc`, `AGENTS.md`.
+**Work in progress.** Live-ops core is in place: SPEEDING follows the sim road class, and the inbox filters by type. If README and code disagree, **code wins**. Agent notes: `.cursor/rules/architecture.mdc`, `AGENTS.md`.
 
 ---
 

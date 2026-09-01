@@ -39,5 +39,5 @@ alwaysApply: false
 ## Domain copy
 
 - Status labels live in `components/vehicles/vehicleStatus.ts`. Do not render the raw enum.
-- Tempo in the list/detail uses `speedBand` from shared and `SPEED_BAND_COLORS` — not `VEHICLE_STATUS_COLORS`. Orange is over `speed_limit_kmh` without an open event; red is `speeding_open`. Inbox `/alerts` is warnings (Ereignis from `formatAlertEvent`); `/drivers` is violation history (all incidents).
+- Tempo in the list/detail uses `speedBand` from shared and `SPEED_BAND_COLORS` — not `VEHICLE_STATUS_COLORS`. Orange is over `speed_limit_kmh` without an open event; red is `speeding_open`. Inbox `/alerts` is warnings (Ereignis from `formatAlertEvent`, chips for open/resolved and `type`); `/drivers` is violation history (all incidents).
 - Timestamps from the API are naive UTC. Format them via `utils/dateTime.ts`, never print the raw string.

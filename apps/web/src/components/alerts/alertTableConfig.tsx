@@ -1,13 +1,25 @@
-import { formatAlertEvent, type Alert, type AlertFilterId } from "@fleet-live/shared";
+import {
+    formatAlertEvent,
+    type Alert,
+    type AlertFilterId,
+    type AlertType,
+} from "@fleet-live/shared";
 import type { TableColumn, TableFilter } from "../../types/table";
 import { formatTimestamp } from "../../utils/dateTime";
 import { DriverNameLink } from "../drivers/DriverNameLink";
+import { ALERT_TYPE_LABELS } from "./alertLabels";
 
 export const alertFilters: Array<
     TableFilter<Alert> & { id: Exclude<AlertFilterId, "all"> }
 > = [
     { id: "open", displayText: "Offen" },
     { id: "resolved", displayText: "Erledigt" },
+];
+
+export const alertTypeFilters: Array<TableFilter<Alert> & { id: AlertType }> = [
+    { id: "SPEEDING", displayText: ALERT_TYPE_LABELS.SPEEDING },
+    { id: "LOW_FUEL", displayText: ALERT_TYPE_LABELS.LOW_FUEL },
+    { id: "OFFLINE", displayText: ALERT_TYPE_LABELS.OFFLINE },
 ];
 
 export const alertColumns: TableColumn<Alert>[] = [

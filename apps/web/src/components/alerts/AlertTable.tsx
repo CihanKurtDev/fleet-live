@@ -13,7 +13,7 @@ import { resolveAlert } from "../../api/alerts";
 import { ApiError } from "../../api/client";
 import { formatTimestamp } from "../../utils/dateTime";
 import type { TableColumn } from "../../types/table";
-import { alertColumns, alertFilters } from "./alertTableConfig.tsx";
+import { alertColumns, alertFilters, alertTypeFilters } from "./alertTableConfig.tsx";
 import styles from "./AlertTable.module.scss";
 
 interface AlertTableProps {
@@ -29,6 +29,7 @@ export const AlertTable = ({
         query,
         tableState,
         setFilter,
+        setType,
         handleSort,
         setPage,
         setLimit,
@@ -61,6 +62,15 @@ export const AlertTable = ({
         setPage,
         setLimit,
     });
+
+    const typeFiltersWithCounts = useMemo(
+        () =>
+            alertTypeFilters.map((filter) => ({
+                ...filter,
+                count: meta?.type_counts?.[filter.id] ?? 0,
+            })),
+        [meta?.type_counts],
+    );
 
     const [resolvingId, setResolvingId] = useState<number | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
@@ -177,12 +187,21 @@ export const AlertTable = ({
             )}
 
             {!isLoading && (
-                <TableFilterBar
-                    filters={filtersWithCounts}
-                    activeFilterId={tableState.filterId}
-                    onFilterChange={setFilter}
-                    allCount={meta?.counts.all}
-                />
+                <div className={styles.filters}>
+                    <TableFilterBar
+                        filters={filtersWithCounts}
+                        activeFilterId={tableState.filterId}
+                        onFilterChange={setFilter}
+                        allCount={meta?.counts.all}
+                    />
+                    <TableFilterBar
+                        filters={typeFiltersWithCounts}
+                        activeFilterId={query.type ?? null}
+                        onFilterChange={setType}
+                        allCount={meta?.type_counts?.all}
+                        ariaLabel="Ereignisart"
+                    />
+                </div>
             )}
 
             {(error || actionError) && (
@@ -235,6 +254,7 @@ export const AlertTable = ({
                             </div>
                         </div>
                     ) : query.filter === "open" &&
+                      query.type === undefined &&
                       query.vehicle_id === undefined &&
                       query.driver_id === undefined ? (
                         "Keine offenen Warnungen."

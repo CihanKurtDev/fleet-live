@@ -113,7 +113,65 @@ describe("GET /api/alerts", () => {
         assert.equal(response.body.meta.counts.open, 1);
         assert.equal(response.body.meta.counts.resolved, 1);
         assert.equal(response.body.meta.counts.all, 2);
+        assert.equal(response.body.meta.type_counts.SPEEDING, 1);
+        assert.equal(response.body.meta.type_counts.LOW_FUEL, 0);
+        assert.equal(response.body.meta.type_counts.OFFLINE, 0);
+        assert.equal(response.body.meta.type_counts.all, 1);
         assert.equal(response.body.meta.total, 1);
+    });
+
+    it("filters by type and keeps status counts independent of type", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TP 1",
+            driver_name: "Typ",
+            company_id: 1,
+        });
+
+        insertAlert(vehicle.id, { type: "SPEEDING", message: "tempo" });
+        insertAlert(vehicle.id, { type: "LOW_FUEL", message: "tank" });
+        insertAlert(vehicle.id, {
+            type: "SPEEDING",
+            message: "tempo erledigt",
+            resolved_at: "2026-01-01 00:00:00",
+            ended_at: "2026-01-01 00:00:00",
+        });
+
+        const speeding = await api.get("/api/alerts").query({
+            type: "SPEEDING",
+        });
+
+        assert.equal(speeding.status, 200);
+        assert.equal(speeding.body.data.length, 1);
+        assert.equal(speeding.body.data[0].type, "SPEEDING");
+        assert.equal(speeding.body.data[0].message, "tempo");
+        assert.equal(speeding.body.meta.total, 1);
+        assert.equal(speeding.body.meta.counts.open, 2);
+        assert.equal(speeding.body.meta.counts.resolved, 1);
+        assert.equal(speeding.body.meta.counts.all, 3);
+        assert.equal(speeding.body.meta.type_counts.SPEEDING, 1);
+        assert.equal(speeding.body.meta.type_counts.LOW_FUEL, 1);
+        assert.equal(speeding.body.meta.type_counts.all, 2);
+
+        const allSpeeding = await api.get("/api/alerts").query({
+            filter: "all",
+            type: "SPEEDING",
+        });
+
+        assert.equal(allSpeeding.status, 200);
+        assert.equal(allSpeeding.body.data.length, 2);
+        assert.equal(allSpeeding.body.meta.type_counts.SPEEDING, 2);
+        assert.equal(allSpeeding.body.meta.type_counts.LOW_FUEL, 1);
+        assert.equal(allSpeeding.body.meta.type_counts.all, 3);
+    });
+
+    it("rejects an invalid type", async () => {
+        const response = await api.get("/api/alerts").query({
+            type: "NOPE",
+        });
+
+        assert.equal(response.status, 400);
+        assert.equal(response.body.code, "VALIDATION_ERROR");
+        assert.equal(response.body.fields.type, "Ungültiger Warnungstyp.");
     });
 
     it("returns 404 for another company's vehicle_id", async () => {
