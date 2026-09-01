@@ -79,12 +79,21 @@ export type AlertListCounts = {
     resolved: number;
 };
 
+/** Typ-Facets: gelten für den aktuellen Statusfilter (`open`/`resolved`/`all`). */
+export type AlertTypeCounts = {
+    all: number;
+    SPEEDING: number;
+    LOW_FUEL: number;
+    OFFLINE: number;
+};
+
 export type AlertListMeta = {
     page: number;
     limit: number;
     total: number;
     pageCount: number;
     counts: AlertListCounts;
+    type_counts: AlertTypeCounts;
 };
 
 export type AlertListResponse = {
@@ -154,6 +163,12 @@ export const alertListQuerySchema = z.object({
             .min(1, "Fahrer-ID muss mindestens 1 sein.")
             .optional(),
     ),
+    type: z.preprocess(
+        emptyToUndefined,
+        z
+            .enum(ALERT_TYPES, { error: "Ungültiger Warnungstyp." })
+            .optional(),
+    ),
 });
 
 export type AlertListQuery = z.infer<typeof alertListQuerySchema>;
@@ -201,6 +216,10 @@ export function serializeAlertListQuery(
 
     if (query.driver_id !== undefined) {
         params.set("driver_id", String(query.driver_id));
+    }
+
+    if (query.type !== undefined) {
+        params.set("type", query.type);
     }
 
     return params;

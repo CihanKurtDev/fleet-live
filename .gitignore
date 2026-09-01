@@ -11,3 +11,6 @@ build/
 apps/api/data/*.db
 apps/api/data/*.db-shm
 apps/api/data/*.db-wal
+
+# Local engineering plan — do not commit or push
+.cursor/ROADMAP.md

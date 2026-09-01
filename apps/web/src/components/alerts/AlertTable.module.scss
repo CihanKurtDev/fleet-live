@@ -32,6 +32,11 @@
     }
 }
 
+.filters {
+    display: flex;
+    flex-direction: column;
+}
+
 .isFetching {
     opacity: 0.72;
 }

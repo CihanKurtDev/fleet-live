@@ -66,6 +66,7 @@ export type {
     AlertSeverity,
     AlertSortKey,
     AlertType,
+    AlertTypeCounts,
     SpeedingAlertDetails,
 } from "./models/alert";
 

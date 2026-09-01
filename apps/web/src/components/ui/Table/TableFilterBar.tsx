@@ -7,6 +7,7 @@ interface TableFilterBarProps<RowType> {
     activeFilterId: string | null;
     onFilterChange: (filterId: string | null) => void;
     allCount?: number;
+    ariaLabel?: string;
 }
 
 export const TableFilterBar = <RowType,>({
@@ -14,6 +15,7 @@ export const TableFilterBar = <RowType,>({
     activeFilterId,
     onFilterChange,
     allCount,
+    ariaLabel = "Statusfilter",
 }: TableFilterBarProps<RowType>) => {
     if (filters.length === 0) {
         return null;
@@ -22,7 +24,7 @@ export const TableFilterBar = <RowType,>({
     const allActive = activeFilterId === null;
 
     return (
-        <div className={styles.filterBar} role="group" aria-label="Statusfilter">
+        <div className={styles.filterBar} role="group" aria-label={ariaLabel}>
             {allCount !== undefined && (
                 <button
                     type="button"

@@ -97,6 +97,13 @@ type FacetRow = {
     resolved_count: number;
 };
 
+type TypeFacetRow = {
+    all_count: number;
+    speeding_count: number;
+    low_fuel_count: number;
+    offline_count: number;
+};
+
 function parseDetails(raw: unknown): AlertDetails | null {
     if (raw == null) {
         return null;
@@ -148,11 +155,14 @@ export class AlertModel {
             query.vehicle_id !== undefined ? "AND a.vehicle_id = ?" : "";
         const driverSql =
             query.driver_id !== undefined ? "AND v.driver_id = ?" : "";
+        const typeSql = query.type !== undefined ? "AND a.type = ?" : "";
         const sortDirection = query.dir === "asc" ? "ASC" : "DESC";
         const scopeParams = [
             ...(query.vehicle_id !== undefined ? [query.vehicle_id] : []),
             ...(query.driver_id !== undefined ? [query.driver_id] : []),
         ];
+        const typeParams =
+            query.type !== undefined ? [query.type] : [];
 
         const listSql = `
             SELECT
@@ -164,6 +174,7 @@ export class AlertModel {
               ${vehicleSql}
               ${driverSql}
               ${filterSql}
+              ${typeSql}
             ORDER BY a.created_at ${sortDirection}, a.id ${sortDirection}
             LIMIT ? OFFSET ?
         `;
@@ -171,6 +182,7 @@ export class AlertModel {
         const rows = stmt(listSql).all(
             companyId,
             ...scopeParams,
+            ...typeParams,
             query.limit,
             offset,
         ) as AlertSqlRow[];
@@ -186,9 +198,14 @@ export class AlertModel {
                   ${vehicleSql}
                   ${driverSql}
                   ${filterSql}
+                  ${typeSql}
             `;
             total = (
-                stmt(countSql).get(companyId, ...scopeParams) as {
+                stmt(countSql).get(
+                    companyId,
+                    ...scopeParams,
+                    ...typeParams,
+                ) as {
                     total: number;
                 }
             ).total;
@@ -209,6 +226,24 @@ export class AlertModel {
             companyId,
             ...scopeParams,
         ) as FacetRow;
+
+        const typeFacetSql = `
+            SELECT
+                COUNT(*) AS all_count,
+                COALESCE(SUM(a.type = 'SPEEDING'), 0) AS speeding_count,
+                COALESCE(SUM(a.type = 'LOW_FUEL'), 0) AS low_fuel_count,
+                COALESCE(SUM(a.type = 'OFFLINE'), 0) AS offline_count
+            FROM alerts a
+            INNER JOIN vehicles v ON v.id = a.vehicle_id
+            WHERE v.company_id = ?
+              ${vehicleSql}
+              ${driverSql}
+              ${filterSql}
+        `;
+        const typeCounts = stmt(typeFacetSql).get(
+            companyId,
+            ...scopeParams,
+        ) as TypeFacetRow;
         const pageCount = Math.max(1, Math.ceil(total / query.limit));
 
         return {
@@ -222,6 +257,12 @@ export class AlertModel {
                     all: Number(counts.all_count),
                     open: Number(counts.open_count),
                     resolved: Number(counts.resolved_count),
+                },
+                type_counts: {
+                    all: Number(typeCounts.all_count),
+                    SPEEDING: Number(typeCounts.speeding_count),
+                    LOW_FUEL: Number(typeCounts.low_fuel_count),
+                    OFFLINE: Number(typeCounts.offline_count),
                 },
             },
         };

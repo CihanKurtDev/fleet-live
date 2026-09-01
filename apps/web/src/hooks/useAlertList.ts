@@ -59,6 +59,7 @@ export const useAlertList = (query: AlertListQuery) => {
         query.limit,
         query.vehicle_id,
         query.driver_id,
+        query.type,
         listEpoch,
     ]);
 
