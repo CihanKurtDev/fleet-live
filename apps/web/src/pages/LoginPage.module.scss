@@ -155,6 +155,8 @@
     font-size: 13px;
     color: var(--accent);
     cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+
+    &:hover {
+        color: var(--text-h);
+    }
 }

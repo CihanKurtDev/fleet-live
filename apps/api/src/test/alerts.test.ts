@@ -174,6 +174,36 @@ describe("GET /api/alerts", () => {
         assert.equal(response.body.fields.type, "Ungültiger Warnungstyp.");
     });
 
+    it("sorts by type and rejects injection", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SR 1",
+            driver_name: "Sort",
+            company_id: 1,
+        });
+
+        insertAlert(vehicle.id, { type: "OFFLINE", message: "funk" });
+        insertAlert(vehicle.id, { type: "SPEEDING", message: "tempo" });
+        insertAlert(vehicle.id, { type: "LOW_FUEL", message: "tank" });
+
+        const ordered = await api.get("/api/alerts").query({
+            sort: "type",
+            dir: "asc",
+        });
+
+        assert.equal(ordered.status, 200);
+        assert.deepEqual(
+            ordered.body.data.map((row: { type: string }) => row.type),
+            ["SPEEDING", "LOW_FUEL", "OFFLINE"],
+        );
+
+        const rejected = await api.get("/api/alerts").query({
+            sort: "id;DROP TABLE alerts",
+        });
+
+        assert.equal(rejected.status, 400);
+        assert.equal(rejected.body.code, "VALIDATION_ERROR");
+    });
+
     it("returns 404 for another company's vehicle_id", async () => {
         const other = VehicleModel.create({
             license_plate: "K-OTH 2",

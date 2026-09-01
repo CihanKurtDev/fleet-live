@@ -283,6 +283,7 @@ describe("GET /api/vehicles", () => {
         assert.ok(response.body.meta.counts.offline >= 1);
         assert.equal(response.body.meta.counts.alerts, 2);
         assert.equal(typeof response.body.data[0].active_alerts, "number");
+        assert.ok(Array.isArray(response.body.data[0].open_alert_types));
         assert.equal(typeof response.body.data[0].created_at, "string");
         assert.equal(response.body.data[0].activeAlerts, undefined);
     });
@@ -718,6 +719,7 @@ describe("vehicle mutations", () => {
         assert.equal(created.status, 201);
         assert.equal(created.body.license_plate, "K-NEU 1");
         assert.equal(created.body.active_alerts, 0);
+        assert.deepEqual(created.body.open_alert_types, []);
         assert.ok(created.body.created_at);
         const assigned = db
             .prepare("SELECT company_id FROM vehicles WHERE id = ?")

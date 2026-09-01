@@ -14,7 +14,8 @@
 .inboxLink {
     font-size: 13px;
     color: var(--text);
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: 2px;
 
     &:hover {
         color: var(--text-h);
@@ -80,7 +81,8 @@
 
     a {
         color: var(--text);
-        text-decoration: none;
+        text-decoration: underline;
+        text-underline-offset: 2px;
 
         &:hover {
             color: var(--text-h);

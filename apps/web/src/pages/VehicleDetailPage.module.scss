@@ -11,6 +11,8 @@
     align-self: flex-start;
     font-size: 14px;
     color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
 
     &:hover {
         color: var(--text-h);
@@ -101,6 +103,33 @@
     border-radius: 10px;
 }
 
+.panelHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+
+    .panelTitle {
+        margin: 0;
+    }
+}
+
+.now {
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.nowTitle {
+    margin: 0 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
 .panelTitle {
     margin: 0 0 16px;
     font-size: 16px;
@@ -152,4 +181,22 @@
 
 .empty {
     font-size: 14px;
+}
+
+.coords {
+    font-size: 13px;
+    color: var(--text);
+
+    summary {
+        cursor: pointer;
+        color: var(--text-h);
+
+        &:hover {
+            color: var(--accent);
+        }
+    }
+
+    .facts {
+        margin-top: 12px;
+    }
 }

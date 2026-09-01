@@ -20,7 +20,7 @@ import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useVehicle } from "../hooks/useVehicle";
-import { formatTimestamp } from "../utils/dateTime";
+import { formatRelativeTimestamp, formatTimestamp } from "../utils/dateTime";
 import styles from "./VehicleDetailPage.module.scss";
 
 const formatCoordinate = (value: number | null) =>
@@ -75,6 +75,7 @@ export const VehicleDetailPage = () => {
     const parsedId = Number.isInteger(vehicleId) ? vehicleId : null;
     const { vehicle, isLoading, error, notFound } = useVehicle(parsedId);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [isEditingMaster, setIsEditingMaster] = useState(false);
     const [tripVehicleId, setTripVehicleId] = useState(parsedId);
     const [trip, setTrip] = useState<Trip | null>(null);
     const [livePath, setLivePath] = useState("");
@@ -195,8 +196,15 @@ export const VehicleDetailPage = () => {
             ? { latitude: vehicle.latitude, longitude: vehicle.longitude }
             : null;
 
-    const handleSubmit = (input: VehicleInput) =>
-        updateVehicle(vehicle.id, input);
+    const handleSubmit = async (input: VehicleInput) => {
+        const errors = await updateVehicle(vehicle.id, input);
+
+        if (!errors) {
+            setIsEditingMaster(false);
+        }
+
+        return errors;
+    };
 
     const handleDelete = async () => {
         await deleteVehicles([vehicle.id]);
@@ -260,10 +268,47 @@ export const VehicleDetailPage = () => {
                 )}
             </header>
 
+            <section className={styles.now}>
+                <h2 className={styles.nowTitle}>Jetzt</h2>
+                <dl className={styles.facts}>
+                    <div>
+                        <dt>Status</dt>
+                        <dd>{vehicleStatusLabel(vehicle.status)}</dd>
+                    </div>
+                    <div>
+                        <dt>Tempo</dt>
+                        <dd>
+                            {vehicle.speed === null ? (
+                                "—"
+                            ) : (
+                                <span
+                                    className={styles.speed}
+                                    data-band={liveSpeed.band}
+                                    style={{
+                                        color: SPEED_BAND_COLORS[liveSpeed.band],
+                                    }}
+                                    title={speedBandTitle(liveSpeed)}
+                                >
+                                    {vehicle.speed} km/h
+                                </span>
+                            )}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Tank</dt>
+                        <dd>{Math.round(vehicle.fuel_level)} %</dd>
+                    </div>
+                    <div>
+                        <dt>Letzte Meldung</dt>
+                        <dd title={formatTimestamp(vehicle.recorded_at)}>
+                            {formatRelativeTimestamp(vehicle.recorded_at)}
+                        </dd>
+                    </div>
+                </dl>
+            </section>
+
             <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>
-                    Letzte Position
-                </h2>
+                <h2 className={styles.panelTitle}>Standort</h2>
 
                 {position ? (
                     <div className={styles.positionBody}>
@@ -275,58 +320,23 @@ export const VehicleDetailPage = () => {
                             status={vehicle.status}
                             trail={trail}
                         />
-                        <dl className={styles.facts}>
-                            <div>
-                                <dt>Breitengrad</dt>
-                                <dd>
-                                    {formatCoordinate(
-                                        position.latitude,
-                                    )}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt>Längengrad</dt>
-                                <dd>
-                                    {formatCoordinate(
-                                        position.longitude,
-                                    )}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt>Geschwindigkeit</dt>
-                                <dd>
-                                    {vehicle.speed === null ? (
-                                        "—"
-                                    ) : (
-                                        <span
-                                            className={styles.speed}
-                                            data-band={liveSpeed.band}
-                                            style={{
-                                                color: SPEED_BAND_COLORS[
-                                                    liveSpeed.band
-                                                ],
-                                            }}
-                                            title={speedBandTitle(liveSpeed)}
-                                        >
-                                            {vehicle.speed} km/h
-                                        </span>
-                                    )}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt>Letzte Meldung</dt>
-                                <dd>
-                                    {formatTimestamp(
-                                        vehicle.recorded_at,
-                                    )}
-                                </dd>
-                            </div>
-                        </dl>
-                        <p className={styles.note}>
-                            {trip
-                                ? describeTrip(trip)
-                                : "Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."}
-                        </p>
+                        <details className={styles.coords}>
+                            <summary>Koordinaten</summary>
+                            <dl className={styles.facts}>
+                                <div>
+                                    <dt>Breitengrad</dt>
+                                    <dd>
+                                        {formatCoordinate(position.latitude)}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt>Längengrad</dt>
+                                    <dd>
+                                        {formatCoordinate(position.longitude)}
+                                    </dd>
+                                </div>
+                            </dl>
+                        </details>
                     </div>
                 ) : (
                     <p className={styles.empty}>
@@ -338,6 +348,15 @@ export const VehicleDetailPage = () => {
             </section>
 
             <section className={styles.panel}>
+                <h2 className={styles.panelTitle}>Letzte Fahrt</h2>
+                <p className={styles.note}>
+                    {trip
+                        ? describeTrip(trip)
+                        : "Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."}
+                </p>
+            </section>
+
+            <section className={styles.panel}>
                 <VehicleAlertList
                     vehicleId={vehicle.id}
                     canWrite={canWrite}
@@ -345,22 +364,48 @@ export const VehicleDetailPage = () => {
             </section>
 
             <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>
-                    Stammdaten
-                </h2>
+                <div className={styles.panelHeader}>
+                    <h2 className={styles.panelTitle}>Stammdaten</h2>
+                    {canWrite && !isEditingMaster && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setIsEditingMaster(true)}
+                        >
+                            Bearbeiten
+                        </Button>
+                    )}
+                </div>
 
-                <VehicleForm
-                    initialValue={{
-                        license_plate: vehicle.license_plate,
-                        driver_name: vehicle.driver_name,
-                        fuel_level: vehicle.fuel_level,
-                        status: vehicle.status,
-                    }}
-                    isFuelMeasured={isDriving}
-                    readOnly={!canWrite}
-                    submitLabel="Speichern"
-                    onSubmit={handleSubmit}
-                />
+                {isEditingMaster && canWrite ? (
+                    <VehicleForm
+                        initialValue={{
+                            license_plate: vehicle.license_plate,
+                            driver_name: vehicle.driver_name,
+                            fuel_level: vehicle.fuel_level,
+                            status: vehicle.status,
+                        }}
+                        isFuelMeasured={isDriving}
+                        submitLabel="Speichern"
+                        onSubmit={handleSubmit}
+                        onCancel={() => setIsEditingMaster(false)}
+                    />
+                ) : (
+                    <dl className={styles.facts}>
+                        <div>
+                            <dt>Kennzeichen</dt>
+                            <dd>{vehicle.license_plate}</dd>
+                        </div>
+                        <div>
+                            <dt>Fahrer</dt>
+                            <dd>{vehicle.driver_name}</dd>
+                        </div>
+                        <div>
+                            <dt>Tankstand</dt>
+                            <dd>{Math.round(vehicle.fuel_level)} %</dd>
+                        </div>
+                    </dl>
+                )}
             </section>
 
             <ConfirmDialog

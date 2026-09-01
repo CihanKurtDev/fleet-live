@@ -1,6 +1,8 @@
 .tableContainer {
     width: 100%;
-    overflow-x: auto;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 .table {
@@ -36,7 +38,7 @@
 }
 
 .sortButton:hover {
-    text-decoration: underline;
+    color: var(--accent);
 }
 
 .sortIndicator {

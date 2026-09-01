@@ -4,6 +4,7 @@ import type {
     AlertListQuery,
     AlertListResponse,
     AlertSeverity,
+    AlertSortKey,
     AlertType,
     SpeedingAlertDetails,
 } from "@fleet-live/shared";
@@ -124,6 +125,24 @@ const FILTER_SQL = {
     all: "",
 } as const;
 
+const SORT_SQL: Record<AlertSortKey, string> = {
+    created_at: "a.created_at",
+    type: `CASE a.type
+        WHEN 'SPEEDING' THEN 1
+        WHEN 'LOW_FUEL' THEN 2
+        WHEN 'OFFLINE' THEN 3
+        ELSE 4
+    END`,
+    severity: `CASE a.severity
+        WHEN 'LOW' THEN 1
+        WHEN 'MEDIUM' THEN 2
+        WHEN 'HIGH' THEN 3
+        ELSE 4
+    END`,
+    driver_name: "v.driver_name COLLATE NOCASE",
+    license_plate: "v.license_plate COLLATE NOCASE",
+};
+
 type AlertSqlRow = Omit<Alert, "details"> & {
     details: string | AlertDetails | null;
     total?: number;
@@ -194,6 +213,7 @@ export class AlertModel {
         const driverSql =
             query.driver_id !== undefined ? "AND v.driver_id = ?" : "";
         const typeSql = query.type !== undefined ? "AND a.type = ?" : "";
+        const sortColumn = SORT_SQL[query.sort];
         const sortDirection = query.dir === "asc" ? "ASC" : "DESC";
         const scopeParams = [
             ...(query.vehicle_id !== undefined ? [query.vehicle_id] : []),
@@ -213,7 +233,7 @@ export class AlertModel {
               ${driverSql}
               ${filterSql}
               ${typeSql}
-            ORDER BY a.created_at ${sortDirection}, a.id ${sortDirection}
+            ORDER BY ${sortColumn} ${sortDirection}, a.id ${sortDirection}
             LIMIT ? OFFSET ?
         `;
 

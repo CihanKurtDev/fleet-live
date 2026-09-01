@@ -5,7 +5,13 @@ import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
 export const ALERT_TYPES = ["SPEEDING", "LOW_FUEL", "OFFLINE"] as const;
 export const ALERT_SEVERITIES = ["LOW", "MEDIUM", "HIGH"] as const;
 export const ALERT_FILTERS = ["open", "resolved", "all"] as const;
-export const ALERT_SORT_KEYS = ["created_at"] as const;
+export const ALERT_SORT_KEYS = [
+    "created_at",
+    "type",
+    "severity",
+    "driver_name",
+    "license_plate",
+] as const;
 
 export type AlertType = (typeof ALERT_TYPES)[number];
 export type AlertSeverity = (typeof ALERT_SEVERITIES)[number];

@@ -185,14 +185,34 @@ export const useAlertListQuery = () => {
             }
 
             patch(
-                {
-                    sort: key,
-                    dir: query.dir === "desc" ? "asc" : "desc",
-                },
+                (() => {
+                    if (query.sort !== key) {
+                        return {
+                            sort: key,
+                            dir: key === "created_at" ? ("desc" as const) : ("asc" as const),
+                        };
+                    }
+
+                    if (key === "created_at") {
+                        return {
+                            sort: "created_at" as const,
+                            dir:
+                                query.dir === "desc"
+                                    ? ("asc" as const)
+                                    : ("desc" as const),
+                        };
+                    }
+
+                    if (query.dir === "asc") {
+                        return { sort: key, dir: "desc" as const };
+                    }
+
+                    return { sort: "created_at" as const, dir: "desc" as const };
+                })(),
                 { replace: true },
             );
         },
-        [patch, query.dir],
+        [patch, query.sort, query.dir],
     );
 
     const tableState: TableStateProps<Alert> = {

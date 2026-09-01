@@ -76,6 +76,8 @@ export const DriverDetailPage = () => {
         );
     }
 
+    const inboxHref = `/alerts?driver_id=${driver.id}`;
+
     return (
         <section className={styles.page}>
             <Link className={styles.back} to={from} onClick={handleBack}>
@@ -84,51 +86,22 @@ export const DriverDetailPage = () => {
 
             <header className={styles.header}>
                 <h1 className={styles.title}>{driver.name}</h1>
+                <p className={styles.openCount}>
+                    {driver.open_warnings > 0 ? (
+                        <Link to={inboxHref}>
+                            {driver.open_warnings}{" "}
+                            {driver.open_warnings === 1
+                                ? "offene Warnung"
+                                : "offene Warnungen"}
+                        </Link>
+                    ) : (
+                        "Keine offenen Warnungen"
+                    )}
+                </p>
             </header>
 
             <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Verstöße</h2>
-                <p className={styles.note}>
-                    Alle Incident-Zeilen dieses Fahrers, auch erledigte.
-                    Offene Warnungen sind die operative Inbox.
-                </p>
-                <dl className={styles.facts}>
-                    <div>
-                        <dt>Gesamt</dt>
-                        <dd>{driver.counts.all}</dd>
-                    </div>
-                    {(["SPEEDING", "LOW_FUEL", "OFFLINE"] as const).map(
-                        (type) => (
-                            <div key={type}>
-                                <dt>{alertTypeLabel(type)}</dt>
-                                <dd>{driver.counts[type]}</dd>
-                            </div>
-                        ),
-                    )}
-                    <div>
-                        <dt>Offene Warnungen</dt>
-                        <dd>
-                            {driver.open_warnings > 0 ? (
-                                <Link to={`/alerts?driver_id=${driver.id}`}>
-                                    {driver.open_warnings}
-                                </Link>
-                            ) : (
-                                "0"
-                            )}
-                        </dd>
-                    </div>
-                </dl>
-                {driver.counts.all > 0 && (
-                    <p className={styles.note}>
-                        <Link to={`/alerts?driver_id=${driver.id}&filter=all`}>
-                            Alle Warnungen dieses Fahrers
-                        </Link>
-                    </p>
-                )}
-            </section>
-
-            <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Fahrzeuge</h2>
+                <h2 className={styles.panelTitle}>Aktuelles Fahrzeug</h2>
                 {driver.vehicles.length === 0 ? (
                     <p className={styles.empty}>
                         Diesem Fahrer ist derzeit kein Fahrzeug zugewiesen.
@@ -147,6 +120,33 @@ export const DriverDetailPage = () => {
                         ))}
                     </ul>
                 )}
+            </section>
+
+            <section className={styles.panel}>
+                <h2 className={styles.panelTitle}>Verstöße</h2>
+                <p className={styles.note}>
+                    Alle Incidents, auch erledigte. Offene Warnungen stehen in
+                    der Inbox.
+                </p>
+                <dl className={styles.facts}>
+                    <div>
+                        <dt>Gesamt</dt>
+                        <dd>{driver.counts.all}</dd>
+                    </div>
+                    {(["SPEEDING", "LOW_FUEL", "OFFLINE"] as const).map(
+                        (type) => (
+                            <div key={type}>
+                                <dt>{alertTypeLabel(type)}</dt>
+                                <dd>{driver.counts[type]}</dd>
+                            </div>
+                        ),
+                    )}
+                </dl>
+                <p className={styles.note}>
+                    <Link to={`${inboxHref}&filter=all`}>
+                        Alle Warnungen
+                    </Link>
+                </p>
             </section>
         </section>
     );

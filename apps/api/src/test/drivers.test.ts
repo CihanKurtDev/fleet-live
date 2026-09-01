@@ -119,6 +119,42 @@ describe("GET /api/drivers", () => {
         assert.equal(response.body.data[0].counts.OFFLINE, 0);
     });
 
+    it("sorts by open warnings and rejects injection", async () => {
+        const quiet = VehicleModel.create({
+            license_plate: "K-Q 1",
+            driver_name: "Ben",
+            company_id: 1,
+        });
+        const noisy = VehicleModel.create({
+            license_plate: "K-N 1",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+
+        insertAlert(quiet.id, { type: "SPEEDING" });
+        insertAlert(noisy.id, { type: "SPEEDING" });
+        insertAlert(noisy.id, { type: "LOW_FUEL" });
+
+        const ordered = await api.get("/api/drivers").query({
+            sort: "open_warnings",
+            dir: "desc",
+        });
+
+        assert.equal(ordered.status, 200);
+        assert.deepEqual(
+            ordered.body.data.map((row: { name: string }) => row.name),
+            ["Anna", "Ben"],
+        );
+        assert.equal(ordered.body.data[0].open_warnings, 2);
+
+        const rejected = await api.get("/api/drivers").query({
+            sort: "name;DROP TABLE drivers",
+        });
+
+        assert.equal(rejected.status, 400);
+        assert.equal(rejected.body.code, "VALIDATION_ERROR");
+    });
+
     it("counts zero open warnings when a driver has a vehicle but no alerts", async () => {
         VehicleModel.create({
             license_plate: "K-NONE 1",

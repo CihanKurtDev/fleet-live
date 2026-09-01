@@ -45,3 +45,46 @@ export const formatTimestamp = (value: string | null): string => {
         ? timeFormat.format(date)
         : dateTimeFormat.format(date);
 };
+
+/** Relative Angabe für den aktuellen Zustand; älter als ein Tag fällt auf die Uhrzeit zurück. */
+export const formatRelativeTimestamp = (value: string | null): string => {
+    if (value === null) {
+        return "—";
+    }
+
+    const date = parseSqliteUtc(value);
+
+    if (!date) {
+        return "—";
+    }
+
+    const diffMs = Date.now() - date.getTime();
+
+    if (diffMs < 0) {
+        return formatTimestamp(value);
+    }
+
+    const seconds = Math.floor(diffMs / 1000);
+
+    if (seconds < 15) {
+        return "gerade eben";
+    }
+
+    if (seconds < 60) {
+        return `vor ${seconds} s`;
+    }
+
+    const minutes = Math.floor(seconds / 60);
+
+    if (minutes < 60) {
+        return minutes === 1 ? "vor 1 Min." : `vor ${minutes} Min.`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+        return hours === 1 ? "vor 1 Std." : `vor ${hours} Std.`;
+    }
+
+    return formatTimestamp(value);
+};

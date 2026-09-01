@@ -1,4 +1,5 @@
 import type {
+    AlertType,
     FleetDriver,
     FleetDriversQuery,
     FleetDriversResponse,
@@ -12,7 +13,12 @@ import type {
     VehicleSortKey,
     VehicleFilterId,
 } from "@fleet-live/shared";
-import { FLEET_DRIVERS_LIST_LIMIT, FLEET_POSITIONS_MAX } from "@fleet-live/shared";
+import {
+    ALERT_TYPES,
+    FLEET_DRIVERS_LIST_LIMIT,
+    FLEET_POSITIONS_MAX,
+    isAlertType,
+} from "@fleet-live/shared";
 import { DriverModel } from "./driver.model";
 import { SpeedingEventModel } from "./speedingEvent.model";
 import { ExceptionEventModel } from "./exceptionEvent.model";
@@ -54,6 +60,17 @@ const SPEEDING_OPEN_SQL = `EXISTS (
           AND a.ended_at IS NULL
     ) AS speeding_open`;
 
+const OPEN_ALERT_TYPES_SQL = `(
+        SELECT GROUP_CONCAT(type)
+        FROM (
+            SELECT DISTINCT a.type AS type
+            FROM alerts a
+            WHERE a.vehicle_id = v.id
+              AND a.resolved_at IS NULL
+            ORDER BY a.type
+        )
+    ) AS open_alert_types`;
+
 const SELECT_ONE = `
     SELECT
         v.id,
@@ -69,6 +86,7 @@ const SELECT_ONE = `
         t.recorded_at,
         v.active_alerts,
         ${SPEEDING_OPEN_SQL},
+        ${OPEN_ALERT_TYPES_SQL},
         v.created_at
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
@@ -113,10 +131,29 @@ const FACET_SQL = `
       AND ${LIST_SEARCH_SQL}
 `;
 
-type ListRow = Omit<Vehicle, "speeding_open"> & {
+type ListRow = Omit<Vehicle, "speeding_open" | "open_alert_types"> & {
     speeding_open: number | boolean;
+    open_alert_types: string | null;
     total: number;
 };
+
+function parseOpenAlertTypes(value: string | null | undefined): AlertType[] {
+    if (!value) {
+        return [];
+    }
+
+    const seen = new Set<AlertType>();
+
+    for (const part of value.split(",")) {
+        const type = part.trim();
+
+        if (isAlertType(type)) {
+            seen.add(type);
+        }
+    }
+
+    return ALERT_TYPES.filter((type) => seen.has(type));
+}
 
 type FacetRow = {
     all_count: number;
@@ -136,10 +173,11 @@ function toLikePattern(search: string): string {
 }
 
 function toVehicle(row: ListRow): Vehicle {
-    const { total: _total, speeding_open, ...vehicle } = row;
+    const { total: _total, speeding_open, open_alert_types, ...vehicle } = row;
     return {
         ...vehicle,
         speeding_open: Boolean(speeding_open),
+        open_alert_types: parseOpenAlertTypes(open_alert_types),
         speed_limit_kmh:
             vehicle.speed_limit_kmh === null ||
             vehicle.speed_limit_kmh === undefined
@@ -178,6 +216,7 @@ export class VehicleModel {
                 t.recorded_at,
                 v.active_alerts,
                 ${SPEEDING_OPEN_SQL},
+                ${OPEN_ALERT_TYPES_SQL},
                 v.created_at,
                 COUNT(*) OVER () AS total
             FROM vehicles v

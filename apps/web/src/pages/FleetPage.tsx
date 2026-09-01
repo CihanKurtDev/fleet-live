@@ -18,6 +18,7 @@ import {
     setTelemetryFocus,
 } from "../api/telemetryFocus";
 import { listVehiclePositions } from "../api/vehicles";
+import { TableFilterBar } from "../components/ui/Table/TableFilterBar";
 import { FleetDriverPicker } from "../components/vehicles/FleetDriverPicker";
 import { FleetMap } from "../components/vehicles/FleetMap";
 import { vehicleFilters } from "../components/vehicles/vehicleTableConfig";
@@ -256,35 +257,16 @@ export const FleetPage = () => {
                     }
                 />
 
-                <div
-                    className={styles.chips}
-                    role="group"
-                    aria-label="Status"
-                >
-                    <button
-                        type="button"
-                        className={styles.chip}
-                        aria-pressed={filter === undefined}
-                        onClick={() => setFilter(undefined)}
-                    >
-                        Alle
-                    </button>
-                    {vehicleFilters.map((item) => (
-                        <button
-                            key={item.id}
-                            type="button"
-                            className={styles.chip}
-                            aria-pressed={filter === item.id}
-                            onClick={() =>
-                                setFilter(
-                                    filter === item.id ? undefined : item.id,
-                                )
-                            }
-                        >
-                            {item.displayText}
-                        </button>
-                    ))}
-                </div>
+                <TableFilterBar
+                    filters={vehicleFilters}
+                    activeFilterId={filter ?? null}
+                    onFilterChange={(id) =>
+                        setFilter((id as VehicleFilterId | null) ?? undefined)
+                    }
+                    showAll
+                    allLabel="Alle"
+                    ariaLabel="Status"
+                />
 
                 <div className={styles.meta}>
                     {isLoading &&
