@@ -10,7 +10,7 @@ alwaysApply: false
 app.ts + routes → Controllers → Models → SQLite
 ```
 
-- `app.ts` and `routes/` only wire HTTP to controllers (stream and sim live in `app.ts`, vehicles in `routes/`). Vehicle writes and `PATCH /api/sim` use `requireDispatcher` after `requireAuth`.
+- `app.ts` and `routes/` only wire HTTP to controllers (stream and sim live in `app.ts`, vehicles, alerts and drivers in `routes/`). Vehicle writes, `PATCH /api/sim`, and `PATCH /api/alerts/:id` use `requireDispatcher` after `requireAuth`.
 - Controllers validate, map HTTP, call models, set status codes. No SQL.
 - Models own SQL via `db/statements.ts` / `db/database.ts`. No `req`/`res`.
 
@@ -21,7 +21,8 @@ app.ts + routes → Controllers → Models → SQLite
 - Unique license plates are per company (`UNIQUE (company_id, license_plate)`).
 - `GET /api/vehicles` returns `{ data, meta }`. `GET /api/vehicles/positions` returns `{ data, meta.truncated }` of last-known positions (slim DTO, optional `bbox=west,south,east,north`, `search`, `drivers` names, and the same `filter` ids as the list). Over `FLEET_POSITIONS_MAX` matches → `truncated` and empty `data` (no sample). `GET /api/vehicles/drivers` returns `{ data: { name, license_plate }[], meta: { total, page, limit, pageCount } }` — search (`search`, `page`) plus optional `names` hydration. `total` is the match count, not the page size; it does not dump the roster. `GET /api/vehicles/:id/telemetry` and `GET /api/vehicles/:id/trips/latest` return `{ data }`. Vehicle JSON is snake_case, including nested telemetry fields.
 - A vehicle without a trip is `{ data: null }`, not a 404. Only a missing vehicle is a 404.
-- No alerts REST API. Unresolved count is `active_alerts` on the vehicle.
+- `GET /api/alerts` returns `{ data, meta }` for the session company (`filter` open/resolved/all, optional `vehicle_id` / `driver_id`, page/limit like the vehicle list). Join includes `license_plate`, `driver_name`, and `driver_id`. Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Access is `alert → vehicle → company`. Other company’s `vehicle_id`, `driver_id`, or alert id is `404`. `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`); a second close is idempotent. Unresolved count remains `active_alerts` on the vehicle. `speeding_open` on the vehicle is an unfinished SPEEDING event (`ended_at` null), independent of `resolved_at`.
+- `GET /api/drivers` returns `{ data, meta }` (search/page/limit). Counts cover **all** alerts per driver (including resolved); `open_warnings` is the unresolved subset. `GET /api/drivers/:id` adds vehicles. Other company’s driver is `404`. Vehicle writes upsert `drivers` from `driver_name` in the session company. `GET /api/vehicles/drivers` remains the fleet name picker.
 
 ## SSE
 

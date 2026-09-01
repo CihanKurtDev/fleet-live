@@ -14,22 +14,22 @@ fleet-live/
 
 Data flow: React `--HTTP + SSE /api-->` Express (`app.ts` + `routes/`) → controllers → models → SQLite.
 
-`@fleet-live/shared` is the contract. Do not duplicate vehicle, list-query, telemetry, or stream schemas in api or web.
+`@fleet-live/shared` is the contract. Do not duplicate vehicle, list-query, telemetry, stream, alert, or driver schemas in api or web.
 
 ## Boundaries
 
 - UI never accesses SQLite or API models.
 - Models never take `req` / `res`.
-- `apps/web/src/components/ui` is generic. Vehicle logic lives in `components/vehicles`, hooks, and `api/`.
+- `apps/web/src/components/ui` is generic. Vehicle logic lives in `components/vehicles`, alert logic in `components/alerts`, plus hooks and `api/`.
 - Live updates are SSE (`GET /api/stream`, `POST /api/stream/focus`), not WebSockets and not list polling.
 
 ## Current vs planned
 
-**Implemented:** vehicle CRUD; server-driven list (search/filter/sort/pagination/facets); SSE telemetry with per-connection focus; telemetry history API; trips with the driven path as an encoded polyline (`GET /api/vehicles/:id/trips/latest`); vehicle list/detail/CRUD UI; Leaflet detail map (marker, SSE, trail from the trip); fleet map (`/fleet`, last positions in the viewport, live ticks for driving vehicles in view); route simulation with a city/highway speed profile and fuel consumption; simulation pause via `GET`/`PATCH /api/sim`; companies; session login (`POST /api/auth/login`); tenant isolation by `company_id`; roles (`dispatcher` / `viewer`); per-company retention for closed trips (`TRIP_RETENTION_DAYS`).
+**Implemented:** vehicle CRUD; server-driven list (search/filter/sort/pagination/facets); SSE telemetry with per-connection focus; telemetry history API; trips with the driven path as an encoded polyline (`GET /api/vehicles/:id/trips/latest`); vehicle list/detail/CRUD UI; Leaflet detail map (marker, SSE, trail from the trip); fleet map (`/fleet`, last positions in the viewport, live ticks for driving vehicles in view); route simulation with a city/highway speed profile and fuel consumption; simulation pause via `GET`/`PATCH /api/sim`; companies; session login (`POST /api/auth/login`); tenant isolation by `company_id`; roles (`dispatcher` / `viewer`); per-company retention for closed trips (`TRIP_RETENTION_DAYS`); alerts REST/UI (`GET`/`PATCH /api/alerts`, inbox `/alerts`, detail panel, resolve); live SPEEDING events from the ticker (8 s over 90 km/h, one open row per vehicle, `ended_at` / `details`); drivers as entities (`GET /api/drivers`, `/drivers` UI); live speed indicator (`speedBand`: orange over 90 until the event opens, red while `speeding_open`, not sim 50/120, no low-speed colour).
 
-**Not implemented — do not treat as present:** alerts REST/UI, frontend tests, CI/CD.
+**Not implemented — do not treat as present:** frontend tests, CI/CD.
 
-The fleet map is `/fleet`, not the list page. After login it loads last positions for the session company in the visible bbox (`GET /api/vehicles/positions`). The driver picker is an optional view filter, not a requirement. Status chips and plate search apply to that company snapshot. If more than `FLEET_POSITIONS_MAX` match, `truncated` is set and no markers are drawn — not a sample of the first 2000 ids. `drivers` is a view filter, not a saved group. The list stays a query page. Unauthenticated vehicle, stream, and sim requests are `401`. Other companies’ vehicles are `404`, not listed. License plates are unique per company. SSE `vehicles-changed` and telemetry patches are delivered only to connections of the same company; `POST /api/stream/focus` cannot take over another company’s connection. `GET`/`PATCH /api/sim` pauses simulation for the session company only. Trips have no `company_id`; access is `trip → vehicle → company` (`TripModel.latestForVehicle` joins `vehicles`). `company_id` on create/update is taken from the session, never from the request body. `dispatcher` may create/update/delete vehicles and `PATCH /api/sim`. `viewer` gets `403` on those writes; reads (list, detail, map, stream, `GET /api/sim`) stay allowed within the company.
+The fleet map is `/fleet`, not the list page. After login it loads last positions for the session company in the visible bbox (`GET /api/vehicles/positions`). The driver picker is an optional view filter, not a requirement. Status chips and plate search apply to that company snapshot. If more than `FLEET_POSITIONS_MAX` match, `truncated` is set and no markers are drawn — not a sample of the first 2000 ids. `drivers` on the fleet query is a view filter, not a saved group. The list stays a query page. Unauthenticated vehicle, stream, sim, alert, and driver requests are `401`. Other companies’ vehicles and drivers are `404`, not listed. License plates are unique per company. Driver names are unique per company. SSE `vehicles-changed` and telemetry patches are delivered only to connections of the same company; `POST /api/stream/focus` cannot take over another company’s connection. `GET`/`PATCH /api/sim` pauses simulation for the session company only. Trips have no `company_id`; access is `trip → vehicle → company` (`TripModel.latestForVehicle` joins `vehicles`). Alerts have no `company_id`; access is `alert → vehicle → company` (`AlertModel` joins `vehicles`). Drivers have `company_id`. `company_id` on create/update is taken from the session, never from the request body. `dispatcher` may create/update/delete vehicles, `PATCH /api/sim`, and `PATCH /api/alerts/:id`. `viewer` gets `403` on those writes; reads (list, detail, map, stream, `GET /api/sim`, `GET /api/alerts`, `GET /api/drivers`) stay allowed within the company.
 
 ## Two layers of position data
 
@@ -45,11 +45,11 @@ The fleet map is `/fleet`, not the list page. After login it loads last position
 
 - `status` is what the vehicle reports. The UI shows it read-only. Do not offer start/stop trip in the frontend — a real fleet does not decide that, and the simulator already drives `DRIVING` vehicles. Pause **this company’s** simulation with `PATCH /api/sim` (not the whole process).
 - `DRIVING` opens a trip, any other status closes it (`syncTrip` in the vehicle controller). `TripModel.appendPoints` also opens one lazily, so seeded or imported driving vehicles still get a path.
-- Ending a trip writes a final telemetry point with speed `0` (`TelemetryModel.recordStandstill`).
+- Ending a trip writes a final telemetry point with speed `0` (`TelemetryModel.recordStandstill`) and ends an open SPEEDING event (`SpeedingEventModel.endForVehicle`).
 - `fuel_level` is measured while `DRIVING` (simulator) and manually maintainable otherwise. Do not overwrite a measured value with a stale form value.
 - A trip has no per-point speed or time by design. Do not add parallel arrays; aggregates (`distance_m`, `max_speed`) live on the trip.
 
-The `users` table backs login. `role` is `dispatcher` or `viewer`. Isolation is company, not driver. The `alerts` table and `active_alerts` count/filter exist; there is no `GET /api/alerts`.
+The `users` table backs login. `role` is `dispatcher` or `viewer`. Isolation is company, not driver. Drivers are a company-scoped entity (`UNIQUE (company_id, name)`); `vehicles.driver_id` is the FK, `driver_name` stays denormalized for search/forms. Alerts hang off `vehicle_id`; `GET`/`PATCH /api/alerts` joins `vehicles`. Inbox `open` is `resolved_at IS NULL` (independent of `ended_at`). SPEEDING rows are written by the ticker (`SpeedingEventModel`): 8 s consecutive over `SPEED_HIGH_WARNING_KMH` (90), one open event per vehicle (`ended_at` null), then `max_speed` / `duration_s` in `details` JSON; 2 s hysteresis or leaving `DRIVING` sets `ended_at` but not `resolved_at`. Seed still inserts LOW_FUEL/OFFLINE only. Live colour is the same rule: orange while over 90 without an open event, red while `speeding_open`. Open alerts are the warning inbox; all alert rows (including resolved) are violation history on `/drivers`.
 
 ## Source of truth
 

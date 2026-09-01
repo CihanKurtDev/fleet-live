@@ -2,7 +2,7 @@
 
 fleet-live — fleet management app (TypeScript monorepo). Vehicles, telemetry, and a React UI; live updates over SSE.
 
-Phase 4 (login and company isolation) is in place. Status detail: `.cursor/rules/architecture.mdc`.
+Phase 4 (login and company isolation) is in place. Drivers, warning inbox and the live speed indicator are in place. Status detail: `.cursor/rules/architecture.mdc`.
 
 ## General
 
@@ -16,7 +16,7 @@ Phase 4 (login and company isolation) is in place. Status detail: `.cursor/rules
 
 - Code is what exists. If README and code disagree, code wins. README Current Status / Roadmap should describe the running system.
 - `apps/docs/table.md` is the table-component spec, not a backlog. Do not add client-side vehicle-list sorting because `sortRows.ts` exists.
-- README mentions alerts as a domain (table, `active_alerts`, filter). That is not an alerts REST API.
+- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts`). SPEEDING rows are live ticker events (8 s over 90); LOW_FUEL/OFFLINE remain seeded. That is not OSM and not a general rule engine.
 
 ## Workflow
 
