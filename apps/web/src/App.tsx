@@ -20,6 +20,8 @@ function AppShell() {
                         <NavLink to="/fleet" aria-label="Flottenkarte">
                             Karte
                         </NavLink>
+                        <NavLink to="/alerts">Warnungen</NavLink>
+                        <NavLink to="/drivers">Fahrer</NavLink>
                     </nav>
                 )}
                 {user && user.role === "dispatcher" && <SimToggle />}

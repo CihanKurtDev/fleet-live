@@ -15,3 +15,7 @@ export function sqliteDaysAgo(days: number): string {
 function sqliteFromDate(date: Date): string {
     return date.toISOString().slice(0, 19).replace("T", " ");
 }
+
+export function sqliteFromMs(ms: number): string {
+    return sqliteFromDate(new Date(ms));
+}

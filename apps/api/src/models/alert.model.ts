@@ -1,0 +1,324 @@
+import type {
+    Alert,
+    AlertDetails,
+    AlertListQuery,
+    AlertListResponse,
+    SpeedingAlertDetails,
+} from "@fleet-live/shared";
+import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
+import { stmt } from "../db/statements";
+import { nowSqlite } from "../lib/sqlTime";
+
+const ALERT_COLUMNS = `
+        a.id,
+        a.vehicle_id,
+        v.driver_id,
+        v.license_plate,
+        v.driver_name,
+        a.type,
+        a.severity,
+        a.message,
+        a.details,
+        a.created_at,
+        a.ended_at,
+        a.resolved_at
+`;
+
+const SELECT_ONE = `
+    SELECT
+        ${ALERT_COLUMNS}
+    FROM alerts a
+    INNER JOIN vehicles v ON v.id = a.vehicle_id
+    WHERE a.id = ?
+      AND v.company_id = ?
+`;
+
+const SELECT_OPEN_SPEEDING = `
+    SELECT id, created_at, details
+    FROM alerts
+    WHERE vehicle_id = ?
+      AND type = 'SPEEDING'
+      AND ended_at IS NULL
+    LIMIT 1
+`;
+
+const INSERT_SPEEDING = `
+    INSERT INTO alerts (
+        vehicle_id,
+        type,
+        severity,
+        message,
+        details,
+        created_at
+    )
+    VALUES (?, 'SPEEDING', ?, ?, ?, ?)
+`;
+
+const UPDATE_SPEEDING = `
+    UPDATE alerts
+    SET severity = ?, message = ?, details = ?
+    WHERE id = ?
+      AND type = 'SPEEDING'
+      AND ended_at IS NULL
+`;
+
+const END_SPEEDING = `
+    UPDATE alerts
+    SET ended_at = ?
+    WHERE id = ?
+      AND type = 'SPEEDING'
+      AND ended_at IS NULL
+`;
+
+const RESOLVE = `
+    UPDATE alerts
+    SET resolved_at = ?
+    WHERE id = ?
+      AND resolved_at IS NULL
+      AND vehicle_id IN (
+          SELECT id FROM vehicles WHERE company_id = ?
+      )
+`;
+
+const FILTER_SQL = {
+    open: "AND a.resolved_at IS NULL",
+    resolved: "AND a.resolved_at IS NOT NULL",
+    all: "",
+} as const;
+
+type AlertSqlRow = Omit<Alert, "details"> & {
+    details: string | AlertDetails | null;
+    total?: number;
+};
+
+type FacetRow = {
+    all_count: number;
+    open_count: number;
+    resolved_count: number;
+};
+
+function parseDetails(raw: unknown): AlertDetails | null {
+    if (raw == null) {
+        return null;
+    }
+
+    if (typeof raw === "object") {
+        return raw as AlertDetails;
+    }
+
+    if (typeof raw !== "string" || raw === "") {
+        return null;
+    }
+
+    try {
+        return JSON.parse(raw) as AlertDetails;
+    } catch {
+        return null;
+    }
+}
+
+function toAlert(row: AlertSqlRow): Alert {
+    const { total: _total, details, ...alert } = row;
+    return {
+        ...alert,
+        details: parseDetails(details),
+    };
+}
+
+export function speedingDetailsJson(details: SpeedingAlertDetails): string {
+    return JSON.stringify(details);
+}
+
+export function speedingMessage(details: SpeedingAlertDetails): string {
+    return formatAlertEvent({
+        type: "SPEEDING",
+        message: "Geschwindigkeit überschritten.",
+        details,
+    });
+}
+
+export class AlertModel {
+    static listForCompany(
+        companyId: number,
+        query: AlertListQuery,
+    ): AlertListResponse {
+        const offset = (query.page - 1) * query.limit;
+        const filterSql = FILTER_SQL[query.filter];
+        const vehicleSql =
+            query.vehicle_id !== undefined ? "AND a.vehicle_id = ?" : "";
+        const driverSql =
+            query.driver_id !== undefined ? "AND v.driver_id = ?" : "";
+        const sortDirection = query.dir === "asc" ? "ASC" : "DESC";
+        const scopeParams = [
+            ...(query.vehicle_id !== undefined ? [query.vehicle_id] : []),
+            ...(query.driver_id !== undefined ? [query.driver_id] : []),
+        ];
+
+        const listSql = `
+            SELECT
+                ${ALERT_COLUMNS},
+                COUNT(*) OVER () AS total
+            FROM alerts a
+            INNER JOIN vehicles v ON v.id = a.vehicle_id
+            WHERE v.company_id = ?
+              ${vehicleSql}
+              ${driverSql}
+              ${filterSql}
+            ORDER BY a.created_at ${sortDirection}, a.id ${sortDirection}
+            LIMIT ? OFFSET ?
+        `;
+
+        const rows = stmt(listSql).all(
+            companyId,
+            ...scopeParams,
+            query.limit,
+            offset,
+        ) as AlertSqlRow[];
+
+        let total = rows[0]?.total ?? 0;
+
+        if (rows.length === 0) {
+            const countSql = `
+                SELECT COUNT(*) AS total
+                FROM alerts a
+                INNER JOIN vehicles v ON v.id = a.vehicle_id
+                WHERE v.company_id = ?
+                  ${vehicleSql}
+                  ${driverSql}
+                  ${filterSql}
+            `;
+            total = (
+                stmt(countSql).get(companyId, ...scopeParams) as {
+                    total: number;
+                }
+            ).total;
+        }
+
+        const facetSql = `
+            SELECT
+                COUNT(*) AS all_count,
+                COALESCE(SUM(a.resolved_at IS NULL), 0) AS open_count,
+                COALESCE(SUM(a.resolved_at IS NOT NULL), 0) AS resolved_count
+            FROM alerts a
+            INNER JOIN vehicles v ON v.id = a.vehicle_id
+            WHERE v.company_id = ?
+              ${vehicleSql}
+              ${driverSql}
+        `;
+        const counts = stmt(facetSql).get(
+            companyId,
+            ...scopeParams,
+        ) as FacetRow;
+        const pageCount = Math.max(1, Math.ceil(total / query.limit));
+
+        return {
+            data: rows.map(toAlert),
+            meta: {
+                page: query.page,
+                limit: query.limit,
+                total,
+                pageCount,
+                counts: {
+                    all: Number(counts.all_count),
+                    open: Number(counts.open_count),
+                    resolved: Number(counts.resolved_count),
+                },
+            },
+        };
+    }
+
+    static getById(id: number, companyId: number): Alert | undefined {
+        const row = stmt(SELECT_ONE).get(id, companyId) as
+            | AlertSqlRow
+            | undefined;
+        return row ? toAlert(row) : undefined;
+    }
+
+    /**
+     * Setzt `resolved_at`, wenn die Warnung noch offen ist. Schon erledigte
+     * Zeilen bleiben unverändert (kein zweiter Trigger-Tick am Zähler).
+     */
+    static resolve(id: number, companyId: number): Alert | undefined {
+        const current = this.getById(id, companyId);
+        if (!current) {
+            return undefined;
+        }
+
+        if (current.resolved_at !== null) {
+            return current;
+        }
+
+        stmt(RESOLVE).run(nowSqlite(), id, companyId);
+        return this.getById(id, companyId) ?? current;
+    }
+
+    static findOpenSpeeding(vehicleId: number): {
+        id: number;
+        created_at: string;
+        maxSpeed: number;
+        details: SpeedingAlertDetails | null;
+    } | undefined {
+        const row = stmt(SELECT_OPEN_SPEEDING).get(vehicleId) as
+            | {
+                  id: number;
+                  created_at: string;
+                  details: string | null;
+              }
+            | undefined;
+
+        if (!row) {
+            return undefined;
+        }
+
+        const details = parseDetails(row.details);
+        const speeding = isSpeedingAlertDetails(details) ? details : null;
+
+        return {
+            id: row.id,
+            created_at: row.created_at,
+            maxSpeed: speeding?.max_speed_kmh ?? 0,
+            details: speeding,
+        };
+    }
+
+    static openSpeeding(input: {
+        vehicleId: number;
+        createdAt: string;
+        severity: "MEDIUM" | "HIGH";
+        details: SpeedingAlertDetails;
+    }): number {
+        const existing = this.findOpenSpeeding(input.vehicleId);
+
+        if (existing) {
+            this.updateSpeeding(existing.id, input.severity, input.details);
+            return existing.id;
+        }
+
+        const result = stmt(INSERT_SPEEDING).run(
+            input.vehicleId,
+            input.severity,
+            speedingMessage(input.details),
+            speedingDetailsJson(input.details),
+            input.createdAt,
+        );
+
+        return Number(result.lastInsertRowid);
+    }
+
+    static updateSpeeding(
+        id: number,
+        severity: "MEDIUM" | "HIGH",
+        details: SpeedingAlertDetails,
+    ): void {
+        stmt(UPDATE_SPEEDING).run(
+            severity,
+            speedingMessage(details),
+            speedingDetailsJson(details),
+            id,
+        );
+    }
+
+    static endSpeeding(id: number, endedAt: string): void {
+        stmt(END_SPEEDING).run(endedAt, id);
+    }
+}

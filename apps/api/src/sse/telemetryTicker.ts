@@ -1,5 +1,6 @@
 import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
+import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { broadcast, getFocusUnion } from "./hub";
 import type { TelemetryPatch } from "@fleet-live/shared";
 
@@ -51,7 +52,13 @@ export function startTelemetryTicker(ms: number) {
                 return;
             }
 
-            broadcastPatches(TelemetryModel.tickDrivingVehicles(focusIds));
+            const patches = TelemetryModel.tickDrivingVehicles(focusIds);
+            const notifyCompanies = SpeedingEventModel.applyPatches(patches);
+            broadcastPatches(patches);
+
+            for (const companyId of notifyCompanies) {
+                broadcast("vehicles-changed", { at: Date.now() }, companyId);
+            }
         } catch (error) {
             logger.error({ err: error }, "telemetry tick failed");
         }

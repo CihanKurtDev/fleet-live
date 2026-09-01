@@ -4,7 +4,7 @@ A full-stack fleet management application built with **TypeScript, Node.js, Expr
 
 > **Status: Work in progress.** Phases 1–4 are in place (vehicles, UI, live map, login and company isolation). The app is a personal engineering project, not a finished product.
 
-This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. GPS is simulated. Alerts exist only as a count on the vehicle.
+This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. GPS is simulated. SPEEDING warnings are live ticker events (8 s over 90 km/h); list colour uses the same threshold. LOW_FUEL and OFFLINE remain seeded.
 
 ---
 
@@ -12,9 +12,9 @@ This is closer to a real fleet system than a tutorial: server-driven lists, SSE 
 
 `fleet-live` monitors vehicles, last positions, live movement and trip paths for **one company per logged-in user**.
 
-The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream and sim requests are `401`. Other companies’ vehicles are `404`, not listed.
+The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream, sim and alert requests are `401`. Other companies’ vehicles are `404`, not listed.
 
-**Next product step:** alerts REST API and UI. Table, seed rows and `active_alerts` already exist.
+**Next product step:** invite / password reset, optional multi-company membership, frontend tests and operations (CI/CD, production database, observability).
 
 ---
 
@@ -33,8 +33,11 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Route simulation (baked geometries, city/highway profile, fuel); pause per company (`GET`/`PATCH /api/sim`)
 * Companies; users belong to exactly one company
 * Session login
-* Roles: `dispatcher` (write + sim pause) and `viewer` (read only)
+* Roles: `dispatcher` (write + sim pause + resolve alerts) and `viewer` (read only)
 * Tenant isolation: `company_id` from the session, never from the client body; plates unique per company; SSE and sim scoped to that company; trips via `trip → vehicle → company`
+* Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts`); live SPEEDING events from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
+* Drivers as entities (`drivers` table, `vehicle.driver_id`); list/detail `/drivers` with incident counts
+* Live speed indicator (`speedBand`: orange over 90 until the event opens, red while `speeding_open`)
 * API integration tests (`node:test` + SuperTest)
 
 ### Consciously simplified / demo
@@ -44,7 +47,8 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Companies 2 and 3 exist in seed for isolation. There is no demo login for them — cross-tenant checks are API tests, or a company-1 user opening another company’s vehicle id (`404`)
 * SQLite file database
 * One company per user (no membership table, no company switcher)
-* Alerts: table + `active_alerts` count/filter only — no REST, no UI, seeded dummy rows
+* Alerts: SPEEDING is written by the ticker (one open row per vehicle); LOW_FUEL/OFFLINE are still seed-only. Not OSM, not a general rule engine
+* Live tempo colour uses the same 90 km/h demo threshold (`speedBand` + `speeding_open`) — not the sim’s 50/120 profile and not map limits. No low-speed colour
 * OSM tiles via Leaflet
 
 ### Technical debt (not production-ready)
@@ -59,7 +63,6 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 
 ### Roadmap (not implemented)
 
-* Alerts REST/UI
 * Invite / password reset / registration
 * Optional multi-company membership
 * Production database, CI/CD, observability
@@ -106,7 +109,7 @@ Routes/controllers handle HTTP. Models own SQL and do not take `req`/`res`. The 
 
 `@fleet-live/shared` is the contract. Do not duplicate vehicle, list-query, telemetry, stream or login schemas in api or web.
 
-Company membership is read from the session. Child rows (telemetry, trips, alerts) hang off `vehicle_id`. HTTP access checks the vehicle’s company first. Trip reads also join `vehicles` (`trip → vehicle → company`). There is no `company_id` on `trips`.
+Company membership is read from the session. Child rows (telemetry, trips, alerts) hang off `vehicle_id`. Drivers hang off `company_id`; vehicles point at `driver_id`. HTTP access checks the vehicle’s or driver’s company first. Trip reads also join `vehicles` (`trip → vehicle → company`). There is no `company_id` on `trips` or `alerts`.
 
 ---
 
@@ -154,9 +157,17 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | `POST`   | `/api/stream/focus`              | `{ connection_id, ids }` — only vehicles of this company; connection must belong to this company |
 | `GET`    | `/api/sim`                       | `{ running, available }` for **this** company |
 | `PATCH`  | `/api/sim`                       | `{ running }` — pause/resume this company’s simulation |
+| `GET`    | `/api/alerts`                    | Paginated alerts (`filter` open/resolved/all, `vehicle_id`, `driver_id`, `page`, `limit`) |
+| `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }` — close; `dispatcher` only |
+| `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`) with type counts |
+| `GET`    | `/api/drivers/:id`               | Driver, vehicles, incident counts (`404` if missing **or** other company) |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
 `GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
+
+`GET /api/alerts` returns `{ data, meta }` of alerts joined with plate, driver name and `driver_id`. Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Default `filter=open` is `resolved_at IS NULL` (independent of `ended_at`). `meta.counts` is `open` / `resolved` / `all`. Optional `vehicle_id` or `driver_id` (404 if missing or other company).
+
+`GET /api/drivers` returns `{ data, meta }` of drivers for the session company. Counts include **all** alert rows (open and resolved). `open_warnings` is the unresolved subset. `vehicle_plate` is set when the driver has exactly one vehicle. `GET /api/drivers/:id` adds assigned vehicles.
 
 `GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions, not the list page. Optional `bbox=west,south,east,north`; `search` matches plate and driver; `drivers` is a view filter (empty means the company snapshot in the bbox, not “no markers”). Over `FLEET_POSITIONS_MAX` (2000) matches → `truncated` and empty `data` (no sample).
 
@@ -174,7 +185,7 @@ Validation example:
 }
 ```
 
-Vehicle JSON includes last telemetry (or `null`) and `active_alerts`.
+Vehicle JSON includes last telemetry (or `null`), `active_alerts`, `speeding_open` (unfinished SPEEDING event), and `driver_id`. Write API still takes `driver_name`; the model upserts a driver in that company.
 
 ---
 
@@ -182,7 +193,7 @@ Vehicle JSON includes last telemetry (or `null`) and `active_alerts`.
 
 Master data a person maintains: license plate and driver. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
 
-Responses also include last position/speed/`recorded_at`, `active_alerts`, and `created_at`.
+Responses also include last position/speed/`recorded_at`, `active_alerts`, `speeding_open`, and `created_at`.
 
 `company_id` is assigned from the session on create. The client cannot choose it.
 
@@ -199,10 +210,13 @@ List state lives in the URL. Reloading keeps the view; a fresh visit to `/vehicl
 | `/login`        | Session login |
 | `/`             | Redirects to `/vehicles` (auth required) |
 | `/vehicles`     | List and create dialog |
-| `/vehicles/:id` | Detail, map/trail, edit, delete |
+| `/vehicles/:id` | Detail, map/trail, alerts, edit, delete |
 | `/fleet`        | Fleet map |
+| `/alerts`       | Warning inbox (open/resolved, optional `vehicle_id` / `driver_id`) |
+| `/drivers`      | Driver list (incident counts) |
+| `/drivers/:id`  | Driver detail, vehicles, violation history |
 
-Unauthenticated visits to vehicle/fleet routes go to `/login`.
+Unauthenticated visits to vehicle, fleet, alert and driver routes go to `/login`.
 
 ## Vehicle list
 
@@ -252,13 +266,29 @@ Deliberate trade-offs:
 
 ---
 
-# Alerts
+# Alerts, warnings, violations
 
-The `alerts` table and `active_alerts` on the vehicle exist. The list can filter and highlight by that count.
+Three layers share the same `alerts` rows; they are not three tables:
 
-There is **no** `GET /api/alerts` and no alerts UI. Seeded rows are demo data.
+* **Indicator** — `speedBand` plus `speeding_open`. Orange while over 90 km/h without an open event; red while a SPEEDING row has `ended_at` null. Only `DRIVING`. After the event ends the cell is normal even if the inbox row is still unresolved.
+* **Warning** — `alerts` where `resolved_at IS NULL`. Operative inbox `/alerts`. Dispatcher acknowledges with `PATCH`. Event end (`ended_at`) is not the same as resolved.
+* **Violation history** — all `alerts` rows, including resolved. Counted per driver on `/drivers`. `resolved_at` means “seen”, not “did not happen”.
 
-**Optional later:** speeding and similar types need map-derived speed limits, not the simulator profile. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
+The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → company`. `driver_id` on the DTO is the vehicle’s current driver (join). `active_alerts` is the unresolved count (triggers) and remains on the vehicle JSON and list filter.
+
+`GET /api/alerts` is the company inbox (`{ data, meta }`). Default `filter=open`. Optional `vehicle_id` or `driver_id` (404 if missing or another company). `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`). A second close is idempotent. Viewer may read, not resolve. After a close the API broadcasts `vehicles-changed` so the list count updates.
+
+The ticker writes SPEEDING: 8 s consecutive over 90 km/h, one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Seed still inserts LOW_FUEL/OFFLINE only. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
+
+**Optional later:** OSM/map-derived limits instead of 90. Do not treat the simulator’s 50/120 profile as legal limits. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
+
+---
+
+# Drivers
+
+`drivers` is a real entity (`UNIQUE (company_id, name)`). Vehicles keep denormalized `driver_name` for search and forms; `driver_id` is the stable link. Creating or renaming a vehicle upserts a driver in the session company. A new name creates a new row; the old driver remains.
+
+`GET /api/drivers` and `GET /api/drivers/:id` aggregate incident counts (all alert types, including resolved) and open warnings. Isolation is still company. `GET /api/vehicles/drivers` remains the fleet-map name picker, not this roster.
 
 ---
 
@@ -268,7 +298,8 @@ There is **no** `GET /api/alerts` and no alerts UI. Seeded rows are demo data.
 companies
 users          → company_id
 sessions       → user_id
-vehicles       → company_id   UNIQUE (company_id, license_plate)
+drivers        → company_id   UNIQUE (company_id, name)
+vehicles       → company_id, driver_id   UNIQUE (company_id, license_plate)
 telemetry      → vehicle_id
 trips          → vehicle_id   (one open trip per vehicle)
 alerts         → vehicle_id
@@ -286,7 +317,7 @@ Implemented:
 * scrypt password hashes
 * HttpOnly session cookie
 * Isolation by `company_id` on the user (one company per account)
-* Roles: `dispatcher` may mutate vehicles and pause the sim; `viewer` may only read
+* Roles: `dispatcher` may mutate vehicles, pause the sim and resolve alerts; `viewer` may only read (including inbox, drivers, indicators)
 * SSE connections and sim pause bound to that company
 
 Not the same as production auth: no reset, lockout, invite, or multi-company membership. CORS `*` is a local default; cookies work because the Vite proxy is same-origin. A split-host deploy needs an explicit origin plus credentialed CORS, not a token redesign.
@@ -389,7 +420,6 @@ Not production-ready. Incomplete by design:
 
 * Production-grade auth (reset, lockout, CSRF for cross-origin cookies)
 * Multi-company users
-* Alerts REST/UI
 * Frontend tests (no runner yet — do not add Jest/Vitest as a checklist item)
 * CI/CD, production database, observability
 * CORS/credentials and rate-limit hardening for a real deployment (including login)
@@ -422,16 +452,18 @@ Not production-ready. Incomplete by design:
 
 ## Phase 5 — still open
 
-Phase 4 already isolates data by company. What remains is product and operations, not a second isolation rewrite:
+Phase 4 already isolates data by company. Alerts REST/UI, drivers, and live SPEEDING events are in place. What remains is product and operations, not a second isolation rewrite:
 
-* [ ] Alerts REST/UI
+* [x] Alerts REST/UI
+* [x] Drivers entity, driver pages, live speed indicator
+* [x] Live SPEEDING events (ticker, 8 s over 90) aligned with list colour
 * [ ] Invite / password reset
 * [ ] Optional multi-company membership
 * [ ] Frontend tests, CI/CD, production database, observability
 
 ## Optional
 
-* [ ] Speed-limit alerts. Needs map-derived limits; do not treat the sim’s 50/120 profile as legal limits.
+* [ ] Replace the demo 90 km/h threshold with map-derived limits. Do not treat the sim’s 50/120 profile as legal limits.
 
 ---
 

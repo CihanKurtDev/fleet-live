@@ -14,6 +14,8 @@ export type TelemetryPatch = {
     recorded_at: string;
     /** Gemessener Tankstand, solange das Fahrzeug unterwegs ist. */
     fuel_level: number;
+    /** Offenes SPEEDING-Ereignis nach dem Tick, für die Live-Farbe. */
+    speeding_open?: boolean;
     /**
      * Encoded-Polyline-Suffix der dieses Tick gefahrenen Straßenpunkte.
      * Relativ zum letzten Punkt der offenen Fahrt — an `Trip.path` anhängen,

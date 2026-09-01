@@ -31,7 +31,13 @@ export type Vehicle = {
     speed: number | null;
     recorded_at: string | null;
     active_alerts: number;
+    /**
+     * Offenes SPEEDING-Ereignis (`ended_at` null). Steuert die rote Tempo-Zelle,
+     * unabhängig davon ob der Dispatcher die Inbox-Zeile schon erledigt hat.
+     */
+    speeding_open: boolean;
     created_at: string;
+    driver_id: number;
 };
 
 /** Die vom Client beschreibbaren Felder eines Fahrzeugs. */

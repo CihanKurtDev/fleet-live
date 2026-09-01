@@ -10,6 +10,7 @@ import { db } from "../db/database";
 import { simplifyPath } from "../lib/geo";
 import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
+import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import {
@@ -566,11 +567,12 @@ describe("GET /api/vehicles/positions", () => {
                 INSERT INTO vehicles (
                     license_plate,
                     driver_name,
+                    driver_id,
                     fuel_level,
                     status,
                     company_id
                 )
-                VALUES (?, ?, 80, 'IDLE', 1)
+                VALUES (?, ?, ?, 80, 'IDLE', 1)
             `,
         );
         const insertTelemetry = db.prepare(
@@ -583,9 +585,12 @@ describe("GET /api/vehicles/positions", () => {
 
         db.exec("BEGIN");
         for (let index = 0; index < overLimit; index += 1) {
+            const driverName = `Driver ${index}`;
+            const driverId = DriverModel.upsert(1, driverName);
             const result = insertVehicle.run(
                 `K-T ${String(index).padStart(4, "0")}`,
-                `Driver ${index}`,
+                driverName,
+                driverId,
             );
             insertTelemetry.run(Number(result.lastInsertRowid));
         }
