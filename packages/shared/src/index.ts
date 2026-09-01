@@ -53,6 +53,40 @@ export {
 
 export type { Trip, TripResponse } from "./models/trip";
 
+export type {
+    Alert,
+    AlertDetails,
+    AlertFilterId,
+    AlertListCounts,
+    AlertListMeta,
+    AlertListQuery,
+    AlertListResponse,
+    AlertPageLimit,
+    AlertPatch,
+    AlertSeverity,
+    AlertSortKey,
+    AlertType,
+    SpeedingAlertDetails,
+} from "./models/alert";
+
+export {
+    ALERT_FILTERS,
+    ALERT_SEVERITIES,
+    ALERT_SORT_KEYS,
+    ALERT_TYPES,
+    alertListQuerySchema,
+    alertPatchSchema,
+    formatAlertEvent,
+    isAlertFilterId,
+    isAlertSeverity,
+    isAlertSortKey,
+    isAlertType,
+    isSpeedingAlertDetails,
+    parseAlertListQuery,
+    parseAlertPatch,
+    serializeAlertListQuery,
+} from "./models/alert";
+
 export type { GeoPoint } from "./geo/polyline";
 
 export {
@@ -77,6 +111,36 @@ export { USER_ROLES, parseLoginInput } from "./models/auth";
 export type { SimPatch, SimState } from "./models/sim";
 
 export { parseSimPatch, simPatchSchema } from "./models/sim";
+
+export type { SpeedBand, SpeedBandReason, SpeedBandResult } from "./models/speedBand";
+
+export {
+    SPEED_BANDS,
+    SPEED_BAND_REASONS,
+    SPEED_HIGH_CRITICAL_KMH,
+    SPEED_HIGH_WARNING_KMH,
+    SPEEDING_HYSTERESIS_MS,
+    SPEEDING_OPEN_AFTER_MS,
+    speedBand,
+} from "./models/speedBand";
+
+export type {
+    Driver,
+    DriverDetail,
+    DriverDetailResponse,
+    DriverIncidentCounts,
+    DriverListMeta,
+    DriverListQuery,
+    DriverListResponse,
+    DriverVehicle,
+} from "./models/driver";
+
+export {
+    DRIVER_INCIDENT_TYPES,
+    driverListQuerySchema,
+    parseDriverListQuery,
+    serializeDriverListQuery,
+} from "./models/driver";
 
 export type {
     FleetDriver,
