@@ -32,9 +32,22 @@ CREATE TABLE IF NOT EXISTS sessions (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS drivers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id),
+
+    UNIQUE (company_id, name)
+);
+
 CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id INTEGER NOT NULL,
+    driver_id INTEGER NOT NULL,
     license_plate TEXT NOT NULL,
     driver_name TEXT NOT NULL,
     fuel_level REAL NOT NULL DEFAULT 100
@@ -50,6 +63,9 @@ CREATE TABLE IF NOT EXISTS vehicles (
 
     FOREIGN KEY (company_id)
         REFERENCES companies(id),
+
+    FOREIGN KEY (driver_id)
+        REFERENCES drivers(id),
 
     UNIQUE (company_id, license_plate)
 );
@@ -98,7 +114,9 @@ CREATE TABLE IF NOT EXISTS alerts (
     type TEXT NOT NULL,
     severity TEXT NOT NULL,
     message TEXT NOT NULL,
+    details TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at TEXT,
     resolved_at TEXT,
 
     FOREIGN KEY (vehicle_id)

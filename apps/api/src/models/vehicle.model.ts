@@ -13,6 +13,8 @@ import type {
     VehicleFilterId,
 } from "@fleet-live/shared";
 import { FLEET_DRIVERS_LIST_LIMIT, FLEET_POSITIONS_MAX } from "@fleet-live/shared";
+import { DriverModel } from "./driver.model";
+import { SpeedingEventModel } from "./speedingEvent.model";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 
@@ -44,11 +46,19 @@ const FILTER_SQL: Record<VehicleFilterId, string> = {
     offline: "v.status = 'OFFLINE'",
 };
 
+const SPEEDING_OPEN_SQL = `EXISTS (
+        SELECT 1 FROM alerts a
+        WHERE a.vehicle_id = v.id
+          AND a.type = 'SPEEDING'
+          AND a.ended_at IS NULL
+    ) AS speeding_open`;
+
 const SELECT_ONE = `
     SELECT
         v.id,
         v.license_plate,
         v.driver_name,
+        v.driver_id,
         v.fuel_level,
         v.status,
         t.latitude,
@@ -56,6 +66,7 @@ const SELECT_ONE = `
         t.speed,
         t.recorded_at,
         v.active_alerts,
+        ${SPEEDING_OPEN_SQL},
         v.created_at
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
@@ -66,16 +77,17 @@ const INSERT_VEHICLE = `
     INSERT INTO vehicles (
         license_plate,
         driver_name,
+        driver_id,
         fuel_level,
         status,
         company_id
     )
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?)
 `;
 
 const UPDATE_VEHICLE = `
     UPDATE vehicles
-    SET license_plate = ?, driver_name = ?, fuel_level = ?, status = ?
+    SET license_plate = ?, driver_name = ?, driver_id = ?, fuel_level = ?, status = ?
     WHERE id = ? AND company_id = ?
 `;
 
@@ -99,7 +111,10 @@ const FACET_SQL = `
       AND ${LIST_SEARCH_SQL}
 `;
 
-type ListRow = Vehicle & { total: number };
+type ListRow = Omit<Vehicle, "speeding_open"> & {
+    speeding_open: number | boolean;
+    total: number;
+};
 
 type FacetRow = {
     all_count: number;
@@ -119,8 +134,11 @@ function toLikePattern(search: string): string {
 }
 
 function toVehicle(row: ListRow): Vehicle {
-    const { total: _total, ...vehicle } = row;
-    return vehicle;
+    const { total: _total, speeding_open, ...vehicle } = row;
+    return {
+        ...vehicle,
+        speeding_open: Boolean(speeding_open),
+    };
 }
 
 export class VehicleModel {
@@ -143,6 +161,7 @@ export class VehicleModel {
                 v.id,
                 v.license_plate,
                 v.driver_name,
+                v.driver_id,
                 v.fuel_level,
                 v.status,
                 t.latitude,
@@ -150,6 +169,7 @@ export class VehicleModel {
                 t.speed,
                 t.recorded_at,
                 v.active_alerts,
+                ${SPEEDING_OPEN_SQL},
                 v.created_at,
                 COUNT(*) OVER () AS total
             FROM vehicles v
@@ -365,10 +385,12 @@ export class VehicleModel {
     }
 
     static getById(id: number, companyId: number): Vehicle | undefined {
-        return stmt(`${SELECT_ONE} AND v.company_id = ?`).get(
+        const row = stmt(`${SELECT_ONE} AND v.company_id = ?`).get(
             id,
             companyId,
-        ) as Vehicle | undefined;
+        ) as ListRow | undefined;
+
+        return row ? toVehicle(row) : undefined;
     }
 
     static ownedIds(ids: number[], companyId: number): number[] {
@@ -403,18 +425,18 @@ export class VehicleModel {
     }
 
     static create(input: VehicleCreateInput): Vehicle {
+        const companyId = input.company_id ?? 1;
+        const driverId = DriverModel.upsert(companyId, input.driver_name);
         const result = stmt(INSERT_VEHICLE).run(
             input.license_plate,
             input.driver_name,
+            driverId,
             input.fuel_level ?? 100,
             input.status ?? "IDLE",
-            input.company_id ?? 1,
+            companyId,
         );
 
-        const created = this.getById(
-            Number(result.lastInsertRowid),
-            input.company_id ?? 1,
-        );
+        const created = this.getById(Number(result.lastInsertRowid), companyId);
         if (!created) {
             throw new Error("Created vehicle was not found.");
         }
@@ -426,9 +448,11 @@ export class VehicleModel {
         input: VehiclePutInput,
         companyId: number,
     ): Vehicle | undefined {
+        const driverId = DriverModel.upsert(companyId, input.driver_name);
         const result = stmt(UPDATE_VEHICLE).run(
             input.license_plate,
             input.driver_name,
+            driverId,
             input.fuel_level,
             input.status,
             id,
@@ -451,9 +475,12 @@ export class VehicleModel {
             return undefined;
         }
 
+        const driverName = input.driver_name ?? current.driver_name;
+        const driverId = DriverModel.upsert(companyId, driverName);
         const result = stmt(UPDATE_VEHICLE).run(
             input.license_plate ?? current.license_plate,
-            input.driver_name ?? current.driver_name,
+            driverName,
+            driverId,
             input.fuel_level ?? current.fuel_level,
             input.status ?? current.status,
             id,
@@ -472,9 +499,11 @@ export class VehicleModel {
     }
 
     static resetForTests() {
+        SpeedingEventModel.resetForTests();
         db.exec("DELETE FROM vehicles");
+        db.exec("DELETE FROM drivers");
         db.exec(
-            "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts', 'trips')",
+            "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts', 'trips', 'drivers')",
         );
     }
 }

@@ -13,6 +13,8 @@ import { requireDispatcher } from "./middleware/requireDispatcher";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 import vehicleRoutes from "./routes/vehicle.routes";
+import alertRoutes from "./routes/alert.routes";
+import driverRoutes from "./routes/driver.routes";
 import authRoutes from "./routes/auth.routes";
 import { setStreamFocus, streamEvents } from "./controllers/stream.controller";
 import { getSim, updateSim } from "./controllers/sim.controller";
@@ -74,6 +76,8 @@ export function createApp() {
     app.post("/api/stream/focus", requireAuth, setStreamFocus);
     app.use("/api/auth", authRoutes);
     app.use("/api/vehicles", requireAuth, vehicleRoutes);
+    app.use("/api/alerts", requireAuth, alertRoutes);
+    app.use("/api/drivers", requireAuth, driverRoutes);
 
     app.use(notFound);
     app.use(errorHandler);

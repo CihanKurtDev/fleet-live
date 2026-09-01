@@ -7,15 +7,26 @@ import { upsertDevAccounts } from "./devAccounts";
 
 const largeMode = process.argv.includes("--large");
 
+const insertDriver = db.prepare(`
+    INSERT INTO drivers (company_id, name)
+    VALUES (?, ?)
+    ON CONFLICT(company_id, name) DO NOTHING
+`);
+
+const selectDriverId = db.prepare(`
+    SELECT id FROM drivers WHERE company_id = ? AND name = ?
+`);
+
 const insertVehicle = db.prepare(`
     INSERT OR IGNORE INTO vehicles (
         license_plate,
         driver_name,
+        driver_id,
         fuel_level,
         status,
         company_id
     )
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?)
 `);
 
 const insertTelemetry = db.prepare(`
@@ -163,16 +174,52 @@ function randomInt(min: number, max: number) {
     return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+function demoAlert(status: string, fuel: number) {
+    if (status === "OFFLINE") {
+        return {
+            type: "OFFLINE",
+            severity: "HIGH",
+            message: "Fahrzeug sendet kein Signal.",
+        };
+    }
+
+    if (fuel < 20) {
+        return {
+            type: "LOW_FUEL",
+            severity: "MEDIUM",
+            message: "Tankstand ist niedrig.",
+        };
+    }
+
+    return null;
+}
+
+function upsertDriverId(companyId: number, name: string): number {
+    insertDriver.run(companyId, name);
+    const row = selectDriverId.get(companyId, name) as
+        | { id: number }
+        | undefined;
+
+    if (!row) {
+        throw new Error(`Driver upsert did not return an id for ${name}.`);
+    }
+
+    return row.id;
+}
+
 function seedSample() {
     upsertDevAccounts(db);
 
     for (const [index, vehicle] of sampleVehicles.entries()) {
+        const companyId = companyIdAt(index);
+        const driverId = upsertDriverId(companyId, vehicle.driver);
         insertVehicle.run(
             vehicle.plate,
             vehicle.driver,
+            driverId,
             vehicle.fuel,
             vehicle.status,
-            companyIdAt(index),
+            companyId,
         );
 
         const row = db
@@ -193,10 +240,14 @@ function seedSample() {
         }
 
         for (let i = 0; i < (vehicle.alerts ?? 0); i += 1) {
+            const alert = demoAlert(vehicle.status, vehicle.fuel);
+            if (!alert) {
+                continue;
+            }
             insertAlert.run(
-                "SPEEDING",
-                "HIGH",
-                "Vehicle exceeded the configured speed limit.",
+                alert.type,
+                alert.severity,
+                alert.message,
                 row.id,
             );
         }
@@ -211,12 +262,14 @@ function seedLarge() {
         INSERT INTO vehicles (
             license_plate,
             driver_name,
+            driver_id,
             fuel_level,
             status,
             company_id
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
     `);
+    const driverIds = new Map<string, number>();
 
     dropMaintenanceTriggers(db);
 
@@ -227,8 +280,9 @@ function seedLarge() {
         // Vorherige Teilläufe (FK-Fehler nach COMMIT alle 1000 Zeilen)
         // würden sonst verwaiste lastInsertRowid=0 und doppelte Kennzeichen erzeugen.
         db.exec("DELETE FROM vehicles");
+        db.exec("DELETE FROM drivers");
         db.exec(
-            "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts')",
+            "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts', 'drivers')",
         );
 
         for (let i = 0; i < vehicleCount; i += 1) {
@@ -237,13 +291,22 @@ function seedLarge() {
             const driver = driverNameAt(i);
             const fuel = randomInt(3, 100);
             const status = STATUSES[randomInt(0, STATUSES.length - 1)];
+            const companyId = largeCompanyIdAt(i);
+            const cacheKey = `${companyId}\0${driver}`;
+            let driverId = driverIds.get(cacheKey);
+
+            if (driverId === undefined) {
+                driverId = upsertDriverId(companyId, driver);
+                driverIds.set(cacheKey, driverId);
+            }
 
             const result = insertVehicleStrict.run(
                 plate,
                 driver,
+                driverId,
                 fuel,
                 status,
-                largeCompanyIdAt(i),
+                companyId,
             );
             const vehicleId = Number(result.lastInsertRowid);
 
@@ -274,12 +337,15 @@ function seedLarge() {
             }
 
             if (i % 10 === 0) {
-                insertAlert.run(
-                    "SPEEDING",
-                    "HIGH",
-                    "Vehicle exceeded the configured speed limit.",
-                    vehicleId,
-                );
+                const alert = demoAlert(status, fuel);
+                if (alert) {
+                    insertAlert.run(
+                        alert.type,
+                        alert.severity,
+                        alert.message,
+                        vehicleId,
+                    );
+                }
             }
         }
 

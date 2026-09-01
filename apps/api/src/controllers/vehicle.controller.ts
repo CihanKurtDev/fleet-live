@@ -13,6 +13,7 @@ import {
 import { VehicleModel } from "../models/vehicle.model";
 import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
+import { SpeedingEventModel } from "../models/speedingEvent.model";
 import {
     BadRequestError,
     NotFoundError,
@@ -101,6 +102,7 @@ function syncTrip(
     }
 
     TelemetryModel.recordStandstill(id);
+    SpeedingEventModel.endForVehicle(id);
     TripModel.close(id);
     TripModel.pruneClosedForCompany(companyId);
 

@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 10;
 
 type TableColumn = {
     name: string;
@@ -52,6 +52,12 @@ CREATE INDEX IF NOT EXISTS idx_trips_vehicle_started
 
 CREATE INDEX IF NOT EXISTS idx_trips_vehicle_ended
     ON trips(vehicle_id, ended_at);
+
+CREATE INDEX IF NOT EXISTS idx_drivers_company
+    ON drivers(company_id);
+
+CREATE INDEX IF NOT EXISTS idx_vehicles_driver
+    ON vehicles(driver_id);
 
 -- Ein Fahrzeug kann nur auf einer Fahrt sein. Die Invariante gehört in die
 -- Datenbank, nicht in die Reihenfolge der Controller-Aufrufe.
@@ -175,12 +181,7 @@ function migrateToV2(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
-/**
- * Mandant am Fahrzeug. Bestehende DBs bekommen drei Seed-Firmen und
- * `company_id` (Default 1). Neue DBs legen die Tabelle über schema.sql an;
- * die Firmenzeilen braucht auch der API-Create, solange es kein Login gibt.
- */
-function migrateToV3(database: DatabaseSync) {
+function ensureCompanies(database: DatabaseSync) {
     database.exec(`
         CREATE TABLE IF NOT EXISTS companies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,7 +194,15 @@ function migrateToV3(database: DatabaseSync) {
             (2, 'Alpen Spedition'),
             (3, 'Nordost Transport');
     `);
+}
 
+/**
+ * Mandant am Fahrzeug. Bestehende DBs bekommen drei Seed-Firmen und
+ * `company_id` (Default 1). Neue DBs legen die Tabelle über schema.sql an;
+ * die Firmenzeilen braucht auch der API-Create, solange es kein Login gibt.
+ */
+function migrateToV3(database: DatabaseSync) {
+    ensureCompanies(database);
     ensureVehiclesCompanyId(database);
     applyMaintenanceTriggers(database);
 }
@@ -369,6 +378,108 @@ function migrateToV8(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+function ensureDriversTable(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS drivers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (company_id)
+                REFERENCES companies(id),
+
+            UNIQUE (company_id, name)
+        );
+    `);
+}
+
+/**
+ * Bestehende DBs: `driver_id` nachziehen. Neue DBs haben die Spalte
+ * schon aus schema.sql (`NOT NULL`). ALTER bleibt nullable — nach dem
+ * Backfill ist jede Zeile gesetzt.
+ */
+function ensureVehiclesDriverId(database: DatabaseSync) {
+    const names = columnNames(database, "vehicles");
+
+    if (!names.has("driver_id")) {
+        database.exec(`
+            ALTER TABLE vehicles
+            ADD COLUMN driver_id INTEGER REFERENCES drivers(id)
+        `);
+    }
+
+    database.exec("PRAGMA foreign_keys = OFF");
+    ensureCompanies(database);
+    database.exec(`
+        INSERT INTO drivers (company_id, name)
+        SELECT DISTINCT v.company_id, v.driver_name
+        FROM vehicles v
+        WHERE v.driver_name IS NOT NULL
+          AND trim(v.driver_name) != ''
+        ON CONFLICT(company_id, name) DO NOTHING;
+
+        UPDATE vehicles
+        SET driver_id = (
+            SELECT d.id
+            FROM drivers d
+            WHERE d.company_id = vehicles.company_id
+              AND d.name = vehicles.driver_name
+        )
+        WHERE driver_id IS NULL;
+    `);
+    database.exec("PRAGMA foreign_keys = ON");
+}
+
+function migrateToV9(database: DatabaseSync) {
+    ensureDriversTable(database);
+    ensureVehiclesDriverId(database);
+    applyMaintenanceTriggers(database);
+}
+
+function ensureAlertsEventColumns(database: DatabaseSync) {
+    const names = columnNames(database, "alerts");
+
+    if (names.size === 0) {
+        return;
+    }
+
+    if (!names.has("ended_at")) {
+        database.exec("ALTER TABLE alerts ADD COLUMN ended_at TEXT");
+    }
+
+    if (!names.has("details")) {
+        database.exec("ALTER TABLE alerts ADD COLUMN details TEXT");
+    }
+
+    // Unique open SPEEDING: keep the oldest row per vehicle, close extras.
+    database.exec(`
+        UPDATE alerts
+        SET ended_at = COALESCE(ended_at, created_at)
+        WHERE type = 'SPEEDING'
+          AND ended_at IS NULL
+          AND id NOT IN (
+              SELECT min_id FROM (
+                  SELECT MIN(id) AS min_id
+                  FROM alerts
+                  WHERE type = 'SPEEDING' AND ended_at IS NULL
+                  GROUP BY vehicle_id
+              )
+          )
+    `);
+
+    database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_speeding
+        ON alerts(vehicle_id)
+        WHERE type = 'SPEEDING' AND ended_at IS NULL
+    `);
+}
+
+function migrateToV10(database: DatabaseSync) {
+    ensureAlertsEventColumns(database);
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -407,11 +518,24 @@ export function migrate(database: DatabaseSync) {
         migrateToV8(database);
     }
 
+    if (currentVersion < 9) {
+        migrateToV9(database);
+    }
+
+    if (currentVersion < 10) {
+        migrateToV10(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
     ensureVehiclesCompanyId(database);
     ensureUsersRole(database);
+    ensureCompanies(database);
+    ensureDriversTable(database);
+    ensureVehiclesDriverId(database);
+    ensureAlertsEventColumns(database);
+    applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {
         database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
