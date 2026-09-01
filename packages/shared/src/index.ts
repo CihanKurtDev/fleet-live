@@ -117,10 +117,10 @@ export type { SpeedBand, SpeedBandReason, SpeedBandResult } from "./models/speed
 export {
     SPEED_BANDS,
     SPEED_BAND_REASONS,
-    SPEED_HIGH_CRITICAL_KMH,
-    SPEED_HIGH_WARNING_KMH,
+    SPEED_CRITICAL_OVER_LIMIT_KMH,
     SPEEDING_HYSTERESIS_MS,
     SPEEDING_OPEN_AFTER_MS,
+    isOverSpeedLimit,
     speedBand,
 } from "./models/speedBand";
 

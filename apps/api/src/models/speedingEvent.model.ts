@@ -1,5 +1,4 @@
 import {
-    SPEED_HIGH_WARNING_KMH,
     type TelemetryPatch,
     type VehicleStatus,
 } from "@fleet-live/shared";
@@ -33,12 +32,17 @@ function hydrate(vehicleId: number): SpeedingTracker | undefined {
         maxSpeed: open.maxSpeed,
         writtenMaxSpeed: open.details?.max_speed_kmh,
         writtenDurationS: open.details?.duration_s,
+        writtenLimitKmh: open.details?.limit_kmh,
     };
 }
 
-function detailsFor(state: SpeedingTracker, nowMs: number) {
+function detailsFor(
+    state: SpeedingTracker,
+    nowMs: number,
+    limitKmh: number,
+) {
     return {
-        limit_kmh: SPEED_HIGH_WARNING_KMH,
+        limit_kmh: limitKmh,
         max_speed_kmh: state.maxSpeed,
         duration_s: speedingDurationS(state.startedAtMs, nowMs),
     };
@@ -49,13 +53,14 @@ function applyAction(
     previous: SpeedingTracker | undefined,
     step: ReturnType<typeof stepSpeeding>,
     nowMs: number,
+    limitKmh: number,
 ): { speedingOpen: boolean; notify: boolean } {
     if (step.action === "open" && step.state) {
-        const details = detailsFor(step.state, nowMs);
+        const details = detailsFor(step.state, nowMs, limitKmh);
         const alertId = AlertModel.openSpeeding({
             vehicleId,
             createdAt: sqliteFromMs(step.state.startedAtMs),
-            severity: speedingSeverity(step.state.maxSpeed),
+            severity: speedingSeverity(step.state.maxSpeed, limitKmh),
             details,
         });
         trackers.set(vehicleId, {
@@ -63,6 +68,7 @@ function applyAction(
             alertId,
             writtenDurationS: details.duration_s,
             writtenMaxSpeed: details.max_speed_kmh,
+            writtenLimitKmh: details.limit_kmh,
         });
         return { speedingOpen: true, notify: true };
     }
@@ -71,10 +77,10 @@ function applyAction(
         const alertId = step.state.alertId ?? previous?.alertId;
 
         if (alertId !== undefined) {
-            const details = detailsFor(step.state, nowMs);
+            const details = detailsFor(step.state, nowMs, limitKmh);
             AlertModel.updateSpeeding(
                 alertId,
-                speedingSeverity(step.state.maxSpeed),
+                speedingSeverity(step.state.maxSpeed, limitKmh),
                 details,
             );
             trackers.set(vehicleId, {
@@ -82,6 +88,7 @@ function applyAction(
                 alertId,
                 writtenDurationS: details.duration_s,
                 writtenMaxSpeed: details.max_speed_kmh,
+                writtenLimitKmh: details.limit_kmh,
             });
         } else {
             trackers.set(vehicleId, step.state);
@@ -118,6 +125,7 @@ function tickOne(
     speed: number | null,
     status: VehicleStatus,
     nowMs: number,
+    limitKmh: number | null | undefined,
 ): { speedingOpen: boolean; notify: boolean } {
     let state = trackers.get(vehicleId);
 
@@ -129,8 +137,17 @@ function tickOne(
     }
 
     const previous = state;
-    const step = stepSpeeding(state, { speed, status, nowMs });
-    return applyAction(vehicleId, previous, step, nowMs);
+    const step = stepSpeeding(state, {
+        speed,
+        status,
+        nowMs,
+        limit_kmh: limitKmh,
+    });
+    const detailsLimit =
+        typeof limitKmh === "number"
+            ? limitKmh
+            : (previous?.writtenLimitKmh ?? 0);
+    return applyAction(vehicleId, previous, step, nowMs, detailsLimit);
 }
 
 export class SpeedingEventModel {
@@ -141,7 +158,13 @@ export class SpeedingEventModel {
         const notify = new Set<number>();
 
         for (const patch of patches) {
-            const result = tickOne(patch.id, patch.speed, "DRIVING", nowMs);
+            const result = tickOne(
+                patch.id,
+                patch.speed,
+                "DRIVING",
+                nowMs,
+                patch.speed_limit_kmh,
+            );
             patch.speeding_open = result.speedingOpen;
 
             if (result.notify) {
@@ -153,7 +176,7 @@ export class SpeedingEventModel {
     }
 
     static endForVehicle(vehicleId: number, nowMs = Date.now()): void {
-        tickOne(vehicleId, 0, "IDLE", nowMs);
+        tickOne(vehicleId, 0, "IDLE", nowMs, null);
     }
 
     static resetForTests() {

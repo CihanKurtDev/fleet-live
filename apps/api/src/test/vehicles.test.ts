@@ -16,6 +16,7 @@ import { UserModel } from "../models/user.model";
 import {
     CITY_LIMIT_KMH,
     HIGHWAY_LIMIT_KMH,
+    SIM_OVERSPEED_EVERY,
     SIM_ROUTES,
     haversineMeters,
     resetSimProgress,
@@ -1503,6 +1504,31 @@ describe("telemetry route simulation", () => {
         assert.ok(highway);
         assert.ok(highway.speed <= HIGHWAY_LIMIT_KMH);
         assert.ok(highway.speed >= HIGHWAY_LIMIT_KMH - 15);
+        assert.equal(highway.speed_limit_kmh, HIGHWAY_LIMIT_KMH);
+    });
+
+    it("lets every 8th vehicle exceed the class limit", () => {
+        const created = Array.from({ length: SIM_OVERSPEED_EVERY }, (_, index) =>
+            VehicleModel.create({
+                license_plate: `K-OV ${index + 1}`,
+                driver_name: "Überhöht",
+                status: "DRIVING",
+            }),
+        );
+        const aggressive = created.find(
+            (vehicle) => vehicle.id % SIM_OVERSPEED_EVERY === 0,
+        );
+        assert.ok(aggressive);
+        seedSimProgress(aggressive.id, "koeln-duesseldorf", 0.5);
+
+        const [patch] = TelemetryModel.tickDrivingVehicles([aggressive.id]);
+        assert.ok(patch);
+        assert.ok(patch.speed > HIGHWAY_LIMIT_KMH);
+        assert.equal(patch.speed_limit_kmh, HIGHWAY_LIMIT_KMH);
+        assert.equal(
+            VehicleModel.getById(aggressive.id, 1)?.speed_limit_kmh,
+            HIGHWAY_LIMIT_KMH,
+        );
     });
 
     it("uses fuel while driving", () => {

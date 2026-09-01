@@ -12,6 +12,8 @@ export type TelemetryPatch = {
     latitude: number;
     longitude: number;
     recorded_at: string;
+    /** Aktuelles Sim-Streckenlimit dieses Ticks; steuert SPEEDING und Listenfarbe. */
+    speed_limit_kmh?: number;
     /** Gemessener Tankstand, solange das Fahrzeug unterwegs ist. */
     fuel_level: number;
     /** Offenes SPEEDING-Ereignis nach dem Tick, für die Live-Farbe. */

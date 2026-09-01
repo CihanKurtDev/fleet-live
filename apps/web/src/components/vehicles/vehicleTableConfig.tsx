@@ -56,6 +56,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
                 speed: value,
                 status: row.status,
                 speeding_open: row.speeding_open,
+                limit_kmh: row.speed_limit_kmh,
             });
 
             return (

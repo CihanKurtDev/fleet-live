@@ -1,8 +1,8 @@
 import {
-    SPEED_HIGH_CRITICAL_KMH,
-    SPEED_HIGH_WARNING_KMH,
+    SPEED_CRITICAL_OVER_LIMIT_KMH,
     SPEEDING_HYSTERESIS_MS,
     SPEEDING_OPEN_AFTER_MS,
+    isOverSpeedLimit,
     type VehicleStatus,
 } from "@fleet-live/shared";
 
@@ -14,6 +14,7 @@ export type SpeedingTracker = {
     belowSinceMs?: number;
     writtenDurationS?: number;
     writtenMaxSpeed?: number;
+    writtenLimitKmh?: number;
 };
 
 export type SpeedingAction = "none" | "open" | "update" | "end";
@@ -23,21 +24,13 @@ export type SpeedingStep = {
     state: SpeedingTracker | undefined;
 };
 
-function isExceeding(
-    speed: number | null,
-    status: VehicleStatus,
-): speed is number {
-    return (
-        status === "DRIVING" &&
-        speed !== null &&
-        speed >= SPEED_HIGH_WARNING_KMH
-    );
-}
-
 export function speedingSeverity(
     maxSpeed: number,
+    limitKmh: number,
 ): "MEDIUM" | "HIGH" {
-    return maxSpeed >= SPEED_HIGH_CRITICAL_KMH ? "HIGH" : "MEDIUM";
+    return maxSpeed >= limitKmh + SPEED_CRITICAL_OVER_LIMIT_KMH
+        ? "HIGH"
+        : "MEDIUM";
 }
 
 export function speedingDurationS(
@@ -53,9 +46,14 @@ export function stepSpeeding(
         speed: number | null;
         status: VehicleStatus;
         nowMs: number;
+        limit_kmh: number | null | undefined;
     },
 ): SpeedingStep {
-    const exceeding = isExceeding(input.speed, input.status);
+    const exceeding = isOverSpeedLimit(
+        input.speed,
+        input.status,
+        input.limit_kmh,
+    );
 
     if (!state) {
         if (!exceeding) {
@@ -96,9 +94,11 @@ export function stepSpeeding(
     if (exceeding) {
         const maxSpeed = Math.max(state.maxSpeed, input.speed);
         const durationS = speedingDurationS(state.startedAtMs, input.nowMs);
+        const limitKmh = input.limit_kmh ?? state.writtenLimitKmh;
         const unchanged =
             maxSpeed === state.writtenMaxSpeed &&
-            durationS === state.writtenDurationS;
+            durationS === state.writtenDurationS &&
+            limitKmh === state.writtenLimitKmh;
         const next: SpeedingTracker = {
             ...state,
             maxSpeed,

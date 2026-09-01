@@ -12,12 +12,11 @@ export type SpeedBandResult = {
 };
 
 /**
- * Demo-Schwellen für den Live-Indikator und SPEEDING-Events — nicht gesetzlich
- * und nicht die Sim-Kinematik (50/120). OSM-Limits würden später nur die
- * Konstanten ersetzen, nicht die Zustandsmaschine.
+ * HIGH-Schwere, sobald die Spitze so weit über dem aktuellen Streckenlimit
+ * liegt. Die 8 s-Maschine bleibt unverändert; OSM würde später nur
+ * `limit_kmh` ersetzen.
  */
-export const SPEED_HIGH_WARNING_KMH = 90;
-export const SPEED_HIGH_CRITICAL_KMH = 110;
+export const SPEED_CRITICAL_OVER_LIMIT_KMH = 20;
 
 /** Zusammenhängende Überschreitung, bevor eine `alerts`-Zeile entsteht. */
 export const SPEEDING_OPEN_AFTER_MS = 8_000;
@@ -25,10 +24,28 @@ export const SPEEDING_OPEN_AFTER_MS = 8_000;
 /** Unter der Schwelle, bevor `ended_at` gesetzt wird. */
 export const SPEEDING_HYSTERESIS_MS = 2_000;
 
+/**
+ * Tempo über dem aktuellen Routenlimit (Stadt/Autobahn der Simulation,
+ * später OSM). Fahren genau am Limit ist kein Event.
+ */
+export function isOverSpeedLimit(
+    speed: number | null,
+    status: VehicleStatus,
+    limitKmh: number | null | undefined,
+): speed is number {
+    return (
+        status === "DRIVING" &&
+        speed !== null &&
+        typeof limitKmh === "number" &&
+        speed > limitKmh
+    );
+}
+
 export function speedBand(input: {
     speed: number | null;
     status: VehicleStatus;
     speeding_open?: boolean;
+    limit_kmh?: number | null;
 }): SpeedBandResult {
     if (input.status !== "DRIVING" || input.speed === null) {
         return { band: "normal", reason: null };
@@ -38,7 +55,7 @@ export function speedBand(input: {
         return { band: "critical", reason: "high" };
     }
 
-    if (input.speed >= SPEED_HIGH_WARNING_KMH) {
+    if (isOverSpeedLimit(input.speed, input.status, input.limit_kmh)) {
         return { band: "warning", reason: "high" };
     }
 

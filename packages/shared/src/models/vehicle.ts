@@ -29,6 +29,11 @@ export type Vehicle = {
     latitude: number | null;
     longitude: number | null;
     speed: number | null;
+    /**
+     * Aktuelles Sim-Streckenlimit (Stadt 50 / Autobahn 120), nicht StVO.
+     * `null`, solange noch kein Tick gelaufen ist.
+     */
+    speed_limit_kmh: number | null;
     recorded_at: string | null;
     active_alerts: number;
     /**

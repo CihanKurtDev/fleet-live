@@ -12,7 +12,7 @@ export const SPEED_BAND_COLORS: Record<SpeedBand, string> = {
 
 export const SPEED_BAND_TITLES: Record<SpeedBand, string> = {
     normal: "Tempo im Rahmen",
-    warning: "Tempo über Schwelle",
+    warning: "Tempo über Streckenlimit",
     critical: "Geschwindigkeitsereignis",
 };
 

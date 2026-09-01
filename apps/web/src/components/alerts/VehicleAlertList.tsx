@@ -8,7 +8,11 @@ import { retryTransient } from "../../api/retryTransient";
 import { useVehicles } from "../../context/vehiclesContext";
 import { Button } from "../ui/Button/Button";
 import { formatTimestamp } from "../../utils/dateTime";
+import { formatCount } from "../../utils/formatCount";
 import styles from "./VehicleAlertList.module.scss";
+
+/** Kleinste erlaubte Listenseite; der Rest liegt in der Inbox. */
+const PREVIEW_LIMIT = 10;
 
 interface VehicleAlertListProps {
     vehicleId: number;
@@ -21,9 +25,12 @@ export const VehicleAlertList = ({
 }: VehicleAlertListProps) => {
     const { listEpoch, refetchLists } = useVehicles();
     const [alerts, setAlerts] = useState<Alert[]>([]);
+    const [openTotal, setOpenTotal] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [resolvingId, setResolvingId] = useState<number | null>(null);
+
+    const inboxHref = `/alerts?vehicle_id=${vehicleId}`;
 
     useEffect(() => {
         const controller = new AbortController();
@@ -38,7 +45,7 @@ export const VehicleAlertList = ({
                         sort: "created_at",
                         dir: "desc",
                         page: 1,
-                        limit: 100,
+                        limit: PREVIEW_LIMIT,
                         vehicle_id: vehicleId,
                     },
                     controller.signal,
@@ -47,6 +54,7 @@ export const VehicleAlertList = ({
         )
             .then((response) => {
                 setAlerts(response.data);
+                setOpenTotal(response.meta.total);
             })
             .catch((caught: unknown) => {
                 if (controller.signal.aborted || isAbortError(caught)) {
@@ -86,14 +94,13 @@ export const VehicleAlertList = ({
         }
     };
 
+    const remaining = Math.max(0, openTotal - alerts.length);
+
     return (
         <>
             <div className={styles.header}>
                 <h2 className={styles.panelTitle}>Warnungen</h2>
-                <Link
-                    className={styles.inboxLink}
-                    to={`/alerts?vehicle_id=${vehicleId}`}
-                >
+                <Link className={styles.inboxLink} to={inboxHref}>
                     Zur Inbox
                 </Link>
             </div>
@@ -109,31 +116,43 @@ export const VehicleAlertList = ({
             ) : alerts.length === 0 ? (
                 <p className={styles.empty}>Keine offenen Warnungen.</p>
             ) : (
-                <ul className={styles.list}>
-                    {alerts.map((alert) => (
-                        <li key={alert.id} className={styles.item}>
-                            <div>
-                                <p className={styles.message}>
-                                    {formatAlertEvent(alert)}
-                                </p>
-                                <p className={styles.time}>
-                                    {formatTimestamp(alert.created_at)}
-                                </p>
-                            </div>
-                            {canWrite && (
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={resolvingId === alert.id}
-                                    onClick={() => void handleResolve(alert.id)}
-                                >
-                                    Erledigen
-                                </Button>
-                            )}
-                        </li>
-                    ))}
-                </ul>
+                <>
+                    <ul className={styles.list}>
+                        {alerts.map((alert) => (
+                            <li key={alert.id} className={styles.item}>
+                                <div>
+                                    <p className={styles.message}>
+                                        {formatAlertEvent(alert)}
+                                    </p>
+                                    <p className={styles.time}>
+                                        {formatTimestamp(alert.created_at)}
+                                    </p>
+                                </div>
+                                {canWrite && (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={resolvingId === alert.id}
+                                        onClick={() => void handleResolve(alert.id)}
+                                    >
+                                        Erledigen
+                                    </Button>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                    {remaining > 0 && (
+                        <p className={styles.more}>
+                            Neueste {formatCount(alerts.length)} von{" "}
+                            {formatCount(openTotal)}.{" "}
+                            <Link to={inboxHref}>
+                                {formatCount(remaining)} weitere in der Inbox
+                            </Link>
+                        </p>
+                    )}
+                </>
             )}
         </>
     );
 };
+

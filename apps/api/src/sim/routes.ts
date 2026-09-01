@@ -21,6 +21,9 @@ export const SIM_SECONDS_PER_TICK = 0.4;
 export const TIME_SCALE = 20;
 export const CITY_LIMIT_KMH = 50;
 export const HIGHWAY_LIMIT_KMH = 120;
+/** Jedes 8. Fahrzeug darf über dem Klassenlimit fahren, sonst gibt es nie SPEEDING. */
+export const SIM_OVERSPEED_EVERY = 8;
+export const SIM_OVERSPEED_FACTOR = 1.2;
 
 const ROUTE_META: Array<{ id: string; from: string; to: string }> = [
     { id: "koeln-duesseldorf", from: "Köln", to: "Düsseldorf" },
@@ -248,13 +251,27 @@ export function speedLimitKmh(frac: number): number {
     return CITY_LIMIT_KMH;
 }
 
-function nextDisplaySpeed(current: number | null, limit: number): number {
+export function simExceedsClassLimit(vehicleId: number): boolean {
+    return vehicleId % SIM_OVERSPEED_EVERY === 0;
+}
+
+export function simSpeedCapKmh(limit: number, vehicleId: number): number {
+    return simExceedsClassLimit(vehicleId)
+        ? Math.round(limit * SIM_OVERSPEED_FACTOR)
+        : limit;
+}
+
+function nextDisplaySpeed(
+    current: number | null,
+    limit: number,
+    cap: number,
+): number {
     const floor = Math.max(30, Math.round(limit * 0.75));
     const base = current !== null ? current : limit;
-    const toward = base + (limit - base) * 0.25;
+    const toward = base + (cap - base) * 0.25;
     const delta = (Math.random() - 0.5) * 6;
 
-    return Math.round(Math.min(limit, Math.max(floor, toward + delta)));
+    return Math.round(Math.min(cap, Math.max(floor, toward + delta)));
 }
 
 export function pickRoute(vehicleId: number, pos: LatLng): SimRoute {
@@ -276,6 +293,8 @@ export type SimTick = {
     lat: number;
     lng: number;
     speed: number;
+    /** Nominelles Streckenlimit dieses Ticks (nicht die Überhöhungs-Kappe). */
+    limit_kmh: number;
     /** Zurückgelegte Strecke dieses Ticks — Basis für den Spritverbrauch. */
     meters: number;
     /** Straßenvertices dieses Ticks, inklusive Ziel, ohne den Startpunkt. */
@@ -307,7 +326,8 @@ export function nextSimTick(
     let { frac, direction } = state;
     const fromFrac = frac;
     const limit = speedLimitKmh(frac);
-    const speed = nextDisplaySpeed(currentSpeed, limit);
+    const cap = simSpeedCapKmh(limit, vehicleId);
+    const speed = nextDisplaySpeed(currentSpeed, limit, cap);
     const length = routeLengthMeters(route.points);
     const meters = (speed * SIM_SECONDS_PER_TICK * TIME_SCALE) / 3.6;
     const deltaFrac = length === 0 ? 0 : meters / length;
@@ -340,5 +360,13 @@ export function nextSimTick(
             ? rest
             : [start, ...rest];
 
-    return { lat: point.lat, lng: point.lng, speed, meters, path, turnedAround };
+    return {
+        lat: point.lat,
+        lng: point.lng,
+        speed,
+        limit_kmh: Math.round(limit),
+        meters,
+        path,
+        turnedAround,
+    };
 }
