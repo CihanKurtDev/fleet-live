@@ -67,6 +67,7 @@ export type {
     AlertSortKey,
     AlertType,
     AlertTypeCounts,
+    LowFuelAlertDetails,
     SpeedingAlertDetails,
 } from "./models/alert";
 
@@ -82,7 +83,13 @@ export {
     isAlertSeverity,
     isAlertSortKey,
     isAlertType,
+    isLowFuelAlertDetails,
+    isLowFuelLevel,
     isSpeedingAlertDetails,
+    LOW_FUEL_CRITICAL_PERCENT,
+    LOW_FUEL_THRESHOLD_PERCENT,
+    lowFuelSeverity,
+    OFFLINE_AFTER_MS,
     parseAlertListQuery,
     parseAlertPatch,
     serializeAlertListQuery,

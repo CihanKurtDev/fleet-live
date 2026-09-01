@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:large": "tsx src/db/seed.ts --large",
-    "test": "tsx --test --test-concurrency=1 src/test/vehicles.test.ts src/test/auth.test.ts src/test/alerts.test.ts src/test/speedBand.test.ts src/test/drivers.test.ts src/test/speedingEvents.test.ts",
+    "test": "tsx --test --test-concurrency=1 src/test/vehicles.test.ts src/test/auth.test.ts src/test/alerts.test.ts src/test/speedBand.test.ts src/test/drivers.test.ts src/test/speedingEvents.test.ts src/test/exceptionEvents.test.ts",
     "bench": "tsx scripts/bench.ts"
   },
   "keywords": [],

@@ -2,9 +2,9 @@
 
 A full-stack fleet management application built with **TypeScript, Node.js, Express, React and SQLite**.
 
-> **Status: Work in progress.** Live SPEEDING warnings, an inbox with type filters, fleet map, trip trails, and company login are in place. GPS is simulated.
+> **Status: Work in progress.** Live speeding, low-fuel and no-signal warnings, an inbox you can filter, fleet map, trip trails, and company login. GPS is simulated.
 
-This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. SPEEDING warnings are live ticker events (8 s over the current sim road-class limit); list colour uses the same limit. LOW_FUEL and OFFLINE remain seeded.
+This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. SPEEDING, LOW_FUEL and OFFLINE warnings are live ticker events. List colour for speed uses the current sim road-class limit.
 
 ---
 
@@ -13,6 +13,30 @@ This is closer to a real fleet system than a tutorial: server-driven lists, SSE 
 `fleet-live` monitors vehicles, last positions, live movement and trip paths for **one company per logged-in user**.
 
 The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream, sim and alert requests are `401`. Other companies’ vehicles are `404`, not listed.
+
+---
+
+# Roadmap
+
+What you can do in the app today, and what lands next — like a game patch list, not an engineering backlog.
+
+## Now
+
+* Speeding warnings while a vehicle is over the route limit
+* Low-fuel warnings under 15% on the road
+* No-signal warnings when a vehicle goes quiet, or is marked offline
+* Inbox: open / done, and filter by speeding / low fuel / no signal
+* Fleet map, trip trail on the vehicle, drivers, company login
+
+## Next
+
+* A morning briefing on the home page, and the open-warning count in the nav
+* Past trips on the vehicle, not only the current drive
+* Yard fields (VIN, HU, depot); drivers you can maintain without the vehicle form
+* A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
+* Depot geofences
+* Due-date reminders (HU, licence, UVV)
+* A CSV for the boss
 
 ---
 
@@ -33,7 +57,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Session login
 * Roles: `dispatcher` (write + sim pause + resolve alerts) and `viewer` (read only)
 * Tenant isolation: `company_id` from the session, never from the client body; plates unique per company; SSE and sim scoped to that company; trips via `trip → vehicle → company`
-* Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts` with open/resolved and `type` chips); live SPEEDING events from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
+* Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts` with open/resolved and `type` chips); live SPEEDING, LOW_FUEL and OFFLINE from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
 * Drivers as entities (`drivers` table, `vehicle.driver_id`); list/detail `/drivers` with incident counts
 * Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
 * API integration tests (`node:test` + SuperTest)
@@ -45,7 +69,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * Companies 2 and 3 exist in seed for isolation. There is no demo login for them — cross-tenant checks are API tests, or a company-1 user opening another company’s vehicle id (`404`)
 * SQLite file database
 * One company per user (no membership table, no company switcher)
-* Alerts: SPEEDING is written by the ticker (one open row per vehicle); LOW_FUEL/OFFLINE are still seed-only. Not OSM, not a general rule engine
+* Alerts: SPEEDING, LOW_FUEL and OFFLINE are written by the ticker (one open row per vehicle per type). Not OSM, not a general rule engine
 * Live tempo colour uses the current sim road-class limit (`speedBand` + `speed_limit_kmh` + `speeding_open`) — not map/OSM limits. A minority of simulated vehicles exceed their class so SPEEDING still fires. No low-speed colour
 * OSM tiles via Leaflet
 
@@ -58,17 +82,6 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 * No CI/CD
 * `CORS_ORIGIN` defaults to `*`; rate limiting is production-only (`NODE_ENV=production`) and is not login-specific
 * No observability beyond request logs
-
-### Coming next
-
-What dispatchers will notice in the product — not an engineering backlog:
-
-* Tank and no-signal warnings while vehicles are out (today only speeding is live)
-* A briefing on the home page, and the open-warning count in the nav
-* Past trips on the vehicle, not only the current drive
-* Yard fields such as VIN, HU, depot; drivers you can maintain without the vehicle form
-* A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
-* Depot geofences, due-date reminders (HU, licence, UVV), and a CSV for the boss
 
 ---
 
@@ -280,7 +293,7 @@ The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → comp
 
 `GET /api/alerts` is the company inbox (`{ data, meta }`). Default `filter=open`. Optional `type` (`SPEEDING` / `LOW_FUEL` / `OFFLINE`), `vehicle_id` or `driver_id` (404 if missing or another company). `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`). A second close is idempotent. Viewer may read, not resolve. After a close the API broadcasts `vehicles-changed` so the list count updates.
 
-The ticker writes SPEEDING: 8 s consecutive over the current sim road-class limit (`speedLimitKmh`: city 50 / highway 120), one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Every 8th simulated vehicle may exceed its class so events still occur. Seed still inserts LOW_FUEL/OFFLINE only. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
+The ticker writes SPEEDING: 8 s consecutive over the current sim road-class limit (`speedLimitKmh`: city 50 / highway 120), one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Every 8th simulated vehicle may exceed its class so events still occur. LOW_FUEL opens under 15% while `DRIVING` and ends on refill. OFFLINE opens after 15 s without ticks while that company’s simulation is paused (vehicles last simulated here), or when status is `OFFLINE`. One open row per vehicle per type. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
 
 Live speed stays in the telemetry window; the trip polyline has no per-point speed.
 
@@ -426,12 +439,6 @@ Not production-ready:
 * No frontend tests, CI/CD, production database, or observability
 * CORS `*` is a local default; a split-host deploy needs an explicit origin plus credentials
 * One company per user (no membership table, no company switcher)
-
----
-
-# Project Status
-
-**Work in progress.** Live-ops core is in place: SPEEDING follows the sim road class, and the inbox filters by type. If README and code disagree, **code wins**. Agent notes: `.cursor/rules/architecture.mdc`, `AGENTS.md`.
 
 ---
 

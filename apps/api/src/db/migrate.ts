@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 type TableColumn = {
     name: string;
@@ -475,6 +475,34 @@ function ensureAlertsEventColumns(database: DatabaseSync) {
     `);
 }
 
+function ensureOpenAlertsPerType(database: DatabaseSync) {
+    const names = columnNames(database, "alerts");
+
+    if (names.size === 0 || !names.has("ended_at")) {
+        return;
+    }
+
+    database.exec(`
+        UPDATE alerts
+        SET ended_at = COALESCE(ended_at, created_at)
+        WHERE ended_at IS NULL
+          AND id NOT IN (
+              SELECT min_id FROM (
+                  SELECT MIN(id) AS min_id
+                  FROM alerts
+                  WHERE ended_at IS NULL
+                  GROUP BY vehicle_id, type
+              )
+          )
+    `);
+
+    database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_per_type
+        ON alerts(vehicle_id, type)
+        WHERE ended_at IS NULL
+    `);
+}
+
 function migrateToV10(database: DatabaseSync) {
     ensureAlertsEventColumns(database);
     applyMaintenanceTriggers(database);
@@ -494,6 +522,11 @@ function ensureVehiclesSpeedLimit(database: DatabaseSync) {
 
 function migrateToV11(database: DatabaseSync) {
     ensureVehiclesSpeedLimit(database);
+    applyMaintenanceTriggers(database);
+}
+
+function migrateToV12(database: DatabaseSync) {
+    ensureOpenAlertsPerType(database);
     applyMaintenanceTriggers(database);
 }
 
@@ -547,6 +580,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV11(database);
     }
 
+    if (currentVersion < 12) {
+        migrateToV12(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -557,6 +594,7 @@ export function migrate(database: DatabaseSync) {
     ensureVehiclesDriverId(database);
     ensureAlertsEventColumns(database);
     ensureVehiclesSpeedLimit(database);
+    ensureOpenAlertsPerType(database);
     applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {

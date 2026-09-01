@@ -14,6 +14,7 @@ import { VehicleModel } from "../models/vehicle.model";
 import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
+import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import {
     BadRequestError,
     NotFoundError,
@@ -107,6 +108,15 @@ function syncTrip(
     TripModel.pruneClosedForCompany(companyId);
 
     return VehicleModel.getById(id, companyId) ?? updated;
+}
+
+function syncExceptions(vehicle: Vehicle, companyId: number): Vehicle {
+    ExceptionEventModel.syncVehicle({
+        id: vehicle.id,
+        status: vehicle.status,
+        fuel_level: vehicle.fuel_level,
+    });
+    return VehicleModel.getById(vehicle.id, companyId) ?? vehicle;
 }
 
 function sessionCompany(req: Request): number {
@@ -218,8 +228,9 @@ export function createVehicle(req: Request, res: Response) {
         TripModel.open(vehicle.id);
     }
 
+    const created = syncExceptions(vehicle, sessionCompany(req));
     notifyVehiclesChanged(sessionCompany(req));
-    res.status(201).location(`/api/vehicles/${vehicle.id}`).json(vehicle);
+    res.status(201).location(`/api/vehicles/${vehicle.id}`).json(created);
 }
 
 export function replaceVehicle(req: Request, res: Response) {
@@ -244,7 +255,12 @@ export function replaceVehicle(req: Request, res: Response) {
     }
 
     notifyVehiclesChanged(companyId);
-    res.json(syncTrip(id, previous?.status, vehicle, companyId));
+    res.json(
+        syncExceptions(
+            syncTrip(id, previous?.status, vehicle, companyId),
+            companyId,
+        ),
+    );
 }
 
 export function updateVehicle(req: Request, res: Response) {
@@ -270,7 +286,12 @@ export function updateVehicle(req: Request, res: Response) {
     }
 
     notifyVehiclesChanged(companyId);
-    res.json(syncTrip(id, previous?.status, vehicle, companyId));
+    res.json(
+        syncExceptions(
+            syncTrip(id, previous?.status, vehicle, companyId),
+            companyId,
+        ),
+    );
 }
 
 export function deleteVehicle(req: Request, res: Response) {

@@ -15,6 +15,7 @@ import type {
 import { FLEET_DRIVERS_LIST_LIMIT, FLEET_POSITIONS_MAX } from "@fleet-live/shared";
 import { DriverModel } from "./driver.model";
 import { SpeedingEventModel } from "./speedingEvent.model";
+import { ExceptionEventModel } from "./exceptionEvent.model";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 
@@ -507,6 +508,7 @@ export class VehicleModel {
 
     static resetForTests() {
         SpeedingEventModel.resetForTests();
+        ExceptionEventModel.resetForTests();
         db.exec("DELETE FROM vehicles");
         db.exec("DELETE FROM drivers");
         db.exec(

@@ -20,7 +20,27 @@ export type SpeedingAlertDetails = {
     duration_s: number;
 };
 
-export type AlertDetails = SpeedingAlertDetails | Record<string, unknown>;
+export type LowFuelAlertDetails = {
+    fuel_level: number;
+};
+
+export type AlertDetails =
+    | SpeedingAlertDetails
+    | LowFuelAlertDetails
+    | Record<string, unknown>;
+
+/** Unter diesem Tankstand öffnet die Simulation eine LOW_FUEL-Zeile. */
+export const LOW_FUEL_THRESHOLD_PERCENT = 15;
+
+/** Darunter ist die LOW_FUEL-Zeile HIGH. */
+export const LOW_FUEL_CRITICAL_PERCENT = 5;
+
+/**
+ * Kein Telemetrie-Tick, obwohl die Firma pausiert ist und das Fahrzeug
+ * zuletzt simuliert wurde. Unfokussierte Fahrzeuge zählen nicht — die
+ * Simulation schreibt die nur bei Focus.
+ */
+export const OFFLINE_AFTER_MS = 15_000;
 
 /**
  * Eine Warnung hängt am Fahrzeug. `license_plate` und `driver_name` kommen
@@ -60,6 +80,26 @@ export function isSpeedingAlertDetails(
     );
 }
 
+export function isLowFuelAlertDetails(
+    value: unknown,
+): value is LowFuelAlertDetails {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+
+    return typeof (value as Record<string, unknown>).fuel_level === "number";
+}
+
+export function isLowFuelLevel(fuelLevel: number): boolean {
+    return fuelLevel < LOW_FUEL_THRESHOLD_PERCENT;
+}
+
+export function lowFuelSeverity(
+    fuelLevel: number,
+): Extract<AlertSeverity, "MEDIUM" | "HIGH"> {
+    return fuelLevel < LOW_FUEL_CRITICAL_PERCENT ? "HIGH" : "MEDIUM";
+}
+
 /**
  * Ereigniszeile für die Inbox: aus `type` + `details`, sonst `message`.
  */
@@ -68,6 +108,10 @@ export function formatAlertEvent(
 ): string {
     if (alert.type === "SPEEDING" && isSpeedingAlertDetails(alert.details)) {
         return `${Math.round(alert.details.max_speed_kmh)} km/h bei Limit ${Math.round(alert.details.limit_kmh)} · ${Math.round(alert.details.duration_s)} s`;
+    }
+
+    if (alert.type === "LOW_FUEL" && isLowFuelAlertDetails(alert.details)) {
+        return `Tankstand ${Math.round(alert.details.fuel_level)} %`;
     }
 
     return alert.message;
