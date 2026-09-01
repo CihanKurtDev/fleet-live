@@ -2,7 +2,7 @@
 
 A full-stack fleet management application built with **TypeScript, Node.js, Express, React and SQLite**.
 
-> **Status: Work in progress.** Phases 1–4 are in place (vehicles, UI, live map, login and company isolation). The app is a personal engineering project, not a finished product.
+> **Status: Work in progress.** Phases 1–5 are in place (vehicles, UI, live map, login, isolation, alerts, drivers). The live-ops core exists; it is not yet a product a dispatcher would buy. Next is Phase 6 (trustworthy exceptions), not invite/CI.
 
 This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. GPS is simulated. SPEEDING warnings are live ticker events (8 s over 90 km/h); list colour uses the same threshold. LOW_FUEL and OFFLINE remain seeded.
 
@@ -14,7 +14,7 @@ This is closer to a real fleet system than a tutorial: server-driven lists, SSE 
 
 The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream, sim and alert requests are `401`. Other companies’ vehicles are `404`, not listed.
 
-**Next product step:** invite / password reset, optional multi-company membership, frontend tests and operations (CI/CD, production database, observability).
+**Next product step:** Phase 6 — make SPEEDING and list colour use the current sim road-class limit (city 50 / highway 120), not the flat 90 km/h demo threshold. The inbox is unusable until that lands. Do not start invite, multi-company membership, or CI/CD.
 
 ---
 
@@ -63,10 +63,7 @@ The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticate
 
 ### Roadmap (not implemented)
 
-* Invite / password reset / registration
-* Optional multi-company membership
-* Production database, CI/CD, observability
-* Speed-limit alerts (need map-derived limits, not the sim’s 50/120 profile)
+See [Roadmap](#roadmap). Immediate work is Phase 6 (exceptions that a dispatcher can trust). Production auth, CI/CD and OSM speed limits come later.
 
 ---
 
@@ -280,7 +277,7 @@ The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → comp
 
 The ticker writes SPEEDING: 8 s consecutive over 90 km/h, one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Seed still inserts LOW_FUEL/OFFLINE only. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
 
-**Optional later:** OSM/map-derived limits instead of 90. Do not treat the simulator’s 50/120 profile as legal limits. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
+**Next (Phase 6.1):** replace the flat 90 with the sim road-class limit. OSM/map-derived legal limits come later and only replace that limit, not the 8 s / hysteresis machine. Live speed stays in the telemetry window; the trip polyline has no per-point speed.
 
 ---
 
@@ -416,8 +413,13 @@ Controllers validate and map HTTP. Models run SQL. This stays intentionally thin
 
 # Current Limitations
 
-Not production-ready. Incomplete by design:
+Not production-ready. Product gaps (Phases 6–13) first, then operations (Phase 14):
 
+* SPEEDING uses a flat 90 km/h demo threshold while the sim drives city 50 / highway 120 — the inbox fills with legal highway speed
+* Only `GET /api/vehicles/:id/trips/latest` — no trip archive in the UI
+* Vehicle/driver master data is plate + name + fuel
+* Fleet map draws nothing when the viewport exceeds `FLEET_POSITIONS_MAX`
+* LOW_FUEL / OFFLINE are seed-only
 * Production-grade auth (reset, lockout, CSRF for cross-origin cookies)
 * Multi-company users
 * Frontend tests (no runner yet — do not add Jest/Vitest as a checklist item)
@@ -428,6 +430,10 @@ Not production-ready. Incomplete by design:
 ---
 
 # Roadmap
+
+A dispatcher buys answers, not tracking. **10/10 as a purchase product** for this app means: the inbox is a work list, the day starts on a briefing, any recent trip can be proven, Stammdaten are enough to run a yard, the map works at fleet scale, geofences answer “still at the depot?”, HU/licence dates are visible, and a CSV exists for the boss. It is **not** a TMS, tachograph, or driver app.
+
+Do not treat the sim’s 50/120 profile as legal OSM limits. Do not start Phase 14 (invite/CI) while the inbox is unusable.
 
 ## Phase 1 — Vehicles
 
@@ -450,26 +456,89 @@ Not production-ready. Incomplete by design:
 * [x] Roles (`dispatcher` writes; `viewer` reads)
 * [x] Per-company retention for closed trips (`TRIP_RETENTION_DAYS`); telemetry stays the rolling window
 
-## Phase 5 — still open
-
-Phase 4 already isolates data by company. Alerts REST/UI, drivers, and live SPEEDING events are in place. What remains is product and operations, not a second isolation rewrite:
+## Phase 5 — Alerts and drivers
 
 * [x] Alerts REST/UI
 * [x] Drivers entity, driver pages, live speed indicator
 * [x] Live SPEEDING events (ticker, 8 s over 90) aligned with list colour
-* [ ] Invite / password reset
-* [ ] Optional multi-company membership
-* [ ] Frontend tests, CI/CD, production database, observability
 
-## Optional
+## Phase 6 — Trustworthy exceptions **← next**
 
-* [ ] Replace the demo 90 km/h threshold with map-derived limits. Do not treat the sim’s 50/120 profile as legal limits.
+The inbox must be something a dispatcher would open. Today thousands of rows are “120 km/h at limit 90” because the Autobahn profile is 120.
+
+* [ ] **6.1 Road-class limit (do this first).** `SpeedingEventModel` / `speedBand` / ticker use the current sim segment limit (`speedLimitKmh`: city 50, highway 120), not `SPEED_HIGH_WARNING_KMH = 90`. `details.limit_kmh` is that segment limit. Copy stays a route limit, not StVO. A minority of simulated vehicles must be allowed to exceed their class (otherwise SPEEDING never fires). List colour uses the same limit. Affected: `packages/shared` `speedBand`, `apps/api` `lib/speeding.ts`, `models/speedingEvent.model.ts`, sim tick, `apps/api/src/test/speedingEvents.test.ts` / `speedBand.test.ts`.
+* [ ] **6.2 Inbox filter by `type`** (`SPEEDING` / `LOW_FUEL` / `OFFLINE`) on `GET /api/alerts` and `/alerts`.
+* [ ] **6.3 Live LOW_FUEL** from the ticker (e.g. under 15% while `DRIVING`), not seed-only. Same `alerts` table, one open row per vehicle per type.
+* [ ] **6.4 Live OFFLINE** when a `DRIVING`/`IDLE` vehicle stops reporting for a threshold. Seed OFFLINE remains until this exists.
+
+OSM/map-derived legal limits are **not** this phase. They replace the sim class limit later without changing the 8 s / hysteresis state machine.
+
+## Phase 7 — Shift briefing
+
+* [ ] `/` is a company briefing, not a redirect to `/vehicles`: counts (driving, idle, offline, open warnings, low fuel) plus a short work list (newest open alerts, no-signal).
+* [ ] Warnungen nav shows the open count.
+* [ ] Viewer may read; only dispatcher resolves.
+
+## Phase 8 — Trip archive
+
+* [ ] `GET /api/vehicles/:id/trips` (paginated closed + open). Keep `…/trips/latest`.
+* [ ] Detail page: list of trips; opening a closed trip draws that polyline (not only the live one).
+* [ ] Closed-trip facts already on the row (`distance_m`, `max_speed`, times) — show them. No per-point speed arrays.
+
+## Phase 9 — Stammdaten a yard actually maintains
+
+* [ ] Vehicle fields: `vin`, `vehicle_type`, `hu_due_on`, `depot` (or site name), `cost_center`. Session `company_id` still owns the row. German validation messages.
+* [ ] Forms and list columns for those fields; HU due becomes a reminder in Phase 12.
+* [ ] Drivers: default sort `open_warnings` desc (page 1 = problem drivers). Dispatcher create/rename without going through the vehicle form. Phone is enough contact for this phase.
+
+## Phase 10 — Map at fleet scale
+
+* [ ] Viewport over `FLEET_POSITIONS_MAX`: cluster/density or a clear “zoom or filter” that still orients — not an empty Europe.
+* [ ] Plate search that finds one vehicle should fit the map to that marker.
+
+## Phase 11 — Geofences
+
+* [ ] Company sites (at least depot). Polygon or radius.
+* [ ] Enter/leave writes `alerts` (new type, same inbox).
+* [ ] Fleet filter or briefing line: “still in depot”.
+
+## Phase 12 — German minimum compliance
+
+* [ ] HU (and optionally AU) due date → reminder alert when due/overdue.
+* [ ] Driver: licence expiry + last check date (Führerscheinkontrolle light — dates, not document upload).
+* [ ] UVV due date on the vehicle. No workshop work-order system.
+
+## Phase 13 — Export and fuel as a number
+
+* [ ] CSV export for the current company: vehicles, alerts, trips (dispatcher).
+* [ ] Trip or period fuel used from the existing sim consumption — not a second telemetry stream.
+* [ ] One printable/CSV period summary (km, open vs resolved warnings, fuel).
+
+## Phase 14 — Production (sell / host)
+
+Only after Phases 6–8. The product has to be true before it has to be hosted.
+
+* [ ] Invite / password reset / lockout
+* [ ] Mid-session `401` returns the UI to `/login`
+* [ ] Durable sim pause
+* [ ] CORS/credentials and login rate limit for a real deploy
+* [ ] CI/CD, production database, observability
+* [ ] Frontend tests only when a runner is explicitly added
+
+## Out of scope for 10/10 of this product
+
+* Multi-company membership / company switcher
+* TMS, tour planning, customer orders
+* Tachograph / Lenkzeiten
+* Driver mobile app
+* Hardware GPS
+* OSM speed limits (optional after 6.1; do not block briefing or trips)
 
 ---
 
 # Project Status
 
-**Work in progress.** Personal full-stack project: vehicle API first, then UI, live map, then login and company isolation. Treat it as an evolving codebase, not a product you would give a dispatcher tomorrow.
+**Work in progress.** Live-ops core (list, map, trip trail, login, isolation, inbox, drivers) is in place. Next build is Phase 6.1: SPEEDING against the sim road class so the inbox is a work list. Treat the codebase as that product path, not as invite/CI work and not as a dispatcher-ready purchase.
 
 If README and code disagree, **code wins**. Agent notes: `.cursor/rules/architecture.mdc`, `AGENTS.md`.
 
