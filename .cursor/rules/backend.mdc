@@ -27,7 +27,7 @@ app.ts + routes → Controllers → Models → SQLite
 ## SSE
 
 - `GET /api/stream` + `POST /api/stream/focus` with `connection_id`.
-- Ticker writes only for the union of focused `DRIVING` vehicles of companies that have not paused the sim; patches go only to connections that focused that id. `vehicles-changed` goes only to connections of the same company. An SSE connection belongs to the session company; `POST /api/stream/focus` cannot bind another company's `connection_id`.
+- Ticker writes only for the union of focused `DRIVING` vehicles of companies that have not paused the sim; patches go only to connections that focused that id. After each tick it also applies live LOW_FUEL (`< 15%`) and OFFLINE (15 s silence while that company is paused, or status `OFFLINE`). `vehicles-changed` goes only to connections of the same company. An SSE connection belongs to the session company; `POST /api/stream/focus` cannot bind another company's `connection_id`.
 - A tick writes position, speed and the consumed `fuel_level`; the patch carries all of them.
 - Do not compress `/api/stream`. Do not replace SSE with WebSockets.
 

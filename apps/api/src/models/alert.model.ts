@@ -3,6 +3,8 @@ import type {
     AlertDetails,
     AlertListQuery,
     AlertListResponse,
+    AlertSeverity,
+    AlertType,
     SpeedingAlertDetails,
 } from "@fleet-live/shared";
 import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
@@ -67,6 +69,42 @@ const END_SPEEDING = `
     SET ended_at = ?
     WHERE id = ?
       AND type = 'SPEEDING'
+      AND ended_at IS NULL
+`;
+
+const SELECT_OPEN_TYPE = `
+    SELECT id, created_at, details
+    FROM alerts
+    WHERE vehicle_id = ?
+      AND type = ?
+      AND ended_at IS NULL
+    LIMIT 1
+`;
+
+const INSERT_TYPED = `
+    INSERT INTO alerts (
+        vehicle_id,
+        type,
+        severity,
+        message,
+        details,
+        created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+`;
+
+const UPDATE_TYPED = `
+    UPDATE alerts
+    SET severity = ?, message = ?, details = ?
+    WHERE id = ?
+      AND ended_at IS NULL
+`;
+
+const END_OPEN_TYPE = `
+    UPDATE alerts
+    SET ended_at = ?
+    WHERE vehicle_id = ?
+      AND type = ?
       AND ended_at IS NULL
 `;
 
@@ -361,5 +399,62 @@ export class AlertModel {
 
     static endSpeeding(id: number, endedAt: string): void {
         stmt(END_SPEEDING).run(endedAt, id);
+    }
+
+    static findOpenByType(
+        vehicleId: number,
+        type: AlertType,
+    ): { id: number } | undefined {
+        const row = stmt(SELECT_OPEN_TYPE).get(vehicleId, type) as
+            | { id: number }
+            | undefined;
+        return row ? { id: row.id } : undefined;
+    }
+
+    /**
+     * Eine offene Zeile pro Fahrzeug und Typ. Schon offene Zeilen werden
+     * nur aktualisiert (kein zweiter `active_alerts`-Tick).
+     */
+    static ensureOpen(input: {
+        vehicleId: number;
+        type: Exclude<AlertType, "SPEEDING">;
+        createdAt: string;
+        severity: AlertSeverity;
+        message: string;
+        details: AlertDetails | null;
+    }): { id: number; opened: boolean } {
+        const existing = this.findOpenByType(input.vehicleId, input.type);
+        const detailsJson =
+            input.details === null ? null : JSON.stringify(input.details);
+
+        if (existing) {
+            stmt(UPDATE_TYPED).run(
+                input.severity,
+                input.message,
+                detailsJson,
+                existing.id,
+            );
+            return { id: existing.id, opened: false };
+        }
+
+        const result = stmt(INSERT_TYPED).run(
+            input.vehicleId,
+            input.type,
+            input.severity,
+            input.message,
+            detailsJson,
+            input.createdAt,
+        );
+
+        return { id: Number(result.lastInsertRowid), opened: true };
+    }
+
+    static endOpenType(
+        vehicleId: number,
+        type: AlertType,
+        endedAt: string,
+    ): boolean {
+        const result = stmt(END_OPEN_TYPE).run(endedAt, vehicleId, type);
+        return result.changes > 0;
     }
 }

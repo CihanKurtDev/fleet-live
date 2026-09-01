@@ -124,4 +124,15 @@ describe("formatAlertEvent", () => {
             "Tankstand ist niedrig.",
         );
     });
+
+    it("formats LOW_FUEL from details", () => {
+        assert.equal(
+            formatAlertEvent({
+                type: "LOW_FUEL",
+                message: "Tankstand ist niedrig.",
+                details: { fuel_level: 12.4 },
+            }),
+            "Tankstand 12 %",
+        );
+    });
 });
