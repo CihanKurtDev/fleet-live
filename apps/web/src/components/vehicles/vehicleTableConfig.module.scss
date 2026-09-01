@@ -1,0 +1,8 @@
+.speed {
+    font-variant-numeric: tabular-nums;
+
+    &[data-band="warning"],
+    &[data-band="critical"] {
+        font-weight: 650;
+    }
+}

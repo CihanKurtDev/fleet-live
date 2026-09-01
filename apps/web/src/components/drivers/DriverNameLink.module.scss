@@ -1,0 +1,9 @@
+.link {
+    color: var(--text-h);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover {
+        color: var(--accent);
+    }
+}

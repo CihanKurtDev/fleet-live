@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import type { Trip, VehicleInput } from "@fleet-live/shared";
-import { decodePolyline } from "@fleet-live/shared";
+import { decodePolyline, speedBand } from "@fleet-live/shared";
 
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import { getVehicleTrip } from "../api/vehicles";
+import { VehicleAlertList } from "../components/alerts/VehicleAlertList";
+import { DriverNameLink } from "../components/drivers/DriverNameLink";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import {
     VehicleMap,
     type MapPoint,
 } from "../components/vehicles/VehicleMap";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
+import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { useVehicles } from "../context/vehiclesContext";
@@ -179,6 +182,11 @@ export const VehicleDetailPage = () => {
     }
 
     const isDriving = vehicle.status === "DRIVING";
+    const liveSpeed = speedBand({
+        speed: vehicle.speed,
+        status: vehicle.status,
+        speeding_open: vehicle.speeding_open,
+    });
     const position =
         vehicle.recorded_at !== null &&
         vehicle.latitude !== null &&
@@ -231,6 +239,11 @@ export const VehicleDetailPage = () => {
                     >
                         {vehicleStatusLabel(vehicle.status)}
                     </span>
+                    <DriverNameLink
+                        className={styles.driverLink}
+                        driverId={vehicle.driver_id}
+                        name={vehicle.driver_name}
+                    />
                 </div>
 
                 {canWrite && (
@@ -281,9 +294,22 @@ export const VehicleDetailPage = () => {
                             <div>
                                 <dt>Geschwindigkeit</dt>
                                 <dd>
-                                    {vehicle.speed === null
-                                        ? "—"
-                                        : `${vehicle.speed} km/h`}
+                                    {vehicle.speed === null ? (
+                                        "—"
+                                    ) : (
+                                        <span
+                                            className={styles.speed}
+                                            data-band={liveSpeed.band}
+                                            style={{
+                                                color: SPEED_BAND_COLORS[
+                                                    liveSpeed.band
+                                                ],
+                                            }}
+                                            title={speedBandTitle(liveSpeed)}
+                                        >
+                                            {vehicle.speed} km/h
+                                        </span>
+                                    )}
                                 </dd>
                             </div>
                             <div>
@@ -308,6 +334,13 @@ export const VehicleDetailPage = () => {
                             : "Dieses Fahrzeug hat noch keine Position gemeldet."}
                     </p>
                 )}
+            </section>
+
+            <section className={styles.panel}>
+                <VehicleAlertList
+                    vehicleId={vehicle.id}
+                    canWrite={canWrite}
+                />
             </section>
 
             <section className={styles.panel}>

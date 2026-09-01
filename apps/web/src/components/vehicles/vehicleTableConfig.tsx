@@ -1,9 +1,12 @@
-import type { Vehicle, VehicleFilterId } from "@fleet-live/shared";
+import { speedBand, type Vehicle, type VehicleFilterId } from "@fleet-live/shared";
 import type {
     TableColumn,
     TableFilter,
 } from "../../types/table";
+import { DriverNameLink } from "../drivers/DriverNameLink";
+import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
 import { vehicleStatusLabel } from "./vehicleStatus";
+import styles from "./vehicleTableConfig.module.scss";
 
 export const vehicleFilters: Array<
     TableFilter<Vehicle> & { id: VehicleFilterId }
@@ -24,6 +27,9 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "driver_name",
         displayText: "Fahrer",
         sortable: true,
+        render: (value, { row }) => (
+            <DriverNameLink driverId={row.driver_id} name={value} />
+        ),
     },
     {
         key: "status",
@@ -41,18 +47,33 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "speed",
         displayText: "Geschwindigkeit",
         sortable: true,
-        render: (value) =>
-            value === null
-                ? "—"
-                : `${value} km/h`,
+        render: (value, { row }) => {
+            if (value === null) {
+                return "—";
+            }
+
+            const band = speedBand({
+                speed: value,
+                status: row.status,
+                speeding_open: row.speeding_open,
+            });
+
+            return (
+                <span
+                    className={styles.speed}
+                    data-band={band.band}
+                    style={{ color: SPEED_BAND_COLORS[band.band] }}
+                    title={speedBandTitle(band)}
+                >
+                    {value} km/h
+                </span>
+            );
+        },
     },
     {
         key: "active_alerts",
         displayText: "Warnungen",
         sortable: true,
-        render: (value) =>
-            value > 0
-                ? `${value}`
-                : "—",
+        render: (value) => (value > 0 ? value : "—"),
     },
 ];

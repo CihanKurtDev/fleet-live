@@ -31,6 +31,17 @@
     gap: 12px;
 }
 
+.driverLink {
+    font-size: 15px;
+    color: var(--text-h);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover {
+        color: var(--accent);
+    }
+}
+
 .actions {
     display: flex;
     flex-wrap: wrap;
@@ -120,6 +131,15 @@
         font-size: 15px;
         font-variant-numeric: tabular-nums;
         color: var(--text-h);
+    }
+}
+
+.speed {
+    font-variant-numeric: tabular-nums;
+
+    &[data-band="warning"],
+    &[data-band="critical"] {
+        font-weight: 650;
     }
 }
 
