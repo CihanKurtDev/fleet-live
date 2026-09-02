@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 
 type TableColumn = {
     name: string;
@@ -530,6 +530,32 @@ function migrateToV12(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+function migrateToV13(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS trip_month_km (
+            company_id INTEGER NOT NULL,
+            month TEXT NOT NULL,
+            distance_m REAL NOT NULL DEFAULT 0,
+            PRIMARY KEY (company_id, month),
+            FOREIGN KEY (company_id)
+                REFERENCES companies(id)
+                ON DELETE CASCADE
+        );
+    `);
+    database.exec(`
+        INSERT INTO trip_month_km (company_id, month, distance_m)
+        SELECT
+            v.company_id,
+            strftime('%Y-%m', t.started_at),
+            COALESCE(SUM(t.distance_m), 0)
+        FROM trips t
+        INNER JOIN vehicles v ON v.id = t.vehicle_id
+        GROUP BY v.company_id, strftime('%Y-%m', t.started_at)
+        ON CONFLICT(company_id, month) DO UPDATE SET
+            distance_m = excluded.distance_m
+    `);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -582,6 +608,10 @@ export function migrate(database: DatabaseSync) {
 
     if (currentVersion < 12) {
         migrateToV12(database);
+    }
+
+    if (currentVersion < 13) {
+        migrateToV13(database);
     }
 
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
