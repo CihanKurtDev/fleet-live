@@ -280,6 +280,7 @@ describe("GET /api/vehicles", () => {
         assert.equal(response.body.meta.counts.all, 12);
         assert.ok(response.body.meta.counts.low_fuel >= 1);
         assert.ok(response.body.meta.counts.driving >= 1);
+        assert.ok(response.body.meta.counts.idle >= 1);
         assert.ok(response.body.meta.counts.offline >= 1);
         assert.equal(response.body.meta.counts.alerts, 2);
         assert.equal(typeof response.body.data[0].active_alerts, "number");
@@ -347,6 +348,29 @@ describe("GET /api/vehicles", () => {
             .query({ sort: "active_alerts", dir: "desc" });
 
         assert.equal(sorted.status, 200);
+    });
+
+    it("filters idle vehicles", async () => {
+        VehicleModel.create({
+            license_plate: "K-ID 1",
+            driver_name: "Idle One",
+            status: "IDLE",
+        });
+        VehicleModel.create({
+            license_plate: "K-DR 9",
+            driver_name: "Drive Nine",
+            status: "DRIVING",
+        });
+
+        const filtered = await api.get("/api/vehicles").query({ filter: "idle" });
+
+        assert.equal(filtered.status, 200);
+        assert.ok(filtered.body.data.length >= 1);
+        assert.ok(
+            filtered.body.data.every(
+                (row: { status: string }) => row.status === "IDLE",
+            ),
+        );
     });
 
     it("responds 304 when If-None-Match matches the ETag", async () => {
@@ -1710,6 +1734,53 @@ describe("trip retention", () => {
         );
         assert.equal(mineLatest.status, 200);
         assert.equal(mineLatest.body.data.ended_at, null);
+    });
+
+    it("keeps month km after closed trips are pruned", () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-RET KM",
+            driver_name: "Km",
+            status: "IDLE",
+            company_id: 1,
+        });
+        const started = sqliteDaysAgo(config.tripRetentionDays + 10);
+        TripModel.open(vehicle.id, started);
+        TripModel.appendPoints(
+            vehicle.id,
+            [
+                { lat: 50.9375, lng: 6.9603 },
+                { lat: 51.2277, lng: 6.7735 },
+            ],
+            80,
+        );
+        TripModel.close(vehicle.id, started);
+
+        const month = started.slice(0, 7);
+        const before = db
+            .prepare(
+                `
+                SELECT distance_m
+                FROM trip_month_km
+                WHERE company_id = 1 AND month = ?
+                `,
+            )
+            .get(month) as { distance_m: number } | undefined;
+
+        assert.ok(before && before.distance_m > 1_000);
+        assert.equal(TripModel.pruneClosedForCompany(1), 1);
+        assert.equal(countTripsFor(vehicle.id), 0);
+
+        const after = db
+            .prepare(
+                `
+                SELECT distance_m
+                FROM trip_month_km
+                WHERE company_id = 1 AND month = ?
+                `,
+            )
+            .get(month) as { distance_m: number } | undefined;
+
+        assert.equal(after?.distance_m, before.distance_m);
     });
 
     it("does not delete a recently closed trip and prunes stale ones on stop", async () => {

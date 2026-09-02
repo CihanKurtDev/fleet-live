@@ -1,4 +1,5 @@
 import { db } from "./database";
+import { seedLivedIn } from "./seedLivedIn";
 import {
     applyMaintenanceTriggers,
     dropMaintenanceTriggers,
@@ -15,18 +16,6 @@ const insertDriver = db.prepare(`
 
 const selectDriverId = db.prepare(`
     SELECT id FROM drivers WHERE company_id = ? AND name = ?
-`);
-
-const insertVehicle = db.prepare(`
-    INSERT OR IGNORE INTO vehicles (
-        license_plate,
-        driver_name,
-        driver_id,
-        fuel_level,
-        status,
-        company_id
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
 `);
 
 const insertTelemetry = db.prepare(`
@@ -48,30 +37,6 @@ const insertAlert = db.prepare(`
     )
     VALUES (?, ?, ?, ?)
 `);
-
-const sampleVehicles: Array<{
-    plate: string;
-    driver: string;
-    fuel: number;
-    status: string;
-    telemetry?: { lat: number; lng: number; speed: number };
-    alerts?: number;
-}> = [
-    { plate: "K-AB 123", driver: "Max Mustermann", fuel: 82, status: "DRIVING", telemetry: { lat: 50.9375, lng: 6.9603, speed: 64 } },
-    { plate: "K-CD 456", driver: "Erika Musterfrau", fuel: 31, status: "IDLE", telemetry: { lat: 50.9412, lng: 6.9501, speed: 0 }, alerts: 2 },
-    { plate: "K-EF 789", driver: "John Doe", fuel: 7, status: "OFFLINE", alerts: 1 },
-    { plate: "K-GH 234", driver: "Anna Schneider", fuel: 58, status: "DRIVING", telemetry: { lat: 50.9289, lng: 6.9712, speed: 88 } },
-    { plate: "K-IJ 567", driver: "Tobias Weber", fuel: 12, status: "STOPPED", telemetry: { lat: 50.9155, lng: 6.9388, speed: 0 }, alerts: 3 },
-    { plate: "D-KL 890", driver: "Sarah Krüger", fuel: 94, status: "DRIVING", telemetry: { lat: 51.2277, lng: 6.7735, speed: 52 } },
-    { plate: "D-MN 112", driver: "Peter Lang", fuel: 45, status: "IDLE", telemetry: { lat: 51.2311, lng: 6.7802, speed: 0 } },
-    { plate: "D-OP 345", driver: "Nina Hoffmann", fuel: 3, status: "OFFLINE", alerts: 2 },
-    { plate: "M-QR 678", driver: "Lukas Bauer", fuel: 67, status: "DRIVING", telemetry: { lat: 48.1351, lng: 11.582, speed: 105 }, alerts: 1 },
-    { plate: "M-ST 901", driver: "Clara Vogel", fuel: 19, status: "STOPPED", telemetry: { lat: 48.1402, lng: 11.5601, speed: 0 } },
-    { plate: "M-UV 223", driver: "Jonas Richter", fuel: 76, status: "DRIVING", telemetry: { lat: 48.1489, lng: 11.5677, speed: 71 } },
-    { plate: "B-WX 556", driver: "Melanie Fuchs", fuel: 88, status: "IDLE", telemetry: { lat: 52.52, lng: 13.405, speed: 0 } },
-    { plate: "B-YZ 889", driver: "Sven Kaiser", fuel: 15, status: "OFFLINE", alerts: 4 },
-    { plate: "B-AC 101", driver: "Laura Böhm", fuel: 51, status: "DRIVING", telemetry: { lat: 52.5065, lng: 13.3846, speed: 46 } },
-];
 
 const CITIES = [
     { lat: 50.9375, lng: 6.9603 },
@@ -137,11 +102,6 @@ const LAST_NAMES = [
 ];
 const STATUSES = ["DRIVING", "DRIVING", "IDLE", "STOPPED", "OFFLINE"] as const;
 const DRIVER_NAME_CYCLE = FIRST_NAMES.length * LAST_NAMES.length;
-const COMPANY_COUNT = 3;
-
-function companyIdAt(index: number) {
-    return (index % COMPANY_COUNT) + 1;
-}
 
 /** Large-Seed: Demo-Login (Firma 1) sieht die Last; 2/3 nur Isolation. */
 function largeCompanyIdAt(index: number) {
@@ -207,53 +167,6 @@ function upsertDriverId(companyId: number, name: string): number {
     return row.id;
 }
 
-function seedSample() {
-    upsertDevAccounts(db);
-
-    for (const [index, vehicle] of sampleVehicles.entries()) {
-        const companyId = companyIdAt(index);
-        const driverId = upsertDriverId(companyId, vehicle.driver);
-        insertVehicle.run(
-            vehicle.plate,
-            vehicle.driver,
-            driverId,
-            vehicle.fuel,
-            vehicle.status,
-            companyId,
-        );
-
-        const row = db
-            .prepare("SELECT id FROM vehicles WHERE license_plate = ?")
-            .get(vehicle.plate) as { id: number } | undefined;
-
-        if (!row) {
-            continue;
-        }
-
-        if (vehicle.telemetry) {
-            insertTelemetry.run(
-                row.id,
-                vehicle.telemetry.lat,
-                vehicle.telemetry.lng,
-                vehicle.telemetry.speed,
-            );
-        }
-
-        for (let i = 0; i < (vehicle.alerts ?? 0); i += 1) {
-            const alert = demoAlert(vehicle.status, vehicle.fuel);
-            if (!alert) {
-                continue;
-            }
-            insertAlert.run(
-                alert.type,
-                alert.severity,
-                alert.message,
-                row.id,
-            );
-        }
-    }
-}
-
 function seedLarge() {
     const vehicleCount = 50_000;
     const telemetryPerVehicle = 10;
@@ -281,6 +194,7 @@ function seedLarge() {
         // würden sonst verwaiste lastInsertRowid=0 und doppelte Kennzeichen erzeugen.
         db.exec("DELETE FROM vehicles");
         db.exec("DELETE FROM drivers");
+        db.exec("DELETE FROM trip_month_km");
         db.exec(
             "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts', 'drivers')",
         );
@@ -385,10 +299,14 @@ function seedLarge() {
 try {
     if (largeMode) {
         seedLarge();
+        console.log(
+            "Database seeded with ~50k vehicles and ~500k telemetry rows.",
+        );
     } else {
-        db.exec("BEGIN");
-        seedSample();
-        db.exec("COMMIT");
+        const summary = seedLivedIn(db);
+        console.log(
+            `Database seeded: ${summary.vehicles} Fahrzeuge. Firma 1: ${summary.mixLabel}.`,
+        );
     }
 } catch (error) {
     try {
@@ -398,9 +316,3 @@ try {
     }
     throw error;
 }
-
-console.log(
-    largeMode
-        ? "Database seeded with ~50k vehicles and ~500k telemetry rows."
-        : "Database seeded successfully.",
-);

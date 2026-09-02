@@ -109,6 +109,19 @@ CREATE TABLE IF NOT EXISTS trips (
         ON DELETE CASCADE
 );
 
+-- Monatssumme gefahrener Meter pro Firma. Bleibt stehen, wenn alte Trips
+-- (Pfad) gelöscht werden. Eine Zeile pro Firma und Monat.
+CREATE TABLE IF NOT EXISTS trip_month_km (
+    company_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    distance_m REAL NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (company_id, month),
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle_id INTEGER NOT NULL,

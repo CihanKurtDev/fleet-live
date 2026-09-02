@@ -15,6 +15,7 @@ export const VEHICLE_FILTERS = [
     "alerts",
     "low_fuel",
     "driving",
+    "idle",
     "offline",
 ] as const;
 
@@ -70,6 +71,7 @@ export type VehicleListCounts = {
     alerts: number;
     low_fuel: number;
     driving: number;
+    idle: number;
     offline: number;
 };
 

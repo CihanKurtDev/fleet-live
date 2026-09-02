@@ -50,6 +50,7 @@ const FILTER_SQL: Record<VehicleFilterId, string> = {
     alerts: "v.active_alerts > 0",
     low_fuel: "v.fuel_level < 20",
     driving: "v.status = 'DRIVING'",
+    idle: "v.status = 'IDLE'",
     offline: "v.status = 'OFFLINE'",
 };
 
@@ -125,6 +126,7 @@ const FACET_SQL = `
         COALESCE(SUM(active_alerts > 0), 0) AS alerts,
         COALESCE(SUM(fuel_level < 20), 0) AS low_fuel,
         COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
+        COALESCE(SUM(status = 'IDLE'), 0) AS idle,
         COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
     FROM vehicles v
     WHERE v.company_id = ?3
@@ -160,6 +162,7 @@ type FacetRow = {
     alerts: number;
     low_fuel: number;
     driving: number;
+    idle: number;
     offline: number;
 };
 
@@ -266,6 +269,7 @@ export class VehicleModel {
                     alerts: Number(counts.alerts),
                     low_fuel: Number(counts.low_fuel),
                     driving: Number(counts.driving),
+                    idle: Number(counts.idle),
                     offline: Number(counts.offline),
                 },
             },
@@ -550,6 +554,7 @@ export class VehicleModel {
         ExceptionEventModel.resetForTests();
         db.exec("DELETE FROM vehicles");
         db.exec("DELETE FROM drivers");
+        db.exec("DELETE FROM trip_month_km");
         db.exec(
             "DELETE FROM sqlite_sequence WHERE name IN ('vehicles', 'telemetry', 'alerts', 'trips', 'drivers')",
         );

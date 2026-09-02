@@ -28,9 +28,24 @@ const SELECT_OPEN = `
 `;
 
 const SELECT_OPEN_FULL = `
-    SELECT id, path, point_count
-    FROM trips
-    WHERE vehicle_id = ? AND ended_at IS NULL
+    SELECT
+        t.id,
+        t.path,
+        t.point_count,
+        t.distance_m,
+        t.started_at,
+        v.company_id
+    FROM trips t
+    INNER JOIN vehicles v ON v.id = t.vehicle_id
+    WHERE t.vehicle_id = ?
+      AND t.ended_at IS NULL
+`;
+
+const ADD_MONTH_KM = `
+    INSERT INTO trip_month_km (company_id, month, distance_m)
+    VALUES (?, ?, ?)
+    ON CONFLICT(company_id, month) DO UPDATE SET
+        distance_m = distance_m + excluded.distance_m
 `;
 
 const SELECT_LATEST = `
@@ -203,7 +218,14 @@ export class TripModel {
      */
     static close(vehicleId: number, at: string = nowSqlite()): void {
         const open = stmt(SELECT_OPEN_FULL).get(vehicleId) as
-            | { id: number; path: string; point_count: number }
+            | {
+                  id: number;
+                  path: string;
+                  point_count: number;
+                  distance_m: number;
+                  started_at: string;
+                  company_id: number;
+              }
             | undefined;
 
         if (!open) {
@@ -212,20 +234,41 @@ export class TripModel {
 
         if (open.point_count < 3) {
             stmt(CLOSE_TRIP).run(at, open.path, open.point_count, open.id);
+        } else {
+            const simplified = simplifyPath(
+                decodePolyline(open.path),
+                SIMPLIFY_TOLERANCE_METERS,
+            );
+
+            stmt(CLOSE_TRIP).run(
+                at,
+                encodePolyline(simplified),
+                simplified.length,
+                open.id,
+            );
+        }
+
+        this.addClosedDistance(
+            open.company_id,
+            open.started_at,
+            Number(open.distance_m),
+        );
+    }
+
+    /**
+     * Monatssumme für die Schicht-Charts. Unabhängig vom Trip-Pfad;
+     * Prune ändert diese Zeilen nicht.
+     */
+    static addClosedDistance(
+        companyId: number,
+        startedAt: string,
+        distanceM: number,
+    ): void {
+        if (!(distanceM > 0)) {
             return;
         }
 
-        const simplified = simplifyPath(
-            decodePolyline(open.path),
-            SIMPLIFY_TOLERANCE_METERS,
-        );
-
-        stmt(CLOSE_TRIP).run(
-            at,
-            encodePolyline(simplified),
-            simplified.length,
-            open.id,
-        );
+        stmt(ADD_MONTH_KM).run(companyId, startedAt.slice(0, 7), distanceM);
     }
 
     /**

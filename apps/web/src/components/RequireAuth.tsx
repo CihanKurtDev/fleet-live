@@ -1,5 +1,4 @@
 import { Navigate, Outlet, useLocation } from "react-router";
-import { VehiclesProvider } from "../context/VehiclesProvider";
 import { useAuth } from "../hooks/useAuth";
 
 export const RequireAuth = () => {
@@ -14,9 +13,5 @@ export const RequireAuth = () => {
         return <Navigate to="/login" replace state={{ from: location }} />;
     }
 
-    return (
-        <VehiclesProvider>
-            <Outlet />
-        </VehiclesProvider>
-    );
+    return <Outlet />;
 };

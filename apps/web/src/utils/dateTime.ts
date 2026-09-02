@@ -88,3 +88,47 @@ export const formatRelativeTimestamp = (value: string | null): string => {
 
     return formatTimestamp(value);
 };
+
+/** Dauer seit dem letzten Punkt, z. B. „seit 4 Min.“ auf der Schicht. */
+export const formatSinceTimestamp = (value: string | null): string => {
+    if (value === null) {
+        return "—";
+    }
+
+    const date = parseSqliteUtc(value);
+
+    if (!date) {
+        return "—";
+    }
+
+    const diffMs = Date.now() - date.getTime();
+
+    if (diffMs < 0) {
+        return formatTimestamp(value);
+    }
+
+    const seconds = Math.floor(diffMs / 1000);
+
+    if (seconds < 15) {
+        return "gerade eben";
+    }
+
+    if (seconds < 60) {
+        return `seit ${seconds} s`;
+    }
+
+    const minutes = Math.floor(seconds / 60);
+
+    if (minutes < 60) {
+        return minutes === 1 ? "seit 1 Min." : `seit ${minutes} Min.`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+        return hours === 1 ? "seit 1 Std." : `seit ${hours} Std.`;
+    }
+
+    return formatTimestamp(value);
+};
+

@@ -26,11 +26,11 @@ What you can do in the app today, and what lands next — like a game patch list
 * Low-fuel warnings under 15% on the road
 * No-signal warnings when a vehicle goes quiet, or is marked offline
 * Inbox: open / done, and filter by speeding / low fuel / no signal
+* Shift briefing on the home page, with the open-warning count in the nav
 * Fleet map, trip trail on the vehicle, drivers, company login
 
 ## Next
 
-* A morning briefing on the home page, and the open-warning count in the nav
 * Past trips on the vehicle, not only the current drive
 * Yard fields (VIN, HU, depot); drivers you can maintain without the vehicle form
 * A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
@@ -60,6 +60,7 @@ What you can do in the app today, and what lands next — like a game patch list
 * Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts` with open/resolved and `type` chips); live SPEEDING, LOW_FUEL and OFFLINE from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
 * Drivers as entities (`drivers` table, `vehicle.driver_id`); list/detail `/drivers` with incident counts
 * Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
+* Shift briefing on `/` (`GET /api/briefing`); Warnungen nav shows the open inbox count
 * API integration tests (`node:test` + SuperTest)
 
 ### Consciously simplified / demo
@@ -174,6 +175,7 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | `PATCH`  | `/api/sim`                       | `{ running }` — pause/resume this company’s simulation |
 | `GET`    | `/api/alerts`                    | Paginated alerts (`filter` open/resolved/all, optional `type`, `vehicle_id`, `driver_id`, `page`, `limit`) |
 | `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }` — close; `dispatcher` only |
+| `GET`    | `/api/briefing`                  | Company snapshot for the home page (counts, newest open alerts, no-signal, drivers with open warnings) |
 | `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`) with type counts |
 | `GET`    | `/api/drivers/:id`               | Driver, vehicles, incident counts (`404` if missing **or** other company) |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
@@ -183,6 +185,8 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 `GET /api/alerts` returns `{ data, meta }` of alerts joined with plate, driver name and `driver_id`. Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Default `filter=open` is `resolved_at IS NULL` (independent of `ended_at`). Optional `type` is `SPEEDING` / `LOW_FUEL` / `OFFLINE` (omit = all types). `meta.counts` is `open` / `resolved` / `all` and ignores `type`. `meta.type_counts` is per-type and respects `filter`. Optional `vehicle_id` or `driver_id` (404 if missing or other company).
 
 `GET /api/drivers` returns `{ data, meta }` of drivers for the session company. Counts include **all** alert rows (open and resolved). `open_warnings` is the unresolved subset. `vehicle_plate` is set when the driver has exactly one vehicle. `GET /api/drivers/:id` adds assigned vehicles.
+
+`GET /api/briefing` returns `{ data }` for the session company: status counts (`driving`, `idle`, `offline`), inbox `open`, open `low_fuel` rows, the newest open alerts, offline vehicles (last `recorded_at`), and drivers with open warnings. Caps are `BRIEFING_OPEN_ALERT_LIMIT` / `BRIEFING_OFFLINE_LIMIT` / `BRIEFING_DRIVER_LIMIT` in `@fleet-live/shared`. `viewer` may read.
 
 `GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions, not the list page. Optional `bbox=west,south,east,north`; `search` matches plate and driver; `drivers` is a view filter (empty means the company snapshot in the bbox, not “no markers”). Over `FLEET_POSITIONS_MAX` (2000) matches → `truncated` and empty `data` (no sample).
 
@@ -223,7 +227,7 @@ List state lives in the URL. Reloading keeps the view; a fresh visit to `/vehicl
 | Route           | Description |
 | --------------- | ----------- |
 | `/login`        | Session login |
-| `/`             | Redirects to `/vehicles` (auth required) |
+| `/`             | Shift briefing (auth required) |
 | `/vehicles`     | List and create dialog |
 | `/vehicles/:id` | Detail, map/trail, alerts, edit, delete |
 | `/fleet`        | Fleet map |
@@ -231,7 +235,11 @@ List state lives in the URL. Reloading keeps the view; a fresh visit to `/vehicl
 | `/drivers`      | Driver list (incident counts) |
 | `/drivers/:id`  | Driver detail, vehicles, violation history |
 
-Unauthenticated visits to vehicle, fleet, alert and driver routes go to `/login`.
+Unauthenticated visits to vehicle, fleet, alert and driver routes go to `/login`. After login the home page is `/`.
+
+## Shift briefing
+
+`/` is the company snapshot for the current shift: five counts (open inbox, no-signal, driving, standby, open low fuel), the newest open alerts with resolve for dispatchers, vehicles with status `OFFLINE`, and drivers with the most open warnings. The Warnungen nav shows the open inbox count. `viewer` may read; only `dispatcher` resolves.
 
 ## Vehicle list
 
