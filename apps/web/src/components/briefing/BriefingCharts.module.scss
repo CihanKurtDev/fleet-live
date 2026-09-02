@@ -1,0 +1,155 @@
+.section {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: 12px;
+}
+
+.hero {
+    grid-column: 1 / -1;
+    min-height: 0;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    padding: 12px 16px 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    text-align: left;
+    box-sizing: border-box;
+}
+
+.kicker {
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
+    font-family: var(--mono);
+}
+
+.title {
+    flex-shrink: 0;
+    margin: 6px 0 4px;
+    font-size: 16px;
+    font-weight: 650;
+    color: var(--text-h);
+}
+
+.lead,
+.note {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text);
+}
+
+.lead {
+    flex-shrink: 0;
+    max-width: 62ch;
+    margin-bottom: 8px;
+}
+
+.chart,
+.chartCompact {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+}
+
+.legend {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.legendItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text);
+}
+
+.swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+
+    &[data-dash="true"] {
+        outline: 1px dashed currentColor;
+        outline-offset: 1px;
+        background: transparent;
+    }
+}
+
+.note {
+    flex-shrink: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.tooltip {
+    min-width: 180px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    box-shadow: var(--shadow);
+    text-align: left;
+}
+
+.tooltipLabel {
+    margin: 0 0 6px;
+    font-size: 12px;
+    color: var(--text);
+}
+
+.tooltipValue {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--mono);
+    line-height: 1.2;
+}
+
+.tooltipHint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--text);
+}
+
+.tooltipRow {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 12px;
+    padding: 2px 0;
+}
+
+.tooltipMuted {
+    color: var(--text);
+}
+
+.tooltipNum {
+    font-family: var(--mono);
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}

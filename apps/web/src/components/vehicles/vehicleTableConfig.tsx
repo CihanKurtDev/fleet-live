@@ -21,6 +21,7 @@ export const vehicleFilters: Array<
     { id: "alerts", displayText: "Warnungen" },
     { id: "low_fuel", displayText: "Wenig Tank" },
     { id: "driving", displayText: "Auf Fahrt" },
+    { id: "idle", displayText: "Standby" },
     { id: "offline", displayText: "Kein Signal" },
 ];
 
