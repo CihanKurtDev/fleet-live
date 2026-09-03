@@ -1,15 +1,16 @@
-import { Link, useLocation, useParams } from "react-router";
+import { Link, useParams } from "react-router";
 
+import { DriverAssignmentPanel } from "../components/drivers/DriverAssignmentPanel";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
+import { useAuth } from "../hooks/useAuth";
 import { useDriver } from "../hooks/useDriver";
-import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
-import { alertTypeLabel } from "../components/alerts/alertLabels";
 import layout from "../styles/detailLayout.module.scss";
 import styles from "./DriverDetailPage.module.scss";
 
 export const DriverDetailPage = () => {
     const { id } = useParams();
-    const location = useLocation();
+    const { user } = useAuth();
+    const canWrite = user?.role === "dispatcher";
     const driverId = Number(id);
     const parsedId = Number.isInteger(driverId) ? driverId : null;
     const { driver, isLoading, error, notFound } = useDriver(parsedId);
@@ -44,8 +45,7 @@ export const DriverDetailPage = () => {
         );
     }
 
-    const inboxHref = `/alerts?driver_id=${driver.id}`;
-    const fromHere = `${location.pathname}${location.search}`;
+    const inboxHref = `/alerts?driver_id=${driver.id}&type=SPEEDING`;
 
     return (
         <section className={layout.page}>
@@ -58,63 +58,32 @@ export const DriverDetailPage = () => {
                         <Link to={inboxHref}>
                             {driver.open_warnings}{" "}
                             {driver.open_warnings === 1
-                                ? "offene Warnung"
-                                : "offene Warnungen"}
+                                ? "offene Tempo-Warnung"
+                                : "offene Tempo-Warnungen"}
                         </Link>
                     ) : (
-                        "Keine offenen Warnungen"
+                        "Keine offenen Tempo-Warnungen"
                     )}
                 </p>
             </header>
 
-            <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Aktuelles Fahrzeug</h2>
-                {driver.vehicles.length === 0 ? (
-                    <p className={layout.empty}>
-                        Diesem Fahrer ist derzeit kein Fahrzeug zugewiesen.
-                    </p>
-                ) : (
-                    <ul className={styles.vehicles}>
-                        {driver.vehicles.map((vehicle) => (
-                            <li key={vehicle.id}>
-                                <Link
-                                    to={`/vehicles/${vehicle.id}`}
-                                    state={{ from: fromHere }}
-                                >
-                                    {vehicle.license_plate}
-                                </Link>
-                                <span>
-                                    {vehicleStatusLabel(vehicle.status)}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </section>
+            <DriverAssignmentPanel driver={driver} canWrite={canWrite} />
 
             <section className={layout.panel}>
                 <h2 className={layout.panelTitle}>Verstöße</h2>
                 <p className={layout.note}>
-                    Alle Incidents, auch erledigte. Offene Warnungen stehen in
-                    der Inbox.
+                    Tempo-Überschreitungen, auch erledigte. Tank und Funk hängen
+                    am Fahrzeug, nicht am Fahrer.
                 </p>
                 <dl className={layout.facts}>
                     <div>
-                        <dt>Gesamt</dt>
-                        <dd>{driver.counts.all}</dd>
+                        <dt>Geschwindigkeit</dt>
+                        <dd>{driver.counts.SPEEDING}</dd>
                     </div>
-                    {(["SPEEDING", "LOW_FUEL", "OFFLINE"] as const).map(
-                        (type) => (
-                            <div key={type}>
-                                <dt>{alertTypeLabel(type)}</dt>
-                                <dd>{driver.counts[type]}</dd>
-                            </div>
-                        ),
-                    )}
                 </dl>
                 <p className={layout.note}>
                     <Link to={`${inboxHref}&filter=all`}>
-                        Alle Warnungen
+                        Alle Tempo-Warnungen
                     </Link>
                 </p>
             </section>

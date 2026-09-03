@@ -53,8 +53,12 @@ export const VehicleAlertList = ({
             controller.signal,
         )
             .then((response) => {
-                setAlerts(response.data);
-                setOpenTotal(response.meta.total);
+                const vehicleAlerts = response.data.filter(
+                    (alert) =>
+                        alert.type === "LOW_FUEL" || alert.type === "OFFLINE",
+                );
+                setAlerts(vehicleAlerts);
+                setOpenTotal(vehicleAlerts.length);
             })
             .catch((caught: unknown) => {
                 if (controller.signal.aborted || isAbortError(caught)) {
@@ -99,7 +103,7 @@ export const VehicleAlertList = ({
     return (
         <>
             <div className={styles.header}>
-                <h2 className={styles.panelTitle}>Offene Warnungen</h2>
+                <h2 className={styles.panelTitle}>Tank und Funk</h2>
                 <Link className={styles.inboxLink} to={inboxHref}>
                     Zur Inbox
                 </Link>
@@ -114,7 +118,7 @@ export const VehicleAlertList = ({
             {isLoading && alerts.length === 0 ? (
                 <p className={styles.empty}>Warnungen werden geladen…</p>
             ) : alerts.length === 0 ? (
-                <p className={styles.empty}>Keine offenen Warnungen.</p>
+                <p className={styles.empty}>Keine offenen Tank- oder Funkwarnungen.</p>
             ) : (
                 <>
                     <ul className={styles.list}>

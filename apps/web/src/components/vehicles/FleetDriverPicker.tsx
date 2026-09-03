@@ -25,7 +25,7 @@ const mergeKnown = (
     const next = new Map(current);
 
     for (const row of rows) {
-        next.set(row.name, row.license_plate);
+        next.set(row.name, row.license_plate ?? "");
     }
 
     return next;
@@ -278,7 +278,7 @@ export const FleetDriverPicker = ({
                                             {driver.name}
                                         </span>
                                         <span className={styles.plate}>
-                                            {driver.license_plate}
+                                            {driver.license_plate || "—"}
                                         </span>
                                     </label>
                                 </li>

@@ -42,7 +42,7 @@ const markerStyle = (status: VehicleStatus) => ({
 });
 
 const markerTooltip = (vehicle: FleetPosition) =>
-    `${vehicle.license_plate} · ${vehicle.driver_name} · ${vehicleStatusLabel(vehicle.status)}`;
+    `${vehicle.license_plate} · ${vehicle.driver_name ?? "Kein Fahrer"} · ${vehicleStatusLabel(vehicle.status)}`;
 
 type FleetMapProps = {
     vehicles: FleetPosition[];

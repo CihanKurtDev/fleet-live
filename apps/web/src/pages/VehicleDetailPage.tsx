@@ -7,8 +7,8 @@ import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import { getVehicleTrip } from "../api/vehicles";
 import { VehicleAlertList } from "../components/alerts/VehicleAlertList";
-import { DriverNameLink } from "../components/drivers/DriverNameLink";
 import { DetailBackLink, useDetailBack } from "../components/navigation/DetailBackLink";
+import { VehicleAssignmentPanel } from "../components/vehicles/VehicleAssignmentPanel";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import {
     VehicleMap,
@@ -208,11 +208,6 @@ export const VehicleDetailPage = () => {
                     >
                         {vehicleStatusLabel(vehicle.status)}
                     </span>
-                    <DriverNameLink
-                        className={styles.driverLink}
-                        driverId={vehicle.driver_id}
-                        name={vehicle.driver_name}
-                    />
                 </div>
 
                 {canWrite && (
@@ -312,8 +307,13 @@ export const VehicleDetailPage = () => {
                 </p>
             </section>
 
+            <VehicleAssignmentPanel
+                vehicle={vehicle}
+                canWrite={canWrite}
+            />
+
             <section className={layout.panel}>
-                <VehicleAlertList>
+                <VehicleAlertList
                     vehicleId={vehicle.id}
                     canWrite={canWrite}
                 />
@@ -337,7 +337,6 @@ export const VehicleDetailPage = () => {
                     <VehicleForm
                         initialValue={{
                             license_plate: vehicle.license_plate,
-                            driver_name: vehicle.driver_name,
                             fuel_level: vehicle.fuel_level,
                             status: vehicle.status,
                         }}
@@ -351,14 +350,6 @@ export const VehicleDetailPage = () => {
                         <div>
                             <dt>Kennzeichen</dt>
                             <dd>{vehicle.license_plate}</dd>
-                        </div>
-                        <div>
-                            <dt>Fahrer</dt>
-                            <dd>{vehicle.driver_name}</dd>
-                        </div>
-                        <div>
-                            <dt>Tankstand</dt>
-                            <dd>{Math.round(vehicle.fuel_level)} %</dd>
                         </div>
                     </dl>
                 )}

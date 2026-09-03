@@ -12,9 +12,13 @@ import styles from "./DriverTable.module.scss";
 
 interface DriverTableProps {
     onSelectDriver?: (driver: Driver) => void;
+    onAddDriver?: () => void;
 }
 
-export const DriverTable = ({ onSelectDriver }: DriverTableProps) => {
+export const DriverTable = ({
+    onSelectDriver,
+    onAddDriver,
+}: DriverTableProps) => {
     const { apiQuery, tableState, setSearch, handleSort, setPage, setLimit } =
         useDriverListQuery();
     const { data, isLoading, isFetching, error, pageCount, total } =
@@ -48,13 +52,16 @@ export const DriverTable = ({ onSelectDriver }: DriverTableProps) => {
         >
             <h1 className={styles.title}>Fahrer</h1>
             <p className={styles.lead}>
-                Offene Warnungen sind die Inbox; Verstöße die Historie.
+                Offene Warnungen sind Tempo-Überschreitungen in der Inbox;
+                Verstöße die Historie.
             </p>
 
             <TableToolbar
                 search={tableState.search}
                 onSearchChange={setSearch}
                 searchPlaceholder="Fahrer suchen..."
+                addNewLabel="Fahrer anlegen"
+                onAddNew={onAddDriver}
             />
 
             {error && (

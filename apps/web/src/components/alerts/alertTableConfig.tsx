@@ -44,9 +44,12 @@ export const alertColumns: TableColumn<Alert>[] = [
         key: "driver_name",
         displayText: "Fahrer",
         sortable: true,
-        render: (value, { row }) => (
-            <DriverNameLink driverId={row.driver_id} name={value} />
-        ),
+        render: (value, { row }) =>
+            row.driver_id ? (
+                <DriverNameLink driverId={row.driver_id} name={value ?? "—"} />
+            ) : (
+                "—"
+            ),
     },
     {
         key: "license_plate",

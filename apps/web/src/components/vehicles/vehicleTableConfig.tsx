@@ -45,9 +45,15 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "driver_name",
         displayText: "Fahrer",
         sortable: true,
-        render: (value, { row }) => (
-            <DriverNameLink driverId={row.driver_id} name={value} />
-        ),
+        render: (value, { row }) =>
+            row.current_driver_id ? (
+                <DriverNameLink
+                    driverId={row.current_driver_id}
+                    name={value ?? "—"}
+                />
+            ) : (
+                "—"
+            ),
     },
     {
         key: "status",

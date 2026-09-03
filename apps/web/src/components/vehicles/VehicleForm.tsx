@@ -1,6 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
 import {
-    DRIVER_NAME_MAX,
     LICENSE_PLATE_MAX,
     validateVehicleInput,
     type VehicleFieldErrors,
@@ -18,13 +17,11 @@ import styles from "./VehicleForm.module.scss";
  */
 interface FormValues {
     license_plate: string;
-    driver_name: string;
     fuel_level: string;
 }
 
 const EMPTY_VALUES: FormValues = {
     license_plate: "",
-    driver_name: "",
     fuel_level: "100",
 };
 
@@ -32,7 +29,6 @@ const toValues = (input?: VehicleInput): FormValues =>
     input
         ? {
               license_plate: input.license_plate,
-              driver_name: input.driver_name,
               fuel_level: String(Math.round(input.fuel_level)),
           }
         : EMPTY_VALUES;
@@ -77,7 +73,6 @@ export const VehicleForm = ({
 
     const toInput = (): Partial<VehicleInput> => ({
         license_plate: values.license_plate,
-        driver_name: values.driver_name,
         // Ein gemessener Tankstand darf nicht durch einen alten Formularwert
         // ersetzt werden, während der Simulator ihn weiterschreibt.
         fuel_level:
@@ -89,10 +84,8 @@ export const VehicleForm = ({
         status: initialValue?.status ?? NEW_VEHICLE_STATUS,
     });
 
-    const editable = ({ license_plate, driver_name, fuel_level }: FormValues) =>
-        isFuelMeasured
-            ? { license_plate, driver_name }
-            : { license_plate, driver_name, fuel_level };
+    const editable = ({ license_plate, fuel_level }: FormValues) =>
+        isFuelMeasured ? { license_plate } : { license_plate, fuel_level };
 
     const isDirty =
         JSON.stringify(editable(values)) !==
@@ -180,33 +173,6 @@ export const VehicleForm = ({
                 {errorFor("license_plate") && (
                     <p className={styles.error} role="alert">
                         {errorFor("license_plate")}
-                    </p>
-                )}
-            </div>
-
-            <div className={styles.field}>
-                <label htmlFor={`${fieldId}-driver`}>
-                    Fahrer
-                </label>
-                <input
-                    id={`${fieldId}-driver`}
-                    type="text"
-                    maxLength={DRIVER_NAME_MAX}
-                    value={values.driver_name}
-                    disabled={readOnly}
-                    onChange={(event) =>
-                        setField(
-                            "driver_name",
-                            event.target.value,
-                        )
-                    }
-                    aria-invalid={
-                        errorFor("driver_name") !== undefined
-                    }
-                />
-                {errorFor("driver_name") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("driver_name")}
                     </p>
                 )}
             </div>
