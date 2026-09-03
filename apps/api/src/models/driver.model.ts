@@ -420,6 +420,30 @@ export class DriverModel {
             }
         }
 
+        const drivingCurrent = stmt(
+            `
+            SELECT id
+            FROM vehicles
+            WHERE company_id = ?
+              AND current_driver_id = ?
+              AND status = 'DRIVING'
+            LIMIT 1
+            `,
+        ).get(companyId, driverId) as { id: number } | undefined;
+
+        if (
+            drivingCurrent &&
+            (vehicleId === null || drivingCurrent.id !== vehicleId)
+        ) {
+            throw new ConflictError(
+                "Fahrer ist noch unterwegs. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.",
+                {
+                    vehicle_id:
+                        "Fahrer ist noch unterwegs. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.",
+                },
+            );
+        }
+
         db.exec("BEGIN");
 
         try {

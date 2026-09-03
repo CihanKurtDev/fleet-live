@@ -2,6 +2,7 @@ import {
     BRIEFING_DRIVER_LIMIT,
     BRIEFING_OFFLINE_LIMIT,
     BRIEFING_OPEN_ALERT_LIMIT,
+    LOW_FUEL_THRESHOLD_PERCENT,
     briefingMonthKeys,
     type BriefingCounts,
     type BriefingHistoryMonth,
@@ -20,6 +21,9 @@ type StatusCountRow = {
 
 type OpenCountRow = {
     open_count: number;
+};
+
+type LowFuelCountRow = {
     low_fuel_count: number;
 };
 
@@ -168,9 +172,7 @@ export class BriefingModel {
 
         const open = stmt(
             `
-            SELECT
-                COUNT(*) AS open_count,
-                COALESCE(SUM(a.type = 'LOW_FUEL'), 0) AS low_fuel_count
+            SELECT COUNT(*) AS open_count
             FROM alerts a
             INNER JOIN vehicles v ON v.id = a.vehicle_id
             WHERE v.company_id = ?
@@ -178,12 +180,21 @@ export class BriefingModel {
             `,
         ).get(companyId) as OpenCountRow;
 
+        const lowFuel = stmt(
+            `
+            SELECT COUNT(*) AS low_fuel_count
+            FROM vehicles
+            WHERE company_id = ?
+              AND fuel_level < ?
+            `,
+        ).get(companyId, LOW_FUEL_THRESHOLD_PERCENT) as LowFuelCountRow;
+
         const counts: BriefingCounts = {
             open: Number(open.open_count),
             offline: Number(status.offline),
             driving: Number(status.driving),
             idle: Number(status.idle),
-            low_fuel: Number(open.low_fuel_count),
+            low_fuel: Number(lowFuel.low_fuel_count),
         };
 
         const offlineVehicles = stmt(

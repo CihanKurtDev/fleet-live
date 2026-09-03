@@ -10,6 +10,7 @@ import { db } from "../db/database";
 import { simplifyPath } from "../lib/geo";
 import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
+import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import {
@@ -322,7 +323,7 @@ describe("GET /api/vehicles", () => {
         VehicleModel.create({
             license_plate: "K-CL 001",
             driver_name: "Clara Conrad",
-            fuel_level: 15,
+            fuel_level: 14,
             status: "IDLE",
         });
         VehicleModel.create({
@@ -1531,7 +1532,7 @@ describe("telemetry route simulation", () => {
         const created = Array.from({ length: SIM_OVERSPEED_EVERY }, (_, index) =>
             VehicleModel.create({
                 license_plate: `K-OV ${index + 1}`,
-                driver_name: "Überhöht",
+                driver_name: `Überhöht ${index + 1}`,
                 status: "DRIVING",
             }),
         );
@@ -1551,7 +1552,7 @@ describe("telemetry route simulation", () => {
         );
     });
 
-    it("uses fuel while driving", () => {
+    it("keeps fuel level while driving", () => {
         const vehicle = VehicleModel.create({
             license_plate: "K-SIM 5",
             driver_name: "Verbrauch",
@@ -1563,11 +1564,35 @@ describe("telemetry route simulation", () => {
         const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
 
         assert.ok(patch);
-        assert.ok(patch.fuel_level < 80);
-        assert.equal(
-            VehicleModel.getById(vehicle.id, 1)?.fuel_level,
-            patch.fuel_level,
-        );
+        assert.equal(patch.fuel_level, 80);
+        assert.equal(VehicleModel.getById(vehicle.id, 1)?.fuel_level, 80);
+    });
+
+    it("does not tick an assigned vehicle without a current driver", () => {
+        const current = VehicleModel.create({
+            license_plate: "K-SIM 6A",
+            driver_name: "Karla",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-SIM 6B",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const driverId = current.current_driver_id;
+        assert.ok(driverId);
+        DriverModel.assignVehicle(driverId, other.id, 1);
+        seedSimProgress(current.id, "koeln-duesseldorf", 0.5);
+        seedSimProgress(other.id, "koeln-duesseldorf", 0.5);
+
+        const patches = TelemetryModel.tickDrivingVehicles([
+            current.id,
+            other.id,
+        ]);
+
+        assert.equal(patches.length, 1);
+        assert.equal(patches[0]?.id, current.id);
     });
 });
 

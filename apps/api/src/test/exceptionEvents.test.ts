@@ -7,7 +7,6 @@ import {
     OFFLINE_AFTER_MS,
 } from "@fleet-live/shared";
 import { app } from "../app";
-import { db } from "../db/database";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
@@ -79,8 +78,8 @@ afterEach(() => {
     resetSimControlForTests();
 });
 
-describe("live LOW_FUEL", () => {
-    it("opens one row under the threshold and ends it after a refill", async () => {
+describe("no live LOW_FUEL ticker", () => {
+    it("does not open LOW_FUEL from telemetry patches", async () => {
         const vehicle = VehicleModel.create({
             license_plate: "K-FU 1",
             driver_name: "Tank",
@@ -90,47 +89,24 @@ describe("live LOW_FUEL", () => {
         });
         const start = 1_000_000;
 
-        const first = drivingPatch(
-            vehicle.id,
-            1,
-            LOW_FUEL_THRESHOLD_PERCENT - 1,
-            start,
+        assert.deepEqual(
+            drivingPatch(
+                vehicle.id,
+                1,
+                LOW_FUEL_THRESHOLD_PERCENT - 1,
+                start,
+            ),
+            [],
         );
-        assert.deepEqual(first, [1]);
 
-        drivingPatch(vehicle.id, 1, 8, start + 400);
-        const stillOpen = await openInbox(api, "LOW_FUEL");
-        assert.equal(stillOpen.body.data.length, 1);
-        assert.equal(stillOpen.body.data[0].type, "LOW_FUEL");
-        assert.equal(stillOpen.body.data[0].ended_at, null);
-        assert.equal(stillOpen.body.data[0].details.fuel_level, 8);
-        assert.equal(stillOpen.body.data[0].message, "Tankstand 8 %");
+        const inbox = await openInbox(api, "LOW_FUEL");
+        assert.equal(inbox.body.data.length, 0);
 
         const detail = await api.get(`/api/vehicles/${vehicle.id}`);
-        assert.deepEqual(detail.body.open_alert_types, ["LOW_FUEL"]);
-
-        drivingPatch(vehicle.id, 1, LOW_FUEL_THRESHOLD_PERCENT, start + 800);
-        const after = await openInbox(api, "LOW_FUEL");
-        assert.equal(after.body.data.length, 1);
-        assert.equal(typeof after.body.data[0].ended_at, "string");
-        assert.equal(after.body.data[0].resolved_at, null);
+        assert.deepEqual(detail.body.open_alert_types, []);
     });
 
-    it("does not leak another company's LOW_FUEL", async () => {
-        const other = VehicleModel.create({
-            license_plate: "K-FU 2",
-            driver_name: "Fremd",
-            company_id: 2,
-            status: "DRIVING",
-            fuel_level: 10,
-        });
-        drivingPatch(other.id, 2, 10, 1_000_000);
-
-        const response = await openInbox(api, "LOW_FUEL");
-        assert.equal(response.body.data.length, 0);
-    });
-
-    it("opens LOW_FUEL when a driving vehicle is created below the threshold", async () => {
+    it("does not open LOW_FUEL when a driving vehicle is created below the threshold", async () => {
         const response = await api.post("/api/vehicles").send({
             license_plate: "K-FU 3",
             driver_name: "Neu",
@@ -139,39 +115,10 @@ describe("live LOW_FUEL", () => {
         });
 
         assert.equal(response.status, 201);
-        assert.equal(response.body.active_alerts, 1);
+        assert.equal(response.body.active_alerts, 0);
 
         const inbox = await openInbox(api, "LOW_FUEL");
-        assert.equal(inbox.body.data.length, 1);
-        assert.equal(inbox.body.data[0].vehicle_id, response.body.id);
-    });
-
-    it("keeps a single open LOW_FUEL row even if a second insert is attempted", async () => {
-        const vehicle = VehicleModel.create({
-            license_plate: "K-FU 4",
-            driver_name: "Doppelt",
-            company_id: 1,
-            status: "DRIVING",
-            fuel_level: 10,
-        });
-        drivingPatch(vehicle.id, 1, 10, 4_000_000);
-
-        assert.throws(
-            () => {
-                db.prepare(
-                    `
-                    INSERT INTO alerts (vehicle_id, type, severity, message)
-                    VALUES (?, 'LOW_FUEL', 'MEDIUM', 'doppelt')
-                `,
-                ).run(vehicle.id);
-            },
-            (error: unknown) =>
-                error instanceof Error &&
-                error.message.includes("UNIQUE constraint failed"),
-        );
-
-        const inbox = await openInbox(api, "LOW_FUEL");
-        assert.equal(inbox.body.data.length, 1);
+        assert.equal(inbox.body.data.length, 0);
     });
 });
 

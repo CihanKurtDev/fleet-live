@@ -35,10 +35,10 @@ export type AlertDetails =
     | LowFuelAlertDetails
     | Record<string, unknown>;
 
-/** Unter diesem Tankstand öffnet die Simulation eine LOW_FUEL-Zeile. */
+/** Unter diesem Tankstand gilt ein Fahrzeug als wenig Tank (Anzeige, kein Live-Ticker). */
 export const LOW_FUEL_THRESHOLD_PERCENT = 15;
 
-/** Darunter ist die LOW_FUEL-Zeile HIGH. */
+/** Darunter wird der Hinweis als kritisch markiert. */
 export const LOW_FUEL_CRITICAL_PERCENT = 5;
 
 /**

@@ -467,6 +467,42 @@ describe("driver assignment", () => {
         );
     });
 
+    it("rejects changing current vehicle while the driver is on a trip", async () => {
+        const current = VehicleModel.create({
+            license_plate: "K-DRV 1",
+            driver_name: "Karl",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-DRV 2",
+            company_id: 1,
+            status: "IDLE",
+        });
+        const driverId = requireCurrentDriver(current);
+
+        await api
+            .post(`/api/drivers/${driverId}/vehicles`)
+            .send({ vehicle_id: other.id });
+
+        const switchCurrent = await api
+            .patch(`/api/drivers/${driverId}/current-vehicle`)
+            .send({ vehicle_id: other.id });
+
+        assert.equal(switchCurrent.status, 409);
+        assert.equal(switchCurrent.body.code, "CONFLICT");
+        assert.equal(
+            switchCurrent.body.error,
+            "Fahrer ist noch unterwegs. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.",
+        );
+
+        const clearCurrent = await api
+            .patch(`/api/drivers/${driverId}/current-vehicle`)
+            .send({ vehicle_id: null });
+
+        assert.equal(clearCurrent.status, 409);
+    });
+
     it("clears current when eligibility is removed", async () => {
         const vehicle = VehicleModel.create({
             license_plate: "K-DEL 1",

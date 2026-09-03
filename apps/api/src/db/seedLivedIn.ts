@@ -230,6 +230,14 @@ export function seedLivedIn(database: DatabaseSync) {
     const updateLast = database.prepare(
         "UPDATE vehicles SET last_telemetry_id = ? WHERE id = ?",
     );
+    const demoteStatus = database.prepare(
+        "UPDATE vehicles SET status = 'IDLE' WHERE id = ?",
+    );
+    const zeroLastSpeed = database.prepare(`
+        UPDATE telemetry
+        SET speed = 0
+        WHERE id = (SELECT last_telemetry_id FROM vehicles WHERE id = ?)
+    `);
     const updateAlerts = database.prepare(`
         UPDATE vehicles
         SET active_alerts = (
@@ -314,6 +322,16 @@ export function seedLivedIn(database: DatabaseSync) {
                     owned.find((row) => row.status === "DRIVING") ?? owned[0];
                 if (current) {
                     setCurrent.run(driverId, name, current.id);
+
+                    for (const row of owned) {
+                        if (row.id === current.id || row.status !== "DRIVING") {
+                            continue;
+                        }
+
+                        demoteStatus.run(row.id);
+                        zeroLastSpeed.run(row.id);
+                        row.status = "IDLE";
+                    }
                 }
             }
         };

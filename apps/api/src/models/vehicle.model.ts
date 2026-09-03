@@ -17,6 +17,7 @@ import {
     ALERT_TYPES,
     FLEET_DRIVERS_LIST_LIMIT,
     FLEET_POSITIONS_MAX,
+    LOW_FUEL_THRESHOLD_PERCENT,
     isAlertType,
 } from "@fleet-live/shared";
 import { DriverModel } from "./driver.model";
@@ -47,7 +48,7 @@ const SORT_COLUMNS: Record<VehicleSortKey, string> = {
 
 const FILTER_SQL: Record<VehicleFilterId, string> = {
     alerts: "v.active_alerts > 0",
-    low_fuel: "v.fuel_level < 20",
+    low_fuel: `v.fuel_level < ${LOW_FUEL_THRESHOLD_PERCENT}`,
     driving: "v.status = 'DRIVING'",
     idle: "v.status = 'IDLE'",
     offline: "v.status = 'OFFLINE'",
@@ -137,7 +138,7 @@ const FACET_SQL = `
     SELECT
         COUNT(*) AS all_count,
         COALESCE(SUM(active_alerts > 0), 0) AS alerts,
-        COALESCE(SUM(fuel_level < 20), 0) AS low_fuel,
+        COALESCE(SUM(fuel_level < ${LOW_FUEL_THRESHOLD_PERCENT}), 0) AS low_fuel,
         COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
         COALESCE(SUM(status = 'IDLE'), 0) AS idle,
         COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
