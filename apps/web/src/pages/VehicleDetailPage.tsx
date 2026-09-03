@@ -21,6 +21,7 @@ import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useVehicle } from "../hooks/useVehicle";
 import { formatRelativeTimestamp, formatTimestamp } from "../utils/dateTime";
+import layout from "../styles/detailLayout.module.scss";
 import styles from "./VehicleDetailPage.module.scss";
 
 const formatCoordinate = (value: number | null) =>
@@ -151,7 +152,7 @@ export const VehicleDetailPage = () => {
 
     if (isLoading) {
         return (
-            <section className={styles.page}>
+            <section className={layout.page}>
                 <p>Fahrzeug wird geladen…</p>
             </section>
         );
@@ -159,7 +160,7 @@ export const VehicleDetailPage = () => {
 
     if (error) {
         return (
-            <section className={styles.page}>
+            <section className={layout.page}>
                 <h1 className={styles.title}>Fehler</h1>
                 <p>{error}</p>
                 <Link to="/vehicles">Zurück zur Übersicht</Link>
@@ -169,7 +170,7 @@ export const VehicleDetailPage = () => {
 
     if (!vehicle || notFound) {
         return (
-            <section className={styles.page}>
+            <section className={layout.page}>
                 <h1 className={styles.title}>
                     Fahrzeug nicht gefunden
                 </h1>
@@ -230,7 +231,7 @@ export const VehicleDetailPage = () => {
     };
 
     return (
-        <section className={styles.page}>
+        <section className={layout.page}>
             <Link className={styles.back} to={from} onClick={handleBack}>
                 {backToFleet
                     ? "Zurück zur Karte"
@@ -268,9 +269,9 @@ export const VehicleDetailPage = () => {
                 )}
             </header>
 
-            <section className={styles.now}>
-                <h2 className={styles.nowTitle}>Jetzt</h2>
-                <dl className={styles.facts}>
+            <section className={layout.now}>
+                <h2 className={layout.nowTitle}>Jetzt</h2>
+                <dl className={layout.facts}>
                     <div>
                         <dt>Status</dt>
                         <dd>{vehicleStatusLabel(vehicle.status)}</dd>
@@ -307,8 +308,8 @@ export const VehicleDetailPage = () => {
                 </dl>
             </section>
 
-            <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Standort</h2>
+            <section className={layout.panel}>
+                <h2 className={layout.panelTitle}>Standort</h2>
 
                 {position ? (
                     <div className={styles.positionBody}>
@@ -322,7 +323,7 @@ export const VehicleDetailPage = () => {
                         />
                         <details className={styles.coords}>
                             <summary>Koordinaten</summary>
-                            <dl className={styles.facts}>
+                            <dl className={layout.facts}>
                                 <div>
                                     <dt>Breitengrad</dt>
                                     <dd>
@@ -339,7 +340,7 @@ export const VehicleDetailPage = () => {
                         </details>
                     </div>
                 ) : (
-                    <p className={styles.empty}>
+                    <p className={layout.empty}>
                         {isDriving
                             ? "Noch keine Position gemeldet. Sobald das Fahrzeug Daten sendet, erscheinen hier Karte und Tempo."
                             : "Dieses Fahrzeug hat noch keine Position gemeldet."}
@@ -347,25 +348,25 @@ export const VehicleDetailPage = () => {
                 )}
             </section>
 
-            <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Letzte Fahrt</h2>
-                <p className={styles.note}>
+            <section className={layout.panel}>
+                <h2 className={layout.panelTitle}>Letzte Fahrt</h2>
+                <p className={layout.note}>
                     {trip
                         ? describeTrip(trip)
                         : "Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."}
                 </p>
             </section>
 
-            <section className={styles.panel}>
-                <VehicleAlertList
+            <section className={layout.panel}>
+                <VehicleAlertList>
                     vehicleId={vehicle.id}
                     canWrite={canWrite}
                 />
             </section>
 
-            <section className={styles.panel}>
-                <div className={styles.panelHeader}>
-                    <h2 className={styles.panelTitle}>Stammdaten</h2>
+            <section className={layout.panel}>
+                <div className={layout.panelHeader}>
+                    <h2 className={layout.panelTitle}>Stammdaten</h2>
                     {canWrite && !isEditingMaster && (
                         <Button
                             variant="secondary"
@@ -391,7 +392,7 @@ export const VehicleDetailPage = () => {
                         onCancel={() => setIsEditingMaster(false)}
                     />
                 ) : (
-                    <dl className={styles.facts}>
+                    <dl className={layout.facts}>
                         <div>
                             <dt>Kennzeichen</dt>
                             <dd>{vehicle.license_plate}</dd>

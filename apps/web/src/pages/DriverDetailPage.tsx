@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useDriver } from "../hooks/useDriver";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { alertTypeLabel } from "../components/alerts/alertLabels";
+import layout from "../styles/detailLayout.module.scss";
 import styles from "./DriverDetailPage.module.scss";
 
 const readBackTarget = (
@@ -48,7 +49,7 @@ export const DriverDetailPage = () => {
 
     if (isLoading) {
         return (
-            <section className={styles.page}>
+            <section className={layout.page}>
                 <p>Fahrer wird geladen…</p>
             </section>
         );
@@ -56,7 +57,7 @@ export const DriverDetailPage = () => {
 
     if (error) {
         return (
-            <section className={styles.page}>
+            <section className={layout.page}>
                 <h1 className={styles.title}>Fehler</h1>
                 <p>{error}</p>
                 <Link to="/drivers">Zurück zur Übersicht</Link>
@@ -66,7 +67,7 @@ export const DriverDetailPage = () => {
 
     if (!driver || notFound) {
         return (
-            <section className={styles.page}>
+            <section className={layout.page}>
                 <h1 className={styles.title}>Fahrer nicht gefunden</h1>
                 <p>
                     Es gibt keinen Fahrer mit der Kennung <code>{id}</code>.
@@ -79,7 +80,7 @@ export const DriverDetailPage = () => {
     const inboxHref = `/alerts?driver_id=${driver.id}`;
 
     return (
-        <section className={styles.page}>
+        <section className={layout.page}>
             <Link className={styles.back} to={from} onClick={handleBack}>
                 Zurück zur Übersicht
             </Link>
@@ -100,10 +101,10 @@ export const DriverDetailPage = () => {
                 </p>
             </header>
 
-            <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Aktuelles Fahrzeug</h2>
+            <section className={layout.panel}>
+                <h2 className={layout.panelTitle}>Aktuelles Fahrzeug</h2>
                 {driver.vehicles.length === 0 ? (
-                    <p className={styles.empty}>
+                    <p className={layout.empty}>
                         Diesem Fahrer ist derzeit kein Fahrzeug zugewiesen.
                     </p>
                 ) : (
@@ -122,13 +123,13 @@ export const DriverDetailPage = () => {
                 )}
             </section>
 
-            <section className={styles.panel}>
-                <h2 className={styles.panelTitle}>Verstöße</h2>
-                <p className={styles.note}>
+            <section className={layout.panel}>
+                <h2 className={layout.panelTitle}>Verstöße</h2>
+                <p className={layout.note}>
                     Alle Incidents, auch erledigte. Offene Warnungen stehen in
                     der Inbox.
                 </p>
-                <dl className={styles.facts}>
+                <dl className={layout.facts}>
                     <div>
                         <dt>Gesamt</dt>
                         <dd>{driver.counts.all}</dd>
@@ -142,7 +143,7 @@ export const DriverDetailPage = () => {
                         ),
                     )}
                 </dl>
-                <p className={styles.note}>
+                <p className={layout.note}>
                     <Link to={`${inboxHref}&filter=all`}>
                         Alle Warnungen
                     </Link>

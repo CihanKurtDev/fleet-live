@@ -1,5 +1,7 @@
 .wrap {
     position: relative;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .wrapFill {
@@ -32,6 +34,8 @@
 
 .map {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     height: 180px;
     z-index: 0;
 
