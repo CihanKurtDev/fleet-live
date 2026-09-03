@@ -22,7 +22,7 @@ alwaysApply: false
 
 - `components/ui` stays generic (Table, Button, Modal). No vehicle fields there.
 - Vehicle columns/filters belong in `components/vehicles/` (e.g. `vehicleTableConfig.tsx`). Alert columns/filters belong in `components/alerts/`. Driver columns belong in `components/drivers/`. The shift briefing lives on `/` (`BriefingPage`). Speed colour comes only from `speedBand` / `SPEED_BAND_COLORS`, not status greens.
-- Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides. Write actions (create/edit/delete, sim pause, resolve alerts) are for `dispatcher`; `viewer` is read-only (including inbox, drivers, speed indicator).
+- Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides. Write actions (create/edit/delete, sim pause, resolve alerts, driver assignment) are for `dispatcher`; `viewer` is read-only (including inbox, drivers, speed indicator).
 - No frontend unit-test runner. Do not add Jest/Vitest unless explicitly asked.
 
 ## Map
@@ -39,5 +39,5 @@ alwaysApply: false
 ## Domain copy
 
 - Status labels live in `components/vehicles/vehicleStatus.ts`. Do not render the raw enum.
-- Tempo in the list/detail uses `speedBand` from shared and `SPEED_BAND_COLORS` — not `VEHICLE_STATUS_COLORS`. Orange is over `speed_limit_kmh` without an open event; red is `speeding_open`. Inbox `/alerts` is warnings (Ereignis from `formatAlertEvent`, chips for open/resolved and `type`); `/drivers` is violation history (all incidents). `/` is the company shift briefing (KPI tiles, newest open alerts, no-signal, drivers with open warnings). The Warnungen nav shows the open inbox count.
+- Tempo in the list/detail uses `speedBand` from shared and `SPEED_BAND_COLORS` — not `VEHICLE_STATUS_COLORS`. Orange is over `speed_limit_kmh` without an open event; red is `speeding_open`. Inbox `/alerts` is warnings (Ereignis from `formatAlertEvent`, chips for open/resolved and `type`); `/drivers` is SPEEDING history (snapshot driver). Vehicle detail lists open LOW_FUEL / OFFLINE. `/` is the company shift briefing (KPI tiles, newest open alerts, no-signal, drivers with open SPEEDING). The Warnungen nav shows the open inbox count.
 - Timestamps from the API are naive UTC. Format them via `utils/dateTime.ts`, never print the raw string.
