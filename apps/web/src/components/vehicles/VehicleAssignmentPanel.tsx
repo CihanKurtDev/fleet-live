@@ -155,6 +155,10 @@ export const VehicleAssignmentPanel = ({
                     {error}
                 </p>
             )}
+            <p className={layout.note}>
+                Freigegebene Fahrer dürfen das Fahrzeug nutzen. In der
+                Übersicht erscheint nur der Fahrer mit „Aktuell“.
+            </p>
 
             {assigned.length === 0 ? (
                 <p className={layout.empty}>
@@ -173,9 +177,13 @@ export const VehicleAssignmentPanel = ({
                                         driverId={driver.id}
                                         name={driver.name}
                                     />
-                                    {isCurrent && (
+                                    {isCurrent ? (
                                         <span className={styles.badge}>
                                             Aktuell
+                                        </span>
+                                    ) : (
+                                        <span className={styles.badgeMuted}>
+                                            Freigegeben
                                         </span>
                                     )}
                                 </div>

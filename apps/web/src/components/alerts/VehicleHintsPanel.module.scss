@@ -47,12 +47,6 @@
     color: var(--text-h);
 }
 
-.time {
-    margin: 4px 0 0;
-    font-size: 13px;
-    color: var(--text);
-}
-
 .error {
     margin: 0 0 12px;
     font-size: 13px;
@@ -63,20 +57,4 @@
     margin: 0;
     color: var(--text);
     font-size: 14px;
-}
-
-.more {
-    margin: 12px 0 0;
-    font-size: 13px;
-    color: var(--text);
-
-    a {
-        color: var(--text);
-        text-decoration: underline;
-        text-underline-offset: 2px;
-
-        &:hover {
-            color: var(--text-h);
-        }
-    }
 }

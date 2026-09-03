@@ -6,7 +6,7 @@ import { decodePolyline, speedBand } from "@fleet-live/shared";
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import { getVehicleTrip } from "../api/vehicles";
-import { VehicleAlertList } from "../components/alerts/VehicleAlertList";
+import { VehicleHintsPanel } from "../components/alerts/VehicleHintsPanel";
 import { DetailBackLink, useDetailBack } from "../components/navigation/DetailBackLink";
 import { VehicleAssignmentPanel } from "../components/vehicles/VehicleAssignmentPanel";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
@@ -321,7 +321,7 @@ export const VehicleDetailPage = () => {
             />
 
             <section className={layout.panel}>
-                <VehicleAlertList
+                <VehicleHintsPanel
                     vehicle={vehicle}
                     canWrite={canWrite}
                 />
@@ -338,7 +338,7 @@ export const VehicleDetailPage = () => {
                         fuel_level: vehicle.fuel_level,
                         status: vehicle.status,
                     }}
-                    isFuelMeasured={isDriving}
+                    isFuelMeasured={false}
                     submitLabel="Speichern"
                     onSubmit={handleSubmit}
                     onCancel={() => setIsEditingMaster(false)}

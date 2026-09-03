@@ -37,6 +37,7 @@ export const DriverAssignmentPanel = ({
     const autoCurrentRef = useRef(driver.current_vehicle === null);
 
     const assignedIds = new Set(driver.vehicles.map((vehicle) => vehicle.id));
+    const onTrip = driver.current_vehicle?.status === "DRIVING";
 
     useEffect(() => {
         if (!assignOpen) {
@@ -124,6 +125,12 @@ export const DriverAssignmentPanel = ({
                     {error}
                 </p>
             )}
+            {onTrip && (
+                <p className={layout.note}>
+                    Fahrer ist unterwegs — aktuelles Fahrzeug lässt sich erst
+                    nach der Fahrt wechseln.
+                </p>
+            )}
             {driver.vehicles.length === 0 ? (
                 <p className={layout.empty}>Kein Fahrzeug zugewiesen.</p>
             ) : (
@@ -151,7 +158,7 @@ export const DriverAssignmentPanel = ({
                                         <button
                                             type="button"
                                             className={styles.textAction}
-                                            disabled={busy}
+                                            disabled={busy || onTrip}
                                             onClick={() =>
                                                 void run(() =>
                                                     setDriverCurrentVehicle(
@@ -167,7 +174,7 @@ export const DriverAssignmentPanel = ({
                                         <button
                                             type="button"
                                             className={styles.textAction}
-                                            disabled={busy}
+                                            disabled={busy || onTrip}
                                             onClick={() =>
                                                 void run(() =>
                                                     setDriverCurrentVehicle(
@@ -229,7 +236,7 @@ export const DriverAssignmentPanel = ({
                             });
                         }
 
-                        if (autoCurrentRef.current && ids[0] !== undefined) {
+                        if (autoCurrentRef.current && ids[0] !== undefined && !onTrip) {
                             await setDriverCurrentVehicle(driver.id, {
                                 vehicle_id: ids[0],
                             });

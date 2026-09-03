@@ -45,7 +45,8 @@ export const DriverDetailPage = () => {
         );
     }
 
-    const inboxHref = `/alerts?driver_id=${driver.id}&type=SPEEDING`;
+    const inboxHref = `/alerts?driver_id=${driver.id}`;
+    const openInboxHref = `${inboxHref}&filter=open`;
 
     return (
         <section className={layout.page}>
@@ -55,14 +56,14 @@ export const DriverDetailPage = () => {
                 <h1 className={styles.title}>{driver.name}</h1>
                 <p className={styles.openCount}>
                     {driver.open_warnings > 0 ? (
-                        <Link to={inboxHref}>
+                        <Link to={openInboxHref}>
                             {driver.open_warnings}{" "}
                             {driver.open_warnings === 1
-                                ? "offene Tempo-Warnung"
-                                : "offene Tempo-Warnungen"}
+                                ? "offene Warnung"
+                                : "offene Warnungen"}
                         </Link>
                     ) : (
-                        "Keine offenen Tempo-Warnungen"
+                        "Keine offenen Warnungen"
                     )}
                 </p>
             </header>
@@ -72,17 +73,33 @@ export const DriverDetailPage = () => {
             <section className={layout.panel}>
                 <h2 className={layout.panelTitle}>Verstöße</h2>
                 <p className={layout.note}>
-                    Tempo-Überschreitungen, auch erledigte. Tank und Funk hängen
-                    am Fahrzeug, nicht am Fahrer.
+                    Tempo-Überschreitungen am Fahrer. Tank und Funk hängen am
+                    Fahrzeug, nicht am Fahrer.
                 </p>
                 <dl className={layout.facts}>
+                    <div>
+                        <dt>Gesamt</dt>
+                        <dd>{driver.counts.all}</dd>
+                    </div>
+                    <div>
+                        <dt>Offen</dt>
+                        <dd>
+                            {driver.open_warnings > 0 ? (
+                                <Link to={openInboxHref}>
+                                    {driver.open_warnings}
+                                </Link>
+                            ) : (
+                                0
+                            )}
+                        </dd>
+                    </div>
                     <div>
                         <dt>Geschwindigkeit</dt>
                         <dd>{driver.counts.SPEEDING}</dd>
                     </div>
                 </dl>
                 <p className={layout.note}>
-                    <Link to={`${inboxHref}&filter=all`}>
+                    <Link to={`${inboxHref}&filter=all&type=SPEEDING`}>
                         Alle Tempo-Warnungen
                     </Link>
                 </p>

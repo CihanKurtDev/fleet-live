@@ -67,6 +67,15 @@
     white-space: nowrap;
 }
 
+.badgeMuted {
+    padding: 1px 7px;
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+}
+
 .picker {
     display: flex;
     flex-direction: column;
