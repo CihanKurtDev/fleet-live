@@ -232,10 +232,6 @@ export const VehicleDetailPage = () => {
                 <h2 className={layout.nowTitle}>Jetzt</h2>
                 <dl className={layout.facts}>
                     <div>
-                        <dt>Status</dt>
-                        <dd>{vehicleStatusLabel(vehicle.status)}</dd>
-                    </div>
-                    <div>
                         <dt>Tempo</dt>
                         <dd>
                             {vehicle.speed === null ? (
