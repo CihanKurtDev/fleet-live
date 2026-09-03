@@ -12,73 +12,7 @@ import { db } from "../db/database";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { TripModel } from "../models/trip.model";
-
-const TEST_PASSWORD = "secret-pass";
-
-async function loginAs(
-    companyId: number,
-    role: "dispatcher" | "viewer" = "dispatcher",
-) {
-    const email = `${role}-${companyId}@example.com`;
-
-    if (!UserModel.findByEmail(email)) {
-        UserModel.create({
-            name: `${role} ${companyId}`,
-            email,
-            password: TEST_PASSWORD,
-            company_id: companyId,
-            role,
-        });
-    }
-
-    const agent = request.agent(app);
-    const response = await agent.post("/api/auth/login").send({
-        email,
-        password: TEST_PASSWORD,
-    });
-
-    assert.equal(response.status, 200);
-    return agent;
-}
-
-function insertAlert(
-    vehicleId: number,
-    input: {
-        type?: string;
-        severity?: string;
-        message?: string;
-        resolved_at?: string | null;
-        ended_at?: string | null;
-        created_at?: string;
-    } = {},
-) {
-    const vehicle = db
-        .prepare(`SELECT current_driver_id FROM vehicles WHERE id = ?`)
-        .get(vehicleId) as { current_driver_id: number | null } | undefined;
-
-    const result = db
-        .prepare(
-            `
-            INSERT INTO alerts (
-                vehicle_id, driver_id, type, severity, message,
-                resolved_at, ended_at, created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
-        `,
-        )
-        .run(
-            vehicleId,
-            vehicle?.current_driver_id ?? null,
-            input.type ?? "SPEEDING",
-            input.severity ?? "HIGH",
-            input.message ?? "zu schnell",
-            input.resolved_at ?? null,
-            input.ended_at ?? null,
-            input.created_at ?? null,
-        );
-
-    return Number(result.lastInsertRowid);
-}
+import { insertAlert, loginAs } from "./helpers";
 
 function setLastTelemetry(vehicleId: number, recordedAt: string) {
     const result = db
@@ -99,7 +33,7 @@ function setLastTelemetry(vehicleId: number, recordedAt: string) {
 let api: ReturnType<typeof request.agent>;
 
 beforeEach(async () => {
-    api = await loginAs(1);
+    api = (await loginAs(1)).agent;
 });
 
 afterEach(() => {
@@ -116,7 +50,7 @@ describe("GET /api/briefing", () => {
     });
 
     it("lets a viewer read the snapshot", async () => {
-        const viewer = await loginAs(1, "viewer");
+        const viewer = (await loginAs(1, "viewer")).agent;
         const response = await viewer.get("/api/briefing");
 
         assert.equal(response.status, 200);

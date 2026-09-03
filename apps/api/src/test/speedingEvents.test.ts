@@ -11,35 +11,12 @@ import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { stepSpeeding } from "../lib/speeding";
+import { loginAs } from "./helpers";
 
-const TEST_PASSWORD = "secret-pass";
 const TICK_MS = 400;
 const CITY_LIMIT = 50;
 const OVER_CITY = 61;
 const HIGH_OVER_CITY = 75;
-
-async function loginAs(companyId: number) {
-    const email = `dispatcher-${companyId}@example.com`;
-
-    if (!UserModel.findByEmail(email)) {
-        UserModel.create({
-            name: `dispatcher ${companyId}`,
-            email,
-            password: TEST_PASSWORD,
-            company_id: companyId,
-            role: "dispatcher",
-        });
-    }
-
-    const agent = request.agent(app);
-    const response = await agent.post("/api/auth/login").send({
-        email,
-        password: TEST_PASSWORD,
-    });
-
-    assert.equal(response.status, 200);
-    return agent;
-}
 
 function patchAt(
     vehicleId: number,
@@ -69,7 +46,7 @@ let api: ReturnType<typeof request.agent>;
 
 beforeEach(async () => {
     SpeedingEventModel.resetForTests();
-    api = await loginAs(1);
+    api = (await loginAs(1)).agent;
 });
 
 afterEach(() => {

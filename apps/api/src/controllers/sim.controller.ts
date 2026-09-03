@@ -1,19 +1,12 @@
 import type { Request, Response } from "express";
 import { parseSimPatch } from "@fleet-live/shared";
-import { BadRequestError, UnauthorizedError } from "../lib/errors";
+import { BadRequestError } from "../lib/errors";
+import { sessionCompany } from "../lib/http";
 import { config } from "../config";
 import {
     isCompanySimRunning,
     setCompanySimRunning,
 } from "../lib/simControl";
-
-function sessionCompany(req: Request): number {
-    if (!req.user) {
-        throw new UnauthorizedError();
-    }
-
-    return req.user.company_id;
-}
 
 function simState(companyId: number) {
     const available = config.telemetryTickMs > 0;

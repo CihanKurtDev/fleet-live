@@ -1,14 +1,10 @@
 import type { Request, Response } from "express";
-import { UnauthorizedError } from "../lib/errors";
+import { sessionCompany } from "../lib/http";
 import { BriefingModel } from "../models/briefing.model";
 
 export function getBriefing(req: Request, res: Response) {
-    if (!req.user) {
-        throw new UnauthorizedError();
-    }
-
     const started = performance.now();
-    const result = BriefingModel.forCompany(req.user.company_id);
+    const result = BriefingModel.forCompany(sessionCompany(req));
     const duration = performance.now() - started;
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");

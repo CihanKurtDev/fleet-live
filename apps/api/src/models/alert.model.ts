@@ -11,6 +11,7 @@ import type {
 import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { nowSqlite } from "../lib/sqlTime";
+import { pagedQuery } from "../lib/pagination";
 
 const ALERT_COLUMNS = `
         a.id,
@@ -226,6 +227,8 @@ export class AlertModel {
         const typeSql = query.type !== undefined ? "AND a.type = ?" : "";
         const sortColumn = SORT_SQL[query.sort];
         const sortDirection = query.dir === "asc" ? "ASC" : "DESC";
+        const nullsLast =
+            query.sort === "driver_name" ? "d.name IS NULL, " : "";
         const scopeParams = [
             ...(query.vehicle_id !== undefined ? [query.vehicle_id] : []),
             ...(query.driver_id !== undefined ? [query.driver_id] : []),
@@ -245,41 +248,34 @@ export class AlertModel {
               ${driverSql}
               ${filterSql}
               ${typeSql}
-            ORDER BY ${sortColumn} ${sortDirection}, a.id ${sortDirection}
+            ORDER BY ${nullsLast}${sortColumn} ${sortDirection}, a.id ${sortDirection}
             LIMIT ? OFFSET ?
         `;
-
-        const rows = stmt(listSql).all(
-            companyId,
-            ...scopeParams,
-            ...typeParams,
-            query.limit,
-            offset,
-        ) as AlertSqlRow[];
-
-        let total = rows[0]?.total ?? 0;
-
-        if (rows.length === 0) {
-            const countSql = `
-                SELECT COUNT(*) AS total
-                FROM alerts a
-                INNER JOIN vehicles v ON v.id = a.vehicle_id
-                WHERE v.company_id = ?
-                  ${vehicleSql}
-                  ${driverSql}
-                  ${filterSql}
-                  ${typeSql}
-            `;
-            total = (
-                stmt(countSql).get(
-                    companyId,
-                    ...scopeParams,
-                    ...typeParams,
-                ) as {
-                    total: number;
-                }
-            ).total;
-        }
+        const countSql = `
+            SELECT COUNT(*) AS total
+            FROM alerts a
+            INNER JOIN vehicles v ON v.id = a.vehicle_id
+            WHERE v.company_id = ?
+              ${vehicleSql}
+              ${driverSql}
+              ${filterSql}
+              ${typeSql}
+        `;
+        const { data, meta } = pagedQuery<AlertSqlRow, Alert>({
+            listSql,
+            listParams: [
+                companyId,
+                ...scopeParams,
+                ...typeParams,
+                query.limit,
+                offset,
+            ],
+            countSql,
+            countParams: [companyId, ...scopeParams, ...typeParams],
+            page: query.page,
+            limit: query.limit,
+            map: toAlert,
+        });
 
         const facetSql = `
             SELECT
@@ -316,15 +312,11 @@ export class AlertModel {
             companyId,
             ...scopeParams,
         ) as TypeFacetRow;
-        const pageCount = Math.max(1, Math.ceil(total / query.limit));
 
         return {
-            data: rows.map(toAlert),
+            data,
             meta: {
-                page: query.page,
-                limit: query.limit,
-                total,
-                pageCount,
+                ...meta,
                 counts: {
                     all: Number(counts.all_count),
                     open: Number(counts.open_count),

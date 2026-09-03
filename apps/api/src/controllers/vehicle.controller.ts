@@ -15,25 +15,15 @@ import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
+import { BadRequestError, NotFoundError, ValidationError } from "../lib/errors";
 import {
-    BadRequestError,
-    NotFoundError,
-    UnauthorizedError,
-    ValidationError,
-} from "../lib/errors";
-import { broadcast } from "../sse/hub";
+    notifyVehiclesChanged,
+    parseId as parseRouteId,
+    sessionCompany,
+} from "../lib/http";
 
 function parseId(value: string | string[] | undefined): number {
-    if (typeof value !== "string") {
-        throw new BadRequestError("Ungültige Fahrzeug-ID.");
-    }
-
-    const id = Number(value);
-    if (!Number.isInteger(id) || id < 1) {
-        throw new BadRequestError("Ungültige Fahrzeug-ID.");
-    }
-
-    return id;
+    return parseRouteId(value, "Fahrzeug-ID");
 }
 
 function throwFieldErrors(fields: VehicleFieldErrors): never {
@@ -67,10 +57,6 @@ function trimStrings(input: Partial<VehicleInput>): Partial<VehicleInput> {
             license_plate: input.license_plate.trim(),
         }),
     };
-}
-
-function notifyVehiclesChanged(companyId: number) {
-    broadcast("vehicles-changed", { at: Date.now() }, companyId);
 }
 
 /**
@@ -110,14 +96,6 @@ function syncExceptions(vehicle: Vehicle, companyId: number): Vehicle {
         status: vehicle.status,
     });
     return VehicleModel.getById(vehicle.id, companyId) ?? vehicle;
-}
-
-function sessionCompany(req: Request): number {
-    if (!req.user) {
-        throw new UnauthorizedError();
-    }
-
-    return req.user.company_id;
 }
 
 export function getVehicles(req: Request, res: Response) {

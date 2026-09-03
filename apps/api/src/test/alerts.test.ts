@@ -6,78 +6,12 @@ import { app } from "../app";
 import { db } from "../db/database";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
-
-const TEST_PASSWORD = "secret-pass";
-
-async function loginAs(
-    companyId: number,
-    role: "dispatcher" | "viewer" = "dispatcher",
-) {
-    const email = `${role}-${companyId}@example.com`;
-
-    if (!UserModel.findByEmail(email)) {
-        UserModel.create({
-            name: `${role} ${companyId}`,
-            email,
-            password: TEST_PASSWORD,
-            company_id: companyId,
-            role,
-        });
-    }
-
-    const agent = request.agent(app);
-    const response = await agent.post("/api/auth/login").send({
-        email,
-        password: TEST_PASSWORD,
-    });
-
-    assert.equal(response.status, 200);
-    return agent;
-}
-
-function insertAlert(
-    vehicleId: number,
-    input: {
-        type?: string;
-        severity?: string;
-        message?: string;
-        resolved_at?: string | null;
-        ended_at?: string | null;
-        driver_id?: number | null;
-    } = {},
-) {
-    const vehicle = db
-        .prepare(`SELECT current_driver_id FROM vehicles WHERE id = ?`)
-        .get(vehicleId) as { current_driver_id: number | null } | undefined;
-
-    const result = db
-        .prepare(
-            `
-            INSERT INTO alerts (
-                vehicle_id, driver_id, type, severity, message, resolved_at, ended_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `,
-        )
-        .run(
-            vehicleId,
-            input.driver_id !== undefined
-                ? input.driver_id
-                : (vehicle?.current_driver_id ?? null),
-            input.type ?? "SPEEDING",
-            input.severity ?? "HIGH",
-            input.message ?? "zu schnell",
-            input.resolved_at ?? null,
-            input.ended_at ?? null,
-        );
-
-    return Number(result.lastInsertRowid);
-}
+import { insertAlert, loginAs } from "./helpers";
 
 let api: ReturnType<typeof request.agent>;
 
 beforeEach(async () => {
-    api = await loginAs(1);
+    api = (await loginAs(1)).agent;
 });
 
 afterEach(() => {
@@ -214,6 +148,39 @@ describe("GET /api/alerts", () => {
         assert.equal(rejected.body.code, "VALIDATION_ERROR");
     });
 
+    it("keeps alerts without a driver after named drivers in both sort directions", async () => {
+        const named = VehicleModel.create({
+            license_plate: "K-AN 1",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+        const pool = VehicleModel.create({
+            license_plate: "K-PL 1",
+            company_id: 1,
+        });
+
+        insertAlert(named.id, { message: "anna" });
+        insertAlert(pool.id, { message: "pool" });
+
+        const names = (response: {
+            body: { data: Array<{ driver_name: string | null }> };
+        }) => response.body.data.map((row) => row.driver_name);
+
+        const asc = await api.get("/api/alerts").query({
+            sort: "driver_name",
+            dir: "asc",
+        });
+        assert.equal(asc.status, 200);
+        assert.deepEqual(names(asc), ["Anna", null]);
+
+        const desc = await api.get("/api/alerts").query({
+            sort: "driver_name",
+            dir: "desc",
+        });
+        assert.equal(desc.status, 200);
+        assert.deepEqual(names(desc), ["Anna", null]);
+    });
+
     it("returns 404 for another company's vehicle_id", async () => {
         const other = VehicleModel.create({
             license_plate: "K-OTH 2",
@@ -303,7 +270,7 @@ describe("GET /api/alerts", () => {
         });
         insertAlert(vehicle.id);
 
-        const viewer = await loginAs(1, "viewer");
+        const viewer = (await loginAs(1, "viewer")).agent;
         const response = await viewer.get("/api/alerts");
 
         assert.equal(response.status, 200);
@@ -396,7 +363,7 @@ describe("PATCH /api/alerts/:id", () => {
         });
         const id = insertAlert(vehicle.id);
 
-        const viewer = await loginAs(1, "viewer");
+        const viewer = (await loginAs(1, "viewer")).agent;
         const response = await viewer
             .patch(`/api/alerts/${id}`)
             .send({ resolved: true });

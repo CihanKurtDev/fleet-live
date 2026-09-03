@@ -11,31 +11,7 @@ import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { setCompanySimRunning, resetSimControlForTests } from "../lib/simControl";
-
-const TEST_PASSWORD = "secret-pass";
-
-async function loginAs(companyId: number) {
-    const email = `dispatcher-${companyId}@example.com`;
-
-    if (!UserModel.findByEmail(email)) {
-        UserModel.create({
-            name: `dispatcher ${companyId}`,
-            email,
-            password: TEST_PASSWORD,
-            company_id: companyId,
-            role: "dispatcher",
-        });
-    }
-
-    const agent = request.agent(app);
-    const response = await agent.post("/api/auth/login").send({
-        email,
-        password: TEST_PASSWORD,
-    });
-
-    assert.equal(response.status, 200);
-    return agent;
-}
+import { loginAs } from "./helpers";
 
 function drivingPatch(
     vehicleId: number,
@@ -69,7 +45,7 @@ let api: ReturnType<typeof request.agent>;
 beforeEach(async () => {
     ExceptionEventModel.resetForTests();
     resetSimControlForTests();
-    api = await loginAs(1);
+    api = (await loginAs(1)).agent;
 });
 
 afterEach(() => {
