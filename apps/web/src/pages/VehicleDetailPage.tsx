@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router";
 import type { Trip, VehicleInput } from "@fleet-live/shared";
 import { decodePolyline, speedBand } from "@fleet-live/shared";
 
@@ -8,6 +8,7 @@ import { retryTransient } from "../api/retryTransient";
 import { getVehicleTrip } from "../api/vehicles";
 import { VehicleAlertList } from "../components/alerts/VehicleAlertList";
 import { DriverNameLink } from "../components/drivers/DriverNameLink";
+import { DetailBackLink, useDetailBack } from "../components/navigation/DetailBackLink";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import {
     VehicleMap,
@@ -32,25 +33,6 @@ const formatKilometers = (meters: number) =>
         maximumFractionDigits: 1,
     })} km`;
 
-const readBackTarget = (
-    state: unknown,
-): { from: string; fromHistory: boolean } => {
-    if (
-        typeof state === "object" &&
-        state !== null &&
-        "from" in state &&
-        typeof state.from === "string"
-    ) {
-        return { from: state.from, fromHistory: true };
-    }
-
-    return { from: "/vehicles", fromHistory: false };
-};
-
-/**
- * Strecke und Spitzentempo erst zur beendeten Fahrt: die Werte werden einmal
- * geladen und würden während der Fahrt eingefroren stehen bleiben.
- */
 const describeTrip = (trip: Trip): string => {
     if (trip.ended_at === null) {
         return `Fahrt läuft seit ${formatTimestamp(trip.started_at)}.`;
@@ -63,10 +45,7 @@ const describeTrip = (trip: Trip): string => {
 
 export const VehicleDetailPage = () => {
     const { id } = useParams();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { from, fromHistory } = readBackTarget(location.state);
-    const backToFleet = from.startsWith("/fleet");
+    const { from, navigate } = useDetailBack("/vehicles");
     const { updateVehicle, deleteVehicles, subscribeTripPath } =
         useVehicles();
     const { user } = useAuth();
@@ -161,9 +140,9 @@ export const VehicleDetailPage = () => {
     if (error) {
         return (
             <section className={layout.page}>
+                <DetailBackLink fallback="/vehicles" />
                 <h1 className={styles.title}>Fehler</h1>
                 <p>{error}</p>
-                <Link to="/vehicles">Zurück zur Übersicht</Link>
             </section>
         );
     }
@@ -171,6 +150,7 @@ export const VehicleDetailPage = () => {
     if (!vehicle || notFound) {
         return (
             <section className={layout.page}>
+                <DetailBackLink fallback="/vehicles" />
                 <h1 className={styles.title}>
                     Fahrzeug nicht gefunden
                 </h1>
@@ -178,7 +158,6 @@ export const VehicleDetailPage = () => {
                     Es gibt kein Fahrzeug mit der Kennung{" "}
                     <code>{id}</code>.
                 </p>
-                <Link to="/vehicles">Zurück zur Übersicht</Link>
             </section>
         );
     }
@@ -214,29 +193,9 @@ export const VehicleDetailPage = () => {
 
     const requestDelete = () => setConfirmDelete(true);
 
-    const handleBack = (event: MouseEvent<HTMLAnchorElement>) => {
-        if (
-            !fromHistory ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-        ) {
-            return;
-        }
-
-        event.preventDefault();
-        navigate(-1);
-    };
-
     return (
         <section className={layout.page}>
-            <Link className={styles.back} to={from} onClick={handleBack}>
-                {backToFleet
-                    ? "Zurück zur Karte"
-                    : "Zurück zur Übersicht"}
-            </Link>
+            <DetailBackLink fallback="/vehicles" />
 
             <header className={styles.header}>
                 <div className={styles.heading}>

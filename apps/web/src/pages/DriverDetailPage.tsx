@@ -1,51 +1,18 @@
-import { type MouseEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 
+import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { useDriver } from "../hooks/useDriver";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { alertTypeLabel } from "../components/alerts/alertLabels";
 import layout from "../styles/detailLayout.module.scss";
 import styles from "./DriverDetailPage.module.scss";
 
-const readBackTarget = (
-    state: unknown,
-): { from: string; fromHistory: boolean } => {
-    if (
-        typeof state === "object" &&
-        state !== null &&
-        "from" in state &&
-        typeof state.from === "string"
-    ) {
-        return { from: state.from, fromHistory: true };
-    }
-
-    return { from: "/drivers", fromHistory: false };
-};
-
 export const DriverDetailPage = () => {
     const { id } = useParams();
-    const navigate = useNavigate();
     const location = useLocation();
-    const { from, fromHistory } = readBackTarget(location.state);
     const driverId = Number(id);
     const parsedId = Number.isInteger(driverId) ? driverId : null;
     const { driver, isLoading, error, notFound } = useDriver(parsedId);
-
-    const handleBack = (event: MouseEvent<HTMLAnchorElement>) => {
-        if (
-            !fromHistory ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-        ) {
-            return;
-        }
-
-        event.preventDefault();
-        navigate(-1);
-    };
 
     if (isLoading) {
         return (
@@ -58,9 +25,9 @@ export const DriverDetailPage = () => {
     if (error) {
         return (
             <section className={layout.page}>
+                <DetailBackLink fallback="/drivers" />
                 <h1 className={styles.title}>Fehler</h1>
                 <p>{error}</p>
-                <Link to="/drivers">Zurück zur Übersicht</Link>
             </section>
         );
     }
@@ -68,22 +35,21 @@ export const DriverDetailPage = () => {
     if (!driver || notFound) {
         return (
             <section className={layout.page}>
+                <DetailBackLink fallback="/drivers" />
                 <h1 className={styles.title}>Fahrer nicht gefunden</h1>
                 <p>
                     Es gibt keinen Fahrer mit der Kennung <code>{id}</code>.
                 </p>
-                <Link to="/drivers">Zurück zur Übersicht</Link>
             </section>
         );
     }
 
     const inboxHref = `/alerts?driver_id=${driver.id}`;
+    const fromHere = `${location.pathname}${location.search}`;
 
     return (
         <section className={layout.page}>
-            <Link className={styles.back} to={from} onClick={handleBack}>
-                Zurück zur Übersicht
-            </Link>
+            <DetailBackLink fallback="/drivers" />
 
             <header className={styles.header}>
                 <h1 className={styles.title}>{driver.name}</h1>
@@ -111,7 +77,10 @@ export const DriverDetailPage = () => {
                     <ul className={styles.vehicles}>
                         {driver.vehicles.map((vehicle) => (
                             <li key={vehicle.id}>
-                                <Link to={`/vehicles/${vehicle.id}`}>
+                                <Link
+                                    to={`/vehicles/${vehicle.id}`}
+                                    state={{ from: fromHere }}
+                                >
                                     {vehicle.license_plate}
                                 </Link>
                                 <span>
