@@ -9,7 +9,6 @@ import { AlertsPage } from './pages/AlertsPage';
 import { DriversPage } from './pages/DriversPage';
 import { DriverDetailPage } from './pages/DriverDetailPage';
 import { LoginPage } from './pages/LoginPage';
-import { HeaderPreviewPage } from './pages/HeaderPreviewPage';
 
 export const router = createBrowserRouter([
     {
@@ -19,10 +18,6 @@ export const router = createBrowserRouter([
             {
                 path: 'login',
                 Component: LoginPage,
-            },
-            {
-                path: '__header-preview',
-                Component: HeaderPreviewPage,
             },
             {
                 Component: RequireAuth,

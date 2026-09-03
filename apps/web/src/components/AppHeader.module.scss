@@ -52,8 +52,7 @@
     min-width: 0;
 }
 
-.nav a,
-.navItem {
+.nav a {
     display: inline-flex;
     align-items: center;
     height: 32px;
@@ -66,9 +65,7 @@
 }
 
 .nav a:hover,
-.nav a.active,
-.navItem:hover,
-.navItemActive {
+.nav a.active {
     color: var(--text-h);
 }
 
@@ -103,19 +100,4 @@
 
 .session:hover {
     color: var(--text-h);
-}
-
-.fakeButton {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 32px;
-    padding: 0 12px;
-
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-    color: var(--text-h);
-    font-size: 13px;
-    line-height: 1;
 }
