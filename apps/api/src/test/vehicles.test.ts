@@ -10,7 +10,6 @@ import { db } from "../db/database";
 import { simplifyPath } from "../lib/geo";
 import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
-import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import {
@@ -593,12 +592,11 @@ describe("GET /api/vehicles/positions", () => {
                 INSERT INTO vehicles (
                     license_plate,
                     driver_name,
-                    driver_id,
                     fuel_level,
                     status,
                     company_id
                 )
-                VALUES (?, ?, ?, 80, 'IDLE', 1)
+                VALUES (?, NULL, 80, 'IDLE', 1)
             `,
         );
         const insertTelemetry = db.prepare(
@@ -611,12 +609,8 @@ describe("GET /api/vehicles/positions", () => {
 
         db.exec("BEGIN");
         for (let index = 0; index < overLimit; index += 1) {
-            const driverName = `Driver ${index}`;
-            const driverId = DriverModel.upsert(1, driverName);
             const result = insertVehicle.run(
                 `K-T ${String(index).padStart(4, "0")}`,
-                driverName,
-                driverId,
             );
             insertTelemetry.run(Number(result.lastInsertRowid));
         }
@@ -742,7 +736,8 @@ describe("vehicle mutations", () => {
 
         assert.equal(created.status, 201);
         assert.equal(created.body.license_plate, "K-NEU 1");
-        assert.equal(created.body.active_alerts, 0);
+        assert.equal(created.body.current_driver_id, null);
+        assert.equal(created.body.driver_name, null);
         assert.deepEqual(created.body.open_alert_types, []);
         assert.ok(created.body.created_at);
         const assigned = db
@@ -779,18 +774,17 @@ describe("vehicle mutations", () => {
 
         assert.equal(missing.status, 400);
         assert.equal(missing.body.fields.license_plate, "Kennzeichen ist erforderlich.");
-        assert.equal(missing.body.fields.driver_name, "Fahrer ist erforderlich.");
+        assert.equal(missing.body.fields.driver_name, undefined);
 
         const tooLong = await api.post("/api/vehicles").send({
             license_plate: "K".repeat(33),
-            driver_name: "A".repeat(81),
             fuel_level: 40,
             status: "IDLE",
         });
 
         assert.equal(tooLong.status, 400);
         assert.match(tooLong.body.fields.license_plate, /höchstens 32/);
-        assert.match(tooLong.body.fields.driver_name, /höchstens 80/);
+        assert.equal(tooLong.body.fields.driver_name, undefined);
     });
 
     it("rejects an invalid id", async () => {
@@ -897,7 +891,7 @@ describe("tenant isolation", () => {
 
         const patched = await api
             .patch(`/api/vehicles/${other.id}`)
-            .send({ driver_name: "Gehackt" });
+            .send({ fuel_level: 11 });
         assert.equal(patched.status, 404);
 
         const replaced = await api.put(`/api/vehicles/${other.id}`).send({

@@ -43,17 +43,27 @@ function insertAlert(
         message?: string;
         resolved_at?: string | null;
         ended_at?: string | null;
+        driver_id?: number | null;
     } = {},
 ) {
+    const vehicle = db
+        .prepare(`SELECT current_driver_id FROM vehicles WHERE id = ?`)
+        .get(vehicleId) as { current_driver_id: number | null } | undefined;
+
     const result = db
         .prepare(
             `
-            INSERT INTO alerts (vehicle_id, type, severity, message, resolved_at, ended_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO alerts (
+                vehicle_id, driver_id, type, severity, message, resolved_at, ended_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
         )
         .run(
             vehicleId,
+            input.driver_id !== undefined
+                ? input.driver_id
+                : (vehicle?.current_driver_id ?? null),
             input.type ?? "SPEEDING",
             input.severity ?? "HIGH",
             input.message ?? "zu schnell",
@@ -241,7 +251,7 @@ describe("GET /api/alerts", () => {
         assert.equal(response.status, 200);
         assert.equal(response.body.data.length, 1);
         assert.equal(response.body.data[0].vehicle_id, first.id);
-        assert.equal(response.body.data[0].driver_id, first.driver_id);
+        assert.equal(response.body.data[0].driver_id, first.current_driver_id);
         assert.equal(response.body.data[0].message, "eins");
     });
 
@@ -254,7 +264,7 @@ describe("GET /api/alerts", () => {
         insertAlert(other.id);
 
         const response = await api.get("/api/alerts").query({
-            driver_id: other.driver_id,
+            driver_id: other.current_driver_id,
         });
 
         assert.equal(response.status, 404);
@@ -276,13 +286,13 @@ describe("GET /api/alerts", () => {
         insertAlert(ben.id, { message: "ben" });
 
         const response = await api.get("/api/alerts").query({
-            driver_id: anna.driver_id,
+            driver_id: anna.current_driver_id,
         });
 
         assert.equal(response.status, 200);
         assert.equal(response.body.data.length, 1);
         assert.equal(response.body.data[0].message, "anna");
-        assert.equal(response.body.data[0].driver_id, anna.driver_id);
+        assert.equal(response.body.data[0].driver_id, anna.current_driver_id);
     });
 
     it("lets a viewer read alerts", async () => {
