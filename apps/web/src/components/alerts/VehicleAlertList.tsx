@@ -1,64 +1,79 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { formatAlertEvent, type Alert } from "@fleet-live/shared";
+import { isLowFuelLevel, type Alert, type Vehicle } from "@fleet-live/shared";
 
 import { ApiError, isAbortError } from "../../api/client";
 import { listAlerts, resolveAlert } from "../../api/alerts";
 import { retryTransient } from "../../api/retryTransient";
 import { useVehicles } from "../../context/vehiclesContext";
 import { Button } from "../ui/Button/Button";
-import { formatTimestamp } from "../../utils/dateTime";
-import { formatCount } from "../../utils/formatCount";
 import styles from "./VehicleAlertList.module.scss";
 
-/** Kleinste erlaubte Listenseite; der Rest liegt in der Inbox. */
-const PREVIEW_LIMIT = 10;
-
 interface VehicleAlertListProps {
-    vehicleId: number;
+    vehicle: Vehicle;
     canWrite: boolean;
 }
 
+const liveOfType = (alerts: Alert[], type: Alert["type"]): Alert | undefined =>
+    alerts.find((alert) => alert.type === type && alert.ended_at === null);
+
 export const VehicleAlertList = ({
-    vehicleId,
+    vehicle,
     canWrite,
 }: VehicleAlertListProps) => {
     const { listEpoch, refetchLists } = useVehicles();
-    const [alerts, setAlerts] = useState<Alert[]>([]);
-    const [openTotal, setOpenTotal] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
+    const [liveFuel, setLiveFuel] = useState<Alert | undefined>();
+    const [liveOffline, setLiveOffline] = useState<Alert | undefined>();
     const [error, setError] = useState<string | null>(null);
     const [resolvingId, setResolvingId] = useState<number | null>(null);
 
-    const inboxHref = `/alerts?vehicle_id=${vehicleId}`;
+    const inboxHref = `/alerts?vehicle_id=${vehicle.id}`;
+    const tankLow = isLowFuelLevel(vehicle.fuel_level);
+    const noSignal =
+        vehicle.status === "OFFLINE" ||
+        vehicle.open_alert_types.includes("OFFLINE");
 
     useEffect(() => {
         const controller = new AbortController();
-        setIsLoading(true);
         setError(null);
 
-        retryTransient(
-            () =>
-                listAlerts(
-                    {
-                        filter: "open",
-                        sort: "created_at",
-                        dir: "desc",
-                        page: 1,
-                        limit: PREVIEW_LIMIT,
-                        vehicle_id: vehicleId,
-                    },
-                    controller.signal,
-                ),
-            controller.signal,
-        )
-            .then((response) => {
-                const vehicleAlerts = response.data.filter(
-                    (alert) =>
-                        alert.type === "LOW_FUEL" || alert.type === "OFFLINE",
-                );
-                setAlerts(vehicleAlerts);
-                setOpenTotal(vehicleAlerts.length);
+        Promise.all([
+            retryTransient(
+                () =>
+                    listAlerts(
+                        {
+                            filter: "open",
+                            type: "LOW_FUEL",
+                            sort: "created_at",
+                            dir: "desc",
+                            page: 1,
+                            limit: 10,
+                            vehicle_id: vehicle.id,
+                        },
+                        controller.signal,
+                    ),
+                controller.signal,
+            ),
+            retryTransient(
+                () =>
+                    listAlerts(
+                        {
+                            filter: "open",
+                            type: "OFFLINE",
+                            sort: "created_at",
+                            dir: "desc",
+                            page: 1,
+                            limit: 10,
+                            vehicle_id: vehicle.id,
+                        },
+                        controller.signal,
+                    ),
+                controller.signal,
+            ),
+        ])
+            .then(([fuel, offline]) => {
+                setLiveFuel(liveOfType(fuel.data, "LOW_FUEL"));
+                setLiveOffline(liveOfType(offline.data, "OFFLINE"));
             })
             .catch((caught: unknown) => {
                 if (controller.signal.aborted || isAbortError(caught)) {
@@ -70,15 +85,10 @@ export const VehicleAlertList = ({
                         ? caught.message
                         : "Warnungen konnten nicht geladen werden.",
                 );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) {
-                    setIsLoading(false);
-                }
             });
 
         return () => controller.abort();
-    }, [vehicleId, listEpoch]);
+    }, [vehicle.id, listEpoch]);
 
     const handleResolve = async (id: number) => {
         setResolvingId(id);
@@ -98,7 +108,8 @@ export const VehicleAlertList = ({
         }
     };
 
-    const remaining = Math.max(0, openTotal - alerts.length);
+    const showTank = tankLow || liveFuel !== undefined;
+    const showFunk = noSignal || liveOffline !== undefined;
 
     return (
         <>
@@ -115,48 +126,48 @@ export const VehicleAlertList = ({
                 </p>
             )}
 
-            {isLoading && alerts.length === 0 ? (
-                <p className={styles.empty}>Warnungen werden geladen…</p>
-            ) : alerts.length === 0 ? (
-                <p className={styles.empty}>Keine offenen Tank- oder Funkwarnungen.</p>
+            {!showTank && !showFunk ? (
+                <p className={styles.empty}>Tank und Funk in Ordnung.</p>
             ) : (
-                <>
-                    <ul className={styles.list}>
-                        {alerts.map((alert) => (
-                            <li key={alert.id} className={styles.item}>
-                                <div>
-                                    <p className={styles.message}>
-                                        {formatAlertEvent(alert)}
-                                    </p>
-                                    <p className={styles.time}>
-                                        {formatTimestamp(alert.created_at)}
-                                    </p>
-                                </div>
-                                {canWrite && (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        disabled={resolvingId === alert.id}
-                                        onClick={() => void handleResolve(alert.id)}
-                                    >
-                                        Erledigen
-                                    </Button>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-                    {remaining > 0 && (
-                        <p className={styles.more}>
-                            Neueste {formatCount(alerts.length)} von{" "}
-                            {formatCount(openTotal)}.{" "}
-                            <Link to={inboxHref}>
-                                {formatCount(remaining)} weitere in der Inbox
-                            </Link>
-                        </p>
+                <ul className={styles.list}>
+                    {showTank && (
+                        <li className={styles.item}>
+                            <p className={styles.message}>
+                                Tank bei {Math.round(vehicle.fuel_level)} %
+                            </p>
+                            {canWrite && liveFuel ? (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={resolvingId === liveFuel.id}
+                                    onClick={() =>
+                                        void handleResolve(liveFuel.id)
+                                    }
+                                >
+                                    Erledigen
+                                </Button>
+                            ) : null}
+                        </li>
                     )}
-                </>
+                    {showFunk && (
+                        <li className={styles.item}>
+                            <p className={styles.message}>Kein Signal</p>
+                            {canWrite && liveOffline ? (
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={resolvingId === liveOffline.id}
+                                    onClick={() =>
+                                        void handleResolve(liveOffline.id)
+                                    }
+                                >
+                                    Erledigen
+                                </Button>
+                            ) : null}
+                        </li>
+                    )}
+                </ul>
             )}
         </>
     );
 };
-

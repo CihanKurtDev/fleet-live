@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import type { DriverDetail, Vehicle } from "@fleet-live/shared";
 
@@ -11,7 +11,7 @@ import {
 import { listVehicles } from "../../api/vehicles";
 import { useVehicles } from "../../context/vehiclesContext";
 import { Button } from "../ui/Button/Button";
-import { Modal } from "../ui/Modal/Modal";
+import { AssignmentPicker } from "./AssignmentPicker";
 import { vehicleStatusLabel } from "../vehicles/vehicleStatus";
 import layout from "../../styles/detailLayout.module.scss";
 import styles from "./assignment.module.scss";
@@ -34,9 +34,9 @@ export const DriverAssignmentPanel = ({
     const [candidates, setCandidates] = useState<Vehicle[]>([]);
     const [search, setSearch] = useState("");
     const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
+    const autoCurrentRef = useRef(driver.current_vehicle === null);
 
     const assignedIds = new Set(driver.vehicles.map((vehicle) => vehicle.id));
-    const current = driver.current_vehicle;
 
     useEffect(() => {
         if (!assignOpen) {
@@ -100,190 +100,146 @@ export const DriverAssignmentPanel = ({
     };
 
     return (
-        <>
-            <section className={layout.panel}>
-                <div className={layout.panelHeader}>
-                    <h2 className={layout.panelTitle}>Aktuelles Fahrzeug</h2>
-                    {canWrite && current && (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() =>
-                                void run(() =>
-                                    setDriverCurrentVehicle(driver.id, {
-                                        vehicle_id: null,
-                                    }),
-                                )
-                            }
-                        >
-                            Aktuelles Fahrzeug aufheben
-                        </Button>
-                    )}
-                </div>
-                {error && (
-                    <p className={styles.error} role="alert">
-                        {error}
-                    </p>
+        <section className={layout.panel}>
+            <div className={layout.panelHeader}>
+                <h2 className={layout.panelTitle}>Fahrzeuge</h2>
+                {canWrite && (
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                            setSearch("");
+                            setIsLoadingCandidates(true);
+                            autoCurrentRef.current =
+                                driver.current_vehicle === null;
+                            setAssignOpen(true);
+                        }}
+                    >
+                        Zuweisen
+                    </Button>
                 )}
-                {current ? (
-                    <p className={styles.identity}>
-                        <Link
-                            className={styles.link}
-                            to={`/vehicles/${current.id}`}
-                            state={{ from: fromHere }}
-                        >
-                            {current.license_plate}
-                        </Link>
-                        <span className={styles.status}>
-                            {vehicleStatusLabel(current.status)}
-                        </span>
-                    </p>
-                ) : (
-                    <p className={layout.empty}>
-                        Kein aktuelles Fahrzeug. Freigegebene Fahrzeuge bleiben
-                        im Pool.
-                    </p>
-                )}
-            </section>
-
-            <section className={layout.panel}>
-                <div className={layout.panelHeader}>
-                    <h2 className={layout.panelTitle}>Freigegebene Fahrzeuge</h2>
-                    {canWrite && (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                                setSearch("");
-                                setAssignOpen(true);
-                            }}
-                        >
-                            Fahrzeug zuweisen
-                        </Button>
-                    )}
-                </div>
-                {driver.vehicles.length === 0 ? (
-                    <p className={layout.empty}>
-                        Diesem Fahrer ist kein Fahrzeug zugewiesen.
-                    </p>
-                ) : (
-                    <ul className={styles.list}>
-                        {driver.vehicles.map((vehicle) => (
-                            <li key={vehicle.id} className={styles.row}>
-                                <div className={styles.identity}>
-                                    <Link
-                                        className={styles.link}
-                                        to={`/vehicles/${vehicle.id}`}
-                                        state={{ from: fromHere }}
-                                    >
-                                        {vehicle.license_plate}
-                                    </Link>
-                                    <span className={styles.status}>
-                                        {vehicleStatusLabel(vehicle.status)}
-                                    </span>
-                                    {vehicle.is_current && (
-                                        <span className={styles.badge}>
-                                            Aktuell
-                                        </span>
-                                    )}
-                                </div>
-                                {canWrite && (
-                                    <div className={styles.actions}>
-                                        {!vehicle.is_current && (
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                disabled={busy}
-                                                onClick={() =>
-                                                    void run(() =>
-                                                        setDriverCurrentVehicle(
-                                                            driver.id,
-                                                            {
-                                                                vehicle_id:
-                                                                    vehicle.id,
-                                                            },
-                                                        ),
-                                                    )
-                                                }
-                                            >
-                                                Als aktuelles Fahrzeug setzen
-                                            </Button>
-                                        )}
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
+            </div>
+            {error && (
+                <p className={styles.error} role="alert">
+                    {error}
+                </p>
+            )}
+            {driver.vehicles.length === 0 ? (
+                <p className={layout.empty}>Kein Fahrzeug zugewiesen.</p>
+            ) : (
+                <ul className={styles.list}>
+                    {driver.vehicles.map((vehicle) => (
+                        <li key={vehicle.id} className={styles.row}>
+                            <div className={styles.identity}>
+                                <Link
+                                    className={styles.link}
+                                    to={`/vehicles/${vehicle.id}`}
+                                    state={{ from: fromHere }}
+                                >
+                                    {vehicle.license_plate}
+                                </Link>
+                                <span className={styles.pickerMeta}>
+                                    {vehicleStatusLabel(vehicle.status)}
+                                </span>
+                                {vehicle.is_current && (
+                                    <span className={styles.badge}>Aktuell</span>
+                                )}
+                            </div>
+                            {canWrite && (
+                                <div className={styles.actions}>
+                                    {vehicle.is_current ? (
+                                        <button
+                                            type="button"
+                                            className={styles.textAction}
                                             disabled={busy}
                                             onClick={() =>
                                                 void run(() =>
-                                                    unassignDriverVehicle(
+                                                    setDriverCurrentVehicle(
                                                         driver.id,
-                                                        vehicle.id,
+                                                        { vehicle_id: null },
                                                     ),
                                                 )
                                             }
                                         >
-                                            Freigabe entfernen
-                                        </Button>
-                                    </div>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </section>
-
-            <Modal
-                open={assignOpen}
-                onClose={() => setAssignOpen(false)}
-                title="Fahrzeug zuweisen"
-            >
-                <div className={styles.picker}>
-                    <input
-                        className={styles.search}
-                        type="search"
-                        value={search}
-                        placeholder="Kennzeichen suchen…"
-                        onChange={(event) => setSearch(event.target.value)}
-                    />
-                    {isLoadingCandidates ? (
-                        <p className={styles.status}>Fahrzeuge werden geladen…</p>
-                    ) : candidates.length === 0 ? (
-                        <p className={layout.empty}>
-                            Keine weiteren Fahrzeuge zum Zuweisen.
-                        </p>
-                    ) : (
-                        <ul className={styles.pickerList}>
-                            {candidates.map((vehicle) => (
-                                <li key={vehicle.id} className={styles.pickerItem}>
-                                    <span>
-                                        {vehicle.license_plate}
-                                        <span className={styles.status}>
-                                            {" "}
-                                            · {vehicleStatusLabel(vehicle.status)}
-                                        </span>
-                                    </span>
-                                    <Button
-                                        size="sm"
+                                            Aufheben
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            className={styles.textAction}
+                                            disabled={busy}
+                                            onClick={() =>
+                                                void run(() =>
+                                                    setDriverCurrentVehicle(
+                                                        driver.id,
+                                                        {
+                                                            vehicle_id:
+                                                                vehicle.id,
+                                                        },
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            Als aktuell
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className={styles.textAction}
                                         disabled={busy}
                                         onClick={() =>
-                                            void run(async () => {
-                                                await assignDriverVehicle(
+                                            void run(() =>
+                                                unassignDriverVehicle(
                                                     driver.id,
-                                                    { vehicle_id: vehicle.id },
-                                                );
-                                                setAssignOpen(false);
-                                            })
+                                                    vehicle.id,
+                                                ),
+                                            )
                                         }
                                     >
-                                        Zuweisen
-                                    </Button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
-            </Modal>
-        </>
+                                        Entfernen
+                                    </button>
+                                </div>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <AssignmentPicker
+                open={assignOpen}
+                title="Fahrzeuge zuweisen"
+                search={search}
+                searchPlaceholder="Kennzeichen suchen…"
+                onSearchChange={setSearch}
+                onClose={() => setAssignOpen(false)}
+                items={candidates.map((vehicle) => ({
+                    id: vehicle.id,
+                    title: vehicle.license_plate,
+                    meta: vehicleStatusLabel(vehicle.status),
+                }))}
+                isLoading={isLoadingCandidates}
+                loadingLabel="Fahrzeuge werden geladen…"
+                empty="Keine weiteren Fahrzeuge."
+                busy={busy}
+                onConfirm={(ids) =>
+                    void run(async () => {
+                        for (const id of ids) {
+                            await assignDriverVehicle(driver.id, {
+                                vehicle_id: id,
+                            });
+                        }
+
+                        if (autoCurrentRef.current && ids[0] !== undefined) {
+                            await setDriverCurrentVehicle(driver.id, {
+                                vehicle_id: ids[0],
+                            });
+                            autoCurrentRef.current = false;
+                        }
+
+                        setAssignOpen(false);
+                    })
+                }
+            />
+        </section>
     );
 };

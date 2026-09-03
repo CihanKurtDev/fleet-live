@@ -11,6 +11,7 @@ Phases 1–7 are in place (including the shift briefing on `/`). **Next is Phase
 - Do not modify unrelated files.
 - Preserve the existing architecture unless there is a strong reason to change it.
 - No speculative architecture. Build for current requirements.
+- Git branches never start with `cursor/`. Use `feat/`, `fix/`, or `docs/` (see `.cursor/rules/git.mdc`).
 
 ## Source of truth
 

@@ -64,17 +64,7 @@ export const formatRelativeTimestamp = (value: string | null): string => {
         return formatTimestamp(value);
     }
 
-    const seconds = Math.floor(diffMs / 1000);
-
-    if (seconds < 15) {
-        return "gerade eben";
-    }
-
-    if (seconds < 60) {
-        return `vor ${seconds} s`;
-    }
-
-    const minutes = Math.floor(seconds / 60);
+    const minutes = Math.floor(diffMs / 60_000);
 
     if (minutes < 60) {
         return minutes === 1 ? "vor 1 Min." : `vor ${minutes} Min.`;
@@ -107,17 +97,7 @@ export const formatSinceTimestamp = (value: string | null): string => {
         return formatTimestamp(value);
     }
 
-    const seconds = Math.floor(diffMs / 1000);
-
-    if (seconds < 15) {
-        return "gerade eben";
-    }
-
-    if (seconds < 60) {
-        return `seit ${seconds} s`;
-    }
-
-    const minutes = Math.floor(seconds / 60);
+    const minutes = Math.floor(diffMs / 60_000);
 
     if (minutes < 60) {
         return minutes === 1 ? "seit 1 Min." : `seit ${minutes} Min.`;

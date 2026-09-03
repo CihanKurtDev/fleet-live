@@ -18,6 +18,7 @@ import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
+import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useVehicle } from "../hooks/useVehicle";
@@ -213,6 +214,13 @@ export const VehicleDetailPage = () => {
                 {canWrite && (
                     <div className={styles.actions}>
                         <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setIsEditingMaster(true)}
+                        >
+                            Bearbeiten
+                        </Button>
+                        <Button
                             variant="danger"
                             size="sm"
                             onClick={requestDelete}
@@ -314,46 +322,28 @@ export const VehicleDetailPage = () => {
 
             <section className={layout.panel}>
                 <VehicleAlertList
-                    vehicleId={vehicle.id}
+                    vehicle={vehicle}
                     canWrite={canWrite}
                 />
             </section>
 
-            <section className={layout.panel}>
-                <div className={layout.panelHeader}>
-                    <h2 className={layout.panelTitle}>Stammdaten</h2>
-                    {canWrite && !isEditingMaster && (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setIsEditingMaster(true)}
-                        >
-                            Bearbeiten
-                        </Button>
-                    )}
-                </div>
-
-                {isEditingMaster && canWrite ? (
-                    <VehicleForm
-                        initialValue={{
-                            license_plate: vehicle.license_plate,
-                            fuel_level: vehicle.fuel_level,
-                            status: vehicle.status,
-                        }}
-                        isFuelMeasured={isDriving}
-                        submitLabel="Speichern"
-                        onSubmit={handleSubmit}
-                        onCancel={() => setIsEditingMaster(false)}
-                    />
-                ) : (
-                    <dl className={layout.facts}>
-                        <div>
-                            <dt>Kennzeichen</dt>
-                            <dd>{vehicle.license_plate}</dd>
-                        </div>
-                    </dl>
-                )}
-            </section>
+            <Modal
+                open={canWrite && isEditingMaster}
+                onClose={() => setIsEditingMaster(false)}
+                title="Kennzeichen"
+            >
+                <VehicleForm
+                    initialValue={{
+                        license_plate: vehicle.license_plate,
+                        fuel_level: vehicle.fuel_level,
+                        status: vehicle.status,
+                    }}
+                    isFuelMeasured={isDriving}
+                    submitLabel="Speichern"
+                    onSubmit={handleSubmit}
+                    onCancel={() => setIsEditingMaster(false)}
+                />
+            </Modal>
 
             <ConfirmDialog
                 open={canWrite && confirmDelete}

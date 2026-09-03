@@ -4,38 +4,65 @@
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 12px;
     min-width: 0;
+    border-top: 1px solid var(--border);
 }
 
 .row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
+    gap: 12px;
+    align-items: baseline;
     justify-content: space-between;
     min-width: 0;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
 }
 
 .identity {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 12px;
+    gap: 6px 10px;
     align-items: baseline;
     min-width: 0;
+}
+
+.lead {
+    margin: 0;
+    font-size: 15px;
+    color: var(--text-h);
 }
 
 .actions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    flex-shrink: 0;
+}
+
+.textAction {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        color: var(--text-h);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 }
 
 .badge {
-    padding: 2px 8px;
+    padding: 1px 7px;
     border: 1px solid var(--border);
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text);
     white-space: nowrap;
 }
@@ -43,38 +70,108 @@
 .picker {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    min-width: 0;
-}
-
-.pickerList {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 320px;
-    overflow: auto;
-}
-
-.pickerItem {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
-    justify-content: space-between;
+    min-height: 0;
+    height: 100%;
+    padding: 16px 20px 20px;
+    box-sizing: border-box;
 }
 
 .search {
+    flex-shrink: 0;
     width: 100%;
     box-sizing: border-box;
-    padding: 8px 10px;
+    height: 36px;
+    margin: 0;
+    padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: 6px;
     background: var(--bg);
     color: var(--text-h);
     font: inherit;
+    font-size: 14px;
+
+    &::placeholder {
+        color: var(--text);
+    }
+
+    &:focus {
+        outline: none;
+        border-color: var(--accent-border);
+        box-shadow: 0 0 0 3px var(--accent-bg);
+    }
+}
+
+.pickerList {
+    flex: 1;
+    min-height: 0;
+    margin: 12px -8px 0;
+    padding: 0;
+    list-style: none;
+    overflow: auto;
+}
+
+.pickerOption {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--text-h);
+    cursor: pointer;
+
+    input {
+        margin: 0;
+        flex-shrink: 0;
+        accent-color: var(--accent);
+    }
+
+    &:hover {
+        background: var(--accent-bg);
+    }
+}
+
+.pickerOptionChecked {
+    background: var(--accent-bg);
+}
+
+.pickerTitle {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 15px;
+    color: var(--text-h);
+    text-align: left;
+}
+
+.pickerMeta {
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.pickerFooter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.pickerActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
 }
 
 .error {
@@ -84,16 +181,8 @@
 }
 
 .status {
+    margin: 12px 0 0;
     font-size: 13px;
-    color: var(--text);
-}
-
-.subtitle {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     color: var(--text);
 }
 
@@ -104,5 +193,27 @@
 
     &:hover {
         color: var(--accent);
+    }
+}
+
+.footerLink {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text-h);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+        color: var(--accent);
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        text-decoration: none;
     }
 }

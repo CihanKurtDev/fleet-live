@@ -15,7 +15,7 @@ export const DriverDetailPage = () => {
     const parsedId = Number.isInteger(driverId) ? driverId : null;
     const { driver, isLoading, error, notFound } = useDriver(parsedId);
 
-    if (isLoading) {
+    if (isLoading && !driver) {
         return (
             <section className={layout.page}>
                 <p>Fahrer wird geladen…</p>

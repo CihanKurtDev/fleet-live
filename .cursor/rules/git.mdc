@@ -1,0 +1,12 @@
+---
+description: Git branch naming for this repo
+alwaysApply: true
+---
+
+# Git branches
+
+Never create or checkout a branch whose name starts with `cursor/`.
+
+Use `feat/`, `fix/`, or `docs/` plus a short topic, for example `feat/ux-driver-assignment`.
+
+Do not use Cursor cloud default names (`cursor/<slug>-<id>`).
