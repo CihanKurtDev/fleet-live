@@ -113,7 +113,11 @@ const UPDATE_VEHICLE = `
 
 const DELETE_VEHICLE = `DELETE FROM vehicles WHERE id = ? AND company_id = ?`;
 
-function searchMatchSql(searchPlaceholder: string, likePlaceholder: string) {
+function searchMatchSql(
+    searchPlaceholder: string,
+    likePlaceholder: string,
+    eligibleLikePlaceholder: string,
+) {
     return `(
         ${searchPlaceholder} = ''
         OR v.search_text LIKE ${likePlaceholder} ESCAPE '#'
@@ -122,12 +126,12 @@ function searchMatchSql(searchPlaceholder: string, likePlaceholder: string) {
             FROM driver_vehicles dv
             INNER JOIN drivers d ON d.id = dv.driver_id
             WHERE dv.vehicle_id = v.id
-              AND lower(d.name) LIKE ${likePlaceholder} ESCAPE '#'
+              AND lower(d.name) LIKE ${eligibleLikePlaceholder} ESCAPE '#'
         )
     )`;
 }
 
-const LIST_SEARCH_SQL = searchMatchSql("?1", "?2");
+const LIST_SEARCH_SQL = searchMatchSql("?", "?", "?");
 
 const FACET_SQL = `
     SELECT
@@ -138,7 +142,7 @@ const FACET_SQL = `
         COALESCE(SUM(status = 'IDLE'), 0) AS idle,
         COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
     FROM vehicles v
-    WHERE v.company_id = ?3
+    WHERE v.company_id = ?
       AND ${LIST_SEARCH_SQL}
 `;
 
@@ -233,17 +237,18 @@ export class VehicleModel {
                 COUNT(*) OVER () AS total
             FROM vehicles v
             LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
-            WHERE v.company_id = ?3
+            WHERE v.company_id = ?
               AND ${LIST_SEARCH_SQL}
               ${filterSql}
             ORDER BY ${nullsLast}${sortColumn} ${sortDirection}, v.id ASC
-            LIMIT ?4 OFFSET ?5
+            LIMIT ? OFFSET ?
         `;
 
         const rows = stmt(listSql).all(
+            companyId,
             search,
             like,
-            companyId,
+            like,
             query.limit,
             offset,
         ) as ListRow[];
@@ -254,16 +259,23 @@ export class VehicleModel {
             const countSql = `
                 SELECT COUNT(*) AS total
                 FROM vehicles v
-                WHERE v.company_id = ?3
+                WHERE v.company_id = ?
                   AND ${LIST_SEARCH_SQL}
                   ${filterSql}
             `;
             total = (
-                stmt(countSql).get(search, like, companyId) as { total: number }
+                stmt(countSql).get(companyId, search, like, like) as {
+                    total: number;
+                }
             ).total;
         }
 
-        const counts = stmt(FACET_SQL).get(search, like, companyId) as FacetRow;
+        const counts = stmt(FACET_SQL).get(
+            companyId,
+            search,
+            like,
+            like,
+        ) as FacetRow;
         const pageCount = Math.max(1, Math.ceil(total / query.limit));
 
         return {
@@ -330,7 +342,7 @@ export class VehicleModel {
             FROM vehicles v
             INNER JOIN telemetry t ON t.id = v.last_telemetry_id
             WHERE v.company_id = ?
-              AND ${searchMatchSql("?", "?")}
+              AND ${searchMatchSql("?", "?", "?")}
               ${filterSql}
               ${driverSql}
               ${bboxSql}
@@ -341,6 +353,7 @@ export class VehicleModel {
         const params = [
             companyId,
             search,
+            like,
             like,
             ...selectedDrivers,
             ...selectedDrivers,
@@ -418,6 +431,24 @@ export class VehicleModel {
 
         const like = toLikePattern(search);
         const offset = (page - 1) * limit;
+        const matchSql = `
+            (
+                lower(d.name) LIKE ? ESCAPE '#'
+                OR EXISTS (
+                    SELECT 1
+                    FROM vehicles v
+                    WHERE v.current_driver_id = d.id
+                      AND lower(v.license_plate) LIKE ? ESCAPE '#'
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM driver_vehicles dv
+                    INNER JOIN vehicles v ON v.id = dv.vehicle_id
+                    WHERE dv.driver_id = d.id
+                      AND lower(v.license_plate) LIKE ? ESCAPE '#'
+                )
+            )
+        `;
         const rows = stmt(
             `
             SELECT
@@ -432,11 +463,11 @@ export class VehicleModel {
                 COUNT(*) OVER () AS total
             FROM drivers d
             WHERE d.company_id = ?
-              AND lower(d.name) LIKE ? ESCAPE '#'
+              AND ${matchSql}
             ORDER BY d.name COLLATE NOCASE
             LIMIT ? OFFSET ?
             `,
-        ).all(companyId, like, limit, offset) as Array<
+        ).all(companyId, like, like, like, limit, offset) as Array<
             FleetDriver & { total: number }
         >;
 
@@ -450,9 +481,9 @@ export class VehicleModel {
                         SELECT COUNT(*) AS n
                         FROM drivers d
                         WHERE d.company_id = ?
-                          AND lower(d.name) LIKE ? ESCAPE '#'
+                          AND ${matchSql}
                         `,
-                    ).get(companyId, like) as { n: number }
+                    ).get(companyId, like, like, like) as { n: number }
                 ).n,
             );
         }

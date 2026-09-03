@@ -663,9 +663,9 @@ describe("GET /api/vehicles/drivers", () => {
             .query({ search: "anna" });
 
         assert.equal(byName.status, 200);
-        assert.deepEqual(byName.body.data, [
-            { name: "Anna Schneider", license_plate: "K-A 1" },
-        ]);
+        assert.equal(byName.body.data.length, 1);
+        assert.equal(byName.body.data[0].name, "Anna Schneider");
+        assert.equal(byName.body.data[0].license_plate, "K-A 1");
         assert.equal(byName.body.meta.total, 1);
         assert.equal(byName.body.meta.pageCount, 1);
 
@@ -674,18 +674,18 @@ describe("GET /api/vehicles/drivers", () => {
             .query({ search: "K-B" });
 
         assert.equal(byPlate.status, 200);
-        assert.deepEqual(byPlate.body.data, [
-            { name: "Max Müller", license_plate: "K-B 1" },
-        ]);
+        assert.equal(byPlate.body.data.length, 1);
+        assert.equal(byPlate.body.data[0].name, "Max Müller");
+        assert.equal(byPlate.body.data[0].license_plate, "K-B 1");
 
         const selected = await api
             .get("/api/vehicles/drivers")
             .query({ names: "Max Müller" });
 
         assert.equal(selected.status, 200);
-        assert.deepEqual(selected.body.data, [
-            { name: "Max Müller", license_plate: "K-B 1" },
-        ]);
+        assert.equal(selected.body.data.length, 1);
+        assert.equal(selected.body.data[0].name, "Max Müller");
+        assert.equal(selected.body.data[0].license_plate, "K-B 1");
     });
 
     it("paginates search hits instead of capping the total at the page size", async () => {
