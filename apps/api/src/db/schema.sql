@@ -159,7 +159,3 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_per_type
     ON alerts(vehicle_id, type)
     WHERE ended_at IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_current_driver
-    ON vehicles(current_driver_id)
-    WHERE current_driver_id IS NOT NULL;

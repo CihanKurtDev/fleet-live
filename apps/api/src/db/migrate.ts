@@ -638,12 +638,95 @@ function ensureAlertsDriverId(database: DatabaseSync) {
     `);
 }
 
+function tableExists(database: DatabaseSync, name: string): boolean {
+    const row = database
+        .prepare(
+            "SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?",
+        )
+        .get(name) as { ok: number } | undefined;
+
+    return Boolean(row);
+}
+
+function tableRowCount(database: DatabaseSync, name: string): number {
+    if (!tableExists(database, name)) {
+        return 0;
+    }
+
+    const row = database.prepare(`SELECT COUNT(*) AS n FROM ${name}`).get() as {
+        n: number;
+    };
+
+    return row.n;
+}
+
+/** Ein abgebrochener v14-Rebuild kann `vehicles` löschen und `vehicles_v14` stehen lassen. */
+function recoverVehiclesRebuild(database: DatabaseSync) {
+    const hasVehicles = tableExists(database, "vehicles");
+    const hasV14 = tableExists(database, "vehicles_v14");
+
+    if (!hasV14) {
+        return;
+    }
+
+    dropMaintenanceTriggers(database);
+    database.exec("PRAGMA foreign_keys = OFF");
+
+    const vehicleCount = tableRowCount(database, "vehicles");
+    const v14Count = tableRowCount(database, "vehicles_v14");
+
+    // schema.sql legt bei fehlendem `vehicles` eine leere Tabelle an.
+    // Die Kopie in `vehicles_v14` ist dann der echte Bestand.
+    if (!hasVehicles || v14Count > vehicleCount) {
+        if (hasVehicles) {
+            database.exec("DROP TABLE vehicles");
+        }
+
+        database.exec("ALTER TABLE vehicles_v14 RENAME TO vehicles");
+        database.exec("PRAGMA foreign_keys = ON");
+        return;
+    }
+
+    database.exec("DROP TABLE vehicles_v14");
+    database.exec("PRAGMA foreign_keys = ON");
+}
+
+function enforceOneCurrentVehiclePerDriver(database: DatabaseSync) {
+    const names = columnNames(database, "vehicles");
+
+    if (!names.has("current_driver_id")) {
+        return;
+    }
+
+    database.exec(`
+        UPDATE vehicles
+        SET current_driver_id = NULL,
+            driver_name = NULL
+        WHERE id NOT IN (
+            SELECT id FROM (
+                SELECT
+                    id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY current_driver_id
+                        ORDER BY
+                            CASE status WHEN 'DRIVING' THEN 0 ELSE 1 END,
+                            id
+                    ) AS rn
+                FROM vehicles
+                WHERE current_driver_id IS NOT NULL
+            ) ranked
+            WHERE rn = 1
+        )
+    `);
+}
+
 /**
  * Freigabe (M:N) und aktueller Fahrer (nullable, unique). Alte
  * `vehicles.driver_id`-Zeilen werden Freigaben; pro Fahrer bleibt
  * höchstens ein aktuelles Fahrzeug.
  */
 function ensureAssignmentModel(database: DatabaseSync) {
+    recoverVehiclesRebuild(database);
     ensureDriversTable(database);
     ensureDriverVehiclesTable(database);
     ensureAlertsDriverId(database);
@@ -651,6 +734,7 @@ function ensureAssignmentModel(database: DatabaseSync) {
     const names = columnNames(database, "vehicles");
 
     if (names.has("current_driver_id")) {
+        enforceOneCurrentVehiclePerDriver(database);
         return;
     }
 
@@ -679,65 +763,73 @@ function ensureAssignmentModel(database: DatabaseSync) {
         .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'vehicles'")
         .get() as { seq: number } | undefined;
 
+    dropMaintenanceTriggers(database);
     database.exec("PRAGMA foreign_keys = OFF");
-    database.exec(`
-        CREATE TABLE vehicles_v14 (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            company_id INTEGER NOT NULL,
-            current_driver_id INTEGER,
-            license_plate TEXT NOT NULL,
-            driver_name TEXT,
-            fuel_level REAL NOT NULL DEFAULT 100
-                CHECK (fuel_level >= 0 AND fuel_level <= 100),
-            status TEXT NOT NULL DEFAULT 'IDLE'
-                CHECK (status IN ('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE')),
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            last_telemetry_id INTEGER,
-            active_alerts INTEGER NOT NULL DEFAULT 0,
-            speed_limit_kmh REAL,
-            search_text TEXT GENERATED ALWAYS AS (
-                lower(license_plate || ' ' || coalesce(driver_name, ''))
-            ) VIRTUAL,
+    database.exec("BEGIN");
+    try {
+        database.exec(`
+            CREATE TABLE vehicles_v14 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                current_driver_id INTEGER,
+                license_plate TEXT NOT NULL,
+                driver_name TEXT,
+                fuel_level REAL NOT NULL DEFAULT 100
+                    CHECK (fuel_level >= 0 AND fuel_level <= 100),
+                status TEXT NOT NULL DEFAULT 'IDLE'
+                    CHECK (status IN ('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_telemetry_id INTEGER,
+                active_alerts INTEGER NOT NULL DEFAULT 0,
+                speed_limit_kmh REAL,
+                search_text TEXT GENERATED ALWAYS AS (
+                    lower(license_plate || ' ' || coalesce(driver_name, ''))
+                ) VIRTUAL,
 
-            FOREIGN KEY (company_id)
-                REFERENCES companies(id),
+                FOREIGN KEY (company_id)
+                    REFERENCES companies(id),
 
-            FOREIGN KEY (current_driver_id)
-                REFERENCES drivers(id),
+                FOREIGN KEY (current_driver_id)
+                    REFERENCES drivers(id),
 
-            UNIQUE (company_id, license_plate)
-        );
+                UNIQUE (company_id, license_plate)
+            );
 
-        INSERT INTO vehicles_v14 (
-            id,
-            company_id,
-            current_driver_id,
-            license_plate,
-            driver_name,
-            fuel_level,
-            status,
-            created_at,
-            last_telemetry_id,
-            active_alerts,
-            speed_limit_kmh
-        )
-        SELECT
-            id,
-            company_id,
-            driver_id,
-            license_plate,
-            driver_name,
-            fuel_level,
-            status,
-            created_at,
-            last_telemetry_id,
-            active_alerts,
-            speed_limit_kmh
-        FROM vehicles;
+            INSERT INTO vehicles_v14 (
+                id,
+                company_id,
+                current_driver_id,
+                license_plate,
+                driver_name,
+                fuel_level,
+                status,
+                created_at,
+                last_telemetry_id,
+                active_alerts,
+                speed_limit_kmh
+            )
+            SELECT
+                id,
+                company_id,
+                driver_id,
+                license_plate,
+                driver_name,
+                fuel_level,
+                status,
+                created_at,
+                last_telemetry_id,
+                active_alerts,
+                speed_limit_kmh
+            FROM vehicles;
 
-        DROP TABLE vehicles;
-        ALTER TABLE vehicles_v14 RENAME TO vehicles;
-    `);
+            DROP TABLE vehicles;
+            ALTER TABLE vehicles_v14 RENAME TO vehicles;
+        `);
+        database.exec("COMMIT");
+    } catch (error) {
+        database.exec("ROLLBACK");
+        throw error;
+    }
 
     if (sequence) {
         database
@@ -747,26 +839,7 @@ function ensureAssignmentModel(database: DatabaseSync) {
             .run(sequence.seq);
     }
 
-    database.exec(`
-        UPDATE vehicles
-        SET current_driver_id = NULL,
-            driver_name = NULL
-        WHERE id NOT IN (
-            SELECT id FROM (
-                SELECT
-                    id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY current_driver_id
-                        ORDER BY
-                            CASE status WHEN 'DRIVING' THEN 0 ELSE 1 END,
-                            id
-                    ) AS rn
-                FROM vehicles
-                WHERE current_driver_id IS NOT NULL
-            ) ranked
-            WHERE rn = 1
-        )
-    `);
+    enforceOneCurrentVehiclePerDriver(database);
 
     database.exec("PRAGMA foreign_keys = ON");
 }
