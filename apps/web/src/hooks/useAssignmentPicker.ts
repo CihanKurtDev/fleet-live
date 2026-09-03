@@ -22,7 +22,6 @@ type ConfirmAssignContext = {
 export type EntityAssignmentPickerConfig<TCandidate, TAssigned = never> = {
     mode: "entity";
     excludedIds?: Set<number>;
-    excludedIdsDeps?: readonly unknown[];
     fetchCandidates: (
         search: string,
         signal: AbortSignal,
@@ -149,7 +148,6 @@ function useEntityAssignmentPicker<TCandidate, TAssigned>(
         fetchCandidates,
         candidatesLoadError,
         excludedIds: externalExcludedIds,
-        excludedIdsDeps = [],
         assigned: assignedConfig,
     } = config;
 
@@ -163,9 +161,16 @@ function useEntityAssignmentPicker<TCandidate, TAssigned>(
         return externalExcludedIds ?? new Set<number>();
     }, [assigned, assignedConfig, externalExcludedIds]);
 
-    const candidateReloadDeps = assignedConfig
-        ? [assigned]
-        : excludedIdsDeps;
+    const excludedIdsKey = useMemo(() => {
+        const ids = assignedConfig
+            ? assigned.map((row) => (row as { id: number }).id)
+            : [...(externalExcludedIds ?? [])];
+
+        return ids.sort((left, right) => left - right).join(",");
+    }, [assigned, assignedConfig, externalExcludedIds]);
+
+    const excludedIdsRef = useRef(excludedIds);
+    excludedIdsRef.current = excludedIds;
 
     useEffect(() => {
         if (!assignedConfig) {
@@ -207,7 +212,7 @@ function useEntityAssignmentPicker<TCandidate, TAssigned>(
                 setCandidates(
                     rows.filter((row) => {
                         const id = (row as { id: number }).id;
-                        return !excludedIds.has(id);
+                        return !excludedIdsRef.current.has(id);
                     }),
                 );
             })
@@ -229,21 +234,27 @@ function useEntityAssignmentPicker<TCandidate, TAssigned>(
             });
 
         return () => controller.abort();
-    }, [
-        assignOpen,
-        search,
-        fetchCandidates,
-        candidatesLoadError,
-        excludedIds,
-        ...candidateReloadDeps,
-    ]);
+    }, [assignOpen, search, fetchCandidates, candidatesLoadError]);
+
+    useEffect(() => {
+        if (!assignOpen) {
+            return;
+        }
+
+        setCandidates((current) =>
+            current.filter((row) => {
+                const id = (row as { id: number }).id;
+                return !excludedIdsRef.current.has(id);
+            }),
+        );
+    }, [assignOpen, excludedIdsKey]);
 
     const openAssignPicker = useCallback(() => {
         setSearch("");
         setIsLoadingCandidates(true);
         autoCurrentRef.current = config.getAutoCurrentOnOpen();
         setAssignOpen(true);
-    }, [config]);
+    }, [config.getAutoCurrentOnOpen]);
 
     const closeAssignPicker = useCallback(() => {
         setAssignOpen(false);

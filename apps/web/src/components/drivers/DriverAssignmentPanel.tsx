@@ -91,7 +91,6 @@ export const DriverAssignmentPanel = ({
     } = useAssignmentPicker<Vehicle>({
         mode: "entity",
         excludedIds: assignedIds,
-        excludedIdsDeps: [driver.vehicles],
         fetchCandidates,
         candidatesLoadError: "Fahrzeuge konnten nicht geladen werden.",
         mutationError: "Zuweisung konnte nicht geändert werden.",
