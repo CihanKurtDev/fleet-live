@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Driver, Vehicle } from "@fleet-live/shared";
 
-import { ApiError, isAbortError } from "../../api/client";
 import {
     assignDriverVehicle,
     listDrivers,
@@ -9,6 +8,7 @@ import {
     unassignDriverVehicle,
 } from "../../api/drivers";
 import { useVehicles } from "../../context/vehiclesContext";
+import { useAssignmentPicker } from "../../hooks/useAssignmentPicker";
 import { Button } from "../ui/Button/Button";
 import { Modal } from "../ui/Modal/Modal";
 import { AssignmentPicker } from "../drivers/AssignmentPicker";
@@ -26,109 +26,101 @@ export const VehicleAssignmentPanel = ({
     vehicle,
     canWrite,
 }: VehicleAssignmentPanelProps) => {
-    const { listEpoch, refetchLists } = useVehicles();
-    const [assigned, setAssigned] = useState<Driver[]>([]);
-    const [error, setError] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
-    const [assignOpen, setAssignOpen] = useState(false);
+    const { listEpoch } = useVehicles();
     const [createOpen, setCreateOpen] = useState(false);
-    const [candidates, setCandidates] = useState<Driver[]>([]);
-    const [search, setSearch] = useState("");
-    const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
-    const autoCurrentRef = useRef(vehicle.current_driver_id === null);
 
-    const assignedIds = new Set(assigned.map((driver) => driver.id));
+    const fetchAssigned = useCallback(
+        (signal: AbortSignal) =>
+            listDrivers(
+                {
+                    search: "",
+                    page: 1,
+                    limit: 100,
+                    dir: "asc",
+                    vehicle_id: vehicle.id,
+                },
+                signal,
+            ).then((response) => response.data),
+        [vehicle.id],
+    );
 
-    useEffect(() => {
-        const controller = new AbortController();
+    const fetchCandidates = useCallback(
+        (search: string, signal: AbortSignal) =>
+            listDrivers(
+                {
+                    search,
+                    page: 1,
+                    limit: 100,
+                    dir: "asc",
+                },
+                signal,
+            ).then((response) => response.data),
+        [],
+    );
 
-        listDrivers(
-            {
-                search: "",
-                page: 1,
-                limit: 100,
-                dir: "asc",
-                vehicle_id: vehicle.id,
+    const getAutoCurrentOnOpen = useCallback(
+        () => vehicle.current_driver_id === null,
+        [vehicle.current_driver_id],
+    );
+
+    const onConfirmAssign = useCallback(
+        async (
+            ids: number[],
+            { autoCurrent, clearAutoCurrent, closePicker }: {
+                autoCurrent: boolean;
+                clearAutoCurrent: () => void;
+                closePicker: () => void;
             },
-            controller.signal,
-        )
-            .then((response) => {
-                setAssigned(response.data);
-            })
-            .catch((caught: unknown) => {
-                if (controller.signal.aborted || isAbortError(caught)) {
-                    return;
-                }
+        ) => {
+            for (const id of ids) {
+                await assignDriverVehicle(id, {
+                    vehicle_id: vehicle.id,
+                });
+            }
 
-                setError(
-                    caught instanceof Error
-                        ? caught.message
-                        : "Fahrer konnten nicht geladen werden.",
-                );
-            });
+            if (autoCurrent && ids[0] !== undefined) {
+                await setDriverCurrentVehicle(ids[0], {
+                    vehicle_id: vehicle.id,
+                });
+                clearAutoCurrent();
+            }
 
-        return () => controller.abort();
-    }, [vehicle.id, listEpoch]);
+            closePicker();
+        },
+        [vehicle.id],
+    );
 
-    useEffect(() => {
-        if (!assignOpen) {
-            return;
-        }
+    const assignedConfig = useMemo(
+        () => ({
+            deps: [vehicle.id, listEpoch] as const,
+            fetch: fetchAssigned,
+            errorMessage: "Fahrer konnten nicht geladen werden.",
+        }),
+        [fetchAssigned, listEpoch, vehicle.id],
+    );
 
-        const controller = new AbortController();
-        setIsLoadingCandidates(true);
-
-        listDrivers(
-            {
-                search,
-                page: 1,
-                limit: 100,
-                dir: "asc",
-            },
-            controller.signal,
-        )
-            .then((response) => {
-                setCandidates(
-                    response.data.filter((driver) => !assignedIds.has(driver.id)),
-                );
-            })
-            .catch((caught: unknown) => {
-                if (controller.signal.aborted || isAbortError(caught)) {
-                    return;
-                }
-
-                setError(
-                    caught instanceof Error
-                        ? caught.message
-                        : "Fahrer konnten nicht geladen werden.",
-                );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) {
-                    setIsLoadingCandidates(false);
-                }
-            });
-
-        return () => controller.abort();
-    }, [assignOpen, search, assigned]);
-
-    const run = async (action: () => Promise<unknown>) => {
-        setBusy(true);
-        setError(null);
-
-        try {
-            await action();
-            refetchLists();
-        } catch (caught) {
-            setError(
-                caught instanceof ApiError
-                    ? caught.message
-                    : "Zuweisung konnte nicht geändert werden.",
-            );
-        } finally {
-            setBusy(false);
-        }
-    };
+    const {
+        error,
+        busy,
+        run,
+        assignOpen,
+        openAssignPicker,
+        closeAssignPicker,
+        search,
+        setSearch,
+        candidates,
+        isLoadingCandidates,
+        confirmAssign,
+        assigned,
+    } = useAssignmentPicker<Driver, Driver>({
+        mode: "entity",
+        fetchCandidates,
+        candidatesLoadError: "Fahrer konnten nicht geladen werden.",
+        mutationError: "Zuweisung konnte nicht geändert werden.",
+        getAutoCurrentOnOpen,
+        onConfirmAssign,
+        assigned: assignedConfig,
+    });
 
     return (
         <section className={layout.panel}>
@@ -138,13 +130,7 @@ export const VehicleAssignmentPanel = ({
                     <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => {
-                            setSearch("");
-                            setIsLoadingCandidates(true);
-                            autoCurrentRef.current =
-                                vehicle.current_driver_id === null;
-                            setAssignOpen(true);
-                        }}
+                        onClick={openAssignPicker}
                     >
                         Zuweisen
                     </Button>
@@ -257,7 +243,7 @@ export const VehicleAssignmentPanel = ({
                 search={search}
                 searchPlaceholder="Fahrer suchen…"
                 onSearchChange={setSearch}
-                onClose={() => setAssignOpen(false)}
+                onClose={closeAssignPicker}
                 items={candidates.map((driver) => ({
                     id: driver.id,
                     title: driver.name,
@@ -272,7 +258,7 @@ export const VehicleAssignmentPanel = ({
                             type="button"
                             className={styles.footerLink}
                             onClick={() => {
-                                setAssignOpen(false);
+                                closeAssignPicker();
                                 setCreateOpen(true);
                             }}
                         >
@@ -280,24 +266,7 @@ export const VehicleAssignmentPanel = ({
                         </button>
                     ) : null
                 }
-                onConfirm={(ids) =>
-                    void run(async () => {
-                        for (const id of ids) {
-                            await assignDriverVehicle(id, {
-                                vehicle_id: vehicle.id,
-                            });
-                        }
-
-                        if (autoCurrentRef.current && ids[0] !== undefined) {
-                            await setDriverCurrentVehicle(ids[0], {
-                                vehicle_id: vehicle.id,
-                            });
-                            autoCurrentRef.current = false;
-                        }
-
-                        setAssignOpen(false);
-                    })
-                }
+                onConfirm={confirmAssign}
             />
 
             <Modal

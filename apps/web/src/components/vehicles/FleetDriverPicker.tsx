@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FLEET_DRIVERS_MAX, type FleetDriver } from "@fleet-live/shared";
+import { FLEET_DRIVERS_MAX } from "@fleet-live/shared";
 
-import { isAbortError } from "../../api/client";
-import { listDrivers } from "../../api/vehicles";
-import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useAssignmentPicker } from "../../hooks/useAssignmentPicker";
 import { formatCount } from "../../utils/formatCount";
 import { Button } from "../ui/Button/Button";
 import { Modal } from "../ui/Modal/Modal";
@@ -14,171 +11,35 @@ type FleetDriverPickerProps = {
     onChange: (names: string[]) => void;
 };
 
-const mergeKnown = (
-    current: Map<string, string>,
-    rows: FleetDriver[],
-): Map<string, string> => {
-    if (rows.length === 0) {
-        return current;
-    }
-
-    const next = new Map(current);
-
-    for (const row of rows) {
-        next.set(row.name, row.license_plate ?? "");
-    }
-
-    return next;
-};
-
 export const FleetDriverPicker = ({
     selected,
     onChange,
 }: FleetDriverPickerProps) => {
-    const [open, setOpen] = useState(false);
-    const [draft, setDraft] = useState<string[]>([]);
-    const [query, setQuery] = useState("");
-    const [hits, setHits] = useState<FleetDriver[]>([]);
-    const [rosterTotal, setRosterTotal] = useState(0);
-    const [matched, setMatched] = useState(0);
-    const [page, setPage] = useState(1);
-    const [pageCount, setPageCount] = useState(1);
-    const [isSearching, setIsSearching] = useState(false);
-    const [known, setKnown] = useState<Map<string, string>>(() => new Map());
-    const searchRef = useRef<HTMLInputElement>(null);
-    const listRef = useRef<HTMLUListElement>(null);
-    const debouncedQuery = useDebouncedValue(query.trim(), 250);
-
-    useEffect(() => {
-        if (open) {
-            searchRef.current?.focus();
-        }
-    }, [open]);
-
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
-
-        const names = selected;
-        const controller = new AbortController();
-
-        listDrivers({}, controller.signal)
-            .then((response) => {
-                setRosterTotal(response.meta.total);
-            })
-            .catch((caught: unknown) => {
-                if (!controller.signal.aborted && !isAbortError(caught)) {
-                    setRosterTotal(0);
-                }
-            });
-
-        if (names.length === 0) {
-            return () => controller.abort();
-        }
-
-        listDrivers({ names }, controller.signal)
-            .then((response) => {
-                setKnown((current) => mergeKnown(current, response.data));
-            })
-            .catch((caught: unknown) => {
-                if (controller.signal.aborted || isAbortError(caught)) {
-                    return;
-                }
-            });
-
-        return () => controller.abort();
-    }, [open, selected]);
-
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
-
-        if (debouncedQuery.length === 0) {
-            setHits([]);
-            setMatched(0);
-            setPageCount(1);
-            setIsSearching(false);
-            return;
-        }
-
-        const controller = new AbortController();
-        setIsSearching(true);
-
-        listDrivers(
-            { search: debouncedQuery, page },
-            controller.signal,
-        )
-            .then((response) => {
-                setHits(response.data);
-                setMatched(response.meta.total);
-                setPageCount(response.meta.pageCount);
-                setKnown((current) => mergeKnown(current, response.data));
-            })
-            .catch((caught: unknown) => {
-                if (!controller.signal.aborted && !isAbortError(caught)) {
-                    setHits([]);
-                    setMatched(0);
-                }
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) {
-                    setIsSearching(false);
-                }
-            });
-
-        return () => controller.abort();
-    }, [debouncedQuery, open, page]);
-
-    useEffect(() => {
-        listRef.current?.scrollTo(0, 0);
-    }, [hits, page]);
-
-    const visible = useMemo(() => {
-        if (debouncedQuery.length > 0) {
-            return hits;
-        }
-
-        return draft.flatMap((name) => {
-            const plate = known.get(name);
-
-            return plate ? [{ name, license_plate: plate }] : [];
-        });
-    }, [debouncedQuery, draft, hits, known]);
-
-    const openModal = () => {
-        setDraft(selected);
-        setQuery("");
-        setHits([]);
-        setPage(1);
-        setOpen(true);
-    };
-
-    const closeModal = () => {
-        setOpen(false);
-        setQuery("");
-        setHits([]);
-        setPage(1);
-    };
-
-    const toggle = (name: string) => {
-        if (draft.includes(name)) {
-            setDraft(draft.filter((item) => item !== name));
-            return;
-        }
-
-        if (draft.length >= FLEET_DRIVERS_MAX) {
-            return;
-        }
-
-        setDraft([...draft, name]);
-    };
-
-    const apply = () => {
-        onChange(draft);
-        closeModal();
-    };
+    const {
+        open,
+        openModal,
+        closeModal,
+        draft,
+        setDraft,
+        query,
+        setQuery,
+        visible,
+        rosterTotal,
+        matched,
+        page,
+        setPage,
+        pageCount,
+        searchRef,
+        listRef,
+        searching,
+        searchPending,
+        toggle,
+        apply,
+    } = useAssignmentPicker({
+        mode: "fleet-filter",
+        selected,
+        onChange,
+    });
 
     const label =
         selected.length === 0
@@ -192,9 +53,6 @@ export const FleetDriverPicker = ({
             : selected.length === 1
               ? `Fahrer: ${selected[0]}`
               : `${formatCount(selected.length)} Fahrer ausgewählt`;
-    const searching = query.trim().length > 0;
-    const searchPending =
-        searching && (isSearching || query.trim() !== debouncedQuery);
     const summary = searching
         ? searchPending
             ? "Suche…"
@@ -237,10 +95,7 @@ export const FleetDriverPicker = ({
                             placeholder="Name oder Kennzeichen"
                             aria-label="Name oder Kennzeichen"
                             value={query}
-                            onChange={(event) => {
-                                setQuery(event.target.value);
-                                setPage(1);
-                            }}
+                            onChange={(event) => setQuery(event.target.value)}
                         />
                         <p className={styles.summary}>
                             {summary}
