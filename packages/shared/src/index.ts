@@ -50,6 +50,8 @@ export {
     TELEMETRY_HISTORY_LIMITS,
     parseTelemetryHistoryQuery,
     telemetryHistoryQuerySchema,
+    telemetryPatchSchema,
+    telemetryPatchesSchema,
 } from "./models/telemetry";
 
 export type { Trip, TripResponse } from "./models/trip";
@@ -105,11 +107,14 @@ export {
     encodePolyline,
 } from "./geo/polyline";
 
-export type { StreamFocusInput } from "./models/stream";
+export type { StreamConnected, StreamFocusInput } from "./models/stream";
 
 export {
     STREAM_FOCUS_MAX_IDS,
+    parseStreamConnected,
     parseStreamFocus,
+    parseTelemetryPatches,
+    streamConnectedSchema,
     streamFocusSchema,
 } from "./models/stream";
 

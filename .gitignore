@@ -10,5 +10,5 @@ build/
 
 apps/api/data/
 
-# Local engineering plan — do not commit or push
-.cursor/ROADMAP.md
+# Local planning markdown in .cursor/ (rules stay .mdc)
+.cursor/*.md

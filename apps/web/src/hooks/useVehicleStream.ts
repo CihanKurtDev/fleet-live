@@ -1,5 +1,9 @@
 import { useEffect, useRef } from "react";
-import type { TelemetryPatch } from "@fleet-live/shared";
+import {
+    parseStreamConnected,
+    parseTelemetryPatches,
+    type TelemetryPatch,
+} from "@fleet-live/shared";
 import { setStreamConnection } from "../api/telemetryFocus";
 
 interface UseVehicleStreamHandlers {
@@ -18,11 +22,11 @@ export const useVehicleStream = (
 
         source.addEventListener("connected", (event) => {
             try {
-                const payload = JSON.parse(
-                    (event as MessageEvent).data,
-                ) as { connection_id?: string };
+                const payload = parseStreamConnected(
+                    JSON.parse((event as MessageEvent).data),
+                );
 
-                if (payload.connection_id) {
+                if (payload?.connection_id) {
                     setStreamConnection(payload.connection_id);
                 }
             } catch {
@@ -32,10 +36,13 @@ export const useVehicleStream = (
 
         source.addEventListener("telemetry", (event) => {
             try {
-                const patches = JSON.parse(
-                    (event as MessageEvent).data,
-                ) as TelemetryPatch[];
-                handlersRef.current.onTelemetry(patches);
+                const patches = parseTelemetryPatches(
+                    JSON.parse((event as MessageEvent).data),
+                );
+
+                if (patches) {
+                    handlersRef.current.onTelemetry(patches);
+                }
             } catch {
                 // Ungültige Events werden stillschweigend verworfen.
             }
