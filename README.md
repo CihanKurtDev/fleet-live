@@ -176,21 +176,25 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | `GET`    | `/api/alerts`                    | Paginated alerts (`filter` open/resolved/all, optional `type`, `vehicle_id`, `driver_id`, `page`, `limit`) |
 | `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }` — close; `dispatcher` only |
 | `GET`    | `/api/briefing`                  | Company snapshot for the home page (counts, newest open alerts, no-signal, drivers with open warnings) |
-| `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`) with type counts |
-| `GET`    | `/api/drivers/:id`               | Driver, vehicles, incident counts (`404` if missing **or** other company) |
+| `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`, optional `vehicle_id`) |
+| `POST`   | `/api/drivers`                   | `{ name }` — create roster row; `dispatcher` |
+| `GET`    | `/api/drivers/:id`               | Driver, eligible vehicles, current vehicle (`404` if missing **or** other company) |
+| `POST`   | `/api/drivers/:id/vehicles`      | `{ vehicle_id }` — eligibility; `dispatcher` |
+| `DELETE` | `/api/drivers/:id/vehicles/:vehicleId` | Remove eligibility; `dispatcher` |
+| `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` or `{ vehicle_id: null }` — current vehicle; `dispatcher` |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
 `GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
 
-`GET /api/alerts` returns `{ data, meta }` of alerts joined with plate, driver name and `driver_id`. Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Default `filter=open` is `resolved_at IS NULL` (independent of `ended_at`). Optional `type` is `SPEEDING` / `LOW_FUEL` / `OFFLINE` (omit = all types). `meta.counts` is `open` / `resolved` / `all` and ignores `type`. `meta.type_counts` is per-type and respects `filter`. Optional `vehicle_id` or `driver_id` (404 if missing or other company).
+`GET /api/alerts` returns `{ data, meta }` of alerts joined with plate and the **snapshot** driver (`driver_id` / `driver_name` at open). Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Default `filter=open` is `resolved_at IS NULL` (independent of `ended_at`). Optional `type` is `SPEEDING` / `LOW_FUEL` / `OFFLINE` (omit = all types). `meta.counts` is `open` / `resolved` / `all` and ignores `type`. `meta.type_counts` is per-type and respects `filter`. Optional `vehicle_id` or `driver_id` (404 if missing or other company). Reassignment does not move old rows.
 
-`GET /api/drivers` returns `{ data, meta }` of drivers for the session company. Counts include **all** alert rows (open and resolved). `open_warnings` is the unresolved subset. `vehicle_plate` is set when the driver has exactly one vehicle. `GET /api/drivers/:id` adds assigned vehicles.
+`GET /api/drivers` returns `{ data, meta }` of drivers for the session company. `counts` and `open_warnings` are **SPEEDING only** (snapshot `alerts.driver_id`). `vehicle_plate` is set when the driver has exactly one eligible vehicle. `current_vehicle_plate` is the vehicle with `current_driver_id`. Optional `vehicle_id` lists drivers eligible for that vehicle (404 if missing or other company). `GET /api/drivers/:id` adds `vehicles` (with `is_current`) and `current_vehicle`.
 
 `GET /api/briefing` returns `{ data }` for the session company: status counts (`driving`, `idle`, `offline`), inbox `open`, open `low_fuel` rows, the newest open alerts, offline vehicles (last `recorded_at`), and drivers with open warnings. Caps are `BRIEFING_OPEN_ALERT_LIMIT` / `BRIEFING_OFFLINE_LIMIT` / `BRIEFING_DRIVER_LIMIT` in `@fleet-live/shared`. `viewer` may read.
 
 `GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions, not the list page. Optional `bbox=west,south,east,north`; `search` matches plate and driver; `drivers` is a view filter (empty means the company snapshot in the bbox, not “no markers”). Over `FLEET_POSITIONS_MAX` (2000) matches → `truncated` and empty `data` (no sample).
 
-Query parameters live in `@fleet-live/shared`. Invalid sort keys or limits are `400`. Default page size `10`; allowed limits `10`, `25`, `50`, `100`. `license_plate` max 32 characters, `driver_name` max 80. Plates are unique **per company**.
+Query parameters live in `@fleet-live/shared`. Invalid sort keys or limits are `400`. Default page size `10`; allowed limits `10`, `25`, `50`, `100`. `license_plate` max 32 characters, driver `name` max 80. Plates and driver names are unique **per company**.
 
 Validation example:
 
@@ -204,13 +208,13 @@ Validation example:
 }
 ```
 
-Vehicle JSON includes last telemetry (or `null`), `speed_limit_kmh`, `active_alerts`, `speeding_open` (unfinished SPEEDING event), and `driver_id`. Write API still takes `driver_name`; the model upserts a driver in that company.
+Vehicle JSON includes last telemetry (or `null`), `speed_limit_kmh`, `active_alerts`, `speeding_open` (unfinished SPEEDING event), `current_driver_id`, and denormalized `driver_name` (null when the vehicle is in the pool). HTTP create/update takes plate, fuel and status — not a driver name. Dispatchers assign drivers via `/api/drivers`.
 
 ---
 
 # Vehicle Model
 
-Master data a person maintains: license plate and driver. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
+Master data a person maintains: license plate (and fuel when not driving). Who may drive it and who has it **now** live on the driver assignment API, not on the vehicle form. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
 
 Responses also include last position/speed/`speed_limit_kmh`/`recorded_at`, `active_alerts`, `speeding_open`, and `created_at`.
 
@@ -229,11 +233,11 @@ List state lives in the URL. Reloading keeps the view; a fresh visit to `/vehicl
 | `/login`        | Session login |
 | `/`             | Shift briefing (auth required) |
 | `/vehicles`     | List and create dialog |
-| `/vehicles/:id` | Detail, map/trail, alerts, edit, delete |
+| `/vehicles/:id` | Detail, map/trail, assignment, tank/funk alerts, edit, delete |
 | `/fleet`        | Fleet map |
 | `/alerts`       | Warning inbox (open/resolved, optional `type`, `vehicle_id` / `driver_id`) |
-| `/drivers`      | Driver list (incident counts) |
-| `/drivers/:id`  | Driver detail, vehicles, violation history |
+| `/drivers`      | Driver list (SPEEDING counts) |
+| `/drivers/:id`  | Driver detail, eligibility / current vehicle, SPEEDING history |
 
 Unauthenticated visits to vehicle, fleet, alert and driver routes go to `/login`. After login the home page is `/`.
 
@@ -251,7 +255,7 @@ Create, edit, delete. Status is a badge. Fuel is read-only while driving. The he
 
 ## Fleet map
 
-`/fleet` loads last positions for the **session company** in the visible bbox. The driver picker is an optional view filter, not a requirement. Status chips and plate search apply to that snapshot. More than 2000 matches → no markers (`truncated`), not a sample. **Fahrer** is a modal (`driver_name`, one vehicle each). Driving vehicles in the snapshot get SSE ticks (focus cap 150). No trails here — the path stays on the detail page.
+`/fleet` loads last positions for the **session company** in the visible bbox. The driver picker is an optional view filter, not a requirement. Status chips and plate search apply to that snapshot. More than 2000 matches → no markers (`truncated`), not a sample. **Fahrer** is a modal (driver name, current plate or —). Driving vehicles in the snapshot get SSE ticks (focus cap 150). No trails here — the path stays on the detail page.
 
 See [apps/docs/table.md](apps/docs/table.md) for the table component.
 
@@ -295,9 +299,9 @@ Three layers share the same `alerts` rows; they are not three tables:
 
 * **Indicator** — `speedBand` plus `speeding_open`. Orange while over the current `speed_limit_kmh` without an open event; red while a SPEEDING row has `ended_at` null. Only `DRIVING`. After the event ends the cell is normal even if the inbox row is still unresolved.
 * **Warning** — `alerts` where `resolved_at IS NULL`. Operative inbox `/alerts`. Dispatcher acknowledges with `PATCH`. Event end (`ended_at`) is not the same as resolved.
-* **Violation history** — all `alerts` rows, including resolved. Counted per driver on `/drivers`. `resolved_at` means “seen”, not “did not happen”.
+* **Violation history** — SPEEDING rows, including resolved, counted per snapshot driver on `/drivers`. Tank and radio stay on the vehicle. `resolved_at` means “seen”, not “did not happen”.
 
-The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → company`. `driver_id` on the DTO is the vehicle’s current driver (join). `active_alerts` is the unresolved count (triggers) and remains on the vehicle JSON and list filter.
+The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → company`. `driver_id` is copied from `vehicles.current_driver_id` **when the row opens** and is never rewritten. `active_alerts` is the unresolved count (triggers) and remains on the vehicle JSON and list filter.
 
 `GET /api/alerts` is the company inbox (`{ data, meta }`). Default `filter=open`. Optional `type` (`SPEEDING` / `LOW_FUEL` / `OFFLINE`), `vehicle_id` or `driver_id` (404 if missing or another company). `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`). A second close is idempotent. Viewer may read, not resolve. After a close the API broadcasts `vehicles-changed` so the list count updates.
 
@@ -309,9 +313,9 @@ Live speed stays in the telemetry window; the trip polyline has no per-point spe
 
 # Drivers
 
-`drivers` is a real entity (`UNIQUE (company_id, name)`). Vehicles keep denormalized `driver_name` for search and forms; `driver_id` is the stable link. Creating or renaming a vehicle upserts a driver in the session company. A new name creates a new row; the old driver remains.
+`drivers` is a real entity (`UNIQUE (company_id, name)`). **Eligibility** is M:N (`driver_vehicles`). **Current** is at most one vehicle per driver (`vehicles.current_driver_id`, partial unique; `NULL` = pool). `driver_name` on the vehicle is the current driver’s name, or `NULL`.
 
-`GET /api/drivers` and `GET /api/drivers/:id` aggregate incident counts (all alert types, including resolved) and open warnings. Isolation is still company. `GET /api/vehicles/drivers` remains the fleet-map name picker, not this roster.
+`POST /api/drivers` creates a roster row. Assign / unassign / set current hang off the driver (`dispatcher`). HTTP vehicle writes do not upsert a driver by name. `GET /api/drivers` and `GET /api/drivers/:id` aggregate SPEEDING counts (including resolved) and open SPEEDING warnings. Isolation is still company. `GET /api/vehicles/drivers` remains the fleet-map name picker, not this roster.
 
 ---
 
@@ -322,10 +326,11 @@ companies
 users          → company_id
 sessions       → user_id
 drivers        → company_id   UNIQUE (company_id, name)
-vehicles       → company_id, driver_id   UNIQUE (company_id, license_plate)
+driver_vehicles → driver_id, vehicle_id
+vehicles       → company_id, current_driver_id   UNIQUE (company_id, license_plate)
 telemetry      → vehicle_id
 trips          → vehicle_id   (one open trip per vehicle)
-alerts         → vehicle_id
+alerts         → vehicle_id, driver_id (snapshot at open)
 ```
 
 A partial unique index on `trips(vehicle_id) WHERE ended_at IS NULL` enforces one drive at a time.
@@ -340,7 +345,7 @@ Implemented:
 * scrypt password hashes
 * HttpOnly session cookie
 * Isolation by `company_id` on the user (one company per account)
-* Roles: `dispatcher` may mutate vehicles, pause the sim and resolve alerts; `viewer` may only read (including inbox, drivers, indicators)
+* Roles: `dispatcher` may mutate vehicles, pause the sim, resolve alerts and assign drivers; `viewer` may only read (including inbox, drivers, indicators)
 * SSE connections and sim pause bound to that company
 
 Not the same as production auth: no reset, lockout, invite, or multi-company membership. CORS `*` is a local default; cookies work because the Vite proxy is same-origin. A split-host deploy needs an explicit origin plus credentialed CORS, not a token redesign.
@@ -417,7 +422,6 @@ Cookie: fleet_session=…
 
 {
   "license_plate": "K-XY 123",
-  "driver_name": "Max Mustermann",
   "fuel_level": 85,
   "status": "DRIVING"
 }

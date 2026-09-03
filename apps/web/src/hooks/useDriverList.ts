@@ -42,7 +42,7 @@ export const useDriverList = (query: DriverListQuery) => {
             });
 
         return () => controller.abort();
-    }, [query.search, query.sort, query.dir, query.page, query.limit, listEpoch]);
+    }, [query.search, query.sort, query.dir, query.page, query.limit, query.vehicle_id, listEpoch]);
 
     return {
         data: response?.data ?? [],

@@ -52,17 +52,23 @@ function insertAlert(
         created_at?: string;
     } = {},
 ) {
+    const vehicle = db
+        .prepare(`SELECT current_driver_id FROM vehicles WHERE id = ?`)
+        .get(vehicleId) as { current_driver_id: number | null } | undefined;
+
     const result = db
         .prepare(
             `
             INSERT INTO alerts (
-                vehicle_id, type, severity, message, resolved_at, ended_at, created_at
+                vehicle_id, driver_id, type, severity, message,
+                resolved_at, ended_at, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
         `,
         )
         .run(
             vehicleId,
+            vehicle?.current_driver_id ?? null,
             input.type ?? "SPEEDING",
             input.severity ?? "HIGH",
             input.message ?? "zu schnell",
@@ -217,8 +223,7 @@ describe("GET /api/briefing", () => {
                 }),
             ),
             [
-                { name: "Anna Fahrt", open_warnings: 2 },
-                { name: "Dirk Funk", open_warnings: 1 },
+                { name: "Anna Fahrt", open_warnings: 1 },
             ],
         );
     });

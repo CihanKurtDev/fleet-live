@@ -34,32 +34,17 @@
 .item {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border);
-
-    &:first-child {
-        padding-top: 0;
-    }
-
-    &:last-child {
-        border-bottom: 0;
-        padding-bottom: 0;
-    }
+    padding: 0;
+    border-bottom: 0;
 }
 
 .message {
     margin: 0;
     font-size: 14px;
     color: var(--text-h);
-}
-
-.time {
-    margin: 4px 0 0;
-    font-size: 13px;
-    color: var(--text);
 }
 
 .error {
@@ -72,20 +57,4 @@
     margin: 0;
     color: var(--text);
     font-size: 14px;
-}
-
-.more {
-    margin: 12px 0 0;
-    font-size: 13px;
-    color: var(--text);
-
-    a {
-        color: var(--text);
-        text-decoration: underline;
-        text-underline-offset: 2px;
-
-        &:hover {
-            color: var(--text-h);
-        }
-    }
 }

@@ -3,12 +3,14 @@ import type { TableColumn } from "../../types/table";
 import { DriverNameLink } from "./DriverNameLink";
 
 function vehicleLabel(driver: Driver): string {
-    if (driver.vehicle_count === 0) {
-        return "—";
+    if (driver.current_vehicle_plate) {
+        return driver.vehicle_count > 1
+            ? `${driver.current_vehicle_plate} · ${driver.vehicle_count} freigegeben`
+            : driver.current_vehicle_plate;
     }
 
-    if (driver.vehicle_count === 1) {
-        return driver.vehicle_plate ?? "1 Fahrzeug";
+    if (driver.vehicle_count === 0) {
+        return "—";
     }
 
     return `${driver.vehicle_count} Fahrzeuge`;

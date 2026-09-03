@@ -3,7 +3,7 @@ import { logout } from "../api/auth";
 import { Button } from "./ui/Button/Button";
 import { useAuth } from "../hooks/useAuth";
 
-export const SessionMenu = () => {
+export const SessionMenu = ({ className }: { className?: string }) => {
     const { user, isReady, setUser } = useAuth();
 
     if (!isReady) {
@@ -12,7 +12,7 @@ export const SessionMenu = () => {
 
     if (!user) {
         return (
-            <NavLink className="appSession" to="/login">
+            <NavLink className={className} to="/login">
                 Anmelden
             </NavLink>
         );
@@ -27,7 +27,7 @@ export const SessionMenu = () => {
     };
 
     return (
-        <div className="appSession">
+        <div className={className}>
             <span>{user.name}</span>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
                 Abmelden

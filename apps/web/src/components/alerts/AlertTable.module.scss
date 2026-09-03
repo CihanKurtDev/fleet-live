@@ -78,3 +78,9 @@
     justify-content: center;
     gap: 8px;
 }
+
+.actionCell {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+}

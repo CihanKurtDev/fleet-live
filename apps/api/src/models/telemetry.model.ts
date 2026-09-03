@@ -28,6 +28,12 @@ const SELECT_DRIVING_BY_IDS = `
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
     WHERE v.status = 'DRIVING'
       AND v.id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
+      AND (
+          v.current_driver_id IS NOT NULL
+          OR NOT EXISTS (
+              SELECT 1 FROM driver_vehicles dv WHERE dv.vehicle_id = v.id
+          )
+      )
 `;
 
 const SELECT_LAST_POSITION = `
@@ -67,19 +73,7 @@ const SELECT_HISTORY = `
     LIMIT ?
 `;
 
-/** Verbrauch der Simulation: 100 % reichen für rund 400 km. */
-const FUEL_PERCENT_PER_KM = 0.25;
-/** Unter dieser Marke wird getankt, damit die Flotte nicht dauerhaft leer steht. */
-const REFUEL_BELOW_PERCENT = 5;
-
 let batchCursor = 0;
-
-function nextFuelLevel(current: number, meters: number): number {
-    const used = (meters / 1_000) * FUEL_PERCENT_PER_KM;
-    const remaining = current - used;
-
-    return remaining <= REFUEL_BELOW_PERCENT ? 100 : remaining;
-}
 
 function takeBatch<T>(items: T[], limit: number): T[] {
     if (items.length <= limit) {
@@ -125,7 +119,7 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
             );
             const { lat: latitude, lng: longitude, speed, path, limit_kmh } =
                 next;
-            const fuelLevel = nextFuelLevel(vehicle.fuel_level, next.meters);
+            const fuelLevel = vehicle.fuel_level;
 
             insert.run(
                 vehicle.id,

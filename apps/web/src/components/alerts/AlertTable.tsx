@@ -83,11 +83,17 @@ export const AlertTable = ({
                 displayText: canWrite ? "Aktion" : "Status",
                 render: (value, { row }) => {
                     if (value) {
-                        return formatTimestamp(value);
+                        return (
+                            <span className={styles.actionCell}>
+                                {formatTimestamp(value)}
+                            </span>
+                        );
                     }
 
                     if (!canWrite) {
-                        return "Offen";
+                        return (
+                            <span className={styles.actionCell}>Offen</span>
+                        );
                     }
 
                     const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
@@ -111,14 +117,16 @@ export const AlertTable = ({
                     };
 
                     return (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={resolvingId === row.id}
-                            onClick={handleClick}
-                        >
-                            Erledigen
-                        </Button>
+                        <span className={styles.actionCell}>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={resolvingId === row.id}
+                                onClick={handleClick}
+                            >
+                                Erledigen
+                            </Button>
+                        </span>
                     );
                 },
             },

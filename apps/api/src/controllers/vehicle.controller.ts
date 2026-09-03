@@ -42,16 +42,13 @@ function throwFieldErrors(fields: VehicleFieldErrors): never {
 }
 
 function readInput(body: unknown): Partial<VehicleInput> {
-    const { license_plate, driver_name, fuel_level, status } =
+    const { license_plate, fuel_level, status } =
         (body ?? {}) as Partial<VehicleInput>;
 
     const input: Partial<VehicleInput> = {};
 
     if (license_plate !== undefined) {
         input.license_plate = license_plate;
-    }
-    if (driver_name !== undefined) {
-        input.driver_name = driver_name;
     }
     if (fuel_level !== undefined) {
         input.fuel_level = fuel_level;
@@ -68,9 +65,6 @@ function trimStrings(input: Partial<VehicleInput>): Partial<VehicleInput> {
         ...input,
         ...(input.license_plate !== undefined && {
             license_plate: input.license_plate.trim(),
-        }),
-        ...(input.driver_name !== undefined && {
-            driver_name: input.driver_name.trim(),
         }),
     };
 }
@@ -114,7 +108,6 @@ function syncExceptions(vehicle: Vehicle, companyId: number): Vehicle {
     ExceptionEventModel.syncVehicle({
         id: vehicle.id,
         status: vehicle.status,
-        fuel_level: vehicle.fuel_level,
     });
     return VehicleModel.getById(vehicle.id, companyId) ?? vehicle;
 }
@@ -205,20 +198,16 @@ export function createVehicle(req: Request, res: Response) {
     if (input.license_plate === undefined) {
         errors.license_plate = "Kennzeichen ist erforderlich.";
     }
-    if (input.driver_name === undefined) {
-        errors.driver_name = "Fahrer ist erforderlich.";
-    }
 
     if (Object.keys(errors).length > 0) {
         throwFieldErrors(errors);
     }
 
-    const { license_plate, driver_name, fuel_level, status } =
+    const { license_plate, fuel_level, status } =
         trimStrings(input);
 
     const vehicle = VehicleModel.create({
         license_plate: license_plate!,
-        driver_name: driver_name!,
         fuel_level,
         status,
         company_id: sessionCompany(req),

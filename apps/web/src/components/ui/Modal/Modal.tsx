@@ -29,6 +29,10 @@ export const Modal = ({
         // ohne zusätzliche Bibliothek.
         if (open && !dialog.open) {
             dialog.showModal();
+            const field = dialog.querySelector<HTMLElement>(
+                "[data-modal-body] input, [data-modal-body] textarea, [data-modal-body] select",
+            );
+            field?.focus();
         }
 
         if (!open && dialog.open) {
@@ -79,7 +83,9 @@ export const Modal = ({
                         </button>
                     </header>
 
-                    <div className={styles.body}>{children}</div>
+                    <div className={styles.body} data-modal-body>
+                        {children}
+                    </div>
                 </div>
             )}
         </dialog>

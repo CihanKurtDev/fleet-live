@@ -15,9 +15,9 @@ import { nowSqlite } from "../lib/sqlTime";
 const ALERT_COLUMNS = `
         a.id,
         a.vehicle_id,
-        v.driver_id,
+        a.driver_id,
         v.license_plate,
-        v.driver_name,
+        d.name AS driver_name,
         a.type,
         a.severity,
         a.message,
@@ -32,6 +32,7 @@ const SELECT_ONE = `
         ${ALERT_COLUMNS}
     FROM alerts a
     INNER JOIN vehicles v ON v.id = a.vehicle_id
+    LEFT JOIN drivers d ON d.id = a.driver_id
     WHERE a.id = ?
       AND v.company_id = ?
 `;
@@ -48,13 +49,14 @@ const SELECT_OPEN_SPEEDING = `
 const INSERT_SPEEDING = `
     INSERT INTO alerts (
         vehicle_id,
+        driver_id,
         type,
         severity,
         message,
         details,
         created_at
     )
-    VALUES (?, 'SPEEDING', ?, ?, ?, ?)
+    VALUES (?, ?, 'SPEEDING', ?, ?, ?, ?)
 `;
 
 const UPDATE_SPEEDING = `
@@ -85,13 +87,14 @@ const SELECT_OPEN_TYPE = `
 const INSERT_TYPED = `
     INSERT INTO alerts (
         vehicle_id,
+        driver_id,
         type,
         severity,
         message,
         details,
         created_at
     )
-    VALUES (?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
 `;
 
 const UPDATE_TYPED = `
@@ -139,7 +142,7 @@ const SORT_SQL: Record<AlertSortKey, string> = {
         WHEN 'HIGH' THEN 3
         ELSE 4
     END`,
-    driver_name: "v.driver_name COLLATE NOCASE",
+    driver_name: "d.name COLLATE NOCASE",
     license_plate: "v.license_plate COLLATE NOCASE",
 };
 
@@ -201,6 +204,14 @@ export function speedingMessage(details: SpeedingAlertDetails): string {
     });
 }
 
+function currentDriverId(vehicleId: number): number | null {
+    const row = stmt(
+        `SELECT current_driver_id FROM vehicles WHERE id = ?`,
+    ).get(vehicleId) as { current_driver_id: number | null } | undefined;
+
+    return row?.current_driver_id ?? null;
+}
+
 export class AlertModel {
     static listForCompany(
         companyId: number,
@@ -211,7 +222,7 @@ export class AlertModel {
         const vehicleSql =
             query.vehicle_id !== undefined ? "AND a.vehicle_id = ?" : "";
         const driverSql =
-            query.driver_id !== undefined ? "AND v.driver_id = ?" : "";
+            query.driver_id !== undefined ? "AND a.driver_id = ?" : "";
         const typeSql = query.type !== undefined ? "AND a.type = ?" : "";
         const sortColumn = SORT_SQL[query.sort];
         const sortDirection = query.dir === "asc" ? "ASC" : "DESC";
@@ -228,6 +239,7 @@ export class AlertModel {
                 COUNT(*) OVER () AS total
             FROM alerts a
             INNER JOIN vehicles v ON v.id = a.vehicle_id
+            LEFT JOIN drivers d ON d.id = a.driver_id
             WHERE v.company_id = ?
               ${vehicleSql}
               ${driverSql}
@@ -276,6 +288,7 @@ export class AlertModel {
                 COALESCE(SUM(a.resolved_at IS NOT NULL), 0) AS resolved_count
             FROM alerts a
             INNER JOIN vehicles v ON v.id = a.vehicle_id
+            LEFT JOIN drivers d ON d.id = a.driver_id
             WHERE v.company_id = ?
               ${vehicleSql}
               ${driverSql}
@@ -293,6 +306,7 @@ export class AlertModel {
                 COALESCE(SUM(a.type = 'OFFLINE'), 0) AS offline_count
             FROM alerts a
             INNER JOIN vehicles v ON v.id = a.vehicle_id
+            LEFT JOIN drivers d ON d.id = a.driver_id
             WHERE v.company_id = ?
               ${vehicleSql}
               ${driverSql}
@@ -332,6 +346,7 @@ export class AlertModel {
             SELECT ${ALERT_COLUMNS}
             FROM alerts a
             INNER JOIN vehicles v ON v.id = a.vehicle_id
+            LEFT JOIN drivers d ON d.id = a.driver_id
             WHERE v.company_id = ?
               AND a.resolved_at IS NULL
             ORDER BY a.created_at DESC, a.id DESC
@@ -411,6 +426,7 @@ export class AlertModel {
 
         const result = stmt(INSERT_SPEEDING).run(
             input.vehicleId,
+            currentDriverId(input.vehicleId),
             input.severity,
             speedingMessage(input.details),
             speedingDetailsJson(input.details),
@@ -475,6 +491,7 @@ export class AlertModel {
 
         const result = stmt(INSERT_TYPED).run(
             input.vehicleId,
+            currentDriverId(input.vehicleId),
             input.type,
             input.severity,
             input.message,

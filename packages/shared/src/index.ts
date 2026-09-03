@@ -11,6 +11,7 @@ export {
     FUEL_LEVEL_MIN,
     LICENSE_PLATE_MAX,
     VEHICLE_STATUSES,
+    driverNameSchema,
     isVehicleStatus,
     validateVehicleInput,
     vehicleInputSchema,
@@ -135,14 +136,22 @@ export {
 export {
     DRIVER_INCIDENT_TYPES,
     DRIVER_SORT_KEYS,
+    driverCreateSchema,
+    driverCurrentVehicleSchema,
     driverListQuerySchema,
+    driverVehicleAssignSchema,
     isDriverSortKey,
+    parseDriverCreate,
+    parseDriverCurrentVehicle,
     parseDriverListQuery,
+    parseDriverVehicleAssign,
     serializeDriverListQuery,
 } from "./models/driver";
 
 export type {
     Driver,
+    DriverCreateInput,
+    DriverCurrentVehicleInput,
     DriverDetail,
     DriverDetailResponse,
     DriverIncidentCounts,
@@ -151,6 +160,7 @@ export type {
     DriverListResponse,
     DriverSortKey,
     DriverVehicle,
+    DriverVehicleAssignInput,
 } from "./models/driver";
 
 export type {

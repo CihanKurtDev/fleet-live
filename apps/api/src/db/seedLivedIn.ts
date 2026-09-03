@@ -196,9 +196,18 @@ export function seedLivedIn(database: DatabaseSync) {
     `);
     const insertVehicle = database.prepare(`
         INSERT INTO vehicles (
-            license_plate, driver_name, driver_id, fuel_level, status, company_id
+            license_plate, driver_name, current_driver_id, fuel_level, status, company_id
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, NULL, NULL, ?, ?, ?)
+    `);
+    const insertAssignment = database.prepare(`
+        INSERT INTO driver_vehicles (driver_id, vehicle_id)
+        VALUES (?, ?)
+    `);
+    const setCurrent = database.prepare(`
+        UPDATE vehicles
+        SET current_driver_id = ?, driver_name = ?
+        WHERE id = ?
     `);
     const insertTelemetry = database.prepare(`
         INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
@@ -206,10 +215,10 @@ export function seedLivedIn(database: DatabaseSync) {
     `);
     const insertAlert = database.prepare(`
         INSERT INTO alerts (
-            vehicle_id, type, severity, message, details,
+            vehicle_id, driver_id, type, severity, message, details,
             created_at, ended_at, resolved_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertTrip = database.prepare(`
         INSERT INTO trips (
@@ -221,6 +230,14 @@ export function seedLivedIn(database: DatabaseSync) {
     const updateLast = database.prepare(
         "UPDATE vehicles SET last_telemetry_id = ? WHERE id = ?",
     );
+    const demoteStatus = database.prepare(
+        "UPDATE vehicles SET status = 'IDLE' WHERE id = ?",
+    );
+    const zeroLastSpeed = database.prepare(`
+        UPDATE telemetry
+        SET speed = 0
+        WHERE id = (SELECT last_telemetry_id FROM vehicles WHERE id = ?)
+    `);
     const updateAlerts = database.prepare(`
         UPDATE vehicles
         SET active_alerts = (
@@ -236,6 +253,7 @@ export function seedLivedIn(database: DatabaseSync) {
         upsertDevAccounts(database);
         database.exec("DELETE FROM trips");
         database.exec("DELETE FROM trip_month_km");
+        database.exec("DELETE FROM driver_vehicles");
         database.exec("DELETE FROM alerts");
         database.exec("DELETE FROM telemetry");
         database.exec("DELETE FROM vehicles");
@@ -257,6 +275,8 @@ export function seedLivedIn(database: DatabaseSync) {
                 const driver = insertDriver.run(companyId, name);
                 const driverId = Number(driver.lastInsertRowid);
 
+                const owned: SeededVehicle[] = [];
+
                 for (let n = 0; n < size; n += 1) {
                     const status =
                         STATUSES[pickInt(rng, 0, STATUSES.length - 1)] ?? "IDLE";
@@ -269,8 +289,6 @@ export function seedLivedIn(database: DatabaseSync) {
                         city.lng + ((((plateIndex * 29) % 401) - 200) * 0.0006);
                     const result = insertVehicle.run(
                         plateAt(plateIndex),
-                        name,
-                        driverId,
                         fuel,
                         status,
                         companyId,
@@ -285,7 +303,9 @@ export function seedLivedIn(database: DatabaseSync) {
                         lat,
                         lng,
                     };
+                    owned.push(row);
                     vehicles.push(row);
+                    insertAssignment.run(driverId, row.id);
 
                     if (status !== "OFFLINE") {
                         const telemetry = insertTelemetry.run(
@@ -295,6 +315,22 @@ export function seedLivedIn(database: DatabaseSync) {
                             status === "DRIVING" ? pickInt(rng, 28, 118) : 0,
                         );
                         updateLast.run(Number(telemetry.lastInsertRowid), row.id);
+                    }
+                }
+
+                const current =
+                    owned.find((row) => row.status === "DRIVING") ?? owned[0];
+                if (current) {
+                    setCurrent.run(driverId, name, current.id);
+
+                    for (const row of owned) {
+                        if (row.id === current.id || row.status !== "DRIVING") {
+                            continue;
+                        }
+
+                        demoteStatus.run(row.id);
+                        zeroLastSpeed.run(row.id);
+                        row.status = "IDLE";
                     }
                 }
             }
@@ -339,6 +375,7 @@ export function seedLivedIn(database: DatabaseSync) {
             const resolved = open || rng() < 0.12 ? null : laterStamp(ended ?? created, rng);
             insertAlert.run(
                 vehicleId,
+                vehicles.find((row) => row.id === vehicleId)?.driverId ?? null,
                 "SPEEDING",
                 high ? "HIGH" : "MEDIUM",
                 "Geschwindigkeit über Streckenlimit.",
@@ -368,6 +405,7 @@ export function seedLivedIn(database: DatabaseSync) {
                     : null;
             insertAlert.run(
                 vehicleId,
+                vehicles.find((row) => row.id === vehicleId)?.driverId ?? null,
                 type,
                 type === "OFFLINE" ? "HIGH" : fuel !== undefined && fuel < 5 ? "HIGH" : "MEDIUM",
                 type === "OFFLINE"
@@ -519,9 +557,10 @@ export function seedLivedIn(database: DatabaseSync) {
             SELECT vehicle_count, COUNT(*) AS drivers
             FROM (
                 SELECT COUNT(*) AS vehicle_count
-                FROM vehicles
-                WHERE company_id = ?
-                GROUP BY driver_id
+            FROM driver_vehicles dv
+            INNER JOIN vehicles v ON v.id = dv.vehicle_id
+            WHERE v.company_id = ?
+            GROUP BY dv.driver_id
             )
             GROUP BY vehicle_count
             ORDER BY vehicle_count
