@@ -3,73 +3,10 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
-import { db } from "../db/database";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
-
-const TEST_PASSWORD = "secret-pass";
-
-async function loginAs(
-    companyId: number,
-    role: "dispatcher" | "viewer" = "dispatcher",
-) {
-    const email = `${role}-${companyId}@example.com`;
-
-    if (!UserModel.findByEmail(email)) {
-        UserModel.create({
-            name: `${role} ${companyId}`,
-            email,
-            password: TEST_PASSWORD,
-            company_id: companyId,
-            role,
-        });
-    }
-
-    const agent = request.agent(app);
-    const response = await agent.post("/api/auth/login").send({
-        email,
-        password: TEST_PASSWORD,
-    });
-
-    assert.equal(response.status, 200);
-    return agent;
-}
-
-function insertAlert(
-    vehicleId: number,
-    input: {
-        type?: string;
-        severity?: string;
-        message?: string;
-        resolved_at?: string | null;
-        ended_at?: string | null;
-        driver_id?: number | null;
-    } = {},
-) {
-    const vehicle = db
-        .prepare(`SELECT current_driver_id FROM vehicles WHERE id = ?`)
-        .get(vehicleId) as { current_driver_id: number | null } | undefined;
-
-    db.prepare(
-        `
-            INSERT INTO alerts (
-                vehicle_id, driver_id, type, severity, message, resolved_at, ended_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `,
-    ).run(
-        vehicleId,
-        input.driver_id !== undefined
-            ? input.driver_id
-            : (vehicle?.current_driver_id ?? null),
-        input.type ?? "SPEEDING",
-        input.severity ?? "HIGH",
-        input.message ?? "zu schnell",
-        input.resolved_at ?? null,
-        input.ended_at ?? null,
-    );
-}
+import { insertAlert, loginAs } from "./helpers";
 
 function requireCurrentDriver(vehicle: {
     current_driver_id: number | null;
@@ -81,7 +18,7 @@ function requireCurrentDriver(vehicle: {
 let api: ReturnType<typeof request.agent>;
 
 beforeEach(async () => {
-    api = await loginAs(1);
+    api = (await loginAs(1)).agent;
 });
 
 afterEach(() => {
@@ -225,7 +162,7 @@ describe("GET /api/drivers", () => {
         );
         assert.equal(detail.body.data.vehicles.length, 2);
 
-        const otherApi = await loginAs(2);
+        const otherApi = (await loginAs(2)).agent;
         const mine = await api.get("/api/drivers");
         const theirs = await otherApi.get("/api/drivers");
 
@@ -241,7 +178,7 @@ describe("GET /api/drivers", () => {
             company_id: 1,
         });
 
-        const viewer = await loginAs(1, "viewer");
+        const viewer = (await loginAs(1, "viewer")).agent;
         const response = await viewer.get("/api/drivers");
 
         assert.equal(response.status, 200);
@@ -359,7 +296,7 @@ describe("POST /api/drivers", () => {
     });
 
     it("forbids a viewer from creating drivers", async () => {
-        const viewer = await loginAs(1, "viewer");
+        const viewer = (await loginAs(1, "viewer")).agent;
         const response = await viewer.post("/api/drivers").send({ name: "No" });
 
         assert.equal(response.status, 403);
@@ -575,7 +512,7 @@ describe("driver assignment", () => {
             company_id: 1,
         });
         const driverId = requireCurrentDriver(vehicle);
-        const viewer = await loginAs(1, "viewer");
+        const viewer = (await loginAs(1, "viewer")).agent;
 
         const assign = await viewer
             .post(`/api/drivers/${driverId}/vehicles`)

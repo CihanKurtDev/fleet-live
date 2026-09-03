@@ -11,6 +11,7 @@ import type {
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 import { ConflictError, NotFoundError, isUniqueConstraintError } from "../lib/errors";
+import { pagedQuery, type SqlParam } from "../lib/pagination";
 
 const INSERT_OR_IGNORE = `
     INSERT INTO drivers (company_id, name)
@@ -248,50 +249,31 @@ export class DriverModel {
             ORDER BY ${sortColumn} ${sortDirection}, d.id ASC
             LIMIT ? OFFSET ?
         `;
+        const countSql = `
+            SELECT COUNT(*) AS total
+            FROM drivers d
+            WHERE d.company_id = ?
+              ${searchSql}
+              ${vehicleSql}
+        `;
 
-        const params: Array<string | number> = [companyId];
+        const params: SqlParam[] = [companyId];
         if (search !== "") {
             params.push(like);
         }
         if (query.vehicle_id !== undefined) {
             params.push(query.vehicle_id);
         }
-        params.push(query.limit, offset);
 
-        const rows = stmt(listSql).all(...params) as DriverRow[];
-        let total = rows[0]?.total ?? 0;
-
-        if (rows.length === 0) {
-            const countSql = `
-                SELECT COUNT(*) AS total
-                FROM drivers d
-                WHERE d.company_id = ?
-                  ${searchSql}
-                  ${vehicleSql}
-            `;
-            const countParams: Array<string | number> = [companyId];
-            if (search !== "") {
-                countParams.push(like);
-            }
-            if (query.vehicle_id !== undefined) {
-                countParams.push(query.vehicle_id);
-            }
-            total = (
-                stmt(countSql).get(...countParams) as { total: number }
-            ).total;
-        }
-
-        const pageCount = Math.max(1, Math.ceil(total / query.limit));
-
-        return {
-            data: rows.map(toDriver),
-            meta: {
-                page: query.page,
-                limit: query.limit,
-                total,
-                pageCount,
-            },
-        };
+        return pagedQuery<DriverRow, Driver>({
+            listSql,
+            listParams: [...params, query.limit, offset],
+            countSql,
+            countParams: params,
+            page: query.page,
+            limit: query.limit,
+            map: toDriver,
+        });
     }
 
     static getDetail(id: number, companyId: number): DriverDetail | undefined {

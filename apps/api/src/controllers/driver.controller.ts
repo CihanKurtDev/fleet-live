@@ -7,37 +7,8 @@ import {
 } from "@fleet-live/shared";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
-import {
-    BadRequestError,
-    NotFoundError,
-    UnauthorizedError,
-} from "../lib/errors";
-import { broadcast } from "../sse/hub";
-
-function parseId(value: string | string[] | undefined, label: string): number {
-    if (typeof value !== "string") {
-        throw new BadRequestError(`Ungültige ${label}.`);
-    }
-
-    const id = Number(value);
-    if (!Number.isInteger(id) || id < 1) {
-        throw new BadRequestError(`Ungültige ${label}.`);
-    }
-
-    return id;
-}
-
-function sessionCompany(req: Request): number {
-    if (!req.user) {
-        throw new UnauthorizedError();
-    }
-
-    return req.user.company_id;
-}
-
-function notifyVehiclesChanged(companyId: number) {
-    broadcast("vehicles-changed", { at: Date.now() }, companyId);
-}
+import { NotFoundError } from "../lib/errors";
+import { notifyVehiclesChanged, parseId, sessionCompany } from "../lib/http";
 
 export function getDrivers(req: Request, res: Response) {
     const companyId = sessionCompany(req);

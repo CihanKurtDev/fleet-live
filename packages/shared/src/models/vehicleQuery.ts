@@ -14,6 +14,7 @@ export const VEHICLE_SORT_KEYS = [
 export const VEHICLE_FILTERS = [
     "alerts",
     "low_fuel",
+    "unassigned",
     "driving",
     "idle",
     "offline",
@@ -70,6 +71,7 @@ export type VehicleListCounts = {
     all: number;
     alerts: number;
     low_fuel: number;
+    unassigned: number;
     driving: number;
     idle: number;
     offline: number;

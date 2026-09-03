@@ -25,6 +25,7 @@ import { SpeedingEventModel } from "./speedingEvent.model";
 import { ExceptionEventModel } from "./exceptionEvent.model";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
+import { pagedQuery } from "../lib/pagination";
 
 export type VehicleCreateInput = Pick<VehicleInput, "license_plate"> &
     Partial<Pick<VehicleInput, "fuel_level" | "status">> & {
@@ -49,6 +50,7 @@ const SORT_COLUMNS: Record<VehicleSortKey, string> = {
 const FILTER_SQL: Record<VehicleFilterId, string> = {
     alerts: "v.active_alerts > 0",
     low_fuel: `v.fuel_level < ${LOW_FUEL_THRESHOLD_PERCENT}`,
+    unassigned: "v.current_driver_id IS NULL",
     driving: "v.status = 'DRIVING'",
     idle: "v.status = 'IDLE'",
     offline: "v.status = 'OFFLINE'",
@@ -139,6 +141,7 @@ const FACET_SQL = `
         COUNT(*) AS all_count,
         COALESCE(SUM(active_alerts > 0), 0) AS alerts,
         COALESCE(SUM(fuel_level < ${LOW_FUEL_THRESHOLD_PERCENT}), 0) AS low_fuel,
+        COALESCE(SUM(current_driver_id IS NULL), 0) AS unassigned,
         COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
         COALESCE(SUM(status = 'IDLE'), 0) AS idle,
         COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
@@ -175,6 +178,7 @@ type FacetRow = {
     all_count: number;
     alerts: number;
     low_fuel: number;
+    unassigned: number;
     driving: number;
     idle: number;
     offline: number;
@@ -215,8 +219,12 @@ export class VehicleModel {
             ? SORT_COLUMNS[query.sort]
             : "v.id";
         const sortDirection = query.dir === "desc" ? "DESC" : "ASC";
+        // Fehlende Werte (kein Fahrer, kein Tempo) immer ans Ende — sonst
+        // landen Pool-Fahrzeuge vor „A“ bzw. nach dem Umdrehen vor „Z“.
         const nullsLast =
-            query.sort === "speed" ? `${sortColumn} IS NULL, ` : "";
+            query.sort === "speed" || query.sort === "driver_name"
+                ? `${sortColumn} IS NULL, `
+                : "";
 
         const listSql = `
             SELECT
@@ -244,32 +252,22 @@ export class VehicleModel {
             ORDER BY ${nullsLast}${sortColumn} ${sortDirection}, v.id ASC
             LIMIT ? OFFSET ?
         `;
-
-        const rows = stmt(listSql).all(
-            companyId,
-            search,
-            like,
-            like,
-            query.limit,
-            offset,
-        ) as ListRow[];
-
-        let total = rows[0]?.total ?? 0;
-
-        if (rows.length === 0) {
-            const countSql = `
-                SELECT COUNT(*) AS total
-                FROM vehicles v
-                WHERE v.company_id = ?
-                  AND ${LIST_SEARCH_SQL}
-                  ${filterSql}
-            `;
-            total = (
-                stmt(countSql).get(companyId, search, like, like) as {
-                    total: number;
-                }
-            ).total;
-        }
+        const countSql = `
+            SELECT COUNT(*) AS total
+            FROM vehicles v
+            WHERE v.company_id = ?
+              AND ${LIST_SEARCH_SQL}
+              ${filterSql}
+        `;
+        const { data, meta } = pagedQuery<ListRow, Vehicle>({
+            listSql,
+            listParams: [companyId, search, like, like, query.limit, offset],
+            countSql,
+            countParams: [companyId, search, like, like],
+            page: query.page,
+            limit: query.limit,
+            map: toVehicle,
+        });
 
         const counts = stmt(FACET_SQL).get(
             companyId,
@@ -277,19 +275,16 @@ export class VehicleModel {
             like,
             like,
         ) as FacetRow;
-        const pageCount = Math.max(1, Math.ceil(total / query.limit));
 
         return {
-            data: rows.map(toVehicle),
+            data,
             meta: {
-                page: query.page,
-                limit: query.limit,
-                total,
-                pageCount,
+                ...meta,
                 counts: {
                     all: Number(counts.all_count),
                     alerts: Number(counts.alerts),
                     low_fuel: Number(counts.low_fuel),
+                    unassigned: Number(counts.unassigned),
                     driving: Number(counts.driving),
                     idle: Number(counts.idle),
                     offline: Number(counts.offline),
@@ -450,54 +445,41 @@ export class VehicleModel {
                 )
             )
         `;
-        const rows = stmt(
-            `
-            SELECT
-                d.id,
-                d.name,
-                (
-                    SELECT v.license_plate
-                    FROM vehicles v
-                    WHERE v.current_driver_id = d.id
-                    LIMIT 1
-                ) AS license_plate,
-                COUNT(*) OVER () AS total
-            FROM drivers d
-            WHERE d.company_id = ?
-              AND ${matchSql}
-            ORDER BY d.name COLLATE NOCASE
-            LIMIT ? OFFSET ?
+        const { data, meta } = pagedQuery<
+            FleetDriver & { total: number },
+            FleetDriver
+        >({
+            listSql: `
+                SELECT
+                    d.id,
+                    d.name,
+                    (
+                        SELECT v.license_plate
+                        FROM vehicles v
+                        WHERE v.current_driver_id = d.id
+                        LIMIT 1
+                    ) AS license_plate,
+                    COUNT(*) OVER () AS total
+                FROM drivers d
+                WHERE d.company_id = ?
+                  AND ${matchSql}
+                ORDER BY d.name COLLATE NOCASE
+                LIMIT ? OFFSET ?
             `,
-        ).all(companyId, like, like, like, limit, offset) as Array<
-            FleetDriver & { total: number }
-        >;
+            listParams: [companyId, like, like, like, limit, offset],
+            countSql: `
+                SELECT COUNT(*) AS total
+                FROM drivers d
+                WHERE d.company_id = ?
+                  AND ${matchSql}
+            `,
+            countParams: [companyId, like, like, like],
+            page,
+            limit,
+            map: ({ total: _total, ...row }) => row,
+        });
 
-        let total = rows[0]?.total ?? 0;
-
-        if (rows.length === 0) {
-            total = Number(
-                (
-                    stmt(
-                        `
-                        SELECT COUNT(*) AS n
-                        FROM drivers d
-                        WHERE d.company_id = ?
-                          AND ${matchSql}
-                        `,
-                    ).get(companyId, like, like, like) as { n: number }
-                ).n,
-            );
-        }
-
-        return {
-            data: rows.map(({ total: _total, ...row }) => row),
-            meta: {
-                total,
-                page,
-                limit,
-                pageCount: Math.max(1, Math.ceil(total / limit)),
-            },
-        };
+        return { data, meta };
     }
 
     static getById(id: number, companyId: number): Vehicle | undefined {

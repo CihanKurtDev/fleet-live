@@ -2,7 +2,6 @@ import "./env";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
-import type { VehicleStatus } from "@fleet-live/shared";
 import { decodePolyline, encodePolyline, FLEET_POSITIONS_MAX } from "@fleet-live/shared";
 import request from "supertest";
 import { app } from "../app";
@@ -28,88 +27,10 @@ import { broadcast, closeAllSseClients } from "../sse/hub";
 import { resetSimControlForTests, setCompanySimRunning } from "../lib/simControl";
 import { sqliteDaysAgo, nowSqlite } from "../lib/sqlTime";
 import { config } from "../config";
+import { loginAs, seedFleet } from "./helpers";
 
-const TEST_PASSWORD = "secret-pass";
 let api: ReturnType<typeof request.agent>;
 let sessionCookie = "";
-
-async function loginAs(companyId: number, role: "dispatcher" | "viewer" = "dispatcher") {
-    const email = `${role}-${companyId}@example.com`;
-
-    if (!UserModel.findByEmail(email)) {
-        UserModel.create({
-            name: `${role} ${companyId}`,
-            email,
-            password: TEST_PASSWORD,
-            company_id: companyId,
-            role,
-        });
-    }
-
-    const agent = request.agent(app);
-    const response = await agent.post("/api/auth/login").send({
-        email,
-        password: TEST_PASSWORD,
-    });
-
-    assert.equal(response.status, 200);
-
-    const raw = response.headers["set-cookie"];
-    const header = Array.isArray(raw) ? raw[0] : raw;
-    assert.ok(header);
-
-    return { agent, cookie: String(header).split(";")[0] };
-}
-
-function seedFleet(count = 3) {
-    const created = [];
-
-    for (let i = 0; i < count; i += 1) {
-        const status: VehicleStatus =
-            i % 5 === 0 ? "OFFLINE" : i % 3 === 0 ? "DRIVING" : "IDLE";
-        const fuel = i % 4 === 0 ? 10 : 80;
-
-        created.push(
-            VehicleModel.create({
-                license_plate: `K-T ${String(i).padStart(3, "0")}`,
-                driver_name: `Driver ${i}`,
-                fuel_level: fuel,
-                status,
-            }),
-        );
-    }
-
-    const [first, second] = created;
-    if (second) {
-        db.prepare(
-            `
-                INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
-                VALUES (?, ?, ?, ?)
-            `,
-        ).run(second.id, 50.9, 6.9, 70);
-    }
-
-    if (first) {
-        db.prepare(
-            `
-                INSERT INTO alerts (vehicle_id, type, severity, message)
-                VALUES (?, 'SPEEDING', 'HIGH', 'too fast')
-            `,
-        ).run(first.id);
-    }
-
-    const third = created[2];
-    if (third) {
-        db.prepare(
-            `
-                INSERT INTO alerts (vehicle_id, type, severity, message)
-                VALUES (?, 'SPEEDING', 'HIGH', 'too fast')
-            `,
-        ).run(third.id);
-    }
-
-    return created;
-}
 
 function parseSseEvents(
     text: string,
@@ -311,6 +232,40 @@ describe("GET /api/vehicles", () => {
         assert.equal(response.body.code, "VALIDATION_ERROR");
     });
 
+    it("keeps vehicles without a driver after named drivers in both sort directions", async () => {
+        VehicleModel.create({
+            license_plate: "K-PL 1",
+            company_id: 1,
+        });
+        VehicleModel.create({
+            license_plate: "K-AN 1",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+        VehicleModel.create({
+            license_plate: "K-ZO 1",
+            driver_name: "Zora",
+            company_id: 1,
+        });
+
+        const names = (response: { body: { data: Array<{ driver_name: string | null }> } }) =>
+            response.body.data.map((row) => row.driver_name);
+
+        const asc = await api.get("/api/vehicles").query({
+            sort: "driver_name",
+            dir: "asc",
+        });
+        assert.equal(asc.status, 200);
+        assert.deepEqual(names(asc), ["Anna", "Zora", null]);
+
+        const desc = await api.get("/api/vehicles").query({
+            sort: "driver_name",
+            dir: "desc",
+        });
+        assert.equal(desc.status, 200);
+        assert.deepEqual(names(desc), ["Zora", "Anna", null]);
+    });
+
     it("rejects sort injection attempts", async () => {
         const response = await api
             .get("/api/vehicles")
@@ -348,6 +303,29 @@ describe("GET /api/vehicles", () => {
             .query({ sort: "active_alerts", dir: "desc" });
 
         assert.equal(sorted.status, 200);
+    });
+
+    it("filters vehicles without a current driver", async () => {
+        VehicleModel.create({
+            license_plate: "K-PL 1",
+            company_id: 1,
+        });
+        VehicleModel.create({
+            license_plate: "K-AN 1",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+
+        const filtered = await api
+            .get("/api/vehicles")
+            .query({ filter: "unassigned" });
+
+        assert.equal(filtered.status, 200);
+        assert.equal(filtered.body.data.length, 1);
+        assert.equal(filtered.body.data[0].license_plate, "K-PL 1");
+        assert.equal(filtered.body.data[0].driver_name, null);
+        assert.equal(filtered.body.meta.counts.unassigned, 1);
+        assert.equal(filtered.body.meta.counts.all, 2);
     });
 
     it("filters idle vehicles", async () => {
@@ -486,6 +464,29 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(driving.status, 200);
         assert.equal(driving.body.data.length, 1);
         assert.equal(driving.body.data[0].license_plate, "K-BB 1");
+    });
+
+    it("filters positions without a current driver", async () => {
+        const pool = VehicleModel.create({
+            license_plate: "K-PL 1",
+            company_id: 1,
+        });
+        const named = VehicleModel.create({
+            license_plate: "K-AN 1",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+        putTelemetry(pool.id, 50.9375, 6.9603);
+        putTelemetry(named.id, 50.94, 6.97);
+
+        const response = await api
+            .get("/api/vehicles/positions")
+            .query({ filter: "unassigned" });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.length, 1);
+        assert.equal(response.body.data[0].license_plate, "K-PL 1");
+        assert.equal(response.body.data[0].driver_name, null);
     });
 
     it("rejects an invalid bbox and an unknown filter", async () => {

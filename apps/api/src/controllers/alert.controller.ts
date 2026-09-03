@@ -3,36 +3,11 @@ import { parseAlertListQuery, parseAlertPatch } from "@fleet-live/shared";
 import { AlertModel } from "../models/alert.model";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
-import {
-    BadRequestError,
-    NotFoundError,
-    UnauthorizedError,
-} from "../lib/errors";
-import { broadcast } from "../sse/hub";
+import { NotFoundError } from "../lib/errors";
+import { notifyVehiclesChanged, parseId, sessionCompany } from "../lib/http";
 
-function parseId(value: string | string[] | undefined): number {
-    if (typeof value !== "string") {
-        throw new BadRequestError("Ungültige Warnungs-ID.");
-    }
-
-    const id = Number(value);
-    if (!Number.isInteger(id) || id < 1) {
-        throw new BadRequestError("Ungültige Warnungs-ID.");
-    }
-
-    return id;
-}
-
-function sessionCompany(req: Request): number {
-    if (!req.user) {
-        throw new UnauthorizedError();
-    }
-
-    return req.user.company_id;
-}
-
-function notifyVehiclesChanged(companyId: number) {
-    broadcast("vehicles-changed", { at: Date.now() }, companyId);
+function parseAlertId(value: string | string[] | undefined): number {
+    return parseId(value, "Warnungs-ID");
 }
 
 export function getAlerts(req: Request, res: Response) {
@@ -66,7 +41,7 @@ export function resolveAlert(req: Request, res: Response) {
     parseAlertPatch(req.body);
 
     const companyId = sessionCompany(req);
-    const id = parseId(req.params.id);
+    const id = parseAlertId(req.params.id);
     const current = AlertModel.getById(id, companyId);
 
     if (!current) {
