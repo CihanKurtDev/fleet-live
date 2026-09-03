@@ -49,8 +49,9 @@ export const LOW_FUEL_CRITICAL_PERCENT = 5;
 export const OFFLINE_AFTER_MS = 15_000;
 
 /**
- * Eine Warnung hängt am Fahrzeug. `license_plate` und `driver_name` kommen
- * aus dem Join, damit die Firmen-Inbox ohne zweiten Request auskommt.
+ * Eine Warnung hängt am Fahrzeug. `driver_id` ist der Fahrer zum
+ * Zeitpunkt des Open (Snapshot). `license_plate` kommt aus dem Join
+ * aufs Fahrzeug, `driver_name` aus dem Snapshot-Fahrer.
  *
  * `ended_at` ist das Ende der Überschreitung, `resolved_at` die Erledigung
  * durch den Dispatcher — beides unabhängig.
@@ -58,9 +59,9 @@ export const OFFLINE_AFTER_MS = 15_000;
 export type Alert = {
     id: number;
     vehicle_id: number;
-    driver_id: number;
+    driver_id: number | null;
     license_plate: string;
-    driver_name: string;
+    driver_name: string | null;
     type: AlertType;
     severity: AlertSeverity;
     message: string;

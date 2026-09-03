@@ -175,12 +175,21 @@ function seedLarge() {
         INSERT INTO vehicles (
             license_plate,
             driver_name,
-            driver_id,
+            current_driver_id,
             fuel_level,
             status,
             company_id
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, NULL, NULL, ?, ?, ?)
+    `);
+    const insertAssignment = db.prepare(`
+        INSERT INTO driver_vehicles (driver_id, vehicle_id)
+        VALUES (?, ?)
+    `);
+    const setCurrent = db.prepare(`
+        UPDATE vehicles
+        SET current_driver_id = ?, driver_name = ?
+        WHERE id = ?
     `);
     const driverIds = new Map<string, number>();
 
@@ -192,6 +201,7 @@ function seedLarge() {
 
         // Vorherige Teilläufe (FK-Fehler nach COMMIT alle 1000 Zeilen)
         // würden sonst verwaiste lastInsertRowid=0 und doppelte Kennzeichen erzeugen.
+        db.exec("DELETE FROM driver_vehicles");
         db.exec("DELETE FROM vehicles");
         db.exec("DELETE FROM drivers");
         db.exec("DELETE FROM trip_month_km");
@@ -216,8 +226,6 @@ function seedLarge() {
 
             const result = insertVehicleStrict.run(
                 plate,
-                driver,
-                driverId,
                 fuel,
                 status,
                 companyId,
@@ -227,6 +235,9 @@ function seedLarge() {
             if (!Number.isInteger(vehicleId) || vehicleId < 1) {
                 throw new Error(`Invalid vehicle id after insert for ${plate}.`);
             }
+
+            insertAssignment.run(driverId, vehicleId);
+            setCurrent.run(driverId, driver, vehicleId);
 
             if (status !== "OFFLINE") {
                 const city = CITIES[i % CITIES.length];

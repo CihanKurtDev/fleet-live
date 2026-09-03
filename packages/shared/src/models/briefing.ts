@@ -53,8 +53,8 @@ export type BriefingCounts = {
 export type BriefingOfflineVehicle = {
     id: number;
     license_plate: string;
-    driver_id: number;
-    driver_name: string;
+    driver_id: number | null;
+    driver_name: string | null;
     recorded_at: string | null;
 };
 

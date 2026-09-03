@@ -51,10 +51,18 @@ export class NotFoundError extends AppError {
 }
 
 export class ConflictError extends AppError {
-    constructor(message = "Kennzeichen ist bereits vergeben.") {
-        super(409, "CONFLICT", message, {
-            license_plate: "Kennzeichen ist bereits vergeben.",
-        });
+    constructor(
+        message = "Kennzeichen ist bereits vergeben.",
+        fields?: FieldErrors,
+    ) {
+        super(
+            409,
+            "CONFLICT",
+            message,
+            fields ?? {
+                license_plate: "Kennzeichen ist bereits vergeben.",
+            },
+        );
     }
 }
 

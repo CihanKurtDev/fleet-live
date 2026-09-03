@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 14;
 
 type TableColumn = {
     name: string;
@@ -57,13 +57,57 @@ CREATE INDEX IF NOT EXISTS idx_drivers_company
     ON drivers(company_id);
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_driver
-    ON vehicles(driver_id);
+    ON vehicles(current_driver_id);
+
+CREATE INDEX IF NOT EXISTS idx_driver_vehicles_vehicle
+    ON driver_vehicles(vehicle_id);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_driver
+    ON alerts(driver_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_current_driver
+    ON vehicles(current_driver_id)
+    WHERE current_driver_id IS NOT NULL;
 
 -- Ein Fahrzeug kann nur auf einer Fahrt sein. Die Invariante gehört in die
 -- Datenbank, nicht in die Reihenfolge der Controller-Aufrufe.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_trips_open
     ON trips(vehicle_id)
     WHERE ended_at IS NULL;
+
+CREATE TRIGGER IF NOT EXISTS trg_vehicles_current_driver_insert
+BEFORE INSERT ON vehicles
+WHEN NEW.current_driver_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'current driver must be assigned')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM driver_vehicles
+        WHERE driver_id = NEW.current_driver_id
+          AND vehicle_id = NEW.id
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_vehicles_current_driver_update
+BEFORE UPDATE OF current_driver_id ON vehicles
+WHEN NEW.current_driver_id IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'current driver must be assigned')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM driver_vehicles
+        WHERE driver_id = NEW.current_driver_id
+          AND vehicle_id = NEW.id
+    );
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_driver_vehicles_after_delete
+AFTER DELETE ON driver_vehicles
+BEGIN
+    UPDATE vehicles
+    SET current_driver_id = NULL,
+        driver_name = NULL
+    WHERE id = OLD.vehicle_id
+      AND current_driver_id = OLD.driver_id;
+END;
 
 CREATE TRIGGER IF NOT EXISTS trg_telemetry_after_insert
 AFTER INSERT ON telemetry
@@ -111,6 +155,9 @@ export function dropMaintenanceTriggers(database: DatabaseSync) {
         DROP TRIGGER IF EXISTS trg_alerts_after_insert;
         DROP TRIGGER IF EXISTS trg_alerts_after_update;
         DROP TRIGGER IF EXISTS trg_alerts_after_delete;
+        DROP TRIGGER IF EXISTS trg_vehicles_current_driver_insert;
+        DROP TRIGGER IF EXISTS trg_vehicles_current_driver_update;
+        DROP TRIGGER IF EXISTS trg_driver_vehicles_after_delete;
     `);
 }
 
@@ -402,6 +449,10 @@ function ensureDriversTable(database: DatabaseSync) {
 function ensureVehiclesDriverId(database: DatabaseSync) {
     const names = columnNames(database, "vehicles");
 
+    if (names.has("current_driver_id")) {
+        return;
+    }
+
     if (!names.has("driver_id")) {
         database.exec(`
             ALTER TABLE vehicles
@@ -556,6 +607,175 @@ function migrateToV13(database: DatabaseSync) {
     `);
 }
 
+function ensureDriverVehiclesTable(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS driver_vehicles (
+            driver_id INTEGER NOT NULL,
+            vehicle_id INTEGER NOT NULL,
+
+            PRIMARY KEY (driver_id, vehicle_id),
+
+            FOREIGN KEY (driver_id)
+                REFERENCES drivers(id),
+
+            FOREIGN KEY (vehicle_id)
+                REFERENCES vehicles(id)
+                ON DELETE CASCADE
+        );
+    `);
+}
+
+function ensureAlertsDriverId(database: DatabaseSync) {
+    const names = columnNames(database, "alerts");
+
+    if (names.size === 0 || names.has("driver_id")) {
+        return;
+    }
+
+    database.exec(`
+        ALTER TABLE alerts
+        ADD COLUMN driver_id INTEGER REFERENCES drivers(id)
+    `);
+}
+
+/**
+ * Freigabe (M:N) und aktueller Fahrer (nullable, unique). Alte
+ * `vehicles.driver_id`-Zeilen werden Freigaben; pro Fahrer bleibt
+ * höchstens ein aktuelles Fahrzeug.
+ */
+function ensureAssignmentModel(database: DatabaseSync) {
+    ensureDriversTable(database);
+    ensureDriverVehiclesTable(database);
+    ensureAlertsDriverId(database);
+
+    const names = columnNames(database, "vehicles");
+
+    if (names.has("current_driver_id")) {
+        return;
+    }
+
+    if (!names.has("driver_id")) {
+        ensureVehiclesDriverId(database);
+    }
+
+    database.exec(`
+        INSERT OR IGNORE INTO driver_vehicles (driver_id, vehicle_id)
+        SELECT driver_id, id
+        FROM vehicles
+        WHERE driver_id IS NOT NULL
+    `);
+
+    database.exec(`
+        UPDATE alerts
+        SET driver_id = (
+            SELECT v.driver_id
+            FROM vehicles v
+            WHERE v.id = alerts.vehicle_id
+        )
+        WHERE driver_id IS NULL
+    `);
+
+    const sequence = database
+        .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'vehicles'")
+        .get() as { seq: number } | undefined;
+
+    database.exec("PRAGMA foreign_keys = OFF");
+    database.exec(`
+        CREATE TABLE vehicles_v14 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            current_driver_id INTEGER,
+            license_plate TEXT NOT NULL,
+            driver_name TEXT,
+            fuel_level REAL NOT NULL DEFAULT 100
+                CHECK (fuel_level >= 0 AND fuel_level <= 100),
+            status TEXT NOT NULL DEFAULT 'IDLE'
+                CHECK (status IN ('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_telemetry_id INTEGER,
+            active_alerts INTEGER NOT NULL DEFAULT 0,
+            speed_limit_kmh REAL,
+            search_text TEXT GENERATED ALWAYS AS (
+                lower(license_plate || ' ' || coalesce(driver_name, ''))
+            ) VIRTUAL,
+
+            FOREIGN KEY (company_id)
+                REFERENCES companies(id),
+
+            FOREIGN KEY (current_driver_id)
+                REFERENCES drivers(id),
+
+            UNIQUE (company_id, license_plate)
+        );
+
+        INSERT INTO vehicles_v14 (
+            id,
+            company_id,
+            current_driver_id,
+            license_plate,
+            driver_name,
+            fuel_level,
+            status,
+            created_at,
+            last_telemetry_id,
+            active_alerts,
+            speed_limit_kmh
+        )
+        SELECT
+            id,
+            company_id,
+            driver_id,
+            license_plate,
+            driver_name,
+            fuel_level,
+            status,
+            created_at,
+            last_telemetry_id,
+            active_alerts,
+            speed_limit_kmh
+        FROM vehicles;
+
+        DROP TABLE vehicles;
+        ALTER TABLE vehicles_v14 RENAME TO vehicles;
+    `);
+
+    if (sequence) {
+        database
+            .prepare(
+                "INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES ('vehicles', ?)",
+            )
+            .run(sequence.seq);
+    }
+
+    database.exec(`
+        UPDATE vehicles
+        SET current_driver_id = NULL,
+            driver_name = NULL
+        WHERE id NOT IN (
+            SELECT id FROM (
+                SELECT
+                    id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY current_driver_id
+                        ORDER BY
+                            CASE status WHEN 'DRIVING' THEN 0 ELSE 1 END,
+                            id
+                    ) AS rn
+                FROM vehicles
+                WHERE current_driver_id IS NOT NULL
+            ) ranked
+            WHERE rn = 1
+        )
+    `);
+
+    database.exec("PRAGMA foreign_keys = ON");
+}
+
+function migrateToV14(database: DatabaseSync) {
+    ensureAssignmentModel(database);
+    applyMaintenanceTriggers(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -614,6 +834,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV13(database);
     }
 
+    if (currentVersion < 14) {
+        migrateToV14(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -622,6 +846,7 @@ export function migrate(database: DatabaseSync) {
     ensureCompanies(database);
     ensureDriversTable(database);
     ensureVehiclesDriverId(database);
+    ensureAssignmentModel(database);
     ensureAlertsEventColumns(database);
     ensureVehiclesSpeedLimit(database);
     ensureOpenAlertsPerType(database);

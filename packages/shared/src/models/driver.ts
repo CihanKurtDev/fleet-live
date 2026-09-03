@@ -16,8 +16,10 @@ export type Driver = {
     name: string;
     created_at: string;
     vehicle_count: number;
-    /** Kennzeichen, wenn genau ein Fahrzeug zugewiesen ist. */
+    /** Kennzeichen, wenn genau ein Fahrzeug freigegeben ist. */
     vehicle_plate: string | null;
+    /** Kennzeichen des aktuellen Fahrzeugs. */
+    current_vehicle_plate: string | null;
     open_warnings: number;
     counts: DriverIncidentCounts;
 };
@@ -27,10 +29,12 @@ export type DriverVehicle = {
     license_plate: string;
     status: VehicleStatus;
     active_alerts: number;
+    is_current: boolean;
 };
 
 export type DriverDetail = Driver & {
     vehicles: DriverVehicle[];
+    current_vehicle: DriverVehicle | null;
 };
 
 export type DriverListMeta = {
@@ -95,6 +99,14 @@ export const driverListQuerySchema = z.object({
         emptyToUndefined,
         z.enum(["asc", "desc"], { error: "Ungültige Sortierrichtung." }).default("asc"),
     ),
+    vehicle_id: z.preprocess(
+        emptyToUndefined,
+        z.coerce
+            .number({ error: "Fahrzeug-ID muss eine Zahl sein." })
+            .int("Fahrzeug-ID muss eine ganze Zahl sein.")
+            .min(1, "Fahrzeug-ID muss mindestens 1 sein.")
+            .optional(),
+    ),
 });
 
 export type DriverListQuery = z.infer<typeof driverListQuerySchema>;
@@ -125,6 +137,10 @@ export function serializeDriverListQuery(
         params.set("limit", String(query.limit));
     }
 
+    if (query.vehicle_id !== undefined) {
+        params.set("vehicle_id", String(query.vehicle_id));
+    }
+
     return params;
 }
 
@@ -136,4 +152,54 @@ export function isDriverSortKey(value: unknown): value is DriverSortKey {
         typeof value === "string" &&
         (DRIVER_SORT_KEYS as readonly string[]).includes(value)
     );
+}
+
+export const driverCreateSchema = z.object({
+    name: z
+        .string({ error: "Name ist erforderlich." })
+        .trim()
+        .min(1, "Name ist erforderlich.")
+        .max(80, "Name darf höchstens 80 Zeichen haben."),
+});
+
+export const driverVehicleAssignSchema = z.object({
+    vehicle_id: z.coerce
+        .number({ error: "Fahrzeug-ID muss eine Zahl sein." })
+        .int("Fahrzeug-ID muss eine ganze Zahl sein.")
+        .min(1, "Fahrzeug-ID muss mindestens 1 sein."),
+});
+
+export const driverCurrentVehicleSchema = z.object({
+    vehicle_id: z
+        .union([
+            z.null(),
+            z.coerce
+                .number({ error: "Fahrzeug-ID muss eine Zahl sein." })
+                .int("Fahrzeug-ID muss eine ganze Zahl sein.")
+                .min(1, "Fahrzeug-ID muss mindestens 1 sein."),
+        ]),
+});
+
+export type DriverCreateInput = z.infer<typeof driverCreateSchema>;
+export type DriverVehicleAssignInput = z.infer<
+    typeof driverVehicleAssignSchema
+>;
+export type DriverCurrentVehicleInput = z.infer<
+    typeof driverCurrentVehicleSchema
+>;
+
+export function parseDriverCreate(input: unknown): DriverCreateInput {
+    return driverCreateSchema.parse(input);
+}
+
+export function parseDriverVehicleAssign(
+    input: unknown,
+): DriverVehicleAssignInput {
+    return driverVehicleAssignSchema.parse(input);
+}
+
+export function parseDriverCurrentVehicle(
+    input: unknown,
+): DriverCurrentVehicleInput {
+    return driverCurrentVehicleSchema.parse(input);
 }

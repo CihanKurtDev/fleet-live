@@ -25,12 +25,11 @@ import { ExceptionEventModel } from "./exceptionEvent.model";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 
-export type VehicleCreateInput = Pick<
-    VehicleInput,
-    "license_plate" | "driver_name"
-> &
+export type VehicleCreateInput = Pick<VehicleInput, "license_plate"> &
     Partial<Pick<VehicleInput, "fuel_level" | "status">> & {
         company_id?: number;
+        /** Nur Seed/Tests: legt Freigabe an und setzt aktuell, wenn frei. */
+        driver_name?: string;
     };
 
 export type VehiclePutInput = VehicleInput;
@@ -77,7 +76,7 @@ const SELECT_ONE = `
         v.id,
         v.license_plate,
         v.driver_name,
-        v.driver_id,
+        v.current_driver_id,
         v.fuel_level,
         v.status,
         t.latitude,
@@ -98,7 +97,7 @@ const INSERT_VEHICLE = `
     INSERT INTO vehicles (
         license_plate,
         driver_name,
-        driver_id,
+        current_driver_id,
         fuel_level,
         status,
         company_id
@@ -108,14 +107,24 @@ const INSERT_VEHICLE = `
 
 const UPDATE_VEHICLE = `
     UPDATE vehicles
-    SET license_plate = ?, driver_name = ?, driver_id = ?, fuel_level = ?, status = ?
+    SET license_plate = ?, fuel_level = ?, status = ?
     WHERE id = ? AND company_id = ?
 `;
 
 const DELETE_VEHICLE = `DELETE FROM vehicles WHERE id = ? AND company_id = ?`;
 
 function searchMatchSql(searchPlaceholder: string, likePlaceholder: string) {
-    return `(${searchPlaceholder} = '' OR v.search_text LIKE ${likePlaceholder} ESCAPE '#')`;
+    return `(
+        ${searchPlaceholder} = ''
+        OR v.search_text LIKE ${likePlaceholder} ESCAPE '#'
+        OR EXISTS (
+            SELECT 1
+            FROM driver_vehicles dv
+            INNER JOIN drivers d ON d.id = dv.driver_id
+            WHERE dv.vehicle_id = v.id
+              AND lower(d.name) LIKE ${likePlaceholder} ESCAPE '#'
+        )
+    )`;
 }
 
 const LIST_SEARCH_SQL = searchMatchSql("?1", "?2");
@@ -209,7 +218,7 @@ export class VehicleModel {
                 v.id,
                 v.license_plate,
                 v.driver_name,
-                v.driver_id,
+                v.current_driver_id,
                 v.fuel_level,
                 v.status,
                 t.latitude,
@@ -293,7 +302,16 @@ export class VehicleModel {
             : "";
         const driverSql =
             selectedDrivers.length > 0
-                ? `AND v.driver_name IN (${selectedDrivers.map(() => "?").join(",")})`
+                ? `AND (
+                    v.driver_name IN (${selectedDrivers.map(() => "?").join(",")})
+                    OR EXISTS (
+                        SELECT 1
+                        FROM driver_vehicles dv
+                        INNER JOIN drivers d ON d.id = dv.driver_id
+                        WHERE dv.vehicle_id = v.id
+                          AND d.name IN (${selectedDrivers.map(() => "?").join(",")})
+                    )
+                )`
                 : "";
         const bboxSql = query.bbox
             ? `AND t.latitude BETWEEN ? AND ?
@@ -325,6 +343,7 @@ export class VehicleModel {
             search,
             like,
             ...selectedDrivers,
+            ...selectedDrivers,
             ...(query.bbox
                 ? [
                       query.bbox.south,
@@ -350,7 +369,7 @@ export class VehicleModel {
     ): FleetDriversResponse {
         const roster = Number(
             (
-                stmt(`SELECT COUNT(*) AS n FROM vehicles WHERE company_id = ?`).get(
+                stmt(`SELECT COUNT(*) AS n FROM drivers WHERE company_id = ?`).get(
                     companyId,
                 ) as { n: number }
             ).n,
@@ -374,11 +393,19 @@ export class VehicleModel {
             const placeholders = names.map(() => "?").join(",");
             const data = stmt(
                 `
-                SELECT v.driver_name AS name, v.license_plate
-                FROM vehicles v
-                WHERE v.company_id = ?
-                  AND v.driver_name IN (${placeholders})
-                ORDER BY v.driver_name COLLATE NOCASE, v.license_plate COLLATE NOCASE
+                SELECT
+                    d.id,
+                    d.name,
+                    (
+                        SELECT v.license_plate
+                        FROM vehicles v
+                        WHERE v.current_driver_id = d.id
+                        LIMIT 1
+                    ) AS license_plate
+                FROM drivers d
+                WHERE d.company_id = ?
+                  AND d.name IN (${placeholders})
+                ORDER BY d.name COLLATE NOCASE
                 LIMIT ?
                 `,
             ).all(companyId, ...names, limit) as FleetDriver[];
@@ -394,13 +421,19 @@ export class VehicleModel {
         const rows = stmt(
             `
             SELECT
-                v.driver_name AS name,
-                v.license_plate,
+                d.id,
+                d.name,
+                (
+                    SELECT v.license_plate
+                    FROM vehicles v
+                    WHERE v.current_driver_id = d.id
+                    LIMIT 1
+                ) AS license_plate,
                 COUNT(*) OVER () AS total
-            FROM vehicles v
-            WHERE v.company_id = ?
-              AND v.search_text LIKE ? ESCAPE '#'
-            ORDER BY v.driver_name COLLATE NOCASE, v.license_plate COLLATE NOCASE
+            FROM drivers d
+            WHERE d.company_id = ?
+              AND lower(d.name) LIKE ? ESCAPE '#'
+            ORDER BY d.name COLLATE NOCASE
             LIMIT ? OFFSET ?
             `,
         ).all(companyId, like, limit, offset) as Array<
@@ -415,9 +448,9 @@ export class VehicleModel {
                     stmt(
                         `
                         SELECT COUNT(*) AS n
-                        FROM vehicles v
-                        WHERE v.company_id = ?
-                          AND v.search_text LIKE ? ESCAPE '#'
+                        FROM drivers d
+                        WHERE d.company_id = ?
+                          AND lower(d.name) LIKE ? ESCAPE '#'
                         `,
                     ).get(companyId, like) as { n: number }
                 ).n,
@@ -477,17 +510,35 @@ export class VehicleModel {
 
     static create(input: VehicleCreateInput): Vehicle {
         const companyId = input.company_id ?? 1;
-        const driverId = DriverModel.upsert(companyId, input.driver_name);
         const result = stmt(INSERT_VEHICLE).run(
             input.license_plate,
-            input.driver_name,
-            driverId,
+            null,
+            null,
             input.fuel_level ?? 100,
             input.status ?? "IDLE",
             companyId,
         );
 
-        const created = this.getById(Number(result.lastInsertRowid), companyId);
+        const id = Number(result.lastInsertRowid);
+        const driverName = input.driver_name?.trim();
+
+        if (driverName) {
+            const driverId = DriverModel.upsert(companyId, driverName);
+            DriverModel.assignVehicle(driverId, id, companyId);
+            const occupied = stmt(
+                `
+                SELECT id FROM vehicles
+                WHERE current_driver_id = ?
+                LIMIT 1
+                `,
+            ).get(driverId) as { id: number } | undefined;
+
+            if (!occupied) {
+                DriverModel.setCurrentVehicle(driverId, id, companyId);
+            }
+        }
+
+        const created = this.getById(id, companyId);
         if (!created) {
             throw new Error("Created vehicle was not found.");
         }
@@ -499,11 +550,8 @@ export class VehicleModel {
         input: VehiclePutInput,
         companyId: number,
     ): Vehicle | undefined {
-        const driverId = DriverModel.upsert(companyId, input.driver_name);
         const result = stmt(UPDATE_VEHICLE).run(
             input.license_plate,
-            input.driver_name,
-            driverId,
             input.fuel_level,
             input.status,
             id,
@@ -526,12 +574,8 @@ export class VehicleModel {
             return undefined;
         }
 
-        const driverName = input.driver_name ?? current.driver_name;
-        const driverId = DriverModel.upsert(companyId, driverName);
         const result = stmt(UPDATE_VEHICLE).run(
             input.license_plate ?? current.license_plate,
-            driverName,
-            driverId,
             input.fuel_level ?? current.fuel_level,
             input.status ?? current.status,
             id,

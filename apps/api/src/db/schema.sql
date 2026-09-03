@@ -47,9 +47,9 @@ CREATE TABLE IF NOT EXISTS drivers (
 CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id INTEGER NOT NULL,
-    driver_id INTEGER NOT NULL,
+    current_driver_id INTEGER,
     license_plate TEXT NOT NULL,
-    driver_name TEXT NOT NULL,
+    driver_name TEXT,
     fuel_level REAL NOT NULL DEFAULT 100
         CHECK (fuel_level >= 0 AND fuel_level <= 100),
     status TEXT NOT NULL DEFAULT 'IDLE'
@@ -59,16 +59,30 @@ CREATE TABLE IF NOT EXISTS vehicles (
     active_alerts INTEGER NOT NULL DEFAULT 0,
     speed_limit_kmh REAL,
     search_text TEXT GENERATED ALWAYS AS (
-        lower(license_plate || ' ' || driver_name)
+        lower(license_plate || ' ' || coalesce(driver_name, ''))
     ) VIRTUAL,
 
     FOREIGN KEY (company_id)
         REFERENCES companies(id),
 
-    FOREIGN KEY (driver_id)
+    FOREIGN KEY (current_driver_id)
         REFERENCES drivers(id),
 
     UNIQUE (company_id, license_plate)
+);
+
+CREATE TABLE IF NOT EXISTS driver_vehicles (
+    driver_id INTEGER NOT NULL,
+    vehicle_id INTEGER NOT NULL,
+
+    PRIMARY KEY (driver_id, vehicle_id),
+
+    FOREIGN KEY (driver_id)
+        REFERENCES drivers(id),
+
+    FOREIGN KEY (vehicle_id)
+        REFERENCES vehicles(id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS telemetry (
@@ -125,6 +139,7 @@ CREATE TABLE IF NOT EXISTS trip_month_km (
 CREATE TABLE IF NOT EXISTS alerts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle_id INTEGER NOT NULL,
+    driver_id INTEGER,
     type TEXT NOT NULL,
     severity TEXT NOT NULL,
     message TEXT NOT NULL,
@@ -135,9 +150,16 @@ CREATE TABLE IF NOT EXISTS alerts (
 
     FOREIGN KEY (vehicle_id)
         REFERENCES vehicles(id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (driver_id)
+        REFERENCES drivers(id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_per_type
     ON alerts(vehicle_id, type)
     WHERE ended_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_current_driver
+    ON vehicles(current_driver_id)
+    WHERE current_driver_id IS NOT NULL;

@@ -24,7 +24,8 @@ export const DRIVER_NAME_MAX = 80;
 export type Vehicle = {
     id: number;
     license_plate: string;
-    driver_name: string;
+    /** Name des aktuellen Fahrers; `null` bei Poolfahrzeugen. */
+    driver_name: string | null;
     fuel_level: number;
     status: VehicleStatus;
     latitude: number | null;
@@ -48,13 +49,12 @@ export type Vehicle = {
      */
     open_alert_types: AlertType[];
     created_at: string;
-    driver_id: number;
+    current_driver_id: number | null;
 };
 
 /** Die vom Client beschreibbaren Felder eines Fahrzeugs. */
 export type VehicleInput = {
     license_plate: string;
-    driver_name: string;
     fuel_level: number;
     status: VehicleStatus;
 };
@@ -81,7 +81,7 @@ const licensePlateSchema = z
         `Kennzeichen darf höchstens ${LICENSE_PLATE_MAX} Zeichen haben.`,
     );
 
-const driverNameSchema = z
+export const driverNameSchema = z
     .string({ error: "Fahrer ist erforderlich." })
     .trim()
     .min(1, "Fahrer ist erforderlich.")
@@ -111,7 +111,6 @@ const statusSchema = z.enum(VEHICLE_STATUSES, {
 
 export const vehicleInputSchema = z.object({
     license_plate: licensePlateSchema,
-    driver_name: driverNameSchema,
     fuel_level: fuelLevelSchema,
     status: statusSchema,
 });
@@ -132,7 +131,6 @@ function fieldErrorsFromZod(error: z.ZodError): VehicleFieldErrors {
 
         if (
             key === "license_plate" ||
-            key === "driver_name" ||
             key === "fuel_level" ||
             key === "status"
         ) {

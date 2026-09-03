@@ -24,7 +24,7 @@ export type GeoBBox = {
 export type FleetPosition = {
     id: number;
     license_plate: string;
-    driver_name: string;
+    driver_name: string | null;
     status: VehicleStatus;
     latitude: number;
     longitude: number;
@@ -44,8 +44,9 @@ export type FleetPositionsQuery = {
 export const FLEET_DRIVERS_LIST_LIMIT = 50;
 
 export type FleetDriver = {
+    id: number;
     name: string;
-    license_plate: string;
+    license_plate: string | null;
 };
 
 export type FleetDriversQuery = {
