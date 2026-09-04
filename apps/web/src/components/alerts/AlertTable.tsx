@@ -1,19 +1,13 @@
-import { useMemo, useState, type MouseEvent } from "react";
 import type { Alert } from "@fleet-live/shared";
 
 import { Table } from "../ui/Table/Table";
 import { TableFilterBar } from "../ui/Table/TableFilterBar";
 import { TablePagination } from "../ui/Table/TablePagination";
-import { Button } from "../ui/Button/Button";
-import { useTable } from "../../hooks/useTable";
+import { useServerTable } from "../../hooks/useServerTable";
 import { useAlertList } from "../../hooks/useAlertList";
 import { useAlertListQuery } from "../../hooks/useAlertListQuery";
-import { useVehicles } from "../../context/vehiclesContext";
-import { resolveAlert } from "../../api/alerts";
-import { ApiError } from "../../api/client";
-import { formatTimestamp } from "../../utils/dateTime";
-import type { TableColumn } from "../../types/table";
-import { alertColumns, alertFilters, alertTypeFilters } from "./alertTableConfig.tsx";
+import { alertFilters, alertTypeFilters } from "./alertTableConfig";
+import { useAlertResolveColumn } from "./useAlertResolveColumn";
 import styles from "./AlertTable.module.scss";
 
 interface AlertTableProps {
@@ -25,116 +19,42 @@ export const AlertTable = ({
     canWrite = false,
     onSelectAlert,
 }: AlertTableProps) => {
+    const listQuery = useAlertListQuery();
+    const listResult = useAlertList(listQuery.query);
+    const { columns, actionError } = useAlertResolveColumn(canWrite);
     const {
         query,
-        tableState,
-        setFilter,
         setType,
-        handleSort,
-        setPage,
-        setLimit,
         clearVehicle,
         clearDriver,
-    } = useAlertListQuery();
-
+    } = listQuery;
+    const { meta, notFound } = listResult;
     const {
-        data,
-        meta,
-        isLoading,
-        isFetching,
-        error,
-        notFound,
-        pageCount,
-        total,
-    } = useAlertList(query);
-    const { refetchLists } = useVehicles();
-
-    const { filtersWithCounts, paginatedRows } = useTable({
-        rows: data,
-        filters: alertFilters,
-        counts: meta?.counts,
-        pageCount,
-        total,
         tableState,
-        setSearch: () => undefined,
+        filtersWithCounts,
+        extraFiltersWithCounts,
+        paginatedRows,
+        isLoading,
+        error,
+        pageCount,
+        total,
+        showPagination,
+        sectionClassName,
+        emptyContent,
         setFilter,
         handleSort,
         setPage,
         setLimit,
+    } = useServerTable<Alert>({
+        listQuery,
+        listResult,
+        filters: alertFilters,
+        counts: listResult.meta?.counts,
+        extras: {
+            filters: alertTypeFilters,
+            counts: listResult.meta?.type_counts,
+        },
     });
-
-    const typeFiltersWithCounts = useMemo(
-        () =>
-            alertTypeFilters.map((filter) => ({
-                ...filter,
-                count: meta?.type_counts?.[filter.id] ?? 0,
-            })),
-        [meta?.type_counts],
-    );
-
-    const [resolvingId, setResolvingId] = useState<number | null>(null);
-    const [actionError, setActionError] = useState<string | null>(null);
-
-    const columns = useMemo<TableColumn<Alert>[]>(() => {
-        return [
-            ...alertColumns,
-            {
-                key: "resolved_at",
-                displayText: canWrite ? "Aktion" : "Status",
-                render: (value, { row }) => {
-                    if (value) {
-                        return (
-                            <span className={styles.actionCell}>
-                                {formatTimestamp(value)}
-                            </span>
-                        );
-                    }
-
-                    if (!canWrite) {
-                        return (
-                            <span className={styles.actionCell}>Offen</span>
-                        );
-                    }
-
-                    const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
-                        event.stopPropagation();
-                        void (async () => {
-                            setResolvingId(row.id);
-                            setActionError(null);
-                            try {
-                                await resolveAlert(row.id);
-                                refetchLists();
-                            } catch (caught) {
-                                setActionError(
-                                    caught instanceof ApiError
-                                        ? caught.message
-                                        : "Warnung konnte nicht erledigt werden.",
-                                );
-                            } finally {
-                                setResolvingId(null);
-                            }
-                        })();
-                    };
-
-                    return (
-                        <span className={styles.actionCell}>
-                            <Button
-                                variant="secondary"
-                                size="sm"
-                                disabled={resolvingId === row.id}
-                                onClick={handleClick}
-                            >
-                                Erledigen
-                            </Button>
-                        </span>
-                    );
-                },
-            },
-        ];
-    }, [canWrite, refetchLists, resolvingId]);
-
-    const isPageOutOfRange =
-        !isLoading && data.length === 0 && total > 0 && tableState.page > pageCount;
 
     if (notFound) {
         return (
@@ -160,11 +80,7 @@ export const AlertTable = ({
 
     return (
         <section
-            className={
-                isFetching && !isLoading
-                    ? `${styles.alertTable} ${styles.isFetching}`
-                    : styles.alertTable
-            }
+            className={sectionClassName(styles.alertTable, styles.isFetching)}
         >
             <h1 className={styles.title}>Warnungen</h1>
 
@@ -205,7 +121,7 @@ export const AlertTable = ({
                         ariaLabel="Status"
                     />
                     <TableFilterBar
-                        filters={typeFiltersWithCounts}
+                        filters={extraFiltersWithCounts}
                         activeFilterId={query.type ?? null}
                         onFilterChange={setType}
                         allCount={meta?.type_counts?.all}
@@ -238,45 +154,17 @@ export const AlertTable = ({
                 caption="Warnungsliste"
                 isLoading={isLoading}
                 skeletonRowCount={Math.min(tableState.limit, 10)}
-                emptyContent={
-                    isPageOutOfRange ? (
-                        <div className={styles.outOfRange}>
-                            <p>
-                                Seite {tableState.page} gibt es nicht. Es gibt{" "}
-                                {pageCount}{" "}
-                                {pageCount === 1 ? "Seite." : "Seiten."}
-                            </p>
-                            <div className={styles.outOfRangeActions}>
-                                <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => setPage(pageCount)}
-                                >
-                                    Zur letzten Seite
-                                </Button>
-                                {pageCount > 1 && (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => setPage(1)}
-                                    >
-                                        Zur ersten Seite
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    ) : query.filter === "open" &&
-                      query.type === undefined &&
-                      query.vehicle_id === undefined &&
-                      query.driver_id === undefined ? (
-                        "Keine offenen Warnungen."
-                    ) : (
-                        "Keine Warnungen passen zum Filter."
-                    )
-                }
+                emptyContent={emptyContent(
+                    query.filter === "open" &&
+                        query.type === undefined &&
+                        query.vehicle_id === undefined &&
+                        query.driver_id === undefined
+                        ? "Keine offenen Warnungen."
+                        : "Keine Warnungen passen zum Filter.",
+                )}
             />
 
-            {total > 0 && tableState.page <= pageCount && (
+            {showPagination && (
                 <TablePagination
                     page={tableState.page}
                     pageCount={pageCount}

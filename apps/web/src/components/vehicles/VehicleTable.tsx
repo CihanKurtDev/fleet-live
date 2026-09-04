@@ -5,15 +5,11 @@ import { Table } from "../ui/Table/Table";
 import { TableToolbar } from "../ui/Table/TableToolbar";
 import { TableFilterBar } from "../ui/Table/TableFilterBar";
 import { TablePagination } from "../ui/Table/TablePagination";
-import { Button } from "../ui/Button/Button";
 import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
-import { useTable } from "../../hooks/useTable";
+import { useServerTable } from "../../hooks/useServerTable";
 import { useVehicleList } from "../../hooks/useVehicleList";
 import { useVehicleListQuery } from "../../hooks/useVehicleListQuery";
-import {
-    vehicleColumns,
-    vehicleFilters,
-} from "./vehicleTableConfig";
+import { vehicleColumns, vehicleFilters } from "./vehicleTableConfig";
 import styles from "./VehicleTable.module.scss";
 
 interface VehicleTableProps {
@@ -27,43 +23,36 @@ export const VehicleTable = ({
     onAddVehicle,
     onSelectVehicle,
 }: VehicleTableProps) => {
+    const listQuery = useVehicleListQuery();
+    const listResult = useVehicleList(listQuery.apiQuery);
     const {
-        apiQuery,
         tableState,
-        setSearch,
-        setFilter,
-        handleSort,
-        setPage,
-        setLimit,
-    } = useVehicleListQuery();
-
-    const { data, meta, isLoading, isFetching, error, pageCount, total } =
-        useVehicleList(apiQuery);
-
-    const {
         filtersWithCounts,
         paginatedRows,
-    } = useTable({
-        rows: data,
-        filters: vehicleFilters,
-        counts: meta?.counts,
+        isLoading,
+        error,
         pageCount,
         total,
-        tableState,
+        showPagination,
+        sectionClassName,
+        emptyContent,
         setSearch,
         setFilter,
         handleSort,
         setPage,
         setLimit,
+    } = useServerTable<Vehicle>({
+        listQuery,
+        listResult,
+        filters: vehicleFilters,
+        counts: listResult.meta?.counts,
     });
 
     const [isEditing, setIsEditing] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<number[]>(
-        [],
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [pendingDeleteIds, setPendingDeleteIds] = useState<number[] | null>(
+        null,
     );
-    const [pendingDeleteIds, setPendingDeleteIds] = useState<
-        number[] | null
-    >(null);
 
     const toggleEditMode = () => {
         setIsEditing((current) => !current);
@@ -73,23 +62,15 @@ export const VehicleTable = ({
     const toggleSelection = (id: number) => {
         setSelectedIds((current) =>
             current.includes(id)
-                ? current.filter(
-                      (selectedId) => selectedId !== id,
-                  )
+                ? current.filter((selectedId) => selectedId !== id)
                 : [...current, id],
         );
     };
 
-    const isPageOutOfRange =
-        !isLoading &&
-        data.length === 0 &&
-        total > 0 &&
-        tableState.page > pageCount;
-
     const pendingCount = pendingDeleteIds?.length ?? 0;
     const pendingVehicle =
         pendingCount === 1
-            ? data.find(
+            ? listResult.data.find(
                   (vehicle) => vehicle.id === pendingDeleteIds?.[0],
               )
             : undefined;
@@ -106,11 +87,7 @@ export const VehicleTable = ({
 
     return (
         <section
-            className={
-                isFetching && !isLoading
-                    ? `${styles.vehicleTable} ${styles.isFetching}`
-                    : styles.vehicleTable
-            }
+            className={sectionClassName(styles.vehicleTable, styles.isFetching)}
         >
             <h1 className={styles.title}>Fahrzeuge</h1>
 
@@ -138,7 +115,7 @@ export const VehicleTable = ({
                     filters={filtersWithCounts}
                     activeFilterId={tableState.filterId}
                     onFilterChange={setFilter}
-                    allCount={meta?.counts.all}
+                    allCount={listResult.meta?.counts.all}
                     groupLabel="Status"
                     ariaLabel="Status"
                 />
@@ -162,53 +139,21 @@ export const VehicleTable = ({
                 getRowKey={(vehicle) => vehicle.id}
                 isEditing={isEditing}
                 selectedRows={selectedIds}
-                onSelectRow={(key) =>
-                    toggleSelection(Number(key))
-                }
+                onSelectRow={(key) => toggleSelection(Number(key))}
                 onRowClick={onSelectVehicle}
                 sortConfig={tableState.sortConfig}
                 onSort={handleSort}
                 caption="Fahrzeugliste"
                 isLoading={isLoading}
                 skeletonRowCount={Math.min(tableState.limit, 10)}
-                emptyContent={
-                    isPageOutOfRange ? (
-                        <div className={styles.outOfRange}>
-                            <p>
-                                Seite {tableState.page} gibt es
-                                nicht. Es gibt {pageCount}{" "}
-                                {pageCount === 1
-                                    ? "Seite."
-                                    : "Seiten."}
-                            </p>
-                            <div className={styles.outOfRangeActions}>
-                                <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => setPage(pageCount)}
-                                >
-                                    Zur letzten Seite
-                                </Button>
-                                {pageCount > 1 && (
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => setPage(1)}
-                                    >
-                                        Zur ersten Seite
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    ) : tableState.search || tableState.filterId ? (
-                        "Keine Fahrzeuge passen zu Suche und Filter."
-                    ) : (
-                        "Keine Fahrzeuge vorhanden."
-                    )
-                }
+                emptyContent={emptyContent(
+                    tableState.search || tableState.filterId
+                        ? "Keine Fahrzeuge passen zu Suche und Filter."
+                        : "Keine Fahrzeuge vorhanden.",
+                )}
             />
 
-            {total > 0 && tableState.page <= pageCount && (
+            {showPagination && (
                 <TablePagination
                     page={tableState.page}
                     pageCount={pageCount}
@@ -238,9 +183,8 @@ export const VehicleTable = ({
                     </p>
                 ) : (
                     <p>
-                        Diese {pendingCount} Fahrzeuge wirklich
-                        löschen? Das kann nicht rückgängig gemacht
-                        werden.
+                        Diese {pendingCount} Fahrzeuge wirklich löschen? Das
+                        kann nicht rückgängig gemacht werden.
                     </p>
                 )}
             </ConfirmDialog>
