@@ -29,6 +29,12 @@ import {
     type RateMonth,
     type TypeMonth,
 } from "./briefingChartSeries";
+import {
+    isKmMonth,
+    isRateMonth,
+    isTypeMonth,
+    type TooltipRow,
+} from "./chartTooltipTypes";
 import styles from "./BriefingCharts.module.scss";
 
 const TYPE_LINES = [
@@ -61,12 +67,6 @@ const TYPE_LINES = [
         dash: "4 3",
     },
 ];
-
-type TooltipRow = {
-    dataKey?: string | number;
-    value?: number | string | Array<number | string> | null;
-    payload?: TypeMonth | RateMonth | KmMonth;
-};
 
 const asNumber = (value: TooltipRow["value"]): number | null => {
     if (typeof value === "number" && Number.isFinite(value)) {
@@ -132,9 +132,9 @@ const RateTooltip = ({
         return null;
     }
 
-    const row = payload[0]?.payload as RateMonth | undefined;
+    const row = payload[0]?.payload;
 
-    if (!row) {
+    if (!isRateMonth(row)) {
         return null;
     }
 
@@ -168,6 +168,10 @@ const TypeTooltip = ({
     year: string;
 }) => {
     if (!active || !payload?.length) {
+        return null;
+    }
+
+    if (!isTypeMonth(payload[0]?.payload)) {
         return null;
     }
 
@@ -211,9 +215,9 @@ const KmTooltip = ({
         return null;
     }
 
-    const row = payload[0]?.payload as KmMonth | undefined;
+    const row = payload[0]?.payload;
 
-    if (!row) {
+    if (!isKmMonth(row)) {
         return null;
     }
 
