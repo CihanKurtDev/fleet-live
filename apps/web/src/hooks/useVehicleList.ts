@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type {
-    Vehicle,
     VehicleListQuery,
     VehicleListResponse,
 } from "@fleet-live/shared";
@@ -16,20 +15,7 @@ import {
     setTelemetryFocus,
 } from "../api/telemetryFocus";
 import { useVehicles } from "../context/vehiclesContext";
-
-const applyOverrides = (
-    rows: Vehicle[],
-    overrides: Record<number, Partial<Vehicle>>,
-): Vehicle[] => {
-    if (Object.keys(overrides).length === 0) {
-        return rows;
-    }
-
-    return rows.map((row) => {
-        const patch = overrides[row.id];
-        return patch ? { ...row, ...patch } : row;
-    });
-};
+import { applyVehicleOverrides } from "../utils/applyVehicleOverrides";
 
 export const useVehicleList = (query: VehicleListQuery) => {
     const { listEpoch, vehicleOverrides } = useVehicles();
@@ -164,7 +150,7 @@ export const useVehicleList = (query: VehicleListQuery) => {
     ]);
 
     const data = response
-        ? applyOverrides(response.data, vehicleOverrides)
+        ? applyVehicleOverrides(response.data, vehicleOverrides)
         : [];
 
     return {
