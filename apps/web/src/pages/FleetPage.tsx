@@ -7,7 +7,6 @@ import {
     isVehicleFilterId,
     type FleetPosition,
     type GeoBBox,
-    type Vehicle,
     type VehicleFilterId,
 } from "@fleet-live/shared";
 
@@ -24,6 +23,7 @@ import { FleetMap } from "../components/vehicles/FleetMap";
 import { vehicleFilters } from "../components/vehicles/vehicleTableConfig";
 import { useVehicles } from "../context/vehiclesContext";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { applyVehicleOverrides } from "../utils/applyVehicleOverrides";
 import { formatCount } from "../utils/formatCount";
 import styles from "./FleetPage.module.scss";
 
@@ -65,32 +65,6 @@ const readBBox = (params: URLSearchParams): GeoBBox | null => {
     const parsed = fleetPositionsQuerySchema.safeParse({ bbox: raw });
 
     return parsed.success && parsed.data.bbox ? parsed.data.bbox : null;
-};
-
-const applyOverrides = (
-    rows: FleetPosition[],
-    overrides: Record<number, Partial<Vehicle>>,
-): FleetPosition[] => {
-    if (Object.keys(overrides).length === 0) {
-        return rows;
-    }
-
-    return rows.map((row) => {
-        const patch = overrides[row.id];
-
-        if (!patch) {
-            return row;
-        }
-
-        return {
-            ...row,
-            status: patch.status ?? row.status,
-            latitude: patch.latitude ?? row.latitude,
-            longitude: patch.longitude ?? row.longitude,
-            speed: patch.speed ?? row.speed,
-            recorded_at: patch.recorded_at ?? row.recorded_at,
-        };
-    });
 };
 
 export const FleetPage = () => {
@@ -187,7 +161,7 @@ export const FleetPage = () => {
     }, [bbox, filter, searchParam, selectedDrivers, listEpoch]);
 
     const vehicles = useMemo(
-        () => applyOverrides(snapshot, vehicleOverrides),
+        () => applyVehicleOverrides(snapshot, vehicleOverrides),
         [snapshot, vehicleOverrides],
     );
 
