@@ -1,11 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import {
     briefingMonthKeys,
-    encodePoints,
     SPEED_CRITICAL_OVER_LIMIT_KMH,
 } from "@fleet-live/shared";
-import { config } from "../config";
-import { sqliteDaysAgo } from "../lib/sqlTime";
 import { TripModel } from "../models/trip.model";
 import {
     applyMaintenanceTriggers,
@@ -185,10 +182,6 @@ type SeededVehicle = {
 export function seedLivedIn(database: DatabaseSync) {
     const rng = mulberry32(20260902);
     const months = briefingMonthKeys();
-    const retentionStart =
-        config.tripRetentionDays > 0
-            ? sqliteDaysAgo(config.tripRetentionDays)
-            : "1970-01-01 00:00:00";
 
     const insertDriver = database.prepare(`
         INSERT INTO drivers (company_id, name)
@@ -217,13 +210,6 @@ export function seedLivedIn(database: DatabaseSync) {
         INSERT INTO alerts (
             vehicle_id, driver_id, type, severity, message, details,
             created_at, ended_at, resolved_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const insertTrip = database.prepare(`
-        INSERT INTO trips (
-            vehicle_id, started_at, ended_at, path, point_count,
-            distance_m, max_speed, last_latitude, last_longitude
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -499,7 +485,6 @@ export function seedLivedIn(database: DatabaseSync) {
             }
 
             for (const month of months) {
-                const keepTripRow = `${month}-01 00:00:00` >= retentionStart;
                 const trips =
                     vehicle.status === "DRIVING"
                         ? pickInt(rng, 2, 4)
@@ -507,34 +492,11 @@ export function seedLivedIn(database: DatabaseSync) {
 
                 for (let t = 0; t < trips; t += 1) {
                     const started = stampInMonth(month, rng);
-                    const ended = laterStamp(started, rng);
                     const distance = pickInt(rng, 40_000, 280_000);
                     TripModel.addClosedDistance(
                         COMPANY_MAIN,
                         started,
                         distance,
-                    );
-
-                    if (!keepTripRow) {
-                        continue;
-                    }
-
-                    const endLat = vehicle.lat + 0.04 + t * 0.01;
-                    const endLng = vehicle.lng + 0.03 + t * 0.01;
-                    const path = encodePoints([
-                        { lat: vehicle.lat, lng: vehicle.lng },
-                        { lat: endLat, lng: endLng },
-                    ]);
-                    insertTrip.run(
-                        vehicle.id,
-                        started,
-                        ended,
-                        path,
-                        2,
-                        distance,
-                        pickInt(rng, 72, 128),
-                        endLat,
-                        endLng,
                     );
                 }
             }
