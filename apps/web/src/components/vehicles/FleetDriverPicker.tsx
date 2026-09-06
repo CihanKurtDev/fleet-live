@@ -1,6 +1,6 @@
 import { FLEET_DRIVERS_MAX } from "@fleet-live/shared";
 
-import { useAssignmentPicker } from "../../hooks/useAssignmentPicker";
+import { useFleetDriverFilter } from "../../hooks/useFleetDriverFilter";
 import { formatCount } from "../../utils/formatCount";
 import { Button } from "../ui/Button/Button";
 import { Modal } from "../ui/Modal/Modal";
@@ -35,8 +35,7 @@ export const FleetDriverPicker = ({
         searchPending,
         toggle,
         apply,
-    } = useAssignmentPicker({
-        mode: "fleet-filter",
+    } = useFleetDriverFilter({
         selected,
         onChange,
     });
