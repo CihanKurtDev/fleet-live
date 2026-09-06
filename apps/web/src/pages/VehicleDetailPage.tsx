@@ -102,6 +102,10 @@ export const VehicleDetailPage = () => {
             return;
         }
 
+        if (vehicle && vehicle.status !== "DRIVING") {
+            setLivePath("");
+        }
+
         const controller = new AbortController();
 
         retryTransient(
@@ -110,7 +114,9 @@ export const VehicleDetailPage = () => {
         )
             .then((response) => {
                 setTrip(response.data);
-                setLivePath("");
+                if (response.data?.ended_at === null) {
+                    setLivePath("");
+                }
             })
             .catch((caught: unknown) => {
                 if (!isAbortError(caught)) {
@@ -119,15 +125,19 @@ export const VehicleDetailPage = () => {
             });
 
         return () => controller.abort();
-    }, [parsedId]);
+    }, [parsedId, vehicle?.status]);
 
+    const openPath =
+        vehicle?.status === "DRIVING" && trip?.ended_at === null
+            ? trip.path
+            : "";
     const trail = useMemo<MapPoint[]>(
         () =>
-            decodePolyline((trip?.path ?? "") + livePath).map((point) => ({
+            decodePolyline(openPath + livePath).map((point) => ({
                 latitude: point.lat,
                 longitude: point.lng,
             })),
-        [trip?.path, livePath],
+        [openPath, livePath],
     );
 
     if (isLoading) {
@@ -277,7 +287,7 @@ export const VehicleDetailPage = () => {
                             longitude={position.longitude}
                             label={vehicle.license_plate}
                             status={vehicle.status}
-                            trail={trail}
+                            trail={isDriving ? trail : undefined}
                         />
                         <details className={styles.coords}>
                             <summary>Koordinaten</summary>
