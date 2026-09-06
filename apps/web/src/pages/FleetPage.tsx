@@ -1,213 +1,39 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import {
-    FLEET_DRIVERS_MAX,
-    STREAM_FOCUS_MAX_IDS,
-    fleetPositionsQuerySchema,
-    isVehicleFilterId,
-    type FleetPosition,
-    type GeoBBox,
-    type VehicleFilterId,
-} from "@fleet-live/shared";
+import { useNavigate } from "react-router";
+import type { VehicleFilterId } from "@fleet-live/shared";
 
-import { isAbortError } from "../api/client";
-import { retryTransient } from "../api/retryTransient";
-import {
-    clearTelemetryFocus,
-    setTelemetryFocus,
-} from "../api/telemetryFocus";
-import { listVehiclePositions } from "../api/vehicles";
 import { TableFilterBar } from "../components/ui/Table/TableFilterBar";
 import { FleetDriverPicker } from "../components/vehicles/FleetDriverPicker";
 import { FleetMap } from "../components/vehicles/FleetMap";
 import { vehicleFilters } from "../components/vehicles/vehicleTableConfig";
-import { useVehicles } from "../context/vehiclesContext";
-import { useDebouncedValue } from "../hooks/useDebouncedValue";
-import { applyVehicleOverrides } from "../utils/applyVehicleOverrides";
+import { useFleetPageQuery } from "../hooks/useFleetPageQuery";
+import { useFleetPositions } from "../hooks/useFleetPositions";
 import { formatCount } from "../utils/formatCount";
 import styles from "./FleetPage.module.scss";
 
-const readDrivers = (params: URLSearchParams): string[] => {
-    const names = params
-        .getAll("drivers")
-        .flatMap((entry) => entry.split(","))
-        .map((name) => name.trim())
-        .filter((name) => name.length > 0);
-
-    return [...new Set(names)].slice(0, FLEET_DRIVERS_MAX);
-};
-
-const writeDrivers = (params: URLSearchParams, names: string[]) => {
-    params.delete("drivers");
-
-    for (const name of names) {
-        params.append("drivers", name);
-    }
-};
-
-const sameBBox = (left: GeoBBox | null, right: GeoBBox) =>
-    left !== null &&
-    left.west === right.west &&
-    left.south === right.south &&
-    left.east === right.east &&
-    left.north === right.north;
-
-const formatBBox = (bbox: GeoBBox) =>
-    `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`;
-
-const readBBox = (params: URLSearchParams): GeoBBox | null => {
-    const raw = params.get("bbox");
-
-    if (!raw) {
-        return null;
-    }
-
-    const parsed = fleetPositionsQuerySchema.safeParse({ bbox: raw });
-
-    return parsed.success && parsed.data.bbox ? parsed.data.bbox : null;
-};
-
 export const FleetPage = () => {
     const navigate = useNavigate();
-    const [searchParams, setSearchParams] = useSearchParams();
-    const { listEpoch, vehicleOverrides } = useVehicles();
-    const filterParam = searchParams.get("filter");
-    const filter = isVehicleFilterId(filterParam) ? filterParam : undefined;
-    const searchParam = searchParams.get("search") ?? "";
-    const selectedDrivers = useMemo(
-        () => readDrivers(searchParams),
-        [searchParams],
-    );
-    const [searchDraft, setSearchDraft] = useState(searchParam);
-    const debouncedSearch = useDebouncedValue(searchDraft);
-
-    const bbox = readBBox(searchParams);
-    const [snapshot, setSnapshot] = useState<FleetPosition[]>([]);
-    const [truncated, setTruncated] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasLoaded, setHasLoaded] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        setSearchDraft(searchParam);
-    }, [searchParam]);
-
-    useEffect(() => {
-        if (debouncedSearch === searchParam) {
-            return;
-        }
-
-        setSearchParams(
-            (current) => {
-                const params = new URLSearchParams(current);
-
-                if (debouncedSearch) {
-                    params.set("search", debouncedSearch);
-                } else {
-                    params.delete("search");
-                }
-
-                return params;
-            },
-            { replace: true },
-        );
-    }, [debouncedSearch, searchParam, setSearchParams]);
-
-    useEffect(() => {
-        if (!bbox) {
-            return;
-        }
-
-        const controller = new AbortController();
-        setIsLoading(true);
-
-        retryTransient(
-            () =>
-                listVehiclePositions(
-                    {
-                        bbox,
-                        filter,
-                        search: searchParam,
-                        drivers: selectedDrivers,
-                    },
-                    controller.signal,
-                ),
-            controller.signal,
-        )
-            .then((response) => {
-                setSnapshot(response.data);
-                setTruncated(response.meta.truncated);
-                setHasLoaded(true);
-                setError(null);
-            })
-            .catch((caught: unknown) => {
-                if (controller.signal.aborted || isAbortError(caught)) {
-                    return;
-                }
-
-                setError(
-                    caught instanceof Error
-                        ? caught.message
-                        : "Positionen konnten nicht geladen werden.",
-                );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) {
-                    setIsLoading(false);
-                }
-            });
-
-        return () => controller.abort();
-    }, [bbox, filter, searchParam, selectedDrivers, listEpoch]);
-
-    const vehicles = useMemo(
-        () => applyVehicleOverrides(snapshot, vehicleOverrides),
-        [snapshot, vehicleOverrides],
-    );
-
-    const drivingFocusKey = vehicles
-        .filter((vehicle) => vehicle.status === "DRIVING")
-        .map((vehicle) => vehicle.id)
-        .slice(0, STREAM_FOCUS_MAX_IDS)
-        .join(",");
-
-    useEffect(() => {
-        const ids = drivingFocusKey
-            ? drivingFocusKey.split(",").map(Number)
-            : [];
-
-        setTelemetryFocus("fleet", ids);
-
-        return () => clearTelemetryFocus("fleet");
-    }, [drivingFocusKey]);
-
-    const patchParams = (mutate: (params: URLSearchParams) => void) => {
-        const params = new URLSearchParams(searchParams);
-        mutate(params);
-        setSearchParams(params, { replace: true });
-    };
-
-    const setFilter = (next: VehicleFilterId | undefined) => {
-        patchParams((params) => {
-            if (next) {
-                params.set("filter", next);
-            } else {
-                params.delete("filter");
-            }
+    const {
+        bbox,
+        filter,
+        search,
+        drivers,
+        searchDraft,
+        setSearchDraft,
+        setFilter,
+        setDrivers,
+        setBBox,
+        searchParams,
+    } = useFleetPageQuery();
+    const { vehicles, truncated, isLoading, hasLoaded, error, snapshotLength } =
+        useFleetPositions({
+            bbox,
+            filter,
+            search,
+            drivers,
         });
-    };
-
-    const handleBoundsChange = (next: GeoBBox) => {
-        if (sameBBox(bbox, next)) {
-            return;
-        }
-
-        patchParams((params) => {
-            params.set("bbox", formatBBox(next));
-        });
-    };
 
     const countLabel = `${formatCount(vehicles.length)} ${vehicles.length === 1 ? "Fahrzeug" : "Fahrzeuge"}`;
+    const queryString = searchParams.toString();
 
     return (
         <section className={styles.page}>
@@ -223,12 +49,8 @@ export const FleetPage = () => {
                 />
 
                 <FleetDriverPicker
-                    selected={selectedDrivers}
-                    onChange={(names) =>
-                        patchParams((params) => {
-                            writeDrivers(params, names);
-                        })
-                    }
+                    selected={drivers}
+                    onChange={setDrivers}
                 />
 
                 <TableFilterBar
@@ -244,7 +66,7 @@ export const FleetPage = () => {
 
                 <div className={styles.meta}>
                     {isLoading &&
-                        snapshot.length === 0 &&
+                        snapshotLength === 0 &&
                         !truncated && (
                             <p className={styles.note}>
                                 Positionen werden geladen…
@@ -267,14 +89,12 @@ export const FleetPage = () => {
                 <FleetMap
                     vehicles={vehicles}
                     initialBbox={bbox}
-                    onBoundsChange={handleBoundsChange}
+                    onBoundsChange={setBBox}
                     onSelect={(id) =>
                         navigate(`/vehicles/${id}`, {
                             state: {
                                 from: `/fleet${
-                                    searchParams.toString()
-                                        ? `?${searchParams.toString()}`
-                                        : ""
+                                    queryString ? `?${queryString}` : ""
                                 }`,
                             },
                         })
