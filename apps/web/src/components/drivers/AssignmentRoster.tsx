@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
 
+import { Avatar } from "../ui/Avatar/Avatar";
 import { Button } from "../ui/Button/Button";
-import {
-    initialsFromName,
-    type AssignmentStatusLine,
-} from "./assignmentMeta";
+import { Checkbox } from "../ui/Checkbox/Checkbox";
+import { type AssignmentStatusLine } from "./assignmentMeta";
 import styles from "./assignment.module.scss";
 
 export type AssignmentRosterRow = {
@@ -28,12 +27,6 @@ type AssignmentRosterProps = {
     onClearCurrent: (id: number) => void;
     onRemove: (id: number) => void;
 };
-
-export const AssignmentAvatar = ({ name }: { name: string }) => (
-    <span className={styles.avatar} aria-hidden>
-        {initialsFromName(name)}
-    </span>
-);
 
 export const AssignmentStatusMeta = ({
     status,
@@ -95,8 +88,7 @@ export const AssignmentRoster = ({
                         }
                     >
                         {selectable && (
-                            <input
-                                type="checkbox"
+                            <Checkbox
                                 className={styles.rowCheck}
                                 checked={checked}
                                 disabled={busy}
@@ -104,7 +96,7 @@ export const AssignmentRoster = ({
                                 onChange={() => onToggle(item.id)}
                             />
                         )}
-                        <AssignmentAvatar name={item.avatarName} />
+                        <Avatar name={item.avatarName} />
                         <div className={styles.copy}>
                             <div className={styles.rowTitle}>{item.title}</div>
                             <AssignmentStatusMeta status={item.status} />

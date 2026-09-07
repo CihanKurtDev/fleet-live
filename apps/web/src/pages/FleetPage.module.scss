@@ -30,34 +30,9 @@
 }
 
 .search {
-    box-sizing: border-box;
     width: 180px;
     max-width: 100%;
     height: 28px;
-    padding: 0 10px;
-
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg);
-
-    font: inherit;
-    font-size: 13px;
-    color: var(--text-h);
-
-    &::placeholder {
-        color: var(--text);
-    }
-
-    &:focus {
-        outline: none;
-        border-color: var(--accent-border);
-        box-shadow: 0 0 0 3px var(--accent-bg);
-    }
-
-    &:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-    }
 }
 
 .meta {

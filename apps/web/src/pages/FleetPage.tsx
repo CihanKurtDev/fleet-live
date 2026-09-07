@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router";
 import type { VehicleFilterId } from "@fleet-live/shared";
 
+import { Input } from "../components/ui/Input/Input";
 import { TableFilterBar } from "../components/ui/Table/TableFilterBar";
 import { FleetDriverPicker } from "../components/vehicles/FleetDriverPicker";
 import { FleetMap } from "../components/vehicles/FleetMap";
@@ -39,8 +40,9 @@ export const FleetPage = () => {
         <section className={styles.page}>
             <h1 className={styles.title}>Flottenkarte</h1>
             <div className={styles.toolbar}>
-                <input
+                <Input
                     type="search"
+                    size="sm"
                     className={styles.search}
                     placeholder="Kennzeichen"
                     aria-label="Kennzeichen"

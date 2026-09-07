@@ -7,12 +7,12 @@ import {
     type ReactNode,
 } from "react";
 
+import { Avatar } from "../ui/Avatar/Avatar";
 import { Button } from "../ui/Button/Button";
+import { Checkbox } from "../ui/Checkbox/Checkbox";
+import { Input } from "../ui/Input/Input";
 import { Modal } from "../ui/Modal/Modal";
-import {
-    AssignmentAvatar,
-    AssignmentStatusMeta,
-} from "./AssignmentRoster";
+import { AssignmentStatusMeta } from "./AssignmentRoster";
 import type { AssignmentStatusLine } from "./assignmentMeta";
 import styles from "./assignment.module.scss";
 
@@ -175,9 +175,11 @@ export const AssignmentPicker = ({
                         <circle cx="11" cy="11" r="7" />
                         <path d="m20 20-3.5-3.5" />
                     </svg>
-                    <input
+                    <Input
                         className={styles.search}
                         type="search"
+                        size="lg"
+                        fullWidth
                         value={search}
                         placeholder={searchPlaceholder}
                         aria-controls={labelId}
@@ -227,14 +229,14 @@ export const AssignmentPicker = ({
                                         }
                                     }}
                                 >
-                                    <input
-                                        type="checkbox"
+                                    <Checkbox
+                                        className={styles.pickerCheck}
                                         tabIndex={-1}
                                         checked={checked}
                                         disabled={busy}
                                         readOnly
                                     />
-                                    <AssignmentAvatar name={item.title} />
+                                    <Avatar name={item.title} />
                                     <span className={styles.copy}>
                                         <span className={styles.rowTitle}>
                                             {item.title}

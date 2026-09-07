@@ -4,6 +4,7 @@ import { DRIVER_NAME_MAX } from "@fleet-live/shared";
 import { ApiError } from "../../api/client";
 import { createDriver } from "../../api/drivers";
 import { Button } from "../ui/Button/Button";
+import { Input } from "../ui/Input/Input";
 import styles from "../vehicles/VehicleForm.module.scss";
 
 interface DriverCreateFormProps {
@@ -52,9 +53,11 @@ export const DriverCreateForm = ({
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
             <div className={styles.field}>
                 <label htmlFor={fieldId}>Name</label>
-                <input
+                <Input
                     id={fieldId}
                     type="text"
+                    size="md"
+                    fullWidth
                     maxLength={DRIVER_NAME_MAX}
                     value={name}
                     onChange={(event) => {
