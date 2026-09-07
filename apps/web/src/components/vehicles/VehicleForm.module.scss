@@ -15,42 +15,6 @@
         font-weight: 500;
         color: var(--text-h);
     }
-
-    input,
-    select {
-        box-sizing: border-box;
-        width: 100%;
-        height: 36px;
-        padding: 0 10px;
-
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        background: var(--bg);
-
-        font: inherit;
-        font-size: 14px;
-        color: var(--text-h);
-
-        transition:
-            border-color 120ms ease,
-            box-shadow 120ms ease;
-
-        &:focus {
-            outline: none;
-            border-color: var(--accent-border);
-            box-shadow: 0 0 0 3px var(--accent-bg);
-        }
-
-        &[aria-invalid="true"] {
-            border-color: #dc2626;
-        }
-
-        &:disabled {
-            background: var(--code-bg);
-            color: var(--text);
-            cursor: not-allowed;
-        }
-    }
 }
 
 .hint {

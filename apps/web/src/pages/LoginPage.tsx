@@ -3,6 +3,8 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 import { login } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
+import { Checkbox } from "../components/ui/Checkbox/Checkbox";
+import { Input } from "../components/ui/Input/Input";
 import { useAuth } from "../hooks/useAuth";
 import styles from "./LoginPage.module.scss";
 
@@ -73,9 +75,11 @@ export const LoginPage = () => {
                 <form className={styles.form} onSubmit={handleSubmit}>
                     <div className={styles.field}>
                         <label htmlFor="login-email">E-Mail</label>
-                        <input
+                        <Input
                             id="login-email"
                             type="email"
+                            size="lg"
+                            fullWidth
                             autoComplete="username"
                             autoFocus
                             required
@@ -97,9 +101,11 @@ export const LoginPage = () => {
                     </div>
                     <div className={styles.field}>
                         <label htmlFor="login-password">Passwort</label>
-                        <input
+                        <Input
                             id="login-password"
                             type="password"
+                            size="lg"
+                            fullWidth
                             autoComplete="current-password"
                             required
                             value={password}
@@ -123,8 +129,7 @@ export const LoginPage = () => {
                         )}
                     </div>
                     <label className={styles.remember}>
-                        <input
-                            type="checkbox"
+                        <Checkbox
                             checked={remember}
                             onChange={(event) =>
                                 setRemember(event.target.checked)

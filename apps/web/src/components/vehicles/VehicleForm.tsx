@@ -6,6 +6,7 @@ import {
     type VehicleInput,
 } from "@fleet-live/shared";
 import { Button } from "../ui/Button/Button";
+import { Input } from "../ui/Input/Input";
 import { NEW_VEHICLE_STATUS } from "./vehicleStatus";
 import styles from "./VehicleForm.module.scss";
 
@@ -154,9 +155,11 @@ export const VehicleForm = ({
                 <label htmlFor={`${fieldId}-plate`}>
                     Kennzeichen
                 </label>
-                <input
+                <Input
                     id={`${fieldId}-plate`}
                     type="text"
+                    size="md"
+                    fullWidth
                     maxLength={LICENSE_PLATE_MAX}
                     value={values.license_plate}
                     disabled={readOnly}
@@ -181,9 +184,11 @@ export const VehicleForm = ({
                 <label htmlFor={`${fieldId}-fuel`}>
                     Tankstand (%)
                 </label>
-                <input
+                <Input
                     id={`${fieldId}-fuel`}
                     type="number"
+                    size="md"
+                    fullWidth
                     min={0}
                     max={100}
                     value={values.fuel_level}

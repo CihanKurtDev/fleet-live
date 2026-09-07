@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Checkbox } from "../Checkbox/Checkbox";
 import type {
     RenderContext,
     TableColumn,
@@ -72,8 +73,7 @@ const TableRowComponent = <RowType,>({
                     // über die Zeile ausgewertet werden.
                     onClick={(event) => event.stopPropagation()}
                 >
-                    <input
-                        type="checkbox"
+                    <Checkbox
                         checked={isSelected}
                         onChange={onSelect}
                         aria-label="Zeile auswählen"

@@ -3,6 +3,8 @@ import { FLEET_DRIVERS_MAX } from "@fleet-live/shared";
 import { useFleetDriverFilter } from "../../hooks/useFleetDriverFilter";
 import { formatCount } from "../../utils/formatCount";
 import { Button } from "../ui/Button/Button";
+import { Checkbox } from "../ui/Checkbox/Checkbox";
+import { Input } from "../ui/Input/Input";
 import { Modal } from "../ui/Modal/Modal";
 import styles from "./FleetDriverPicker.module.scss";
 
@@ -87,10 +89,11 @@ export const FleetDriverPicker = ({
             >
                 <div className={styles.modal}>
                     <div className={styles.toolbar}>
-                        <input
+                        <Input
                             ref={searchRef}
                             type="search"
-                            className={styles.search}
+                            size="sm"
+                            fullWidth
                             placeholder="Name oder Kennzeichen"
                             aria-label="Name oder Kennzeichen"
                             value={query}
@@ -120,8 +123,7 @@ export const FleetDriverPicker = ({
                                                 : styles.option
                                         }
                                     >
-                                        <input
-                                            type="checkbox"
+                                        <Checkbox
                                             checked={checked}
                                             disabled={blocked}
                                             onChange={() =>

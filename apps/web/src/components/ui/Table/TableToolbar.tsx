@@ -1,4 +1,5 @@
 import { Button } from "../Button/Button";
+import { Input } from "../Input/Input";
 import styles from "./TableToolbar.module.scss";
 
 interface TableToolbarProps {
@@ -73,8 +74,9 @@ export const TableToolbar = ({
             </div>
 
             <div className={styles.search}>
-                <input
+                <Input
                     type="search"
+                    size="sm"
                     className={styles.searchInput}
                     placeholder={searchPlaceholder}
                     aria-label={searchAriaLabel ?? searchPlaceholder}
