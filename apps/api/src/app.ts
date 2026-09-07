@@ -17,6 +17,7 @@ import alertRoutes from "./routes/alert.routes";
 import driverRoutes from "./routes/driver.routes";
 import briefingRoutes from "./routes/briefing.routes";
 import authRoutes from "./routes/auth.routes";
+import importRoutes from "./routes/import.routes";
 import { setStreamFocus, streamEvents } from "./controllers/stream.controller";
 import { getSim, updateSim } from "./controllers/sim.controller";
 
@@ -54,7 +55,10 @@ export function createApp() {
             },
         }),
     );
-    app.use(express.json({ limit: "16kb" }));
+    app.use((req, res, next) => {
+        const limit = req.path.startsWith("/api/import") ? "2mb" : "16kb";
+        express.json({ limit })(req, res, next);
+    });
     app.use(attachSession);
     app.use(
         "/api",
@@ -80,6 +84,7 @@ export function createApp() {
     app.use("/api/vehicles", requireAuth, vehicleRoutes);
     app.use("/api/alerts", requireAuth, alertRoutes);
     app.use("/api/drivers", requireAuth, driverRoutes);
+    app.use("/api/import", requireAuth, importRoutes);
 
     app.use(notFound);
     app.use(errorHandler);

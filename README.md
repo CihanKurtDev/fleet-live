@@ -29,10 +29,10 @@ What you can do in the app today, and what lands next — like a game patch list
 * Shift briefing on the home page, with the open-warning count in the nav
 * Fleet map, trip trail on the vehicle, drivers, company login
 * Trip archive on the vehicle: browse past drives and show a closed route on the map
+* Import vehicles and drivers from CSV with column mapping and preview (`/vehicles/import`)
 
 ## Next
 
-* Import vehicles and drivers from CSV with preview (Phase 9.1 on branch)
 * Yard fields (VIN, HU, depot); drivers you can maintain without the vehicle form
 * A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
 * Depot geofences
@@ -63,6 +63,7 @@ What you can do in the app today, and what lands next — like a game patch list
 * Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
 * Shift briefing on `/` (`GET /api/briefing`); Warnungen nav shows the open inbox count
 * Trip archive on vehicle detail (`GET /api/vehicles/:id/trips`, paginated list; closed trip polyline on map)
+* Stammdaten import (`POST /api/import/preview`, `POST /api/import/commit`, wizard `/vehicles/import`)
 * API integration tests (`node:test` + SuperTest)
 
 ### Consciously simplified / demo

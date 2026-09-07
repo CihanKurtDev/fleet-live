@@ -34,6 +34,11 @@ export const VehiclesPage = () => {
             <VehicleTable
                 onDeleteVehicles={canWrite ? deleteVehicles : undefined}
                 onAddVehicle={canWrite ? () => setIsCreateOpen(true) : undefined}
+                onImport={
+                    canWrite
+                        ? () => navigate("/vehicles/import")
+                        : undefined
+                }
                 onSelectVehicle={(vehicle) => {
                     rememberVehicle(vehicle);
                     setTelemetryFocus("detail", [vehicle.id]);

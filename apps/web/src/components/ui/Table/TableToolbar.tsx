@@ -15,6 +15,8 @@ interface TableToolbarProps {
 
     onAddNew?: () => void;
     addNewLabel?: string;
+    onSecondaryAction?: () => void;
+    secondaryActionLabel?: string;
     searchAriaLabel?: string;
 }
 
@@ -28,6 +30,8 @@ export const TableToolbar = ({
     onDeleteSelected,
     onAddNew,
     addNewLabel,
+    onSecondaryAction,
+    secondaryActionLabel,
     searchAriaLabel,
 }: TableToolbarProps) => {
     const canDelete =
@@ -48,6 +52,16 @@ export const TableToolbar = ({
                         {isEditing
                             ? "Bearbeitung beenden"
                             : "Bearbeiten"}
+                    </Button>
+                )}
+
+                {onSecondaryAction && (
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={onSecondaryAction}
+                    >
+                        {secondaryActionLabel ?? "Weitere Aktion"}
                     </Button>
                 )}
 

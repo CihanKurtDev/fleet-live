@@ -15,12 +15,14 @@ import styles from "./VehicleTable.module.scss";
 interface VehicleTableProps {
     onDeleteVehicles?: (ids: number[]) => void;
     onAddVehicle?: () => void;
+    onImport?: () => void;
     onSelectVehicle?: (vehicle: Vehicle) => void;
 }
 
 export const VehicleTable = ({
     onDeleteVehicles,
     onAddVehicle,
+    onImport,
     onSelectVehicle,
 }: VehicleTableProps) => {
     const listQuery = useVehicleListQuery();
@@ -108,6 +110,8 @@ export const VehicleTable = ({
                         : undefined
                 }
                 onAddNew={onAddVehicle}
+                onSecondaryAction={onImport}
+                secondaryActionLabel="Importieren"
             />
 
             {!isLoading && (

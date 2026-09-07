@@ -199,6 +199,29 @@ export {
 } from "./models/briefing";
 
 export type {
+    ImportColumnMapping,
+    ImportColumnTarget,
+    ImportCommitInput,
+    ImportCommitResult,
+    ImportPreviewCounts,
+    ImportPreviewInput,
+    ImportPreviewResponse,
+    ImportPreviewRow,
+    ImportRowAction,
+    ImportRowIssue,
+    ImportStatusMapping,
+} from "./models/import";
+
+export {
+    IMPORT_COLUMN_TARGETS,
+    IMPORT_ROW_ACTIONS,
+    isImportColumnTarget,
+    isImportRowAction,
+    parseImportCommitInput,
+    parseImportPreviewInput,
+} from "./models/import";
+
+export type {
     FleetDriver,
     FleetDriversQuery,
     FleetDriversResponse,
