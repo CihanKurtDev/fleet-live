@@ -28,10 +28,11 @@ What you can do in the app today, and what lands next — like a game patch list
 * Inbox: open / done, and filter by speeding / low fuel / no signal
 * Shift briefing on the home page, with the open-warning count in the nav
 * Fleet map, trip trail on the vehicle, drivers, company login
+* Trip archive on the vehicle: browse past drives and show a closed route on the map
 
 ## Next
 
-* Past trips on the vehicle, not only the current drive
+* Import vehicles and drivers from CSV with preview (Phase 9.1 on branch)
 * Yard fields (VIN, HU, depot); drivers you can maintain without the vehicle form
 * A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
 * Depot geofences
@@ -61,6 +62,7 @@ What you can do in the app today, and what lands next — like a game patch list
 * Drivers as entities (`drivers` table, `vehicle.driver_id`); list/detail `/drivers` with incident counts
 * Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
 * Shift briefing on `/` (`GET /api/briefing`); Warnungen nav shows the open inbox count
+* Trip archive on vehicle detail (`GET /api/vehicles/:id/trips`, paginated list; closed trip polyline on map)
 * API integration tests (`node:test` + SuperTest)
 
 ### Consciously simplified / demo
@@ -165,6 +167,7 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | `GET`    | `/api/vehicles/:id`              | One vehicle (`404` if missing **or** other company) |
 | `GET`    | `/api/vehicles/:id/telemetry`    | Recent points (`limit`: 10, 25, 50, 100; default 50) |
 | `GET`    | `/api/vehicles/:id/trips/latest` | Running trip, else last finished (`data: null` if never driven) |
+| `GET`    | `/api/vehicles/:id/trips`        | Paginated trip archive (open + closed) for the vehicle          |
 | `POST`   | `/api/vehicles`                  | Create (`Location` on `201`); `company_id` from the session |
 | `PUT`    | `/api/vehicles/:id`              | Replace |
 | `PATCH`  | `/api/vehicles/:id`              | Update |

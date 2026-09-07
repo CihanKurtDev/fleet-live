@@ -5,7 +5,7 @@ import { decodePolyline, speedBand } from "@fleet-live/shared";
 
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
-import { getVehicleTrip } from "../api/vehicles";
+import { getVehicleTrip, listVehicleTrips } from "../api/vehicles";
 import { VehicleHintsPanel } from "../components/alerts/VehicleHintsPanel";
 import { DetailBackLink, useDetailBack } from "../components/navigation/DetailBackLink";
 import { VehicleAssignmentPanel } from "../components/vehicles/VehicleAssignmentPanel";
@@ -14,6 +14,7 @@ import {
     VehicleMap,
     type MapPoint,
 } from "../components/vehicles/VehicleMap";
+import { VehicleTripArchive } from "../components/vehicles/VehicleTripArchive";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
 import { Button } from "../components/ui/Button/Button";
@@ -39,7 +40,7 @@ const describeTrip = (trip: Trip): string => {
         return `Fahrt läuft seit ${formatTimestamp(trip.started_at)}.`;
     }
 
-    return `Letzte Fahrt beendet ${formatTimestamp(trip.ended_at)} · ${formatKilometers(
+    return `${formatTimestamp(trip.started_at)} – ${formatTimestamp(trip.ended_at)} · ${formatKilometers(
         trip.distance_m,
     )} · Spitze ${Math.round(trip.max_speed)} km/h`;
 };
@@ -60,11 +61,20 @@ export const VehicleDetailPage = () => {
     const [tripVehicleId, setTripVehicleId] = useState(parsedId);
     const [trip, setTrip] = useState<Trip | null>(null);
     const [livePath, setLivePath] = useState("");
+    const [archiveTrips, setArchiveTrips] = useState<Trip[]>([]);
+    const [archivePage, setArchivePage] = useState(1);
+    const [archivePageCount, setArchivePageCount] = useState(1);
+    const [archiveTotal, setArchiveTotal] = useState(0);
+    const [archiveLoading, setArchiveLoading] = useState(false);
+    const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
 
     if (parsedId !== tripVehicleId) {
         setTripVehicleId(parsedId);
         setTrip(null);
         setLivePath("");
+        setArchiveTrips([]);
+        setArchivePage(1);
+        setSelectedTripId(null);
     }
 
     useEffect(() => {
@@ -127,18 +137,85 @@ export const VehicleDetailPage = () => {
         return () => controller.abort();
     }, [parsedId, vehicle?.status]);
 
+    useEffect(() => {
+        if (parsedId === null) {
+            return;
+        }
+
+        const controller = new AbortController();
+        setArchiveLoading(true);
+
+        retryTransient(
+            () =>
+                listVehicleTrips(
+                    parsedId,
+                    { page: archivePage, limit: 10 },
+                    controller.signal,
+                ),
+            controller.signal,
+        )
+            .then((response) => {
+                setArchiveTrips(response.data);
+                setArchivePageCount(response.meta.pageCount);
+                setArchiveTotal(response.meta.total);
+                setSelectedTripId((current) => {
+                    if (
+                        current !== null &&
+                        response.data.some((row) => row.id === current)
+                    ) {
+                        return current;
+                    }
+
+                    return response.data[0]?.id ?? null;
+                });
+            })
+            .catch((caught: unknown) => {
+                if (!isAbortError(caught)) {
+                    setArchiveTrips([]);
+                    setArchiveTotal(0);
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setArchiveLoading(false);
+                }
+            });
+
+        return () => controller.abort();
+    }, [parsedId, archivePage, vehicle?.status]);
+
+    const selectedTrip =
+        archiveTrips.find((row) => row.id === selectedTripId) ??
+        trip ??
+        null;
+
     const openPath =
-        vehicle?.status === "DRIVING" && trip?.ended_at === null
-            ? trip.path
+        vehicle?.status === "DRIVING" &&
+        selectedTrip?.ended_at === null
+            ? selectedTrip.path
             : "";
-    const trail = useMemo<MapPoint[]>(
-        () =>
-            decodePolyline(openPath + livePath).map((point) => ({
+    const closedPath =
+        selectedTrip?.ended_at !== null && selectedTrip?.ended_at !== undefined
+            ? selectedTrip.path
+            : "";
+    const trail = useMemo<MapPoint[]>(() => {
+        if (openPath) {
+            return decodePolyline(openPath + livePath).map((point) => ({
                 latitude: point.lat,
                 longitude: point.lng,
-            })),
-        [openPath, livePath],
-    );
+            }));
+        }
+
+        if (closedPath) {
+            return decodePolyline(closedPath).map((point) => ({
+                latitude: point.lat,
+                longitude: point.lng,
+            }));
+        }
+
+        return [];
+    }, [openPath, livePath, closedPath]);
+    const showTrail = trail.length > 0;
 
     if (isLoading) {
         return (
@@ -287,7 +364,7 @@ export const VehicleDetailPage = () => {
                             longitude={position.longitude}
                             label={vehicle.license_plate}
                             status={vehicle.status}
-                            trail={isDriving ? trail : undefined}
+                            trail={showTrail ? trail : undefined}
                         />
                         <details className={styles.coords}>
                             <summary>Koordinaten</summary>
@@ -317,12 +394,20 @@ export const VehicleDetailPage = () => {
             </section>
 
             <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Letzte Fahrt</h2>
-                <p className={layout.note}>
-                    {trip
-                        ? describeTrip(trip)
-                        : "Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."}
-                </p>
+                <h2 className={layout.panelTitle}>Fahrten</h2>
+                {selectedTrip && (
+                    <p className={layout.note}>{describeTrip(selectedTrip)}</p>
+                )}
+                <VehicleTripArchive
+                    trips={archiveTrips}
+                    selectedTripId={selectedTripId}
+                    onSelectTrip={setSelectedTripId}
+                    page={archivePage}
+                    pageCount={archivePageCount}
+                    total={archiveTotal}
+                    onPageChange={setArchivePage}
+                    isLoading={archiveLoading}
+                />
             </section>
 
             <VehicleAssignmentPanel

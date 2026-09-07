@@ -1,4 +1,4 @@
-import type { GeoPoint, Trip } from "@fleet-live/shared";
+import type { GeoPoint, Trip, TripListQuery, TripListResponse } from "@fleet-live/shared";
 import {
     decodePolyline,
     encodePoints,
@@ -8,6 +8,7 @@ import { config } from "../config";
 import { stmt } from "../db/statements";
 import { haversineMeters, simplifyPath } from "../lib/geo";
 import { nowSqlite, sqliteDaysAgo } from "../lib/sqlTime";
+import { pagedQuery } from "../lib/pagination";
 
 /**
  * Unterhalb dieser Distanz ist ein neuer Punkt Messrauschen und kein Stück
@@ -64,6 +65,33 @@ const SELECT_LATEST = `
       AND v.company_id = ?
     ORDER BY t.ended_at IS NULL DESC, t.started_at DESC, t.id DESC
     LIMIT 1
+`;
+
+const LIST_FOR_VEHICLE = `
+    SELECT
+        t.id,
+        t.vehicle_id,
+        t.started_at,
+        t.ended_at,
+        t.path,
+        t.point_count,
+        t.distance_m,
+        t.max_speed,
+        COUNT(*) OVER () AS total
+    FROM trips t
+    INNER JOIN vehicles v ON v.id = t.vehicle_id
+    WHERE t.vehicle_id = ?
+      AND v.company_id = ?
+    ORDER BY t.ended_at IS NULL DESC, t.started_at DESC, t.id DESC
+    LIMIT ? OFFSET ?
+`;
+
+const COUNT_FOR_VEHICLE = `
+    SELECT COUNT(*) AS total
+    FROM trips t
+    INNER JOIN vehicles v ON v.id = t.vehicle_id
+    WHERE t.vehicle_id = ?
+      AND v.company_id = ?
 `;
 
 /**
@@ -298,5 +326,28 @@ export class TripModel {
             | undefined;
 
         return row ?? null;
+    }
+
+    static listForVehicle(
+        vehicleId: number,
+        companyId: number,
+        query: TripListQuery,
+    ): TripListResponse {
+        const offset = (query.page - 1) * query.limit;
+
+        return pagedQuery({
+            listSql: LIST_FOR_VEHICLE,
+            listParams: [vehicleId, companyId, query.limit, offset],
+            countSql: COUNT_FOR_VEHICLE,
+            countParams: [vehicleId, companyId],
+            page: query.page,
+            limit: query.limit,
+            map: (row) => {
+                const { total: _total, ...trip } = row as Trip & {
+                    total: number;
+                };
+                return trip;
+            },
+        });
     }
 }

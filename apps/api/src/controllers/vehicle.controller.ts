@@ -3,6 +3,7 @@ import {
     parseFleetDriversQuery,
     parseFleetPositionsQuery,
     parseTelemetryHistoryQuery,
+    parseTripListQuery,
     parseVehicleListQuery,
     validateVehicleInput,
     type Vehicle,
@@ -167,6 +168,19 @@ export function getVehicleTrip(req: Request, res: Response) {
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
     res.json({ data: TripModel.latestForVehicle(id, sessionCompany(req)) });
+}
+
+export function getVehicleTrips(req: Request, res: Response) {
+    const id = parseId(req.params.id);
+    const companyId = sessionCompany(req);
+
+    if (!VehicleModel.getById(id, companyId)) {
+        throw new NotFoundError();
+    }
+
+    const query = parseTripListQuery(req.query);
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.json(TripModel.listForVehicle(id, companyId, query));
 }
 
 export function createVehicle(req: Request, res: Response) {

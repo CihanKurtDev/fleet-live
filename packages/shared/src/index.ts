@@ -57,6 +57,19 @@ export {
 export type { Trip, TripResponse } from "./models/trip";
 
 export type {
+    TripListMeta,
+    TripListQuery,
+    TripListResponse,
+    TripPageLimit,
+} from "./models/tripQuery";
+
+export {
+    TRIP_PAGE_LIMITS,
+    parseTripListQuery,
+    tripListQuerySchema,
+} from "./models/tripQuery";
+
+export type {
     Alert,
     AlertDetails,
     AlertFilterId,

@@ -1971,6 +1971,71 @@ describe("GET /api/vehicles/:id/trips/latest", () => {
     });
 });
 
+describe("GET /api/vehicles/:id/trips", () => {
+    it("returns 404 for a missing vehicle", async () => {
+        const response = await api.get("/api/vehicles/999/trips");
+
+        assert.equal(response.status, 404);
+    });
+
+    it("returns an empty page for a vehicle that never drove", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-ARC 1",
+            driver_name: "Leer",
+        });
+
+        const response = await api.get(
+            `/api/vehicles/${vehicle.id}/trips`,
+        );
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.body.data, []);
+        assert.equal(response.body.meta.total, 0);
+    });
+
+    it("lists open and closed trips with pagination", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-ARC 2",
+            driver_name: "Zwei Fahrten",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.1);
+        TelemetryModel.tickDrivingVehicles([vehicle.id]);
+
+        await api
+            .patch(`/api/vehicles/${vehicle.id}`)
+            .send({ status: "IDLE" });
+
+        VehicleModel.update(vehicle.id, { status: "DRIVING" }, 1);
+        TripModel.open(vehicle.id);
+        TelemetryModel.tickDrivingVehicles([vehicle.id]);
+
+        const response = await api.get(
+            `/api/vehicles/${vehicle.id}/trips?limit=10`,
+        );
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.meta.total, 2);
+        assert.equal(response.body.data.length, 2);
+        assert.equal(response.body.data[0].ended_at, null);
+        assert.ok(response.body.data[1].ended_at);
+        assert.ok(response.body.data[0].path);
+    });
+
+    it("returns 404 for another company's vehicle", async () => {
+        const other = VehicleModel.create({
+            license_plate: "K-ARC 3",
+            company_id: 2,
+        });
+
+        const response = await api.get(
+            `/api/vehicles/${other.id}/trips`,
+        );
+
+        assert.equal(response.status, 404);
+    });
+});
+
 describe("polyline geometry", () => {
     it("round-trips coordinates within a metre", () => {
         const points = [

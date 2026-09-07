@@ -3,6 +3,8 @@ import type {
     FleetDriversResponse,
     FleetPositionsQuery,
     FleetPositionsResponse,
+    TripListQuery,
+    TripListResponse,
     TripResponse,
     Vehicle,
     VehicleInput,
@@ -61,6 +63,21 @@ export function getVehicleTrip(id: number, signal?: AbortSignal) {
     return request<TripResponse>(`/api/vehicles/${id}/trips/latest`, {
         signal,
     });
+}
+
+export function listVehicleTrips(
+    id: number,
+    query: TripListQuery,
+    signal?: AbortSignal,
+) {
+    const params = new URLSearchParams();
+    params.set("page", String(query.page));
+    params.set("limit", String(query.limit));
+
+    return request<TripListResponse>(
+        `/api/vehicles/${id}/trips?${params.toString()}`,
+        { signal },
+    );
 }
 
 export function createVehicle(input: VehicleInput) {
