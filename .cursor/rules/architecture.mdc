@@ -29,7 +29,7 @@ Data flow: React `--HTTP + SSE /api-->` Express (`app.ts` + `routes/`) → contr
 
 **Not implemented — do not treat as present:** frontend tests, CI/CD, trip archive, geofences, HU/licence dates, CSV export.
 
-**Next (do this, not invite/CI):** Phase 8 — trip archive. Do not treat sim 50/120 as legal OSM limits. Details: `.cursor/ROADMAP.md`.
+**Next (do this, not invite/CI):** shared `Avatar`, `Checkbox`, and `Input` in `components/ui`, then use them everywhere instead of raw `<input>` / ad-hoc initials. After that, Phase 8 — trip archive. Do not treat sim 50/120 as legal OSM limits. Details: `.cursor/ROADMAP.md`.
 
 Git branches never start with `cursor/`. See `.cursor/rules/git.mdc`.
 

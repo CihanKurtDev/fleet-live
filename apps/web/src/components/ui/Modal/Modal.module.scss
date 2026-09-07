@@ -1,7 +1,11 @@
 .dialog {
     width: 440px;
     max-width: calc(100vw - 32px);
+    max-height: calc(100svh - 32px);
+    margin: auto;
     padding: 0;
+    box-sizing: border-box;
+    overflow: hidden;
 
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -16,7 +20,8 @@
 
 .dialogLg {
     width: min(560px, calc(100vw - 32px));
-    height: min(680px, calc(100vh - 48px));
+    height: min(560px, calc(100svh - 72px));
+    max-height: calc(100svh - 72px);
 
     .content {
         height: 100%;

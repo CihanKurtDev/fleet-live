@@ -67,6 +67,7 @@ describe("GET /api/drivers", () => {
         assert.equal(response.body.data[0].vehicle_count, 2);
         assert.equal(response.body.data[0].vehicle_plate, null);
         assert.equal(response.body.data[0].current_vehicle_plate, "K-OWN 1");
+        assert.equal(response.body.data[0].current_vehicle_status, "IDLE");
         assert.equal(response.body.data[0].open_warnings, 1);
         assert.equal(response.body.data[0].counts.all, 1);
         assert.equal(response.body.data[0].counts.SPEEDING, 1);
@@ -134,6 +135,7 @@ describe("GET /api/drivers", () => {
         assert.equal(response.body.data[0].vehicle_count, 1);
         assert.equal(response.body.data[0].vehicle_plate, "K-NONE 1");
         assert.equal(response.body.data[0].current_vehicle_plate, "K-NONE 1");
+        assert.equal(response.body.data[0].current_vehicle_status, "IDLE");
     });
 
     it("upserts the same name in one company and isolates names across companies", async () => {
@@ -286,6 +288,10 @@ describe("POST /api/drivers", () => {
         const duplicate = await api.post("/api/drivers").send({ name: "Elisa" });
         assert.equal(duplicate.status, 409);
         assert.equal(duplicate.body.code, "CONFLICT");
+
+        const listed = await api.get("/api/drivers").query({ search: "Elisa" });
+        assert.equal(listed.body.data[0].current_vehicle_plate, null);
+        assert.equal(listed.body.data[0].current_vehicle_status, null);
     });
 
     it("rejects an empty name", async () => {
@@ -417,6 +423,10 @@ describe("driver assignment", () => {
             status: "IDLE",
         });
         const driverId = requireCurrentDriver(current);
+
+        const listed = await api.get("/api/drivers").query({ search: "Karl" });
+        assert.equal(listed.body.data[0].current_vehicle_plate, "K-DRV 1");
+        assert.equal(listed.body.data[0].current_vehicle_status, "DRIVING");
 
         await api
             .post(`/api/drivers/${driverId}/vehicles`)

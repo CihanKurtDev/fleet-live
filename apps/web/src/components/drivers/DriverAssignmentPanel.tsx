@@ -1,17 +1,23 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
-import type { DriverDetail, Vehicle } from "@fleet-live/shared";
+import type { DriverDetail, DriverVehicle, Vehicle } from "@fleet-live/shared";
 
 import {
     assignDriverVehicle,
     setDriverCurrentVehicle,
     unassignDriverVehicle,
 } from "../../api/drivers";
+import { ApiError } from "../../api/client";
 import { listVehicles } from "../../api/vehicles";
 import { useAssignmentPicker } from "../../hooks/useAssignmentPicker";
 import { Button } from "../ui/Button/Button";
+import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
 import { AssignmentPicker } from "./AssignmentPicker";
-import { vehicleStatusLabel } from "../vehicles/vehicleStatus";
+import { AssignmentRoster } from "./AssignmentRoster";
+import {
+    assignmentStatus,
+    canAutoCurrentVehicle,
+} from "./assignmentMeta";
 import layout from "../../styles/detailLayout.module.scss";
 import styles from "./assignment.module.scss";
 
@@ -28,6 +34,12 @@ export const DriverAssignmentPanel = ({
     const fromHere = `${location.pathname}${location.search}`;
     const assignedIds = new Set(driver.vehicles.map((vehicle) => vehicle.id));
     const onTrip = driver.current_vehicle?.status === "DRIVING";
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [editing, setEditing] = useState(false);
+    const [pendingUnassign, setPendingUnassign] = useState<
+        DriverVehicle[] | null
+    >(null);
+    const candidatesRef = useRef<Vehicle[]>([]);
 
     const fetchCandidates = useCallback(
         (search: string, signal: AbortSignal) =>
@@ -64,11 +76,31 @@ export const DriverAssignmentPanel = ({
                 });
             }
 
-            if (autoCurrent && ids[0] !== undefined && !onTrip) {
-                await setDriverCurrentVehicle(driver.id, {
-                    vehicle_id: ids[0],
-                });
-                clearAutoCurrent();
+            const picked =
+                ids.length === 1
+                    ? candidatesRef.current.find(
+                          (vehicle) => vehicle.id === ids[0],
+                      )
+                    : undefined;
+
+            if (
+                autoCurrent &&
+                !onTrip &&
+                canAutoCurrentVehicle(picked) &&
+                ids[0] !== undefined
+            ) {
+                try {
+                    await setDriverCurrentVehicle(driver.id, {
+                        vehicle_id: ids[0],
+                    });
+                    clearAutoCurrent();
+                } catch (caught) {
+                    if (
+                        !(caught instanceof ApiError && caught.status === 409)
+                    ) {
+                        throw caught;
+                    }
+                }
             }
 
             closePicker();
@@ -98,18 +130,117 @@ export const DriverAssignmentPanel = ({
         onConfirmAssign,
     });
 
+    candidatesRef.current = candidates;
+
+    useEffect(() => {
+        const allowed = new Set(driver.vehicles.map((vehicle) => vehicle.id));
+        setSelectedIds((current) =>
+            current.filter((id) => allowed.has(id)),
+        );
+        if (driver.vehicles.length === 0) {
+            setEditing(false);
+        }
+    }, [driver.vehicles]);
+
+    const rosterItems = useMemo(() => {
+        return [...driver.vehicles]
+            .sort((left, right) => {
+                if (left.is_current !== right.is_current) {
+                    return left.is_current ? -1 : 1;
+                }
+
+                return left.license_plate.localeCompare(
+                    right.license_plate,
+                    "de",
+                );
+            })
+            .map((vehicle) => ({
+                id: vehicle.id,
+                title: (
+                    <Link
+                        to={`/vehicles/${vehicle.id}`}
+                        state={{ from: fromHere }}
+                    >
+                        {vehicle.license_plate}
+                    </Link>
+                ),
+                avatarName: vehicle.license_plate,
+                selectLabel: `${vehicle.license_plate} auswählen`,
+                status: assignmentStatus(
+                    vehicle.is_current ? "Aktuell" : "Zugewiesen",
+                    vehicle.status,
+                ),
+                isCurrent: vehicle.is_current,
+                currentLocked: onTrip,
+            }));
+    }, [driver.vehicles, fromHere, onTrip]);
+
+    const pendingCount = pendingUnassign?.length ?? 0;
+    const pendingCurrent =
+        pendingUnassign?.some((vehicle) => vehicle.is_current) ?? false;
+    const selectedCount = selectedIds.length;
+
     return (
         <section className={layout.panel}>
             <div className={layout.panelHeader}>
                 <h2 className={layout.panelTitle}>Fahrzeuge</h2>
                 {canWrite && (
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={openAssignPicker}
-                    >
-                        Zuweisen
-                    </Button>
+                    <div className={styles.headerActions}>
+                        {editing && selectedCount > 0 && (
+                            <>
+                                <span className={styles.selectionCount}>
+                                    {selectedCount === 1
+                                        ? "1 ausgewählt"
+                                        : `${selectedCount} ausgewählt`}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={busy}
+                                    onClick={() => setSelectedIds([])}
+                                >
+                                    Auswahl aufheben
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={busy}
+                                    onClick={() =>
+                                        setPendingUnassign(
+                                            driver.vehicles.filter((vehicle) =>
+                                                selectedIds.includes(
+                                                    vehicle.id,
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                >
+                                    {selectedCount === 1
+                                        ? "1 entfernen"
+                                        : `${selectedCount} entfernen`}
+                                </Button>
+                            </>
+                        )}
+                        {driver.vehicles.length > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                    setEditing((current) => !current);
+                                    setSelectedIds([]);
+                                }}
+                            >
+                                {editing ? "Fertig" : "Bearbeiten"}
+                            </Button>
+                        )}
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={openAssignPicker}
+                        >
+                            Zuweisen
+                        </Button>
+                    </div>
                 )}
             </div>
             {error && (
@@ -123,86 +254,43 @@ export const DriverAssignmentPanel = ({
                     nach der Fahrt wechseln.
                 </p>
             )}
-            {driver.vehicles.length === 0 ? (
-                <p className={layout.empty}>Kein Fahrzeug zugewiesen.</p>
-            ) : (
-                <ul className={styles.list}>
-                    {driver.vehicles.map((vehicle) => (
-                        <li key={vehicle.id} className={styles.row}>
-                            <div className={styles.identity}>
-                                <Link
-                                    className={styles.link}
-                                    to={`/vehicles/${vehicle.id}`}
-                                    state={{ from: fromHere }}
-                                >
-                                    {vehicle.license_plate}
-                                </Link>
-                                <span className={styles.pickerMeta}>
-                                    {vehicleStatusLabel(vehicle.status)}
-                                </span>
-                                {vehicle.is_current && (
-                                    <span className={styles.badge}>Aktuell</span>
-                                )}
-                            </div>
-                            {canWrite && (
-                                <div className={styles.actions}>
-                                    {vehicle.is_current ? (
-                                        <button
-                                            type="button"
-                                            className={styles.textAction}
-                                            disabled={busy || onTrip}
-                                            onClick={() =>
-                                                void run(() =>
-                                                    setDriverCurrentVehicle(
-                                                        driver.id,
-                                                        { vehicle_id: null },
-                                                    ),
-                                                )
-                                            }
-                                        >
-                                            Aufheben
-                                        </button>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            className={styles.textAction}
-                                            disabled={busy || onTrip}
-                                            onClick={() =>
-                                                void run(() =>
-                                                    setDriverCurrentVehicle(
-                                                        driver.id,
-                                                        {
-                                                            vehicle_id:
-                                                                vehicle.id,
-                                                        },
-                                                    ),
-                                                )
-                                            }
-                                        >
-                                            Als aktuell
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        className={styles.textAction}
-                                        disabled={busy}
-                                        onClick={() =>
-                                            void run(() =>
-                                                unassignDriverVehicle(
-                                                    driver.id,
-                                                    vehicle.id,
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        Entfernen
-                                    </button>
-                                </div>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-            )}
+
+            <AssignmentRoster
+                items={rosterItems}
+                editing={editing}
+                busy={busy}
+                selectedIds={selectedIds}
+                empty="Kein Fahrzeug zugewiesen."
+                onToggle={(id) =>
+                    setSelectedIds((current) =>
+                        current.includes(id)
+                            ? current.filter((selected) => selected !== id)
+                            : [...current, id],
+                    )
+                }
+                onSetCurrent={(id) =>
+                    void run(() =>
+                        setDriverCurrentVehicle(driver.id, {
+                            vehicle_id: id,
+                        }),
+                    )
+                }
+                onClearCurrent={() =>
+                    void run(() =>
+                        setDriverCurrentVehicle(driver.id, {
+                            vehicle_id: null,
+                        }),
+                    )
+                }
+                onRemove={(id) => {
+                    const vehicle = driver.vehicles.find(
+                        (row) => row.id === id,
+                    );
+                    if (vehicle) {
+                        setPendingUnassign([vehicle]);
+                    }
+                }}
+            />
 
             <AssignmentPicker
                 open={assignOpen}
@@ -214,7 +302,10 @@ export const DriverAssignmentPanel = ({
                 items={candidates.map((vehicle) => ({
                     id: vehicle.id,
                     title: vehicle.license_plate,
-                    meta: vehicleStatusLabel(vehicle.status),
+                    status: assignmentStatus(
+                        vehicle.driver_name ?? "Pool",
+                        vehicle.status,
+                    ),
                 }))}
                 isLoading={isLoadingCandidates}
                 loadingLabel="Fahrzeuge werden geladen…"
@@ -222,6 +313,46 @@ export const DriverAssignmentPanel = ({
                 busy={busy}
                 onConfirm={confirmAssign}
             />
+
+            <ConfirmDialog
+                open={pendingUnassign !== null}
+                onClose={() => setPendingUnassign(null)}
+                title={
+                    pendingCount === 1
+                        ? "Zuweisung entfernen?"
+                        : `${pendingCount} Zuweisungen entfernen?`
+                }
+                confirmLabel="Entfernen"
+                onConfirm={() => {
+                    const vehicles = pendingUnassign;
+                    if (!vehicles || vehicles.length === 0) {
+                        return;
+                    }
+
+                    setPendingUnassign(null);
+                    setSelectedIds([]);
+                    void run(async () => {
+                        for (const vehicle of vehicles) {
+                            await unassignDriverVehicle(driver.id, vehicle.id);
+                        }
+                    });
+                }}
+            >
+                {pendingCount === 1 ? (
+                    <p>
+                        „{pendingUnassign?.[0]?.license_plate}“ wirklich von
+                        diesem Fahrer entfernen?
+                    </p>
+                ) : (
+                    <p>
+                        Diese {pendingCount} Fahrzeuge wirklich von diesem
+                        Fahrer entfernen?
+                        {pendingCurrent
+                            ? " Das aktuelle Fahrzeug wird mit entfernt."
+                            : ""}
+                    </p>
+                )}
+            </ConfirmDialog>
         </section>
     );
 };
