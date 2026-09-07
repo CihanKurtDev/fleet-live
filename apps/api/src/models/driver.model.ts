@@ -7,6 +7,7 @@ import type {
     DriverListResponse,
     DriverSortKey,
     DriverVehicle,
+    VehicleStatus,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
@@ -41,6 +42,7 @@ type DriverRow = {
     vehicle_count: number;
     vehicle_plate: string | null;
     current_vehicle_plate: string | null;
+    current_vehicle_status: VehicleStatus | null;
     open_warnings: number;
     speeding: number;
     all_incidents: number;
@@ -75,6 +77,7 @@ function toDriver(row: DriverRow): Driver {
         vehicle_count: Number(row.vehicle_count),
         vehicle_plate: row.vehicle_plate,
         current_vehicle_plate: row.current_vehicle_plate,
+        current_vehicle_status: row.current_vehicle_status,
         open_warnings: Number(row.open_warnings),
         counts: toCounts(row),
     };
@@ -106,6 +109,12 @@ const AGG_SELECT = `
         WHERE v.current_driver_id = d.id
         LIMIT 1
     ) AS current_vehicle_plate,
+    (
+        SELECT v.status
+        FROM vehicles v
+        WHERE v.current_driver_id = d.id
+        LIMIT 1
+    ) AS current_vehicle_status,
     (
         SELECT COUNT(*)
         FROM alerts a

@@ -20,6 +20,8 @@ export type Driver = {
     vehicle_plate: string | null;
     /** Kennzeichen des aktuellen Fahrzeugs. */
     current_vehicle_plate: string | null;
+    /** Status des aktuellen Fahrzeugs; null ohne aktuelles Fahrzeug. */
+    current_vehicle_status: VehicleStatus | null;
     open_warnings: number;
     counts: DriverIncidentCounts;
 };

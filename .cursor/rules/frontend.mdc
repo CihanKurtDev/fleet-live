@@ -20,7 +20,7 @@ alwaysApply: false
 
 ## UI split
 
-- `components/ui` stays generic (Table, Button, Modal). No vehicle fields there.
+- `components/ui` stays generic (Table, Button, Modal). No vehicle fields there. Avatar, Checkbox, and Input are the next add — when they exist, use them everywhere (assignment, fleet picker, tables, login, forms). Do not add more raw `<input>` or one-off initial circles.
 - Vehicle columns/filters belong in `components/vehicles/` (e.g. `vehicleTableConfig.tsx`). Alert columns/filters belong in `components/alerts/`. Driver columns belong in `components/drivers/`. The shift briefing lives on `/` (`BriefingPage`). Speed colour comes only from `speedBand` / `SPEED_BAND_COLORS`, not status greens.
 - Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides. Write actions (create/edit/delete, sim pause, resolve alerts, driver assignment) are for `dispatcher`; `viewer` is read-only (including inbox, drivers, speed indicator).
 - No frontend unit-test runner. Do not add Jest/Vitest unless explicitly asked.
