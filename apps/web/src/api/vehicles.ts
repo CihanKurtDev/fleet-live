@@ -80,6 +80,17 @@ export function listVehicleTrips(
     );
 }
 
+export function getVehicleTripById(
+    vehicleId: number,
+    tripId: number,
+    signal?: AbortSignal,
+) {
+    return request<TripResponse>(
+        `/api/vehicles/${vehicleId}/trips/${tripId}`,
+        { signal },
+    );
+}
+
 export function createVehicle(input: VehicleInput) {
     return request<Vehicle>("/api/vehicles", {
         method: "POST",

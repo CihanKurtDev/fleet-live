@@ -82,4 +82,6 @@ export interface TableProps<RowType> {
 
     /** Sichtbar nur für Screenreader. Ohne Caption kein `<caption>`. */
     caption?: string;
+
+    className?: string;
 }

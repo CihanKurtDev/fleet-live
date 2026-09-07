@@ -3,7 +3,7 @@ import { formatCount } from "../../../utils/formatCount";
 import { getPageWindow } from "../../../utils/getPageWindow";
 import styles from "./TablePagination.module.scss";
 
-const LIMIT_OPTIONS = [10, 25, 50, 100];
+const LIMIT_OPTIONS = [10, 25, 50, 100] as const;
 
 interface ChevronProps {
     direction: "left" | "right";
@@ -52,6 +52,9 @@ interface TablePaginationProps {
 
     onPageChange: (page: number) => void;
     onLimitChange: (limit: number) => void;
+
+    /** Erlaubte Seitengrößen. Standard: 10, 25, 50, 100. */
+    limitOptions?: readonly number[];
 }
 
 export const TablePagination = ({
@@ -61,6 +64,7 @@ export const TablePagination = ({
     total,
     onPageChange,
     onLimitChange,
+    limitOptions: allowedLimits = LIMIT_OPTIONS,
 }: TablePaginationProps) => {
     const limitSelectId = useId();
 
@@ -72,9 +76,9 @@ export const TablePagination = ({
 
     // Nur Optionen anbieten, die zur Datenmenge passen:
     // die kleinste, alle die noch etwas ändern, und die aktuelle.
-    const limitOptions = LIMIT_OPTIONS.filter(
+    const limitOptions = allowedLimits.filter(
         (option, index) => {
-            const previous = LIMIT_OPTIONS[index - 1];
+            const previous = allowedLimits[index - 1];
 
             return (
                 option === limit ||

@@ -1,4 +1,10 @@
-import type { GeoPoint, Trip, TripListQuery, TripListResponse } from "@fleet-live/shared";
+import type {
+    GeoPoint,
+    Trip,
+    TripListItem,
+    TripListQuery,
+    TripListResponse,
+} from "@fleet-live/shared";
 import {
     decodePolyline,
     encodePoints,
@@ -73,7 +79,6 @@ const LIST_FOR_VEHICLE = `
         t.vehicle_id,
         t.started_at,
         t.ended_at,
-        t.path,
         t.point_count,
         t.distance_m,
         t.max_speed,
@@ -84,6 +89,23 @@ const LIST_FOR_VEHICLE = `
       AND v.company_id = ?
     ORDER BY t.ended_at IS NULL DESC, t.started_at DESC, t.id DESC
     LIMIT ? OFFSET ?
+`;
+
+const SELECT_ONE = `
+    SELECT
+        t.id,
+        t.vehicle_id,
+        t.started_at,
+        t.ended_at,
+        t.path,
+        t.point_count,
+        t.distance_m,
+        t.max_speed
+    FROM trips t
+    INNER JOIN vehicles v ON v.id = t.vehicle_id
+    WHERE t.id = ?
+      AND t.vehicle_id = ?
+      AND v.company_id = ?
 `;
 
 const COUNT_FOR_VEHICLE = `
@@ -343,11 +365,23 @@ export class TripModel {
             page: query.page,
             limit: query.limit,
             map: (row) => {
-                const { total: _total, ...trip } = row as Trip & {
+                const { total: _total, ...trip } = row as TripListItem & {
                     total: number;
                 };
                 return trip;
             },
         });
+    }
+
+    static getById(
+        tripId: number,
+        vehicleId: number,
+        companyId: number,
+    ): Trip | null {
+        const row = stmt(SELECT_ONE).get(tripId, vehicleId, companyId) as
+            | Trip
+            | undefined;
+
+        return row ?? null;
     }
 }

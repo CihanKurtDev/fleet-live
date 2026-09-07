@@ -1,22 +1,21 @@
-import type { Trip } from "@fleet-live/shared";
+import type { TripListItem } from "@fleet-live/shared";
+import { TRIP_PAGE_LIMITS } from "@fleet-live/shared";
 
-import { Button } from "../ui/Button/Button";
-import { formatTimestamp } from "../../utils/dateTime";
+import { Table } from "../ui/Table/Table";
+import { TablePagination } from "../ui/Table/TablePagination";
+import { tripColumns } from "./tripTableConfig";
 import styles from "./VehicleTripArchive.module.scss";
 
-const formatKilometers = (meters: number) =>
-    `${(meters / 1_000).toLocaleString("de-DE", {
-        maximumFractionDigits: 1,
-    })} km`;
-
 interface VehicleTripArchiveProps {
-    trips: Trip[];
+    trips: TripListItem[];
     selectedTripId: number | null;
     onSelectTrip: (tripId: number) => void;
     page: number;
     pageCount: number;
+    limit: number;
     total: number;
     onPageChange: (page: number) => void;
+    onLimitChange: (limit: number) => void;
     isLoading?: boolean;
 }
 
@@ -26,79 +25,41 @@ export const VehicleTripArchive = ({
     onSelectTrip,
     page,
     pageCount,
+    limit,
     total,
     onPageChange,
+    onLimitChange,
     isLoading = false,
 }: VehicleTripArchiveProps) => {
-    if (isLoading) {
-        return <p className={styles.empty}>Fahrten werden geladen…</p>;
-    }
-
-    if (total === 0) {
-        return (
-            <p className={styles.empty}>
-                Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald
-                das Fahrzeug unterwegs ist.
-            </p>
-        );
-    }
+    const showPagination = total > 0 && page <= pageCount;
 
     return (
         <div className={styles.archive}>
-            <ul className={styles.list}>
-                {trips.map((trip) => {
-                    const isOpen = trip.ended_at === null;
-                    const isSelected = trip.id === selectedTripId;
+            <Table
+                columns={tripColumns}
+                rows={trips}
+                getRowKey={(row) => row.id}
+                selectedRows={
+                    selectedTripId === null ? [] : [selectedTripId]
+                }
+                onRowClick={(row) => onSelectTrip(row.id)}
+                isLoading={isLoading}
+                skeletonRowCount={Math.min(limit, 10)}
+                emptyContent="Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."
+                caption="Fahrten"
+                className={styles.tableWrap}
+            />
 
-                    return (
-                        <li key={trip.id}>
-                            <button
-                                type="button"
-                                className={styles.item}
-                                data-selected={isSelected || undefined}
-                                data-open={isOpen || undefined}
-                                onClick={() => onSelectTrip(trip.id)}
-                            >
-                                <span className={styles.when}>
-                                    {formatTimestamp(trip.started_at)}
-                                    {isOpen
-                                        ? " · läuft"
-                                        : trip.ended_at
-                                          ? ` – ${formatTimestamp(trip.ended_at)}`
-                                          : ""}
-                                </span>
-                                <span className={styles.stats}>
-                                    {formatKilometers(trip.distance_m)} · Spitze{" "}
-                                    {Math.round(trip.max_speed)} km/h
-                                </span>
-                            </button>
-                        </li>
-                    );
-                })}
-            </ul>
-
-            {pageCount > 1 && (
-                <div className={styles.pagination}>
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={page <= 1}
-                        onClick={() => onPageChange(page - 1)}
-                    >
-                        Zurück
-                    </Button>
-                    <span className={styles.pageLabel}>
-                        Seite {page} von {pageCount}
-                    </span>
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={page >= pageCount}
-                        onClick={() => onPageChange(page + 1)}
-                    >
-                        Weiter
-                    </Button>
-                </div>
+            {showPagination && (
+                <TablePagination
+                    page={page}
+                    pageCount={pageCount}
+                    limit={limit}
+                    total={total}
+                    onPageChange={onPageChange}
+                    onLimitChange={onLimitChange}
+                    limitOptions={TRIP_PAGE_LIMITS}
+                />
             )}
         </div>
     );

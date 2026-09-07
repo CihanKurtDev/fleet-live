@@ -17,13 +17,14 @@ export const Table = <RowType,>({
     skeletonRowCount = 10,
     emptyContent = "Keine Ergebnisse",
     caption,
+    className,
 }: TableProps<RowType>) => {
     const columnCount = isEditing
         ? columns.length + 1
         : columns.length;
 
     return (
-        <div className={styles.tableContainer}>
+        <div className={[styles.tableContainer, className].filter(Boolean).join(" ")}>
             <table
                 className={styles.table}
                 aria-busy={isLoading}

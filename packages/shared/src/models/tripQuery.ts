@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Trip } from "./trip";
+import type { TripListItem } from "./trip";
 import { emptyToUndefined } from "./queryPreprocess";
 
 export const TRIP_PAGE_LIMITS = [10, 25, 50] as const;
@@ -14,7 +14,7 @@ export type TripListMeta = {
 };
 
 export type TripListResponse = {
-    data: Trip[];
+    data: TripListItem[];
     meta: TripListMeta;
 };
 

@@ -183,6 +183,24 @@ export function getVehicleTrips(req: Request, res: Response) {
     res.json(TripModel.listForVehicle(id, companyId, query));
 }
 
+export function getVehicleTripById(req: Request, res: Response) {
+    const id = parseId(req.params.id);
+    const tripId = parseRouteId(req.params.tripId, "Fahrt-ID");
+    const companyId = sessionCompany(req);
+
+    if (!VehicleModel.getById(id, companyId)) {
+        throw new NotFoundError();
+    }
+
+    const trip = TripModel.getById(tripId, id, companyId);
+    if (!trip) {
+        throw new NotFoundError("Fahrt nicht gefunden.");
+    }
+
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.json({ data: trip });
+}
+
 export function createVehicle(req: Request, res: Response) {
     const input = readInput(req.body);
     const errors = validateVehicleInput(input, { partial: true });

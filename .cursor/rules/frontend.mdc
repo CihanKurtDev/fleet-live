@@ -28,7 +28,7 @@ alwaysApply: false
 ## Map
 
 - Leaflet on the detail page (`VehicleMap`) and the fleet page (`FleetMap`); shared basemap/theme in `leafletMap.ts`.
-- Marker at last telemetry. The detail-map trail is the **open** trip only (`ended_at === null`) plus live `path_delta`, and only while `status === DRIVING`. Closed latest trips stay in the “Letzte Fahrt” text; do not draw them as a live polyline. Decode with `decodePolyline`. SSE `path_delta` is road vertices, not the tick chord. `path_reset` replaces the trail (new trip), it does not append. Do not concatenate a closed `trip.path` with live crumbs.
+- Marker at last telemetry. The detail-map trail is the **selected** trip: the open trip plus live `path_delta` while `DRIVING` and that open trip is selected; a selected closed trip draws its archived polyline (no live append). Decode with `decodePolyline`. SSE `path_delta` is road vertices, not the tick chord. `path_reset` replaces the trail (new trip), it does not append. Do not concatenate a closed `trip.path` with live crumbs. The trip table is paginated; list rows have no `path` — fetch `GET …/trips/:tripId` for the line.
 - The marker slides along the new vertices (~400 ms). The trail grows with the marker, never ahead of it. The map stays centered on the vehicle until the user pans or zooms; "Fahrzeug zentrieren" resumes follow and keeps it.
 - Status is not a form field and not a trip toggle.
 - Do not fetch the telemetry history for the trail. That is the hot buffer and it rolls over mid-drive.

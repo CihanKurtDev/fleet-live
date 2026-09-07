@@ -8,6 +8,7 @@ import {
     getVehiclePositions,
     getVehicleTelemetry,
     getVehicleTrip,
+    getVehicleTripById,
     getVehicleTrips,
     getVehicles,
     replaceVehicle,
@@ -21,6 +22,7 @@ router.get("/positions", getVehiclePositions);
 router.get("/drivers", getVehicleDrivers);
 router.get("/:id/telemetry", getVehicleTelemetry);
 router.get("/:id/trips/latest", getVehicleTrip);
+router.get("/:id/trips/:tripId", getVehicleTripById);
 router.get("/:id/trips", getVehicleTrips);
 router.get("/:id", getVehicleById);
 router.post("/", requireDispatcher, createVehicle);

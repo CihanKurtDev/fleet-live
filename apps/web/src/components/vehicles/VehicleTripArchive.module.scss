@@ -1,68 +1,10 @@
 .archive {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    min-width: 0;
+    max-width: 100%;
 }
 
-.list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.item {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface, #fff);
-    color: var(--text);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-
-    &:hover {
-        border-color: var(--accent);
-    }
-
-    &[data-selected] {
-        border-color: var(--accent);
-        box-shadow: inset 0 0 0 1px var(--accent);
-    }
-
-    &[data-open] .when {
-        font-weight: 600;
-    }
-}
-
-.when {
-    font-size: 0.95rem;
-}
-
-.stats {
-    font-size: 0.85rem;
-    color: var(--text-muted, #64748b);
-}
-
-.pagination {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.pageLabel {
-    font-size: 0.9rem;
-    color: var(--text-muted, #64748b);
-}
-
-.empty {
-    margin: 0;
-    color: var(--text-muted, #64748b);
+.tableWrap {
+    max-height: 22.5rem;
 }

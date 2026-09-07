@@ -54,7 +54,7 @@ export {
     telemetryPatchesSchema,
 } from "./models/telemetry";
 
-export type { Trip, TripResponse } from "./models/trip";
+export type { Trip, TripListItem, TripResponse } from "./models/trip";
 
 export type {
     TripListMeta,

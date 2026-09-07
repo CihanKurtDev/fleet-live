@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import type { Trip, VehicleInput } from "@fleet-live/shared";
+import type { Trip, TripListItem, VehicleInput } from "@fleet-live/shared";
 import { decodePolyline, speedBand } from "@fleet-live/shared";
 
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
-import { getVehicleTrip, listVehicleTrips } from "../api/vehicles";
+import { getVehicleTripById, listVehicleTrips } from "../api/vehicles";
 import { VehicleHintsPanel } from "../components/alerts/VehicleHintsPanel";
 import { DetailBackLink, useDetailBack } from "../components/navigation/DetailBackLink";
 import { VehicleAssignmentPanel } from "../components/vehicles/VehicleAssignmentPanel";
@@ -35,7 +35,7 @@ const formatKilometers = (meters: number) =>
         maximumFractionDigits: 1,
     })} km`;
 
-const describeTrip = (trip: Trip): string => {
+const describeTrip = (trip: TripListItem): string => {
     if (trip.ended_at === null) {
         return `Fahrt läuft seit ${formatTimestamp(trip.started_at)}.`;
     }
@@ -59,22 +59,24 @@ export const VehicleDetailPage = () => {
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [isEditingMaster, setIsEditingMaster] = useState(false);
     const [tripVehicleId, setTripVehicleId] = useState(parsedId);
-    const [trip, setTrip] = useState<Trip | null>(null);
     const [livePath, setLivePath] = useState("");
-    const [archiveTrips, setArchiveTrips] = useState<Trip[]>([]);
+    const [archiveTrips, setArchiveTrips] = useState<TripListItem[]>([]);
     const [archivePage, setArchivePage] = useState(1);
+    const [archiveLimit, setArchiveLimit] = useState(10);
     const [archivePageCount, setArchivePageCount] = useState(1);
     const [archiveTotal, setArchiveTotal] = useState(0);
     const [archiveLoading, setArchiveLoading] = useState(false);
     const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
+    const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
 
     if (parsedId !== tripVehicleId) {
         setTripVehicleId(parsedId);
-        setTrip(null);
         setLivePath("");
         setArchiveTrips([]);
         setArchivePage(1);
+        setArchiveLimit(10);
         setSelectedTripId(null);
+        setSelectedTrip(null);
     }
 
     useEffect(() => {
@@ -87,18 +89,25 @@ export const VehicleDetailPage = () => {
                 return;
             }
 
+            setSelectedTrip((current) => {
+                if (!current || current.ended_at !== null) {
+                    return current;
+                }
+
+                if (reset) {
+                    return {
+                        ...current,
+                        path: "",
+                        ended_at: null,
+                        distance_m: 0,
+                        point_count: 0,
+                    };
+                }
+
+                return current;
+            });
+
             if (reset) {
-                setTrip((current) =>
-                    current
-                        ? {
-                              ...current,
-                              path: "",
-                              ended_at: null,
-                              distance_m: 0,
-                              point_count: 0,
-                          }
-                        : current,
-                );
                 setLivePath(delta);
                 return;
             }
@@ -112,36 +121,6 @@ export const VehicleDetailPage = () => {
             return;
         }
 
-        if (vehicle && vehicle.status !== "DRIVING") {
-            setLivePath("");
-        }
-
-        const controller = new AbortController();
-
-        retryTransient(
-            () => getVehicleTrip(parsedId, controller.signal),
-            controller.signal,
-        )
-            .then((response) => {
-                setTrip(response.data);
-                if (response.data?.ended_at === null) {
-                    setLivePath("");
-                }
-            })
-            .catch((caught: unknown) => {
-                if (!isAbortError(caught)) {
-                    setTrip(null);
-                }
-            });
-
-        return () => controller.abort();
-    }, [parsedId, vehicle?.status]);
-
-    useEffect(() => {
-        if (parsedId === null) {
-            return;
-        }
-
         const controller = new AbortController();
         setArchiveLoading(true);
 
@@ -149,7 +128,7 @@ export const VehicleDetailPage = () => {
             () =>
                 listVehicleTrips(
                     parsedId,
-                    { page: archivePage, limit: 10 },
+                    { page: archivePage, limit: archiveLimit },
                     controller.signal,
                 ),
             controller.signal,
@@ -173,6 +152,7 @@ export const VehicleDetailPage = () => {
                 if (!isAbortError(caught)) {
                     setArchiveTrips([]);
                     setArchiveTotal(0);
+                    setSelectedTripId(null);
                 }
             })
             .finally(() => {
@@ -182,12 +162,45 @@ export const VehicleDetailPage = () => {
             });
 
         return () => controller.abort();
-    }, [parsedId, archivePage, vehicle?.status]);
+    }, [parsedId, archivePage, archiveLimit, vehicle?.status]);
 
-    const selectedTrip =
+    useEffect(() => {
+        if (parsedId === null || selectedTripId === null) {
+            setSelectedTrip(null);
+            return;
+        }
+
+        if (vehicle && vehicle.status !== "DRIVING") {
+            setLivePath("");
+        }
+
+        const controller = new AbortController();
+
+        retryTransient(
+            () =>
+                getVehicleTripById(
+                    parsedId,
+                    selectedTripId,
+                    controller.signal,
+                ),
+            controller.signal,
+        )
+            .then((response) => {
+                setSelectedTrip(response.data);
+                setLivePath("");
+            })
+            .catch((caught: unknown) => {
+                if (!isAbortError(caught)) {
+                    setSelectedTrip(null);
+                }
+            });
+
+        return () => controller.abort();
+    }, [parsedId, selectedTripId, vehicle?.status]);
+
+    const selectedFacts =
         archiveTrips.find((row) => row.id === selectedTripId) ??
-        trip ??
-        null;
+        selectedTrip;
 
     const openPath =
         vehicle?.status === "DRIVING" &&
@@ -395,8 +408,8 @@ export const VehicleDetailPage = () => {
 
             <section className={layout.panel}>
                 <h2 className={layout.panelTitle}>Fahrten</h2>
-                {selectedTrip && (
-                    <p className={layout.note}>{describeTrip(selectedTrip)}</p>
+                {selectedFacts && (
+                    <p className={layout.note}>{describeTrip(selectedFacts)}</p>
                 )}
                 <VehicleTripArchive
                     trips={archiveTrips}
@@ -404,8 +417,13 @@ export const VehicleDetailPage = () => {
                     onSelectTrip={setSelectedTripId}
                     page={archivePage}
                     pageCount={archivePageCount}
+                    limit={archiveLimit}
                     total={archiveTotal}
                     onPageChange={setArchivePage}
+                    onLimitChange={(nextLimit) => {
+                        setArchiveLimit(nextLimit);
+                        setArchivePage(1);
+                    }}
                     isLoading={archiveLoading}
                 />
             </section>

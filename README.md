@@ -167,7 +167,8 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | `GET`    | `/api/vehicles/:id`              | One vehicle (`404` if missing **or** other company) |
 | `GET`    | `/api/vehicles/:id/telemetry`    | Recent points (`limit`: 10, 25, 50, 100; default 50) |
 | `GET`    | `/api/vehicles/:id/trips/latest` | Running trip, else last finished (`data: null` if never driven) |
-| `GET`    | `/api/vehicles/:id/trips`        | Paginated trip archive (open + closed) for the vehicle          |
+| `GET`    | `/api/vehicles/:id/trips`        | Paginated archive (facts only, no `path`)                       |
+| `GET`    | `/api/vehicles/:id/trips/:tripId`| One trip including `path` (`404` if missing or other company)   |
 | `POST`   | `/api/vehicles`                  | Create (`Location` on `201`); `company_id` from the session |
 | `PUT`    | `/api/vehicles/:id`              | Replace |
 | `PATCH`  | `/api/vehicles/:id`              | Update |
@@ -284,7 +285,7 @@ Each reported position is appended to `trips.path` as an [encoded polyline](http
 * **Close simplifies** with Ramer-Douglas-Peucker at 12 m.
 * **`distance_m`** is the sum of reported segments, not the simplified line.
 
-Access is `trip → vehicle → company`. There is no `company_id` on `trips` and no `GET /api/trips/:id`.
+Access is `trip → vehicle → company`. There is no `company_id` on `trips` and no top-level `GET /api/trips/:id`. List rows omit `path`; the polyline is loaded with `GET /api/vehicles/:id/trips/:tripId`.
 
 Closed trips older than `TRIP_RETENTION_DAYS` (default 90) are deleted **per company**. Open trips stay. Prune runs after a trip is closed and after a telemetry tick for companies in that batch. `TRIP_RETENTION_DAYS=0` turns prune off.
 

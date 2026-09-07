@@ -2019,7 +2019,48 @@ describe("GET /api/vehicles/:id/trips", () => {
         assert.equal(response.body.data.length, 2);
         assert.equal(response.body.data[0].ended_at, null);
         assert.ok(response.body.data[1].ended_at);
-        assert.ok(response.body.data[0].path);
+        assert.equal(response.body.data[0].path, undefined);
+        assert.ok(typeof response.body.data[0].distance_m === "number");
+
+        const openId = response.body.data[0].id as number;
+        const one = await api.get(
+            `/api/vehicles/${vehicle.id}/trips/${openId}`,
+        );
+        assert.equal(one.status, 200);
+        assert.ok(typeof one.body.data.path === "string");
+    });
+
+    it("returns 404 for another company's trip", async () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-ARC 4",
+            status: "DRIVING",
+        });
+        seedSimProgress(mine.id, "koeln-duesseldorf", 0.1);
+        TelemetryModel.tickDrivingVehicles([mine.id]);
+        const latest = TripModel.latestForVehicle(mine.id, 1);
+        assert.ok(latest);
+
+        const other = VehicleModel.create({
+            license_plate: "K-ARC 5",
+            company_id: 2,
+        });
+
+        const stolen = await api.get(
+            `/api/vehicles/${other.id}/trips/${latest.id}`,
+        );
+        assert.equal(stolen.status, 404);
+    });
+
+    it("returns 404 for a missing trip", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-ARC 6",
+        });
+
+        const response = await api.get(
+            `/api/vehicles/${vehicle.id}/trips/999`,
+        );
+
+        assert.equal(response.status, 404);
     });
 
     it("returns 404 for another company's vehicle", async () => {
