@@ -35,6 +35,8 @@ describe("POST /api/import/preview", () => {
         );
         assert.equal(response.body.data.rows.length, 2);
         assert.equal(response.body.data.rows[0].license_plate, "B-IMP 101");
+        assert.equal(response.body.data.rows[0].status, "IDLE");
+        assert.equal(response.body.data.rows[1].status, "DRIVING");
         assert.equal(response.body.data.rows[0].default_action, "create");
         assert.ok(response.body.data.preview_id);
         assert.equal(response.body.data.can_commit, true);

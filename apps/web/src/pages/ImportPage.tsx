@@ -1,8 +1,13 @@
-import { useMemo, useState } from "react";
+import {
+    useMemo,
+    useRef,
+    useState,
+    type ChangeEvent,
+    type DragEvent,
+} from "react";
 import { Navigate, useNavigate } from "react-router";
 import {
     IMPORT_COLUMN_TARGETS,
-    IMPORT_ROW_ACTIONS,
     VEHICLE_STATUSES,
     type ImportColumnMapping,
     type ImportColumnTarget,
@@ -14,8 +19,16 @@ import {
 import { commitImport, previewImport } from "../api/import";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
+import { Table } from "../components/ui/Table/Table";
+import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { useAuth } from "../hooks/useAuth";
+import { useVehicles } from "../context/vehiclesContext";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
+import {
+    importPreviewColumns,
+    type ImportPreviewTableRow,
+} from "../components/vehicles/importPreviewConfig";
+import layout from "../styles/detailLayout.module.scss";
 import styles from "./ImportPage.module.scss";
 
 type WizardStep = "upload" | "mapping" | "preview" | "result";
@@ -28,12 +41,6 @@ const COLUMN_TARGET_LABELS: Record<ImportColumnTarget, string> = {
     ignore: "Ignorieren",
 };
 
-const ROW_ACTION_LABELS: Record<ImportRowAction, string> = {
-    create: "Neu anlegen",
-    update: "Aktualisieren",
-    skip: "Überspringen",
-};
-
 const STEP_LABELS: Record<WizardStep, string> = {
     upload: "Datei",
     mapping: "Spalten",
@@ -43,6 +50,8 @@ const STEP_LABELS: Record<WizardStep, string> = {
 
 const STEP_ORDER: WizardStep[] = ["upload", "mapping", "preview", "result"];
 
+const SAMPLE_FILE_HREF = "/import-beispiel.csv";
+
 function readFileAsText(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -50,6 +59,26 @@ function readFileAsText(file: File): Promise<string> {
         reader.onerror = () => reject(reader.error);
         reader.readAsText(file, "UTF-8");
     });
+}
+
+function isSpreadsheetFile(file: File): boolean {
+    const name = file.name.toLowerCase();
+    return (
+        name.endsWith(".xlsx") ||
+        name.endsWith(".xls") ||
+        file.type ===
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        file.type === "application/vnd.ms-excel"
+    );
+}
+
+function isCsvFile(file: File): boolean {
+    const name = file.name.toLowerCase();
+    return (
+        name.endsWith(".csv") ||
+        file.type === "text/csv" ||
+        file.type === "text/plain"
+    );
 }
 
 function stepState(
@@ -73,11 +102,13 @@ function stepState(
 export const ImportPage = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const { refetchLists } = useVehicles();
     const canWrite = user?.role === "dispatcher";
 
     const [step, setStep] = useState<WizardStep>("upload");
     const [csvContent, setCsvContent] = useState("");
     const [fileName, setFileName] = useState<string | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
     const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
     const [columnMapping, setColumnMapping] = useState<ImportColumnMapping>({});
     const [statusMapping, setStatusMapping] = useState<ImportStatusMapping>({});
@@ -89,6 +120,7 @@ export const ImportPage = () => {
     >(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const unmappedStatuses = preview?.unmapped_status_values ?? [];
 
@@ -105,15 +137,42 @@ export const ImportPage = () => {
         return actions;
     }, [preview, rowActions]);
 
+    const previewRows = useMemo<ImportPreviewTableRow[]>(() => {
+        if (!preview) {
+            return [];
+        }
+
+        return preview.rows.map((row) => ({
+            ...row,
+            action: effectiveRowActions[row.row_index] ?? row.default_action,
+        }));
+    }, [preview, effectiveRowActions]);
+
+    const previewColumns = useMemo(
+        () =>
+            importPreviewColumns((rowIndex, action) => {
+                setRowActions((current) => ({
+                    ...current,
+                    [rowIndex]: action,
+                }));
+            }),
+        [],
+    );
+
     if (!canWrite) {
         return <Navigate to="/vehicles" replace />;
     }
 
-    const handleFileChange = async (
-        event: React.ChangeEvent<HTMLInputElement>,
-    ) => {
-        const file = event.target.files?.[0];
-        if (!file) {
+    const applyFile = async (file: File) => {
+        if (isSpreadsheetFile(file)) {
+            setError(
+                "Excel-Dateien werden noch nicht unterstützt. Bitte als CSV speichern.",
+            );
+            return;
+        }
+
+        if (!isCsvFile(file)) {
+            setError("Bitte eine CSV-Datei auswählen.");
             return;
         }
 
@@ -127,6 +186,23 @@ export const ImportPage = () => {
             setRowActions({});
         } catch {
             setError("Die Datei konnte nicht gelesen werden.");
+        }
+    };
+
+    const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            void applyFile(file);
+        }
+        event.target.value = "";
+    };
+
+    const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragging(false);
+        const file = event.dataTransfer.files[0];
+        if (file) {
+            void applyFile(file);
         }
     };
 
@@ -174,15 +250,13 @@ export const ImportPage = () => {
     const handleMappingNext = async () => {
         const hasPlate = Object.values(columnMapping).includes("license_plate");
         if (!hasPlate) {
-            setError("Mindestens eine Spalte muss „Kennzeichen“ zugeordnet werden.");
+            setError(
+                "Mindestens eine Spalte muss „Kennzeichen“ zugeordnet werden.",
+            );
             return;
         }
 
         await runPreview("preview", columnMapping, statusMapping);
-    };
-
-    const handleUploadNext = async () => {
-        await runPreview("mapping");
     };
 
     const handleCommit = async () => {
@@ -208,6 +282,7 @@ export const ImportPage = () => {
 
             setCommitSummary(response.data);
             setStep("result");
+            refetchLists();
         } catch (caught) {
             setError(
                 caught instanceof ApiError
@@ -227,7 +302,8 @@ export const ImportPage = () => {
         const lines = [
             "Zeile;Fehler",
             ...commitSummary.errors.map(
-                (entry) => `${entry.row_index};${entry.message.replace(/;/g, ",")}`,
+                (entry) =>
+                    `${entry.row_index};${entry.message.replace(/;/g, ",")}`,
             ),
         ];
         const blob = new Blob([lines.join("\n")], {
@@ -241,50 +317,137 @@ export const ImportPage = () => {
         URL.revokeObjectURL(url);
     };
 
+    const resetWizard = () => {
+        setStep("upload");
+        setCsvContent("");
+        setFileName(null);
+        setPreview(null);
+        setColumnMapping({});
+        setStatusMapping({});
+        setRowActions({});
+        setCommitSummary(null);
+        setError(null);
+    };
+
+    const canCommit =
+        preview !== null &&
+        preview.rows.some((row) => {
+            const hasError = row.issues.some(
+                (issue) => issue.level === "error",
+            );
+            const action = effectiveRowActions[row.row_index];
+            return !hasError && (action === "create" || action === "update");
+        });
+
     return (
-        <div className={styles.importPage}>
-            <header className={styles.header}>
+        <section className={`${layout.page} ${styles.page}`}>
+            <DetailBackLink fallback="/vehicles" />
+
+            <header>
                 <h1 className={styles.title}>Bestand importieren</h1>
                 <p className={styles.lead}>
                     Fahrzeuge und optional Fahrer aus einer CSV-Datei laden.
-                    Telemetrie, Fahrten und Warnungen werden nicht importiert.
+                    Telemetrie, Fahrten und Warnungen bleiben unberührt.
                 </p>
-                <div className={styles.steps}>
-                    {STEP_ORDER.map((wizardStep) => {
+                <ol className={styles.steps} aria-label="Importschritte">
+                    {STEP_ORDER.map((wizardStep, index) => {
                         const state = stepState(step, wizardStep);
-                        const className =
-                            state === "active"
-                                ? styles.stepChipActive
-                                : state === "done"
-                                  ? styles.stepChipDone
-                                  : styles.stepChip;
+
+                        if (state === "done") {
+                            return (
+                                <li key={wizardStep}>
+                                    <button
+                                        type="button"
+                                        className={styles.stepDone}
+                                        onClick={() => setStep(wizardStep)}
+                                    >
+                                        <span className={styles.stepIndex}>
+                                            {index + 1}
+                                        </span>
+                                        {STEP_LABELS[wizardStep]}
+                                    </button>
+                                </li>
+                            );
+                        }
 
                         return (
-                            <span key={wizardStep} className={className}>
+                            <li
+                                key={wizardStep}
+                                className={
+                                    state === "active"
+                                        ? styles.stepActive
+                                        : styles.step
+                                }
+                                aria-current={
+                                    state === "active" ? "step" : undefined
+                                }
+                            >
+                                <span className={styles.stepIndex}>
+                                    {index + 1}
+                                </span>
                                 {STEP_LABELS[wizardStep]}
-                            </span>
+                            </li>
                         );
                     })}
-                </div>
+                </ol>
             </header>
 
-            {error && <div className={styles.errorBanner}>{error}</div>}
+            {error && (
+                <p className={styles.error} role="alert">
+                    {error}
+                </p>
+            )}
 
             {step === "upload" && (
-                <section className={styles.panel}>
-                    <h2 className={styles.panelTitle}>1. Datei hochladen</h2>
-                    <p className={styles.hint}>
-                        CSV mit Semikolon oder Komma. Excel: als CSV speichern.
+                <section className={layout.panel}>
+                    <h2 className={layout.panelTitle}>Datei wählen</h2>
+                    <p className={layout.note}>
+                        Semikolon oder Komma als Trenner. Nur CSV — Excel
+                        (.xlsx) wird noch nicht gelesen.
                     </p>
-                    <input
-                        className={styles.fileInput}
-                        type="file"
-                        accept=".csv,text/csv"
-                        onChange={handleFileChange}
-                    />
-                    {fileName && (
-                        <p className={styles.hint}>Ausgewählt: {fileName}</p>
-                    )}
+                    <div
+                        className={
+                            isDragging
+                                ? `${styles.dropzone} ${styles.dropzoneActive}`
+                                : styles.dropzone
+                        }
+                        onDragOver={(event) => {
+                            event.preventDefault();
+                            setIsDragging(true);
+                        }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={handleDrop}
+                    >
+                        <input
+                            ref={fileInputRef}
+                            className={styles.fileInput}
+                            type="file"
+                            accept=".csv,text/csv"
+                            onChange={handleFileChange}
+                        />
+                        <p className={styles.dropTitle}>
+                            CSV hierher ziehen oder auswählen
+                        </p>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            Datei auswählen
+                        </Button>
+                        {fileName ? (
+                            <p className={styles.fileName}>{fileName}</p>
+                        ) : (
+                            <p className={layout.note}>Keine Datei gewählt.</p>
+                        )}
+                    </div>
+                    <a
+                        className={styles.sampleLink}
+                        href={SAMPLE_FILE_HREF}
+                        download="import-beispiel.csv"
+                    >
+                        Beispieldatei herunterladen
+                    </a>
                     <div className={styles.actions}>
                         <Button
                             variant="secondary"
@@ -297,23 +460,24 @@ export const ImportPage = () => {
                             variant="primary"
                             size="sm"
                             disabled={!csvContent.trim() || isLoading}
-                            onClick={handleUploadNext}
+                            onClick={() => void runPreview("mapping")}
                         >
-                            Weiter
+                            {isLoading ? "Wird gelesen…" : "Weiter"}
                         </Button>
                     </div>
                 </section>
             )}
 
             {step === "mapping" && preview && (
-                <section className={styles.panel}>
-                    <h2 className={styles.panelTitle}>2. Spalten zuordnen</h2>
-                    <p className={styles.hint}>
-                        {preview.columns.length} Spalten erkannt.
+                <section className={layout.panel}>
+                    <h2 className={layout.panelTitle}>Spalten zuordnen</h2>
+                    <p className={layout.note}>
+                        {preview.columns.length} Spalten erkannt. Jede Dateispalte
+                        braucht ein Feld — oder „Ignorieren“.
                     </p>
                     <div className={styles.mappingGrid}>
                         {preview.columns.map((column) => (
-                            <div key={column} className={styles.mappingRow}>
+                            <label key={column} className={styles.mappingRow}>
                                 <span className={styles.mappingLabel}>
                                     {column}
                                 </span>
@@ -335,17 +499,21 @@ export const ImportPage = () => {
                                         </option>
                                     ))}
                                 </select>
-                            </div>
+                            </label>
                         ))}
                     </div>
 
                     {unmappedStatuses.length > 0 && (
                         <div className={styles.statusMapping}>
-                            <h3 className={styles.panelTitle}>
-                                Statuswerte zuordnen
+                            <h3 className={styles.statusHeading}>
+                                Statuswerte
                             </h3>
+                            <p className={layout.note}>
+                                Diese Werte aus der Datei kennt die App nicht.
+                                Ohne Zuordnung wird Standby verwendet.
+                            </p>
                             {unmappedStatuses.map((raw) => (
-                                <div
+                                <label
                                     key={raw}
                                     className={styles.mappingRow}
                                 >
@@ -369,14 +537,19 @@ export const ImportPage = () => {
                                             });
                                         }}
                                     >
-                                        <option value="">— Standard IDLE —</option>
+                                        <option value="">
+                                            Standby (Standard)
+                                        </option>
                                         {VEHICLE_STATUSES.map((status) => (
-                                            <option key={status} value={status}>
+                                            <option
+                                                key={status}
+                                                value={status}
+                                            >
                                                 {vehicleStatusLabel(status)}
                                             </option>
                                         ))}
                                     </select>
-                                </div>
+                                </label>
                             ))}
                         </div>
                     )}
@@ -393,123 +566,55 @@ export const ImportPage = () => {
                             variant="primary"
                             size="sm"
                             disabled={isLoading}
-                            onClick={handleMappingNext}
+                            onClick={() => void handleMappingNext()}
                         >
-                            Vorschau
+                            {isLoading ? "Wird geprüft…" : "Vorschau"}
                         </Button>
                     </div>
                 </section>
             )}
 
             {step === "preview" && preview && (
-                <section className={styles.panel}>
-                    <h2 className={styles.panelTitle}>3. Testlauf</h2>
-                    <div className={styles.counts}>
-                        <span className={styles.countItem}>
-                            Zeilen: <strong>{preview.counts.total_rows}</strong>
-                        </span>
-                        <span className={styles.countItem}>
-                            Neu: <strong>{preview.counts.to_create}</strong>
-                        </span>
-                        <span className={styles.countItem}>
-                            Aktualisieren:{" "}
-                            <strong>{preview.counts.to_update}</strong>
-                        </span>
-                        <span className={styles.countItem}>
-                            Überspringen:{" "}
-                            <strong>{preview.counts.to_skip}</strong>
-                        </span>
+                <section className={layout.panel}>
+                    <h2 className={layout.panelTitle}>Testlauf</h2>
+                    <p className={layout.note}>
+                        Bestehende Kennzeichen werden übersprungen, bis du die
+                        Aktion auf „Aktualisieren“ stellst.
+                    </p>
+                    <dl className={layout.facts}>
+                        <div>
+                            <dt>Zeilen</dt>
+                            <dd>{preview.counts.total_rows}</dd>
+                        </div>
+                        <div>
+                            <dt>Neu</dt>
+                            <dd>{preview.counts.to_create}</dd>
+                        </div>
+                        <div>
+                            <dt>Aktualisieren</dt>
+                            <dd>{preview.counts.to_update}</dd>
+                        </div>
+                        <div>
+                            <dt>Überspringen</dt>
+                            <dd>{preview.counts.to_skip}</dd>
+                        </div>
                         {preview.counts.errors > 0 && (
-                            <span className={styles.countItem}>
-                                Fehler:{" "}
-                                <strong>{preview.counts.errors}</strong>
-                            </span>
+                            <div>
+                                <dt>Fehler</dt>
+                                <dd>{preview.counts.errors}</dd>
+                            </div>
                         )}
-                    </div>
+                    </dl>
 
-                    <table className={styles.previewTable}>
-                        <thead>
-                            <tr>
-                                <th>Zeile</th>
-                                <th>Kennzeichen</th>
-                                <th>Tank</th>
-                                <th>Status</th>
-                                <th>Fahrer</th>
-                                <th>Aktion</th>
-                                <th>Hinweise</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {preview.rows.map((row) => {
-                                const action =
-                                    effectiveRowActions[row.row_index] ??
-                                    row.default_action;
-                                const hasError = row.issues.some(
-                                    (issue) => issue.level === "error",
-                                );
-
-                                return (
-                                    <tr key={row.row_index}>
-                                        <td>{row.row_index}</td>
-                                        <td>{row.license_plate ?? "—"}</td>
-                                        <td>
-                                            {row.fuel_level ?? "100 (Standard)"}
-                                        </td>
-                                        <td>
-                                            {row.status
-                                                ? vehicleStatusLabel(row.status)
-                                                : "IDLE (Standard)"}
-                                        </td>
-                                        <td>{row.driver_name ?? "—"}</td>
-                                        <td>
-                                            <select
-                                                className={styles.select}
-                                                value={action}
-                                                disabled={hasError}
-                                                onChange={(event) => {
-                                                    const value = event.target
-                                                        .value as ImportRowAction;
-                                                    setRowActions((current) => ({
-                                                        ...current,
-                                                        [row.row_index]: value,
-                                                    }));
-                                                }}
-                                            >
-                                                {IMPORT_ROW_ACTIONS.map(
-                                                    (option) => (
-                                                        <option
-                                                            key={option}
-                                                            value={option}
-                                                        >
-                                                            {
-                                                                ROW_ACTION_LABELS[
-                                                                    option
-                                                                ]
-                                                            }
-                                                        </option>
-                                                    ),
-                                                )}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            {row.issues.map((issue) => (
-                                                <div
-                                                    key={`${issue.code}-${issue.message}`}
-                                                    className={
-                                                        issue.level === "error"
-                                                            ? styles.issueError
-                                                            : styles.issueWarning
-                                                    }
-                                                >
-                                                    {issue.message}
-                                                </div>
-                                            ))}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                    <Table
+                        columns={previewColumns}
+                        rows={previewRows}
+                        getRowKey={(row) => row.row_index}
+                        caption="Importvorschau"
+                        isLoading={isLoading}
+                        emptyContent="Keine Zeilen in der Datei."
+                        className={styles.tableWrap}
+                    />
 
                     <div className={styles.actions}>
                         <Button
@@ -522,54 +627,42 @@ export const ImportPage = () => {
                         <Button
                             variant="primary"
                             size="sm"
-                            disabled={
-                                isLoading ||
-                                !preview.rows.some((row) => {
-                                    const hasError = row.issues.some(
-                                        (issue) => issue.level === "error",
-                                    );
-                                    const action =
-                                        effectiveRowActions[row.row_index];
-                                    return (
-                                        !hasError &&
-                                        (action === "create" ||
-                                            action === "update")
-                                    );
-                                })
-                            }
-                            onClick={handleCommit}
+                            disabled={isLoading || !canCommit}
+                            onClick={() => void handleCommit()}
                         >
-                            Import ausführen
+                            {isLoading ? "Import läuft…" : "Import ausführen"}
                         </Button>
                     </div>
                 </section>
             )}
 
             {step === "result" && commitSummary && (
-                <section className={styles.panel}>
-                    <h2 className={styles.panelTitle}>4. Ergebnis</h2>
-                    <ul className={styles.resultList}>
-                        <li>
-                            {commitSummary.created_vehicles} Fahrzeuge
-                            angelegt
-                        </li>
-                        <li>
-                            {commitSummary.updated_vehicles} Fahrzeuge
-                            aktualisiert
-                        </li>
-                        <li>
-                            {commitSummary.created_drivers} Fahrer neu
-                            angelegt
-                        </li>
-                        <li>
-                            {commitSummary.skipped_rows} Zeilen übersprungen
-                        </li>
+                <section className={layout.panel}>
+                    <h2 className={layout.panelTitle}>Ergebnis</h2>
+                    <dl className={layout.facts}>
+                        <div>
+                            <dt>Fahrzeuge angelegt</dt>
+                            <dd>{commitSummary.created_vehicles}</dd>
+                        </div>
+                        <div>
+                            <dt>Aktualisiert</dt>
+                            <dd>{commitSummary.updated_vehicles}</dd>
+                        </div>
+                        <div>
+                            <dt>Fahrer angelegt</dt>
+                            <dd>{commitSummary.created_drivers}</dd>
+                        </div>
+                        <div>
+                            <dt>Übersprungen</dt>
+                            <dd>{commitSummary.skipped_rows}</dd>
+                        </div>
                         {commitSummary.failed_rows > 0 && (
-                            <li>
-                                {commitSummary.failed_rows} Zeilen fehlgeschlagen
-                            </li>
+                            <div>
+                                <dt>Fehlgeschlagen</dt>
+                                <dd>{commitSummary.failed_rows}</dd>
+                            </div>
                         )}
-                    </ul>
+                    </dl>
                     <div className={styles.actions}>
                         {commitSummary.errors.length > 0 && (
                             <Button
@@ -581,6 +674,13 @@ export const ImportPage = () => {
                             </Button>
                         )}
                         <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={resetWizard}
+                        >
+                            Weitere Datei
+                        </Button>
+                        <Button
                             variant="primary"
                             size="sm"
                             onClick={() => navigate("/vehicles")}
@@ -590,6 +690,6 @@ export const ImportPage = () => {
                     </div>
                 </section>
             )}
-        </div>
+        </section>
     );
 };

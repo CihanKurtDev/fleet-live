@@ -40,8 +40,8 @@ const COLUMN_HINTS: Array<{ pattern: RegExp; target: ImportColumnTarget }> = [
 
 const STATUS_HINTS: Array<{ pattern: RegExp; status: VehicleStatus }> = [
     { pattern: /unterwegs|driving|fahrt|rollt/i, status: "DRIVING" },
-    { pattern: /idle|bereit|frei|wartet|park/i, status: "IDLE" },
-    { pattern: /stop|halt|steht|gestoppt/i, status: "STOPPED" },
+    { pattern: /idle|standby|bereit|frei|wartet|park/i, status: "IDLE" },
+    { pattern: /stop|halt|steht|gestoppt|feierabend/i, status: "STOPPED" },
     { pattern: /offline|aus|tot|kein signal/i, status: "OFFLINE" },
 ];
 
