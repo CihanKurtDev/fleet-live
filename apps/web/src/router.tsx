@@ -4,6 +4,7 @@ import { RequireAuth } from './components/RequireAuth';
 import { BriefingPage } from './pages/BriefingPage';
 import { VehiclesPage } from './pages/VehiclesPage';
 import { VehicleDetailPage } from './pages/VehicleDetailPage';
+import { ImportPage } from './pages/ImportPage';
 import { FleetPage } from './pages/FleetPage';
 import { AlertsPage } from './pages/AlertsPage';
 import { DriversPage } from './pages/DriversPage';
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
                     {
                         path: 'vehicles',
                         Component: VehiclesPage,
+                    },
+                    {
+                        path: 'vehicles/import',
+                        Component: ImportPage,
                     },
                     {
                         path: 'vehicles/:id',
