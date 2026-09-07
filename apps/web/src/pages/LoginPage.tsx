@@ -8,6 +8,22 @@ import { Input } from "../components/ui/Input/Input";
 import { useAuth } from "../hooks/useAuth";
 import styles from "./LoginPage.module.scss";
 
+const loginRedirectPath = (location: {
+    state: unknown;
+}): string => {
+    const from = (
+        location.state as {
+            from?: { pathname: string; search: string };
+        } | null
+    )?.from;
+
+    if (from && from.pathname !== "/login") {
+        return `${from.pathname}${from.search}`;
+    }
+
+    return "/";
+};
+
 export const LoginPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -28,16 +44,7 @@ export const LoginPage = () => {
             setIsSubmitting(true);
             const user = await login({ email, password, remember });
             setUser(user);
-            const from = (
-                location.state as {
-                    from?: { pathname: string; search: string };
-                } | null
-            )?.from;
-            const next =
-                from && from.pathname !== "/login"
-                    ? `${from.pathname}${from.search}`
-                    : "/";
-            navigate(next, { replace: true });
+            navigate(loginRedirectPath(location), { replace: true });
         } catch (caught: unknown) {
             if (caught instanceof ApiError) {
                 setError(caught.message);
@@ -59,7 +66,7 @@ export const LoginPage = () => {
         error && !emailError && !passwordError ? error : null;
 
     if (user) {
-        return <Navigate to="/" replace />;
+        return <Navigate to={loginRedirectPath(location)} replace />;
     }
 
     return (

@@ -25,7 +25,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                 setUser(null);
             })
-            .finally(() => setIsReady(true));
+            .finally(() => {
+                if (!controller.signal.aborted) {
+                    setIsReady(true);
+                }
+            });
 
         return () => controller.abort();
     }, []);
