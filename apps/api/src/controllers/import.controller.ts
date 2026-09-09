@@ -22,13 +22,7 @@ export function previewImport(req: Request, res: Response): void {
         const companyId = sessionCompany(req);
         const userId = sessionUserId(req);
 
-        const preview = ImportModel.preview(
-            input.csv,
-            companyId,
-            userId,
-            input.column_mapping,
-            input.status_mapping,
-        );
+        const preview = ImportModel.preview(input, companyId, userId);
 
         if (preview.columns.length === 0) {
             throw new BadRequestError(

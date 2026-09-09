@@ -14,9 +14,12 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
         return;
     }
 
-    const error = isUniqueConstraintError(err)
-        ? new ConflictError()
-        : err;
+    const error =
+        err instanceof AppError
+            ? err
+            : isUniqueConstraintError(err)
+              ? new ConflictError()
+              : err;
 
     if (error instanceof AppError) {
         res.status(error.status).json({

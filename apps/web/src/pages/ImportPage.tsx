@@ -61,14 +61,30 @@ function readFileAsText(file: File): Promise<string> {
     });
 }
 
+function readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = String(reader.result ?? "");
+            const comma = result.indexOf(",");
+            resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
+}
+
+function isLegacyXlsFile(file: File): boolean {
+    const name = file.name.toLowerCase();
+    return name.endsWith(".xls") && !name.endsWith(".xlsx");
+}
+
 function isSpreadsheetFile(file: File): boolean {
     const name = file.name.toLowerCase();
     return (
         name.endsWith(".xlsx") ||
-        name.endsWith(".xls") ||
         file.type ===
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-        file.type === "application/vnd.ms-excel"
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
 }
 
@@ -107,6 +123,7 @@ export const ImportPage = () => {
 
     const [step, setStep] = useState<WizardStep>("upload");
     const [csvContent, setCsvContent] = useState("");
+    const [xlsxBase64, setXlsxBase64] = useState<string | null>(null);
     const [fileName, setFileName] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
@@ -164,15 +181,31 @@ export const ImportPage = () => {
     }
 
     const applyFile = async (file: File) => {
-        if (isSpreadsheetFile(file)) {
+        if (isLegacyXlsFile(file)) {
             setError(
-                "Excel-Dateien werden noch nicht unterstützt. Bitte als CSV speichern.",
+                "Alte .xls-Dateien werden nicht gelesen. Bitte als .xlsx speichern.",
             );
             return;
         }
 
+        if (isSpreadsheetFile(file)) {
+            setError(null);
+            try {
+                const base64 = await readFileAsBase64(file);
+                setXlsxBase64(base64);
+                setCsvContent("");
+                setFileName(file.name);
+                setPreview(null);
+                setCommitSummary(null);
+                setRowActions({});
+            } catch {
+                setError("Die Datei konnte nicht gelesen werden.");
+            }
+            return;
+        }
+
         if (!isCsvFile(file)) {
-            setError("Bitte eine CSV-Datei auswählen.");
+            setError("Bitte eine CSV- oder Excel-Datei (.xlsx) auswählen.");
             return;
         }
 
@@ -180,6 +213,7 @@ export const ImportPage = () => {
         try {
             const text = await readFileAsText(file);
             setCsvContent(text);
+            setXlsxBase64(null);
             setFileName(file.name);
             setPreview(null);
             setCommitSummary(null);
@@ -211,8 +245,8 @@ export const ImportPage = () => {
         mapping = columnMapping,
         statuses = statusMapping,
     ) => {
-        if (!csvContent.trim()) {
-            setError("Bitte zuerst eine CSV-Datei auswählen.");
+        if (!csvContent.trim() && !xlsxBase64) {
+            setError("Bitte zuerst eine CSV- oder Excel-Datei auswählen.");
             return;
         }
 
@@ -221,9 +255,11 @@ export const ImportPage = () => {
 
         try {
             const response = await previewImport({
-                csv: csvContent,
-                column_mapping: mapping,
-                status_mapping: statuses,
+                ...(xlsxBase64 ? { xlsx: xlsxBase64 } : { csv: csvContent }),
+                column_mapping:
+                    Object.keys(mapping).length > 0 ? mapping : undefined,
+                status_mapping:
+                    Object.keys(statuses).length > 0 ? statuses : undefined,
             });
             const data = response.data;
 
@@ -320,6 +356,7 @@ export const ImportPage = () => {
     const resetWizard = () => {
         setStep("upload");
         setCsvContent("");
+        setXlsxBase64(null);
         setFileName(null);
         setPreview(null);
         setColumnMapping({});
@@ -402,8 +439,9 @@ export const ImportPage = () => {
                 <section className={layout.panel}>
                     <h2 className={layout.panelTitle}>Datei wählen</h2>
                     <p className={layout.note}>
-                        Semikolon oder Komma als Trenner. Nur CSV — Excel
-                        (.xlsx) wird noch nicht gelesen.
+                        CSV (Semikolon oder Komma) oder Excel (.xlsx), erstes
+                        Tabellenblatt. Alte .xls-Dateien bitte zuerst als
+                        .xlsx speichern.
                     </p>
                     <div
                         className={
@@ -422,11 +460,12 @@ export const ImportPage = () => {
                             ref={fileInputRef}
                             className={styles.fileInput}
                             type="file"
-                            accept=".csv,text/csv"
+                            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             onChange={handleFileChange}
                         />
                         <p className={styles.dropTitle}>
-                            CSV hierher ziehen oder auswählen
+                            CSV oder Excel (.xlsx) hierher ziehen oder
+                            auswählen
                         </p>
                         <Button
                             variant="secondary"
@@ -441,13 +480,22 @@ export const ImportPage = () => {
                             <p className={layout.note}>Keine Datei gewählt.</p>
                         )}
                     </div>
-                    <a
-                        className={styles.sampleLink}
-                        href={SAMPLE_FILE_HREF}
-                        download="import-beispiel.csv"
-                    >
-                        Beispieldatei herunterladen
-                    </a>
+                    <p className={styles.sampleLinks}>
+                        <a
+                            className={styles.sampleLink}
+                            href={SAMPLE_FILE_HREF}
+                            download="import-beispiel.csv"
+                        >
+                            Beispiel-CSV
+                        </a>
+                        <a
+                            className={styles.sampleLink}
+                            href="/import-beispiel.xlsx"
+                            download="import-beispiel.xlsx"
+                        >
+                            Beispiel-Excel
+                        </a>
+                    </p>
                     <div className={styles.actions}>
                         <Button
                             variant="secondary"
@@ -459,7 +507,9 @@ export const ImportPage = () => {
                         <Button
                             variant="primary"
                             size="sm"
-                            disabled={!csvContent.trim() || isLoading}
+                            disabled={
+                                (!csvContent.trim() && !xlsxBase64) || isLoading
+                            }
                             onClick={() => void runPreview("mapping")}
                         >
                             {isLoading ? "Wird gelesen…" : "Weiter"}
