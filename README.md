@@ -29,7 +29,7 @@ What you can do in the app today, and what lands next — like a game patch list
 * Shift briefing on the home page, with the open-warning count in the nav
 * Fleet map, trip trail on the vehicle, drivers, company login
 * Trip archive on the vehicle: browse past drives and show a closed route on the map
-* Import vehicles and drivers from CSV or Excel (.xlsx) with column mapping and preview (`/vehicles/import`)
+* Import vehicles, drivers, eligibility and current assignment from CSV or Excel (`/vehicles/import`)
 
 ## Next
 
@@ -63,7 +63,7 @@ What you can do in the app today, and what lands next — like a game patch list
 * Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
 * Shift briefing on `/` (`GET /api/briefing`); Warnungen nav shows the open inbox count
 * Trip archive on vehicle detail (`GET /api/vehicles/:id/trips`, paginated list; closed trip polyline on map)
-* Stammdaten import (`POST /api/import/preview` with `csv` or `xlsx`, `POST /api/import/commit`, wizard `/vehicles/import`)
+* Stammdaten import (`POST /api/import/preview` with `csv` or named `xlsx` sheets, `POST /api/import/commit`, wizard `/vehicles/import`)
 * API integration tests (`node:test` + SuperTest)
 
 ### Consciously simplified / demo

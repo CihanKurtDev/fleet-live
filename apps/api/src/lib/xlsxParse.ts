@@ -169,23 +169,12 @@ function parseSheet(xml: string, shared: string[]): string[][] {
     return rows;
 }
 
-function firstSheetPath(
-    files: Record<string, Uint8Array>,
+function resolveSheetPath(
+    rels: string | undefined,
+    rId: string | undefined,
 ): string | undefined {
-    const workbook = readXml(files, "xl/workbook.xml");
-    const rels = readXml(files, "xl/_rels/workbook.xml.rels");
-
-    if (!workbook) {
-        return undefined;
-    }
-
-    const sheetMatch =
-        /<(?:[\w-]+:)?sheet\b([^>]*)\/?>/i.exec(workbook);
-    const rId = sheetMatch ? firstAttr(sheetMatch[1] ?? "", "r:id") : undefined;
-
     if (rId && rels) {
-        const relRe =
-            /<(?:[\w-]+:)?Relationship\b([^>]*)\/?>/gi;
+        const relRe = /<(?:[\w-]+:)?Relationship\b([^>]*)\/?>/gi;
 
         for (const match of rels.matchAll(relRe)) {
             const attrs = match[1] ?? "";
@@ -207,11 +196,61 @@ function firstSheetPath(
         }
     }
 
-    if (zipPath(files, "xl/worksheets/sheet1.xml")) {
-        return "xl/worksheets/sheet1.xml";
+    return undefined;
+}
+
+function listWorkbookSheets(
+    files: Record<string, Uint8Array>,
+): Array<{ name: string; path: string }> {
+    const workbook = readXml(files, "xl/workbook.xml");
+    const rels = readXml(files, "xl/_rels/workbook.xml.rels");
+    const sheets: Array<{ name: string; path: string }> = [];
+
+    if (!workbook) {
+        return sheets;
     }
 
-    return undefined;
+    const sheetRe = /<(?:[\w-]+:)?sheet\b([^>]*)\/?>/gi;
+
+    for (const match of workbook.matchAll(sheetRe)) {
+        const attrs = match[1] ?? "";
+        const name = firstAttr(attrs, "name") ?? `Blatt ${sheets.length + 1}`;
+        const path = resolveSheetPath(rels, firstAttr(attrs, "r:id"));
+        if (path) {
+            sheets.push({ name, path });
+        }
+    }
+
+    if (sheets.length === 0 && zipPath(files, "xl/worksheets/sheet1.xml")) {
+        sheets.push({ name: "Import", path: "xl/worksheets/sheet1.xml" });
+    }
+
+    return sheets;
+}
+
+function matrixToTable(matrix: string[][]): CsvTable {
+    if (matrix.length === 0) {
+        return { columns: [], rows: [] };
+    }
+
+    const [header, ...dataRows] = matrix;
+    const columns = (header ?? []).map((cell, index) => {
+        const trimmed = cell.trim();
+        return trimmed === "" ? `Spalte ${index + 1}` : trimmed;
+    });
+
+    const width = columns.length;
+    const rows = dataRows.map((row) => {
+        const padded = row.slice(0, width);
+
+        while (padded.length < width) {
+            padded.push("");
+        }
+
+        return padded;
+    });
+
+    return { columns, rows };
 }
 
 function decodeBase64(value: string): Buffer {
@@ -237,41 +276,68 @@ export function parseXlsxBuffer(buffer: Buffer): CsvTable {
         throw new BadRequestError("Die Excel-Datei konnte nicht gelesen werden.");
     }
 
-    const sheetPath = firstSheetPath(files);
-    const sheetXml = sheetPath ? readXml(files, sheetPath) : undefined;
-
-    if (!sheetXml) {
+    const workbook = parseXlsxFiles(files);
+    if (workbook.length === 0) {
         throw new BadRequestError(
             "Die Excel-Datei enthält kein lesbares Tabellenblatt.",
         );
     }
 
+    return workbook[0]?.table ?? { columns: [], rows: [] };
+}
+
+export type NamedImportTable = {
+    name: string;
+    table: CsvTable;
+};
+
+function parseXlsxFiles(
+    files: Record<string, Uint8Array>,
+): NamedImportTable[] {
     const sharedXml = readXml(files, "xl/sharedStrings.xml") ?? "";
     const shared = sharedXml ? parseSharedStrings(sharedXml) : [];
-    const matrix = parseSheet(sheetXml, shared);
+    const sheets: NamedImportTable[] = [];
 
-    if (matrix.length === 0) {
-        return { columns: [], rows: [] };
-    }
-
-    const [header, ...dataRows] = matrix;
-    const columns = (header ?? []).map((cell, index) => {
-        const trimmed = cell.trim();
-        return trimmed === "" ? `Spalte ${index + 1}` : trimmed;
-    });
-
-    const width = columns.length;
-    const rows = dataRows.map((row) => {
-        const padded = row.slice(0, width);
-
-        while (padded.length < width) {
-            padded.push("");
+    for (const sheet of listWorkbookSheets(files)) {
+        const sheetXml = readXml(files, sheet.path);
+        if (!sheetXml) {
+            continue;
         }
 
-        return padded;
-    });
+        const table = matrixToTable(parseSheet(sheetXml, shared));
+        if (table.columns.length === 0) {
+            continue;
+        }
 
-    return { columns, rows };
+        sheets.push({ name: sheet.name, table });
+    }
+
+    return sheets;
+}
+
+export function parseXlsxWorkbook(buffer: Buffer): NamedImportTable[] {
+    if (buffer.length >= 4 && buffer.subarray(0, 4).equals(OLE_XLS)) {
+        throw new BadRequestError(
+            "Alte .xls-Dateien werden nicht gelesen. Bitte als .xlsx speichern.",
+        );
+    }
+
+    let files: Record<string, Uint8Array>;
+
+    try {
+        files = unzipSync(new Uint8Array(buffer));
+    } catch {
+        throw new BadRequestError("Die Excel-Datei konnte nicht gelesen werden.");
+    }
+
+    const workbook = parseXlsxFiles(files);
+    if (workbook.length === 0) {
+        throw new BadRequestError(
+            "Die Excel-Datei enthält kein lesbares Tabellenblatt.",
+        );
+    }
+
+    return workbook;
 }
 
 export function parseXlsxBase64(value: string): CsvTable {
@@ -284,8 +350,20 @@ export function parseXlsxBase64(value: string): CsvTable {
     return parseXlsxBuffer(buffer);
 }
 
-/** Minimal .xlsx for tests — first sheet, shared strings. */
-export function buildXlsx(rows: string[][]): Buffer {
+export function parseXlsxWorkbookBase64(value: string): NamedImportTable[] {
+    const buffer = decodeBase64(value);
+
+    if (buffer.length === 0) {
+        throw new BadRequestError("Die Excel-Datei ist leer.");
+    }
+
+    return parseXlsxWorkbook(buffer);
+}
+
+/** Minimal .xlsx for tests — named sheets, shared strings. */
+export function buildXlsxWorkbook(
+    sheets: Array<{ name: string; rows: string[][] }>,
+): Buffer {
     const strings: string[] = [];
     const indexOf = (value: string): number => {
         const existing = strings.indexOf(value);
@@ -297,19 +375,49 @@ export function buildXlsx(rows: string[][]): Buffer {
         return strings.length - 1;
     };
 
-    const sheetRows = rows.map((row, rowIndex) => {
-        const cells = row.map((value, colIndex) => {
-            const ref = `${colLetters(colIndex)}${rowIndex + 1}`;
-            const si = indexOf(value);
-            return `<c r="${ref}" t="s"><v>${si}</v></c>`;
+    const worksheetXml = sheets.map((sheet) => {
+        const sheetRows = sheet.rows.map((row, rowIndex) => {
+            const cells = row.map((value, colIndex) => {
+                const ref = `${colLetters(colIndex)}${rowIndex + 1}`;
+                const si = indexOf(value);
+                return `<c r="${ref}" t="s"><v>${si}</v></c>`;
+            });
+
+            return `<row r="${rowIndex + 1}">${cells.join("")}</row>`;
         });
 
-        return `<row r="${rowIndex + 1}">${cells.join("")}</row>`;
+        return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>${sheetRows.join("")}</sheetData>
+</worksheet>`;
     });
 
     const sst = strings
         .map((value) => `<si><t>${escapeXml(value)}</t></si>`)
         .join("");
+
+    const sheetOverrides = sheets
+        .map(
+            (_sheet, index) =>
+                `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+        )
+        .join("");
+
+    const sheetEntries = sheets
+        .map(
+            (sheet, index) =>
+                `<sheet name="${escapeXml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`,
+        )
+        .join("");
+
+    const sheetRels = sheets
+        .map(
+            (_sheet, index) =>
+                `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`,
+        )
+        .join("");
+
+    const sharedRelId = sheets.length + 1;
 
     const files: Record<string, Uint8Array> = {
         "[Content_Types].xml": strToU8(
@@ -318,7 +426,7 @@ export function buildXlsx(rows: string[][]): Buffer {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  ${sheetOverrides}
   <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
 </Types>`,
         ),
@@ -332,28 +440,30 @@ export function buildXlsx(rows: string[][]): Buffer {
             `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets>
-    <sheet name="Import" sheetId="1" r:id="rId1"/>
+    ${sheetEntries}
   </sheets>
 </workbook>`,
         ),
         "xl/_rels/workbook.xml.rels": strToU8(
             `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+  ${sheetRels}
+  <Relationship Id="rId${sharedRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
 </Relationships>`,
         ),
         "xl/sharedStrings.xml": strToU8(
             `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${strings.length}" uniqueCount="${strings.length}">${sst}</sst>`,
         ),
-        "xl/worksheets/sheet1.xml": strToU8(
-            `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetData>${sheetRows.join("")}</sheetData>
-</worksheet>`,
-        ),
     };
 
+    for (const [index, xml] of worksheetXml.entries()) {
+        files[`xl/worksheets/sheet${index + 1}.xml`] = strToU8(xml);
+    }
+
     return Buffer.from(zipSync(files));
+}
+
+export function buildXlsx(rows: string[][]): Buffer {
+    return buildXlsxWorkbook([{ name: "Import", rows }]);
 }

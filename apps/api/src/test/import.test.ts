@@ -6,7 +6,7 @@ import { app } from "../app";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { resetImportPreviewStoreForTests } from "../lib/importPreviewStore";
-import { buildXlsx } from "../lib/xlsxParse";
+import { buildXlsx, buildXlsxWorkbook } from "../lib/xlsxParse";
 import { loginAs } from "./helpers";
 
 const SAMPLE_CSV = `Kennzeichen;Tank;Status;Fahrer
@@ -135,6 +135,59 @@ B-DUP 1;60
             .expect(400);
 
         assert.match(response.body.error, /\.xlsx/i);
+    });
+
+    it("classifies named worksheets as vehicles, drivers, eligibility and current", async () => {
+        const { agent } = await loginAs(1);
+        const xlsx = buildXlsxWorkbook([
+            {
+                name: "Fahrzeuge",
+                rows: [
+                    ["Kennzeichen", "Tank"],
+                    ["B-SH 1", "40"],
+                ],
+            },
+            {
+                name: "Fahrer",
+                rows: [["Name"], ["Nora Weber"]],
+            },
+            {
+                name: "Eignung",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "B-SH 1"],
+                ],
+            },
+            {
+                name: "Aktuell",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "B-SH 1"],
+                ],
+            },
+        ]).toString("base64");
+
+        const response = await agent
+            .post("/api/import/preview")
+            .send({ xlsx })
+            .expect(200);
+
+        const kinds = response.body.data.sheets.map(
+            (sheet: { kind: string }) => sheet.kind,
+        );
+        assert.deepEqual(kinds, [
+            "drivers",
+            "vehicles",
+            "eligibility",
+            "current",
+        ]);
+        assert.equal(response.body.data.can_commit, true);
+        assert.equal(
+            response.body.data.sheets.find(
+                (sheet: { kind: string }) => sheet.kind === "vehicles",
+            ).rows[0].license_plate,
+            "B-SH 1",
+        );
     });
 });
 
@@ -267,5 +320,62 @@ B-TXN 2;50
             .get("/api/vehicles?search=B-TXN%201")
             .expect(200);
         assert.equal(created.body.data.length, 1);
+    });
+
+    it("commits drivers, eligibility and current from named sheets", async () => {
+        const { agent } = await loginAs(1);
+        const xlsx = buildXlsxWorkbook([
+            {
+                name: "Fahrzeuge",
+                rows: [
+                    ["Kennzeichen", "Tank"],
+                    ["B-SH 9", "40"],
+                ],
+            },
+            {
+                name: "Fahrer",
+                rows: [["Name"], ["Nora Weber"]],
+            },
+            {
+                name: "Eignung",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "B-SH 9"],
+                ],
+            },
+            {
+                name: "Aktuell",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "B-SH 9"],
+                ],
+            },
+        ]).toString("base64");
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ xlsx })
+            .expect(200);
+
+        const commit = await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        assert.equal(commit.body.data.created_vehicles, 1);
+        assert.equal(commit.body.data.created_drivers, 1);
+        assert.equal(commit.body.data.assigned_eligibility, 1);
+        assert.equal(commit.body.data.set_current, 1);
+
+        const vehicles = await agent
+            .get("/api/vehicles?search=B-SH%209")
+            .expect(200);
+        assert.equal(vehicles.body.data[0].driver_name, "Nora Weber");
+
+        const drivers = await agent
+            .get("/api/drivers?search=Nora")
+            .expect(200);
+        assert.equal(drivers.body.data.length, 1);
+        assert.equal(drivers.body.data[0].current_vehicle_plate, "B-SH 9");
     });
 });

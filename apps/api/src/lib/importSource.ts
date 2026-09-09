@@ -1,15 +1,22 @@
 import type { ImportPreviewInput } from "@fleet-live/shared";
-import { parseCsv, type CsvTable } from "./csvParse";
+import { parseCsv } from "./csvParse";
 import { BadRequestError } from "./errors";
-import { parseXlsxBase64 } from "./xlsxParse";
+import {
+    parseXlsxWorkbookBase64,
+    type NamedImportTable,
+} from "./xlsxParse";
 
-export function tableFromImportInput(input: ImportPreviewInput): CsvTable {
+export type { NamedImportTable };
+
+export function tablesFromImportInput(
+    input: ImportPreviewInput,
+): NamedImportTable[] {
     if (input.xlsx) {
-        return parseXlsxBase64(input.xlsx);
+        return parseXlsxWorkbookBase64(input.xlsx);
     }
 
     if (input.csv) {
-        return parseCsv(input.csv);
+        return [{ name: "CSV", table: parseCsv(input.csv) }];
     }
 
     throw new BadRequestError("Bitte CSV- oder Excel-Inhalt senden.");
