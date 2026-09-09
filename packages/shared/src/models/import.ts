@@ -72,13 +72,21 @@ const statusMappingSchema = z.record(
     z.enum(VEHICLE_STATUSES),
 );
 
-const importPreviewInputSchema = z.object({
-    csv: z
-        .string({ error: "CSV-Inhalt fehlt." })
-        .min(1, "CSV-Inhalt fehlt."),
-    column_mapping: columnMappingSchema.optional(),
-    status_mapping: statusMappingSchema.optional(),
-});
+const importPreviewInputSchema = z
+    .object({
+        csv: z.string().optional(),
+        xlsx: z.string().optional(),
+        column_mapping: columnMappingSchema.optional(),
+        status_mapping: statusMappingSchema.optional(),
+    })
+    .refine(
+        (value) => {
+            const csv = value.csv?.trim() ?? "";
+            const xlsx = value.xlsx?.trim() ?? "";
+            return (csv.length > 0) !== (xlsx.length > 0);
+        },
+        "Bitte CSV- oder Excel-Inhalt senden.",
+    );
 
 const rowActionsSchema = z.record(
     z.string().regex(/^\d+$/),
@@ -93,7 +101,8 @@ const importCommitInputSchema = z.object({
 });
 
 export type ImportPreviewInput = {
-    csv: string;
+    csv?: string;
+    xlsx?: string;
     column_mapping?: ImportColumnMapping;
     status_mapping?: ImportStatusMapping;
 };
@@ -105,8 +114,12 @@ export type ImportCommitInput = {
 
 export function parseImportPreviewInput(body: unknown): ImportPreviewInput {
     const parsed = importPreviewInputSchema.parse(body);
+    const csv = parsed.csv?.trim() ?? "";
+    const xlsx = parsed.xlsx?.trim() ?? "";
+
     return {
-        csv: parsed.csv,
+        ...(csv ? { csv } : {}),
+        ...(xlsx ? { xlsx } : {}),
         column_mapping: parsed.column_mapping as
             | ImportColumnMapping
             | undefined,

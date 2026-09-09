@@ -3,6 +3,7 @@ import type {
     ImportColumnTarget,
     ImportCommitResult,
     ImportPreviewCounts,
+    ImportPreviewInput,
     ImportPreviewResponse,
     ImportPreviewRow,
     ImportRowAction,
@@ -17,7 +18,8 @@ import {
     LICENSE_PLATE_MAX,
     VEHICLE_STATUSES,
 } from "@fleet-live/shared";
-import { parseCsv, type CsvTable } from "../lib/csvParse";
+import { type CsvTable } from "../lib/csvParse";
+import { tableFromImportInput } from "../lib/importSource";
 import {
     deleteImportPreview,
     getImportPreview,
@@ -26,10 +28,15 @@ import {
 import { DriverModel } from "./driver.model";
 import { VehicleModel } from "./vehicle.model";
 import { stmt } from "../db/statements";
+import { withTransaction } from "../db/database";
 import { TripModel } from "./trip.model";
 import { TelemetryModel } from "./telemetry.model";
 import { SpeedingEventModel } from "./speedingEvent.model";
-import { NotFoundError } from "../lib/errors";
+import {
+    ConflictError,
+    NotFoundError,
+    isUniqueConstraintError,
+} from "../lib/errors";
 
 const COLUMN_HINTS: Array<{ pattern: RegExp; target: ImportColumnTarget }> = [
     { pattern: /kennzeichen|license|plate|nummer/i, target: "license_plate" },
@@ -425,13 +432,13 @@ function syncTripOnImport(
 
 export class ImportModel {
     static preview(
-        csv: string,
+        input: ImportPreviewInput,
         companyId: number,
         userId: number,
-        columnMappingInput?: ImportColumnMapping,
-        statusMappingInput?: ImportStatusMapping,
     ): ImportPreviewResponse {
-        const table = parseCsv(csv);
+        const table = tableFromImportInput(input);
+        const columnMappingInput = input.column_mapping;
+        const statusMappingInput = input.status_mapping;
 
         if (table.columns.length === 0) {
             return {
@@ -529,118 +536,136 @@ export class ImportModel {
             errors: [],
         };
 
-        for (const row of stored.rows) {
-            const actionKey = String(row.row_index);
-            const action =
-                rowActionsInput?.[actionKey] ?? row.default_action;
+        try {
+            withTransaction(() => {
+                for (const row of stored.rows) {
+                    const actionKey = String(row.row_index);
+                    const action =
+                        rowActionsInput?.[actionKey] ?? row.default_action;
 
-            const hasError = row.issues.some((issue) => issue.level === "error");
-            if (hasError || action === "skip") {
-                result.skipped_rows += 1;
-                continue;
-            }
-
-            if (!row.license_plate) {
-                result.skipped_rows += 1;
-                continue;
-            }
-
-            const fuelLevel = row.fuel_level ?? 100;
-            const status = row.status ?? "IDLE";
-
-            try {
-                if (action === "create") {
-                    if (row.driver_name && !driverExists(companyId, row.driver_name)) {
-                        result.created_drivers += 1;
-                    }
-
-                    const created = VehicleModel.create({
-                        license_plate: row.license_plate,
-                        fuel_level: fuelLevel,
-                        status,
-                        company_id: companyId,
-                        driver_name: row.driver_name ?? undefined,
-                    });
-
-                    if (row.status === "DRIVING") {
-                        syncTripOnImport(
-                            created.id,
-                            undefined,
-                            status,
-                            companyId,
-                        );
-                    }
-
-                    result.created_vehicles += 1;
-                } else if (action === "update") {
-                    const vehicleId = findVehicleIdByPlate(
-                        companyId,
-                        row.license_plate,
+                    const hasError = row.issues.some(
+                        (issue) => issue.level === "error",
                     );
-
-                    if (vehicleId === undefined) {
-                        result.failed_rows += 1;
-                        result.errors.push({
-                            row_index: row.row_index,
-                            message: `Kennzeichen ${row.license_plate} wurde nicht gefunden.`,
-                        });
+                    if (hasError || action === "skip") {
+                        result.skipped_rows += 1;
                         continue;
                     }
 
-                    const previous = VehicleModel.getById(
-                        vehicleId,
-                        companyId,
-                    );
-                    const updated = VehicleModel.update(
-                        vehicleId,
-                        {
+                    if (!row.license_plate) {
+                        result.skipped_rows += 1;
+                        continue;
+                    }
+
+                    const fuelLevel = row.fuel_level ?? 100;
+                    const status = row.status ?? "IDLE";
+
+                    if (action === "create") {
+                        const createdDriver = Boolean(
+                            row.driver_name &&
+                                !driverExists(companyId, row.driver_name),
+                        );
+
+                        const created = VehicleModel.create({
+                            license_plate: row.license_plate,
                             fuel_level: fuelLevel,
                             status,
-                        },
-                        companyId,
-                    );
-
-                    if (!updated) {
-                        result.failed_rows += 1;
-                        result.errors.push({
-                            row_index: row.row_index,
-                            message: `Fahrzeug ${row.license_plate} konnte nicht aktualisiert werden.`,
+                            company_id: companyId,
+                            driver_name: row.driver_name ?? undefined,
                         });
-                        continue;
-                    }
 
-                    syncTripOnImport(
-                        vehicleId,
-                        previous?.status,
-                        status,
-                        companyId,
-                    );
+                        if (row.status === "DRIVING") {
+                            syncTripOnImport(
+                                created.id,
+                                undefined,
+                                status,
+                                companyId,
+                            );
+                        }
 
-                    if (row.driver_name) {
-                        const createdDriver = assignDriverToVehicle(
-                            companyId,
-                            vehicleId,
-                            row.driver_name,
-                        );
                         if (createdDriver) {
                             result.created_drivers += 1;
                         }
-                    }
 
-                    result.updated_vehicles += 1;
-                } else {
-                    result.skipped_rows += 1;
+                        result.created_vehicles += 1;
+                    } else if (action === "update") {
+                        const vehicleId = findVehicleIdByPlate(
+                            companyId,
+                            row.license_plate,
+                        );
+
+                        if (vehicleId === undefined) {
+                            throw new ConflictError(
+                                `Import abgebrochen in Zeile ${row.row_index}: Kennzeichen ${row.license_plate} wurde nicht gefunden. Es wurde nichts übernommen.`,
+                                {},
+                            );
+                        }
+
+                        const previous = VehicleModel.getById(
+                            vehicleId,
+                            companyId,
+                        );
+                        const updated = VehicleModel.update(
+                            vehicleId,
+                            {
+                                fuel_level: fuelLevel,
+                                status,
+                            },
+                            companyId,
+                        );
+
+                        if (!updated) {
+                            throw new ConflictError(
+                                `Import abgebrochen in Zeile ${row.row_index}: Fahrzeug ${row.license_plate} konnte nicht aktualisiert werden. Es wurde nichts übernommen.`,
+                                {},
+                            );
+                        }
+
+                        syncTripOnImport(
+                            vehicleId,
+                            previous?.status,
+                            status,
+                            companyId,
+                        );
+
+                        if (row.driver_name) {
+                            const createdDriver = assignDriverToVehicle(
+                                companyId,
+                                vehicleId,
+                                row.driver_name,
+                            );
+                            if (createdDriver) {
+                                result.created_drivers += 1;
+                            }
+                        }
+
+                        result.updated_vehicles += 1;
+                    } else {
+                        result.skipped_rows += 1;
+                    }
                 }
-            } catch (error) {
-                result.failed_rows += 1;
-                result.errors.push({
-                    row_index: row.row_index,
-                    message:
-                        error instanceof Error
-                            ? error.message
-                            : "Unbekannter Fehler beim Import.",
-                });
+            });
+        } catch (error) {
+            if (
+                error instanceof ConflictError &&
+                error.message.includes("nichts übernommen")
+            ) {
+                throw error;
             }
+
+            if (error instanceof NotFoundError) {
+                throw error;
+            }
+
+            const detail = isUniqueConstraintError(error)
+                ? "Kennzeichen ist bereits vergeben."
+                : error instanceof Error
+                  ? error.message
+                  : "Unbekannter Fehler beim Import.";
+
+            throw new ConflictError(
+                `Import abgebrochen: ${detail} Es wurde nichts übernommen.`,
+                {},
+            );
         }
 
         deleteImportPreview(previewId);

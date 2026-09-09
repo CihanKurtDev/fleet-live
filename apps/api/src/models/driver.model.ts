@@ -10,7 +10,7 @@ import type {
     VehicleStatus,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
-import { db } from "../db/database";
+import { withTransaction } from "../db/database";
 import { ConflictError, NotFoundError, isUniqueConstraintError } from "../lib/errors";
 import { pagedQuery, type SqlParam } from "../lib/pagination";
 
@@ -435,9 +435,7 @@ export class DriverModel {
             );
         }
 
-        db.exec("BEGIN");
-
-        try {
+        withTransaction(() => {
             stmt(
                 `
                 UPDATE vehicles
@@ -469,12 +467,7 @@ export class DriverModel {
                     `,
                 ).run(driverId, driver.name, vehicleId, companyId);
             }
-
-            db.exec("COMMIT");
-        } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-        }
+        });
 
         const detail = this.getDetail(driverId, companyId);
         if (!detail) {
