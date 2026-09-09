@@ -53,7 +53,9 @@ export function commitImport(req: Request, res: Response): void {
 
         if (
             result.created_vehicles > 0 ||
-            result.updated_vehicles > 0
+            result.updated_vehicles > 0 ||
+            result.set_current > 0 ||
+            result.assigned_eligibility > 0
         ) {
             notifyVehiclesChanged(companyId);
         }

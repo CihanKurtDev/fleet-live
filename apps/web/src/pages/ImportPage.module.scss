@@ -116,6 +116,21 @@
     color: var(--text-h);
 }
 
+.sheetBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sheetHeading {
+    margin: 8px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
 .mappingGrid,
 .statusMapping {
     display: flex;

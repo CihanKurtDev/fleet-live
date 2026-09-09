@@ -207,16 +207,23 @@ export type {
     ImportPreviewInput,
     ImportPreviewResponse,
     ImportPreviewRow,
+    ImportPreviewSheet,
     ImportRowAction,
     ImportRowIssue,
+    ImportSheetKind,
+    ImportSheetMappings,
     ImportStatusMapping,
 } from "./models/import";
 
 export {
     IMPORT_COLUMN_TARGETS,
     IMPORT_ROW_ACTIONS,
+    IMPORT_SHEET_KINDS,
+    importActionKey,
+    importRequiredTargets,
     isImportColumnTarget,
     isImportRowAction,
+    isImportSheetKind,
     parseImportCommitInput,
     parseImportPreviewInput,
 } from "./models/import";

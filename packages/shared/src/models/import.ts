@@ -11,6 +11,15 @@ export const IMPORT_COLUMN_TARGETS = [
 
 export type ImportColumnTarget = (typeof IMPORT_COLUMN_TARGETS)[number];
 
+export const IMPORT_SHEET_KINDS = [
+    "vehicles",
+    "drivers",
+    "eligibility",
+    "current",
+] as const;
+
+export type ImportSheetKind = (typeof IMPORT_SHEET_KINDS)[number];
+
 export const IMPORT_ROW_ACTIONS = ["create", "update", "skip"] as const;
 
 export type ImportRowAction = (typeof IMPORT_ROW_ACTIONS)[number];
@@ -19,6 +28,10 @@ export type ImportColumnMapping = Partial<Record<string, ImportColumnTarget>>;
 
 export type ImportStatusMapping = Partial<Record<string, VehicleStatus>>;
 
+export type ImportSheetMappings = Partial<
+    Record<ImportSheetKind, ImportColumnMapping>
+>;
+
 export type ImportRowIssue = {
     level: "error" | "warning";
     code: string;
@@ -26,6 +39,7 @@ export type ImportRowIssue = {
 };
 
 export type ImportPreviewRow = {
+    sheet_kind: ImportSheetKind;
     row_index: number;
     license_plate: string | null;
     fuel_level: number | null;
@@ -44,8 +58,19 @@ export type ImportPreviewCounts = {
     warnings: number;
 };
 
+export type ImportPreviewSheet = {
+    kind: ImportSheetKind;
+    name: string;
+    columns: string[];
+    suggested_mapping: ImportColumnMapping;
+    unmapped_status_values: string[];
+    rows: ImportPreviewRow[];
+    counts: ImportPreviewCounts;
+};
+
 export type ImportPreviewResponse = {
     preview_id: string;
+    sheets: ImportPreviewSheet[];
     columns: string[];
     suggested_mapping: ImportColumnMapping;
     unmapped_status_values: string[];
@@ -58,6 +83,8 @@ export type ImportCommitResult = {
     created_vehicles: number;
     updated_vehicles: number;
     created_drivers: number;
+    assigned_eligibility: number;
+    set_current: number;
     skipped_rows: number;
     failed_rows: number;
     errors: Array<{ row_index: number; message: string }>;
@@ -72,11 +99,19 @@ const statusMappingSchema = z.record(
     z.enum(VEHICLE_STATUSES),
 );
 
+const sheetMappingsSchema = z.object({
+    vehicles: columnMappingSchema.optional(),
+    drivers: columnMappingSchema.optional(),
+    eligibility: columnMappingSchema.optional(),
+    current: columnMappingSchema.optional(),
+});
+
 const importPreviewInputSchema = z
     .object({
         csv: z.string().optional(),
         xlsx: z.string().optional(),
         column_mapping: columnMappingSchema.optional(),
+        sheet_mappings: sheetMappingsSchema.optional(),
         status_mapping: statusMappingSchema.optional(),
     })
     .refine(
@@ -89,7 +124,7 @@ const importPreviewInputSchema = z
     );
 
 const rowActionsSchema = z.record(
-    z.string().regex(/^\d+$/),
+    z.string().min(1),
     z.enum(IMPORT_ROW_ACTIONS),
 );
 
@@ -104,6 +139,7 @@ export type ImportPreviewInput = {
     csv?: string;
     xlsx?: string;
     column_mapping?: ImportColumnMapping;
+    sheet_mappings?: ImportSheetMappings;
     status_mapping?: ImportStatusMapping;
 };
 
@@ -122,6 +158,9 @@ export function parseImportPreviewInput(body: unknown): ImportPreviewInput {
         ...(xlsx ? { xlsx } : {}),
         column_mapping: parsed.column_mapping as
             | ImportColumnMapping
+            | undefined,
+        sheet_mappings: parsed.sheet_mappings as
+            | ImportSheetMappings
             | undefined,
         status_mapping: parsed.status_mapping as
             | ImportStatusMapping
@@ -147,4 +186,32 @@ export function isImportRowAction(value: unknown): value is ImportRowAction {
         typeof value === "string" &&
         (IMPORT_ROW_ACTIONS as readonly string[]).includes(value)
     );
+}
+
+export function isImportSheetKind(value: unknown): value is ImportSheetKind {
+    return (
+        typeof value === "string" &&
+        (IMPORT_SHEET_KINDS as readonly string[]).includes(value)
+    );
+}
+
+export function importActionKey(
+    kind: ImportSheetKind,
+    rowIndex: number,
+): string {
+    return `${kind}:${rowIndex}`;
+}
+
+export function importRequiredTargets(
+    kind: ImportSheetKind,
+): ImportColumnTarget[] {
+    if (kind === "drivers") {
+        return ["driver_name"];
+    }
+
+    if (kind === "eligibility" || kind === "current") {
+        return ["driver_name", "license_plate"];
+    }
+
+    return ["license_plate"];
 }

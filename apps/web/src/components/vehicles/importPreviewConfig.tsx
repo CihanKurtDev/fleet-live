@@ -1,6 +1,7 @@
 import type {
     ImportPreviewRow,
     ImportRowAction,
+    ImportSheetKind,
 } from "@fleet-live/shared";
 import { IMPORT_ROW_ACTIONS } from "@fleet-live/shared";
 
@@ -19,35 +20,10 @@ export type ImportPreviewTableRow = ImportPreviewRow & {
 };
 
 export const importPreviewColumns = (
-    onActionChange: (rowIndex: number, action: ImportRowAction) => void,
-): TableColumn<ImportPreviewTableRow>[] => [
-    {
-        key: "row_index",
-        displayText: "Zeile",
-    },
-    {
-        key: "license_plate",
-        displayText: "Kennzeichen",
-        render: (value) => value ?? "—",
-    },
-    {
-        key: "fuel_level",
-        displayText: "Tank",
-        render: (value) =>
-            value === null ? "100 % (Standard)" : `${value} %`,
-    },
-    {
-        key: "status",
-        displayText: "Status",
-        render: (value) =>
-            value ? vehicleStatusLabel(value) : "Standby (Standard)",
-    },
-    {
-        key: "driver_name",
-        displayText: "Fahrer",
-        render: (value) => value ?? "—",
-    },
-    {
+    kind: ImportSheetKind,
+    onActionChange: (row: ImportPreviewTableRow, action: ImportRowAction) => void,
+): TableColumn<ImportPreviewTableRow>[] => {
+    const actionColumn: TableColumn<ImportPreviewTableRow> = {
         key: "action",
         displayText: "Aktion",
         render: (value, { row }) => {
@@ -60,11 +36,11 @@ export const importPreviewColumns = (
                     className={styles.select}
                     value={value}
                     disabled={hasError}
-                    aria-label={`Aktion für Zeile ${row.row_index}`}
+                    aria-label={`Aktion für ${kind} Zeile ${row.row_index}`}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => {
                         onActionChange(
-                            row.row_index,
+                            row,
                             event.target.value as ImportRowAction,
                         );
                     }}
@@ -77,8 +53,9 @@ export const importPreviewColumns = (
                 </select>
             );
         },
-    },
-    {
+    };
+
+    const issuesColumn: TableColumn<ImportPreviewTableRow> = {
         key: "issues",
         displayText: "Hinweise",
         render: (value) =>
@@ -100,5 +77,70 @@ export const importPreviewColumns = (
                     ))}
                 </div>
             ),
-    },
-];
+    };
+
+    const indexColumn: TableColumn<ImportPreviewTableRow> = {
+        key: "row_index",
+        displayText: "Zeile",
+    };
+
+    if (kind === "drivers") {
+        return [
+            indexColumn,
+            {
+                key: "driver_name",
+                displayText: "Fahrer",
+                render: (value) => value ?? "—",
+            },
+            actionColumn,
+            issuesColumn,
+        ];
+    }
+
+    if (kind === "eligibility" || kind === "current") {
+        return [
+            indexColumn,
+            {
+                key: "license_plate",
+                displayText: "Kennzeichen",
+                render: (value) => value ?? "—",
+            },
+            {
+                key: "driver_name",
+                displayText: "Fahrer",
+                render: (value) => value ?? "—",
+            },
+            actionColumn,
+            issuesColumn,
+        ];
+    }
+
+    return [
+        indexColumn,
+        {
+            key: "license_plate",
+            displayText: "Kennzeichen",
+            render: (value) => value ?? "—",
+        },
+        {
+            key: "fuel_level",
+            displayText: "Tank",
+            render: (value) =>
+                value === null ? "100 % (Standard)" : `${value} %`,
+        },
+        {
+            key: "status",
+            displayText: "Status",
+            render: (value) =>
+                value ? vehicleStatusLabel(value) : "Standby (Standard)",
+        },
+        {
+            key: "driver_name",
+            displayText: "Fahrer",
+            render: (value) => value ?? "—",
+        },
+        actionColumn,
+        issuesColumn,
+    ];
+};
+
