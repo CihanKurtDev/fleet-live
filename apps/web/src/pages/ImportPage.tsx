@@ -1,4 +1,5 @@
 import {
+    useEffect,
     useMemo,
     useRef,
     useState,
@@ -15,14 +16,16 @@ import {
     type ImportColumnTarget,
     type ImportPreviewResponse,
     type ImportRowAction,
+    type ImportRun,
     type ImportSheetKind,
     type ImportSheetMappings,
     type ImportStatusMapping,
 } from "@fleet-live/shared";
 
-import { commitImport, previewImport } from "../api/import";
+import { commitImport, listImportRuns, previewImport } from "../api/import";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
+import { Checkbox } from "../components/ui/Checkbox/Checkbox";
 import { Table } from "../components/ui/Table/Table";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { useAuth } from "../hooks/useAuth";
@@ -32,6 +35,7 @@ import {
     importPreviewColumns,
     type ImportPreviewTableRow,
 } from "../components/vehicles/importPreviewConfig";
+import { importRunColumns } from "../components/vehicles/importRunConfig";
 import layout from "../styles/detailLayout.module.scss";
 import styles from "./ImportPage.module.scss";
 
@@ -62,6 +66,25 @@ const STEP_LABELS: Record<WizardStep, string> = {
 const STEP_ORDER: WizardStep[] = ["upload", "mapping", "preview", "result"];
 
 const SAMPLE_FILE_HREF = "/import-beispiel.csv";
+
+function ImportLog({ runs }: { runs: ImportRun[] }) {
+    return (
+        <section className={layout.panel}>
+            <h2 className={layout.panelTitle}>Letzte Importe</h2>
+            <p className={layout.note}>
+                Wann, wer, und wie viele Zeilen übernommen wurden.
+            </p>
+            <Table
+                columns={importRunColumns}
+                rows={runs}
+                getRowKey={(row) => row.id}
+                caption="Importprotokoll"
+                emptyContent="Noch kein Import in dieser Firma."
+                className={styles.tableWrap}
+            />
+        </section>
+    );
+}
 
 function readFileAsText(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -148,9 +171,31 @@ export const ImportPage = () => {
     const [commitSummary, setCommitSummary] = useState<
         Awaited<ReturnType<typeof commitImport>>["data"] | null
     >(null);
+    const [saveProfile, setSaveProfile] = useState(true);
+    const [runs, setRuns] = useState<ImportRun[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        void listImportRuns()
+            .then((response) => {
+                if (!cancelled) {
+                    setRuns(response.data);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setRuns([]);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const unmappedStatuses =
         preview?.sheets.find((sheet) => sheet.kind === "vehicles")
@@ -194,6 +239,8 @@ export const ImportPage = () => {
                 setFileName(file.name);
                 setPreview(null);
                 setCommitSummary(null);
+                setSheetMappings({});
+                setStatusMapping({});
                 setRowActions({});
             } catch {
                 setError("Die Datei konnte nicht gelesen werden.");
@@ -214,6 +261,8 @@ export const ImportPage = () => {
             setFileName(file.name);
             setPreview(null);
             setCommitSummary(null);
+            setSheetMappings({});
+            setStatusMapping({});
             setRowActions({});
         } catch {
             setError("Die Datei konnte nicht gelesen werden.");
@@ -328,11 +377,18 @@ export const ImportPage = () => {
             const response = await commitImport({
                 preview_id: preview.preview_id,
                 row_actions: payload,
+                save_profile: saveProfile,
             });
 
             setCommitSummary(response.data);
             setStep("result");
             refetchLists();
+            try {
+                const log = await listImportRuns();
+                setRuns(log.data);
+            } catch {
+                // Ergebnis zählt; das Protokoll ist nachrangig.
+            }
         } catch (caught) {
             setError(
                 caught instanceof ApiError
@@ -401,9 +457,8 @@ export const ImportPage = () => {
                 <h1 className={styles.title}>Bestand importieren</h1>
                 <p className={styles.lead}>
                     Fahrzeuge, Fahrer, Eignung und aktuelle Zuweisung aus CSV
-                    oder Excel laden. Mehrere Excel-Blätter (Fahrzeuge, Fahrer,
-                    Eignung, Aktuell) werden erkannt. Telemetrie, Fahrten und
-                    Warnungen bleiben unberührt.
+                    oder Excel laden. Spaltenzuordnung merkt sich die Firma für
+                    den nächsten Export. Jeder Lauf landet im Protokoll.
                 </p>
                 <ol className={styles.steps} aria-label="Importschritte">
                     {STEP_ORDER.map((wizardStep, index) => {
@@ -546,6 +601,12 @@ export const ImportPage = () => {
                             ? `${previewSheets.length} Blätter erkannt. Jede Dateispalte braucht ein Feld — oder „Ignorieren“.`
                             : `${preview.columns.length} Spalten erkannt. Jede Dateispalte braucht ein Feld — oder „Ignorieren“.`}
                     </p>
+                    {preview.profile_applied && (
+                        <p className={layout.note}>
+                            Firmenprofil angewendet — so sehen eure Exporte
+                            aus. Du kannst die Zuordnung noch ändern.
+                        </p>
+                    )}
                     {previewSheets.map((sheet) => (
                         <div key={sheet.kind} className={styles.sheetBlock}>
                             <h3 className={styles.sheetHeading}>
@@ -756,6 +817,15 @@ export const ImportPage = () => {
                         );
                     })}
 
+                    <label className={styles.remember}>
+                        <Checkbox
+                            checked={saveProfile}
+                            onChange={(event) =>
+                                setSaveProfile(event.target.checked)
+                            }
+                        />
+                        Als Firmenprofil merken
+                    </label>
                     <div className={styles.actions}>
                         <Button
                             variant="secondary"
@@ -810,6 +880,12 @@ export const ImportPage = () => {
                                 <dd>{commitSummary.failed_rows}</dd>
                             </div>
                         )}
+                        {commitSummary.profile_saved && (
+                            <div>
+                                <dt>Profil</dt>
+                                <dd>gespeichert</dd>
+                            </div>
+                        )}
                     </dl>
                     <div className={styles.actions}>
                         {commitSummary.errors.length > 0 && (
@@ -837,6 +913,10 @@ export const ImportPage = () => {
                         </Button>
                     </div>
                 </section>
+            )}
+
+            {(step === "upload" || step === "result") && (
+                <ImportLog runs={runs} />
             )}
         </section>
     );

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type {
     ImportColumnMapping,
     ImportPreviewRow,
+    ImportSheetMappings,
+    ImportSource,
     ImportStatusMapping,
 } from "@fleet-live/shared";
 
@@ -11,9 +13,12 @@ export type StoredImportPreview = {
     companyId: number;
     userId: number;
     createdAt: number;
+    source: ImportSource;
     rows: ImportPreviewRow[];
+    sheetMappings: ImportSheetMappings;
     columnMapping: ImportColumnMapping;
     statusMapping: ImportStatusMapping;
+    warningCount: number;
 };
 
 const store = new Map<string, StoredImportPreview>();

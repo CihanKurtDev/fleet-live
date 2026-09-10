@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { emptyToUndefined } from "./queryPreprocess";
 import { VEHICLE_STATUSES, type VehicleStatus } from "./vehicle";
+import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
 
 export const IMPORT_COLUMN_TARGETS = [
     "license_plate",
@@ -77,6 +79,42 @@ export type ImportPreviewResponse = {
     rows: ImportPreviewRow[];
     counts: ImportPreviewCounts;
     can_commit: boolean;
+    profile_applied: boolean;
+};
+
+export const IMPORT_SOURCES = ["csv", "xlsx"] as const;
+
+export type ImportSource = (typeof IMPORT_SOURCES)[number];
+
+export type ImportMappingProfile = {
+    sheet_mappings: ImportSheetMappings;
+    status_mapping: ImportStatusMapping;
+    updated_at: string;
+};
+
+export type ImportRun = {
+    id: number;
+    created_at: string;
+    source: ImportSource;
+    user_name: string;
+    created_vehicles: number;
+    updated_vehicles: number;
+    created_drivers: number;
+    assigned_eligibility: number;
+    set_current: number;
+    skipped_rows: number;
+    failed_rows: number;
+    warning_count: number;
+};
+
+export type ImportRunListResponse = {
+    data: ImportRun[];
+    meta: {
+        page: number;
+        limit: number;
+        total: number;
+        pageCount: number;
+    };
 };
 
 export type ImportCommitResult = {
@@ -88,6 +126,7 @@ export type ImportCommitResult = {
     skipped_rows: number;
     failed_rows: number;
     errors: Array<{ row_index: number; message: string }>;
+    profile_saved: boolean;
 };
 
 const columnTargetSchema = z.enum(IMPORT_COLUMN_TARGETS);
@@ -133,6 +172,35 @@ const importCommitInputSchema = z.object({
         .string({ error: "Vorschau-ID fehlt." })
         .min(1, "Vorschau-ID fehlt."),
     row_actions: rowActionsSchema.optional(),
+    save_profile: z.boolean().optional(),
+});
+
+const importProfileInputSchema = z.object({
+    sheet_mappings: sheetMappingsSchema.default({}),
+    status_mapping: statusMappingSchema.default({}),
+});
+
+const importRunListQuerySchema = z.object({
+    page: z.preprocess(
+        emptyToUndefined,
+        z.coerce
+            .number({ error: "Seite muss eine Zahl sein." })
+            .int("Seite muss eine ganze Zahl sein.")
+            .min(1, "Seite muss mindestens 1 sein.")
+            .default(1),
+    ),
+    limit: z.preprocess(
+        emptyToUndefined,
+        z.coerce
+            .number({ error: "Limit muss eine Zahl sein." })
+            .int("Limit muss eine ganze Zahl sein.")
+            .refine(
+                (value) =>
+                    (VEHICLE_PAGE_LIMITS as readonly number[]).includes(value),
+                "Limit muss 10, 25, 50 oder 100 sein.",
+            )
+            .default(10),
+    ),
 });
 
 export type ImportPreviewInput = {
@@ -146,6 +214,17 @@ export type ImportPreviewInput = {
 export type ImportCommitInput = {
     preview_id: string;
     row_actions?: Record<string, ImportRowAction>;
+    save_profile?: boolean;
+};
+
+export type ImportProfileInput = {
+    sheet_mappings: ImportSheetMappings;
+    status_mapping: ImportStatusMapping;
+};
+
+export type ImportRunListQuery = {
+    page: number;
+    limit: number;
 };
 
 export function parseImportPreviewInput(body: unknown): ImportPreviewInput {
@@ -169,7 +248,28 @@ export function parseImportPreviewInput(body: unknown): ImportPreviewInput {
 }
 
 export function parseImportCommitInput(body: unknown): ImportCommitInput {
-    return importCommitInputSchema.parse(body) as ImportCommitInput;
+    const parsed = importCommitInputSchema.parse(body);
+
+    return {
+        preview_id: parsed.preview_id,
+        row_actions: parsed.row_actions as
+            | Record<string, ImportRowAction>
+            | undefined,
+        save_profile: parsed.save_profile ?? true,
+    };
+}
+
+export function parseImportProfileInput(body: unknown): ImportProfileInput {
+    const parsed = importProfileInputSchema.parse(body);
+
+    return {
+        sheet_mappings: parsed.sheet_mappings as ImportSheetMappings,
+        status_mapping: parsed.status_mapping as ImportStatusMapping,
+    };
+}
+
+export function parseImportRunListQuery(input: unknown): ImportRunListQuery {
+    return importRunListQuerySchema.parse(input);
 }
 
 export function isImportColumnTarget(

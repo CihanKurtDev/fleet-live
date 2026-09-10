@@ -2,14 +2,20 @@ import type {
     ImportColumnMapping,
     ImportColumnTarget,
     ImportCommitResult,
+    ImportMappingProfile,
     ImportPreviewCounts,
     ImportPreviewInput,
     ImportPreviewResponse,
     ImportPreviewRow,
     ImportPreviewSheet,
+    ImportProfileInput,
     ImportRowAction,
     ImportRowIssue,
+    ImportRun,
+    ImportRunListQuery,
     ImportSheetKind,
+    ImportSheetMappings,
+    ImportSource,
     ImportStatusMapping,
     VehicleStatus,
 } from "@fleet-live/shared";
@@ -20,10 +26,12 @@ import {
     importActionKey,
     isVehicleStatus,
     LICENSE_PLATE_MAX,
+    parseImportProfileInput,
     VEHICLE_STATUSES,
 } from "@fleet-live/shared";
 import { type CsvTable } from "../lib/csvParse";
 import {
+    applySavedMapping,
     assignSheetKinds,
     suggestColumnMapping,
 } from "../lib/importSheets";
@@ -36,7 +44,8 @@ import {
 import { DriverModel } from "./driver.model";
 import { VehicleModel } from "./vehicle.model";
 import { stmt } from "../db/statements";
-import { withTransaction } from "../db/database";
+import { db, withTransaction } from "../db/database";
+import { pagedQuery } from "../lib/pagination";
 import { TripModel } from "./trip.model";
 import { TelemetryModel } from "./telemetry.model";
 import { SpeedingEventModel } from "./speedingEvent.model";
@@ -327,6 +336,7 @@ function emptyPreview(): ImportPreviewResponse {
         rows: [],
         counts: emptyCounts(),
         can_commit: false,
+        profile_applied: false,
     };
 }
 
@@ -769,6 +779,10 @@ function syncTripOnImport(
     }
 }
 
+function hasKeys(value: object | undefined): boolean {
+    return Boolean(value && Object.keys(value).length > 0);
+}
+
 function resolveAction(
     row: ImportPreviewRow,
     rowActionsInput?: Record<string, ImportRowAction>,
@@ -815,6 +829,12 @@ export class ImportModel {
             return emptyPreview();
         }
 
+        const profile = ImportModel.getProfile(companyId);
+        const clientStatus = hasKeys(input.status_mapping)
+            ? input.status_mapping
+            : undefined;
+        let profileApplied = false;
+
         const parsedByKind = new Map<
             ImportSheetKind,
             {
@@ -832,10 +852,20 @@ export class ImportModel {
                 source.kind,
                 source.table.columns,
             );
-            const mapping =
+            const clientMapping =
                 input.sheet_mappings?.[source.kind] ??
-                (source.kind === "vehicles" ? input.column_mapping : undefined) ??
-                suggested;
+                (source.kind === "vehicles" ? input.column_mapping : undefined);
+            const appliedMapping = hasKeys(clientMapping)
+                ? { mapping: clientMapping as ImportColumnMapping, applied: false }
+                : applySavedMapping(
+                      source.table.columns,
+                      suggested,
+                      profile?.sheet_mappings[source.kind],
+                  );
+            const mapping = appliedMapping.mapping;
+            if (appliedMapping.applied) {
+                profileApplied = true;
+            }
 
             const statusValues = new Set<string>();
             const statusColumn = Object.entries(mapping).find(
@@ -854,8 +884,20 @@ export class ImportModel {
                 }
             }
 
+            const savedStatus =
+                clientStatus === undefined ? profile?.status_mapping : undefined;
+            if (savedStatus) {
+                for (const raw of statusValues) {
+                    if (savedStatus[raw]) {
+                        profileApplied = true;
+                        break;
+                    }
+                }
+            }
+
             const statusMapping = {
                 ...suggestStatusMapping([...statusValues]),
+                ...savedStatus,
                 ...input.status_mapping,
             };
 
@@ -919,7 +961,7 @@ export class ImportModel {
                 kind,
                 name: parsed.name,
                 columns: parsed.table.columns,
-                suggested_mapping: parsed.suggested,
+                suggested_mapping: parsed.mapping,
                 unmapped_status_values: parsed.unmapped,
                 rows,
                 counts: countPreview(rows),
@@ -933,13 +975,25 @@ export class ImportModel {
             counts.to_create + counts.to_update > 0;
 
         const primary = sheets.find((sheet) => sheet.kind === "vehicles") ?? sheets[0];
+        const sheetMappings: ImportSheetMappings = {};
+        for (const [kind, parsed] of parsedByKind) {
+            sheetMappings[kind] = parsed.mapping;
+        }
 
         const previewId = saveImportPreview({
             companyId,
             userId,
+            source: input.xlsx ? "xlsx" : "csv",
             rows,
+            sheetMappings,
             columnMapping: primary?.suggested_mapping ?? {},
-            statusMapping: input.status_mapping ?? {},
+            statusMapping: {
+                ...input.status_mapping,
+                ...(clientStatus === undefined
+                    ? (profile?.status_mapping ?? {})
+                    : {}),
+            },
+            warningCount: counts.warnings,
         });
 
         return {
@@ -951,13 +1005,16 @@ export class ImportModel {
             rows,
             counts,
             can_commit: canCommit,
+            profile_applied: profileApplied,
         };
     }
 
     static commit(
         previewId: string,
         companyId: number,
+        userId: number,
         rowActionsInput?: Record<string, ImportRowAction>,
+        saveProfile = true,
     ): ImportCommitResult {
         const stored = getImportPreview(previewId, companyId);
         if (!stored) {
@@ -976,6 +1033,7 @@ export class ImportModel {
             skipped_rows: 0,
             failed_rows: 0,
             errors: [],
+            profile_saved: false,
         };
 
         try {
@@ -1170,6 +1228,22 @@ export class ImportModel {
                         result.set_current += 1;
                     }
                 }
+
+                insertImportRun({
+                    companyId,
+                    userId,
+                    source: stored.source,
+                    result,
+                    warningCount: stored.warningCount,
+                });
+
+                if (saveProfile && hasKeys(stored.sheetMappings)) {
+                    ImportModel.putProfile(companyId, {
+                        sheet_mappings: stored.sheetMappings,
+                        status_mapping: stored.statusMapping,
+                    });
+                    result.profile_saved = true;
+                }
             });
         } catch (error) {
             if (
@@ -1198,6 +1272,173 @@ export class ImportModel {
         deleteImportPreview(previewId);
         return result;
     }
+
+    static getProfile(companyId: number): ImportMappingProfile | null {
+        const row = stmt(
+            `
+            SELECT sheet_mappings, status_mapping, updated_at
+            FROM import_mapping_profiles
+            WHERE company_id = ?
+            `,
+        ).get(companyId) as
+            | {
+                  sheet_mappings: string;
+                  status_mapping: string;
+                  updated_at: string;
+              }
+            | undefined;
+
+        if (!row) {
+            return null;
+        }
+
+        try {
+            const parsed = parseImportProfileInput({
+                sheet_mappings: JSON.parse(row.sheet_mappings),
+                status_mapping: JSON.parse(row.status_mapping),
+            });
+
+            return {
+                ...parsed,
+                updated_at: row.updated_at,
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    static putProfile(
+        companyId: number,
+        input: ImportProfileInput,
+    ): ImportMappingProfile {
+        stmt(
+            `
+            INSERT INTO import_mapping_profiles (
+                company_id, sheet_mappings, status_mapping, updated_at
+            )
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id) DO UPDATE SET
+                sheet_mappings = excluded.sheet_mappings,
+                status_mapping = excluded.status_mapping,
+                updated_at = CURRENT_TIMESTAMP
+            `,
+        ).run(
+            companyId,
+            JSON.stringify(input.sheet_mappings),
+            JSON.stringify(input.status_mapping),
+        );
+
+        const saved = this.getProfile(companyId);
+        if (!saved) {
+            throw new Error("Import-Profil wurde nicht gespeichert.");
+        }
+
+        return saved;
+    }
+
+    static listRuns(query: ImportRunListQuery, companyId: number) {
+        const offset = (query.page - 1) * query.limit;
+
+        return pagedQuery<ImportRunRow, ImportRun>({
+            listSql: `
+                SELECT
+                    r.id,
+                    r.created_at,
+                    r.source,
+                    u.name AS user_name,
+                    r.created_vehicles,
+                    r.updated_vehicles,
+                    r.created_drivers,
+                    r.assigned_eligibility,
+                    r.set_current,
+                    r.skipped_rows,
+                    r.failed_rows,
+                    r.warning_count,
+                    COUNT(*) OVER () AS total
+                FROM import_runs r
+                INNER JOIN users u ON u.id = r.user_id
+                WHERE r.company_id = ?
+                ORDER BY r.created_at DESC, r.id DESC
+                LIMIT ? OFFSET ?
+            `,
+            listParams: [companyId, query.limit, offset],
+            countSql: `
+                SELECT COUNT(*) AS total
+                FROM import_runs
+                WHERE company_id = ?
+            `,
+            countParams: [companyId],
+            page: query.page,
+            limit: query.limit,
+            map: mapImportRun,
+        });
+    }
+
+    static resetForTests() {
+        db.exec("DELETE FROM import_runs");
+        db.exec("DELETE FROM import_mapping_profiles");
+        db.exec(
+            "DELETE FROM sqlite_sequence WHERE name IN ('import_runs')",
+        );
+    }
+}
+
+type ImportRunRow = ImportRun & { total?: number };
+
+function mapImportRun(row: ImportRunRow): ImportRun {
+    return {
+        id: row.id,
+        created_at: row.created_at,
+        source: row.source,
+        user_name: row.user_name,
+        created_vehicles: row.created_vehicles,
+        updated_vehicles: row.updated_vehicles,
+        created_drivers: row.created_drivers,
+        assigned_eligibility: row.assigned_eligibility,
+        set_current: row.set_current,
+        skipped_rows: row.skipped_rows,
+        failed_rows: row.failed_rows,
+        warning_count: row.warning_count,
+    };
+}
+
+function insertImportRun(input: {
+    companyId: number;
+    userId: number;
+    source: ImportSource;
+    result: ImportCommitResult;
+    warningCount: number;
+}): void {
+    stmt(
+        `
+        INSERT INTO import_runs (
+            company_id,
+            user_id,
+            source,
+            created_vehicles,
+            updated_vehicles,
+            created_drivers,
+            assigned_eligibility,
+            set_current,
+            skipped_rows,
+            failed_rows,
+            warning_count
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+    ).run(
+        input.companyId,
+        input.userId,
+        input.source,
+        input.result.created_vehicles,
+        input.result.updated_vehicles,
+        input.result.created_drivers,
+        input.result.assigned_eligibility,
+        input.result.set_current,
+        input.result.skipped_rows,
+        input.result.failed_rows,
+        input.warningCount,
+    );
 }
 
 export { VEHICLE_STATUSES as importVehicleStatuses };
