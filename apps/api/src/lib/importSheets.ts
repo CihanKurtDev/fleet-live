@@ -96,3 +96,29 @@ export function suggestColumnMapping(
 
     return mapping;
 }
+
+/** Overlay a saved company mapping onto columns that still exist in the file. */
+export function applySavedMapping(
+    columns: string[],
+    suggested: ImportColumnMapping,
+    saved: ImportColumnMapping | undefined,
+): { mapping: ImportColumnMapping; applied: boolean } {
+    if (!saved) {
+        return { mapping: suggested, applied: false };
+    }
+
+    const mapping = { ...suggested };
+    let applied = false;
+
+    for (const column of columns) {
+        const target = saved[column];
+        if (!target) {
+            continue;
+        }
+
+        mapping[column] = target;
+        applied = true;
+    }
+
+    return { mapping, applied };
+}

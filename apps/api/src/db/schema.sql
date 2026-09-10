@@ -159,3 +159,42 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_per_type
     ON alerts(vehicle_id, type)
     WHERE ended_at IS NULL;
+
+-- Ein Profil pro Firma: Spalten- und Statuszuordnung der letzten Exporte.
+CREATE TABLE IF NOT EXISTS import_mapping_profiles (
+    company_id INTEGER PRIMARY KEY,
+    sheet_mappings TEXT NOT NULL,
+    status_mapping TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+);
+
+-- Protokoll erfolgreicher Commits (wer, wann, Zähler).
+CREATE TABLE IF NOT EXISTS import_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    source TEXT NOT NULL
+        CHECK (source IN ('csv', 'xlsx')),
+    created_vehicles INTEGER NOT NULL,
+    updated_vehicles INTEGER NOT NULL,
+    created_drivers INTEGER NOT NULL,
+    assigned_eligibility INTEGER NOT NULL,
+    set_current INTEGER NOT NULL,
+    skipped_rows INTEGER NOT NULL,
+    failed_rows INTEGER NOT NULL,
+    warning_count INTEGER NOT NULL DEFAULT 0,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id),
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_import_runs_company_created
+    ON import_runs(company_id, created_at DESC, id DESC);

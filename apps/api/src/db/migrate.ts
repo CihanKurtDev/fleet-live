@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 15;
 
 type TableColumn = {
     name: string;
@@ -849,6 +849,51 @@ function migrateToV14(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
 }
 
+function ensureImportTables(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS import_mapping_profiles (
+            company_id INTEGER PRIMARY KEY,
+            sheet_mappings TEXT NOT NULL,
+            status_mapping TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (company_id)
+                REFERENCES companies(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS import_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            source TEXT NOT NULL
+                CHECK (source IN ('csv', 'xlsx')),
+            created_vehicles INTEGER NOT NULL,
+            updated_vehicles INTEGER NOT NULL,
+            created_drivers INTEGER NOT NULL,
+            assigned_eligibility INTEGER NOT NULL,
+            set_current INTEGER NOT NULL,
+            skipped_rows INTEGER NOT NULL,
+            failed_rows INTEGER NOT NULL,
+            warning_count INTEGER NOT NULL DEFAULT 0,
+
+            FOREIGN KEY (company_id)
+                REFERENCES companies(id),
+
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_import_runs_company_created
+            ON import_runs(company_id, created_at DESC, id DESC);
+    `);
+}
+
+function migrateToV15(database: DatabaseSync) {
+    ensureImportTables(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -911,6 +956,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV14(database);
     }
 
+    if (currentVersion < 15) {
+        migrateToV15(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -923,6 +972,7 @@ export function migrate(database: DatabaseSync) {
     ensureAlertsEventColumns(database);
     ensureVehiclesSpeedLimit(database);
     ensureOpenAlertsPerType(database);
+    ensureImportTables(database);
     applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {

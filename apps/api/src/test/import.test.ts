@@ -5,6 +5,7 @@ import request from "supertest";
 import { app } from "../app";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
+import { ImportModel } from "../models/import.model";
 import { resetImportPreviewStoreForTests } from "../lib/importPreviewStore";
 import { buildXlsx, buildXlsxWorkbook } from "../lib/xlsxParse";
 import { loginAs } from "./helpers";
@@ -21,6 +22,7 @@ const SAMPLE_XLSX = buildXlsx([
 ]).toString("base64");
 
 afterEach(() => {
+    ImportModel.resetForTests();
     VehicleModel.resetForTests();
     UserModel.resetForTests();
     resetImportPreviewStoreForTests();
@@ -377,5 +379,155 @@ B-TXN 2;50
             .expect(200);
         assert.equal(drivers.body.data.length, 1);
         assert.equal(drivers.body.data[0].current_vehicle_plate, "B-SH 9");
+    });
+});
+
+const ODD_CSV = `Kfz;Fuellstand;Betrieb;Person
+B-PRF 1;70;Standby;Anna Schmidt
+`;
+
+const ODD_MAPPING = {
+    vehicles: {
+        Kfz: "license_plate",
+        Fuellstand: "fuel_level",
+        Betrieb: "status",
+        Person: "driver_name",
+    },
+} as const;
+
+describe("import profile and log", () => {
+    it("applies a saved company mapping when headers match", async () => {
+        const { agent } = await loginAs(1);
+
+        await agent
+            .put("/api/import/profile")
+            .send({ sheet_mappings: ODD_MAPPING, status_mapping: {} })
+            .expect(200);
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv: ODD_CSV })
+            .expect(200);
+
+        assert.equal(preview.body.data.profile_applied, true);
+        assert.equal(preview.body.data.rows[0].license_plate, "B-PRF 1");
+        assert.equal(preview.body.data.can_commit, true);
+    });
+
+    it("does not apply another company's profile", async () => {
+        const companyOne = await loginAs(1);
+        await companyOne.agent
+            .put("/api/import/profile")
+            .send({ sheet_mappings: ODD_MAPPING, status_mapping: {} })
+            .expect(200);
+
+        const companyTwo = await loginAs(2);
+        const preview = await companyTwo.agent
+            .post("/api/import/preview")
+            .send({ csv: ODD_CSV })
+            .expect(200);
+
+        assert.equal(preview.body.data.profile_applied, false);
+        assert.equal(preview.body.data.rows[0].license_plate, null);
+        assert.equal(preview.body.data.can_commit, false);
+
+        const profile = await companyTwo.agent
+            .get("/api/import/profile")
+            .expect(200);
+        assert.equal(profile.body.data, null);
+    });
+
+    it("writes an import run on commit and hides it from other companies", async () => {
+        const { agent } = await loginAs(1);
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv: SAMPLE_CSV })
+            .expect(200);
+
+        const commit = await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        assert.equal(commit.body.data.created_vehicles, 2);
+        assert.equal(commit.body.data.profile_saved, true);
+
+        const runs = await agent.get("/api/import/runs").expect(200);
+        assert.equal(runs.body.data.length, 1);
+        assert.equal(runs.body.data[0].source, "csv");
+        assert.equal(runs.body.data[0].created_vehicles, 2);
+        assert.equal(runs.body.data[0].user_name, "dispatcher 1");
+        assert.equal(runs.body.meta.total, 1);
+
+        const other = await loginAs(2);
+        const otherRuns = await other.agent.get("/api/import/runs").expect(200);
+        assert.equal(otherRuns.body.data.length, 0);
+        assert.equal(otherRuns.body.meta.total, 0);
+    });
+
+    it("does not log a rolled-back commit", async () => {
+        const { agent } = await loginAs(1);
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({
+                csv: `Kennzeichen;Tank
+B-TXN 1;40
+B-TXN 2;50
+`,
+            })
+            .expect(200);
+
+        VehicleModel.create({
+            license_plate: "B-TXN 2",
+            company_id: 1,
+        });
+
+        await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(409);
+
+        const runs = await agent.get("/api/import/runs").expect(200);
+        assert.equal(runs.body.data.length, 0);
+    });
+
+    it("skips saving the profile when save_profile is false", async () => {
+        const { agent } = await loginAs(1);
+
+        await agent
+            .put("/api/import/profile")
+            .send({ sheet_mappings: ODD_MAPPING, status_mapping: {} })
+            .expect(200);
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv: SAMPLE_CSV })
+            .expect(200);
+
+        const commit = await agent
+            .post("/api/import/commit")
+            .send({
+                preview_id: preview.body.data.preview_id,
+                save_profile: false,
+            })
+            .expect(200);
+
+        assert.equal(commit.body.data.profile_saved, false);
+
+        const profile = await agent.get("/api/import/profile").expect(200);
+        assert.equal(
+            profile.body.data.sheet_mappings.vehicles.Kfz,
+            "license_plate",
+        );
+    });
+
+    it("returns 403 on profile and runs for viewers", async () => {
+        const { agent } = await loginAs(1, "viewer");
+
+        await agent.get("/api/import/profile").expect(403);
+        await agent.put("/api/import/profile").send({}).expect(403);
+        await agent.get("/api/import/runs").expect(403);
     });
 });

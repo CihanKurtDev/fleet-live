@@ -66,6 +66,7 @@ export const UserModel = {
     },
 
     resetForTests() {
+        db.exec("DELETE FROM import_runs");
         db.exec("DELETE FROM sessions");
         db.exec("DELETE FROM users");
         db.exec(
