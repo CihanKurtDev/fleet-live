@@ -8,6 +8,7 @@ import { UserModel } from "../models/user.model";
 import { ImportModel } from "../models/import.model";
 import { resetImportPreviewStoreForTests } from "../lib/importPreviewStore";
 import { buildXlsx, buildXlsxWorkbook } from "../lib/xlsxParse";
+import { importActionKey } from "@fleet-live/shared";
 import { loginAs } from "./helpers";
 
 const SAMPLE_CSV = `Kennzeichen;Tank;Status;Fahrer
@@ -379,6 +380,111 @@ B-TXN 2;50
             .expect(200);
         assert.equal(drivers.body.data.length, 1);
         assert.equal(drivers.body.data[0].current_vehicle_plate, "B-SH 9");
+    });
+
+    it("commits the sample workbook with driving and offline statuses", async () => {
+        const { agent } = await loginAs(1);
+        const xlsx = buildXlsxWorkbook([
+            {
+                name: "Fahrzeuge",
+                rows: [
+                    ["Kennzeichen", "Tank", "Status"],
+                    ["K-XLS 1001", "82", "Auf Fahrt"],
+                    ["K-XLS 1002", "14", "Standby"],
+                    ["K-XLS 1003", "55", "Feierabend"],
+                    ["K-XLS 1004", "", "Kein Signal"],
+                ],
+            },
+            {
+                name: "Fahrer",
+                rows: [["Name"], ["Nora Weber"], ["Leo Krüger"]],
+            },
+            {
+                name: "Eignung",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "K-XLS 1001"],
+                    ["Nora Weber", "K-XLS 1002"],
+                    ["Leo Krüger", "K-XLS 1003"],
+                ],
+            },
+            {
+                name: "Aktuell",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "K-XLS 1001"],
+                ],
+            },
+        ]).toString("base64");
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ xlsx })
+            .expect(200);
+
+        const commit = await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        assert.equal(commit.body.data.created_vehicles, 4);
+        assert.equal(commit.body.data.created_drivers, 2);
+        assert.equal(commit.body.data.assigned_eligibility, 3);
+        assert.equal(commit.body.data.set_current, 1);
+    });
+
+    it("explains a skipped vehicle instead of an internal eligibility error", async () => {
+        const { agent } = await loginAs(1);
+        const xlsx = buildXlsxWorkbook([
+            {
+                name: "Fahrzeuge",
+                rows: [
+                    ["Kennzeichen", "Tank"],
+                    ["K-XLS 1001", "40"],
+                ],
+            },
+            {
+                name: "Fahrer",
+                rows: [["Name"], ["Nora Weber"]],
+            },
+            {
+                name: "Eignung",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "K-XLS 1001"],
+                ],
+            },
+        ]).toString("base64");
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ xlsx })
+            .expect(200);
+
+        const vehicleRow = preview.body.data.rows.find(
+            (row: { sheet_kind: string }) => row.sheet_kind === "vehicles",
+        );
+        const eligibilityRow = preview.body.data.rows.find(
+            (row: { sheet_kind: string }) => row.sheet_kind === "eligibility",
+        );
+
+        const failed = await agent
+            .post("/api/import/commit")
+            .send({
+                preview_id: preview.body.data.preview_id,
+                row_actions: {
+                    [importActionKey("vehicles", vehicleRow.row_index)]:
+                        "skip",
+                    [importActionKey("eligibility", eligibilityRow.row_index)]:
+                        "create",
+                },
+            })
+            .expect(409);
+
+        assert.match(failed.body.error, /Eignung, Zeile/i);
+        assert.match(failed.body.error, /übersprungen/i);
+        assert.doesNotMatch(failed.body.error, /eligibility/i);
+        assert.doesNotMatch(failed.body.error, /wurde nicht gefunden/i);
     });
 });
 

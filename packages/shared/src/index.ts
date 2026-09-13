@@ -225,6 +225,7 @@ export {
     IMPORT_COLUMN_TARGETS,
     IMPORT_ROW_ACTIONS,
     IMPORT_SHEET_KINDS,
+    IMPORT_SHEET_KIND_LABELS,
     IMPORT_SOURCES,
     importActionKey,
     importRequiredTargets,

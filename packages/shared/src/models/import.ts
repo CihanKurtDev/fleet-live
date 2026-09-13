@@ -22,6 +22,13 @@ export const IMPORT_SHEET_KINDS = [
 
 export type ImportSheetKind = (typeof IMPORT_SHEET_KINDS)[number];
 
+export const IMPORT_SHEET_KIND_LABELS: Record<ImportSheetKind, string> = {
+    vehicles: "Fahrzeuge",
+    drivers: "Fahrer",
+    eligibility: "Eignung",
+    current: "Aktuell",
+};
+
 export const IMPORT_ROW_ACTIONS = ["create", "update", "skip"] as const;
 
 export type ImportRowAction = (typeof IMPORT_ROW_ACTIONS)[number];

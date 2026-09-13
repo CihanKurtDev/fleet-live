@@ -24,6 +24,7 @@ import {
     FUEL_LEVEL_MAX,
     FUEL_LEVEL_MIN,
     importActionKey,
+    IMPORT_SHEET_KIND_LABELS,
     isVehicleStatus,
     LICENSE_PLATE_MAX,
     parseImportProfileInput,
@@ -110,7 +111,8 @@ function findVehicleIdByPlate(
     const row = stmt(
         `
         SELECT id FROM vehicles
-        WHERE company_id = ? AND license_plate = ?
+        WHERE company_id = ? AND lower(license_plate) = lower(?)
+        LIMIT 1
         `,
     ).get(companyId, licensePlate) as { id: number } | undefined;
 
@@ -799,9 +801,32 @@ function resolveAction(
 
 function abortRow(row: ImportPreviewRow, message: string): never {
     throw new ConflictError(
-        `Import abgebrochen in ${row.sheet_kind} Zeile ${row.row_index}: ${message} Es wurde nichts übernommen.`,
+        `${IMPORT_SHEET_KIND_LABELS[row.sheet_kind]}, Zeile ${row.row_index}: ${message} Es wurde nichts übernommen.`,
         {},
     );
+}
+
+function missingVehicleMessage(
+    plate: string,
+    rows: ImportPreviewRow[],
+    rowActionsInput?: Record<string, ImportRowAction>,
+): string {
+    const vehicleRow = rows.find(
+        (row) =>
+            row.sheet_kind === "vehicles" &&
+            row.license_plate?.toLowerCase() === plate.toLowerCase(),
+    );
+
+    if (!vehicleRow) {
+        return `Fahrzeug ${plate} ist weder in der Datei noch im Bestand. Kennzeichen prüfen oder ins Blatt Fahrzeuge aufnehmen.`;
+    }
+
+    const action = resolveAction(vehicleRow, rowActionsInput);
+    if (action === "skip") {
+        return `Fahrzeug ${plate} wird in dieser Datei übersprungen. Unter Fahrzeuge die Aktion auf „Neu anlegen“ stellen.`;
+    }
+
+    return `Fahrzeug ${plate} wurde nicht angelegt. Unter Fahrzeuge prüfen, ob die Zeile übernommen wird.`;
 }
 
 export class ImportModel {
@@ -1038,6 +1063,18 @@ export class ImportModel {
 
         try {
             withTransaction(() => {
+                const plateIds = new Map<string, number>();
+
+                const rememberPlate = (plate: string, id: number) => {
+                    plateIds.set(plate.toLowerCase(), id);
+                };
+
+                const resolveVehicleId = (
+                    plate: string,
+                ): number | undefined =>
+                    plateIds.get(plate.toLowerCase()) ??
+                    findVehicleIdByPlate(companyId, plate);
+
                 for (const kind of COMMIT_ORDER) {
                     for (const row of stored.rows) {
                         if (row.sheet_kind !== kind) {
@@ -1049,6 +1086,21 @@ export class ImportModel {
                             (issue) => issue.level === "error",
                         );
                         if (hasError || action === "skip") {
+                            if (
+                                kind === "vehicles" &&
+                                row.license_plate
+                            ) {
+                                const existing = findVehicleIdByPlate(
+                                    companyId,
+                                    row.license_plate,
+                                );
+                                if (existing !== undefined) {
+                                    rememberPlate(
+                                        row.license_plate,
+                                        existing,
+                                    );
+                                }
+                            }
                             result.skipped_rows += 1;
                             continue;
                         }
@@ -1121,6 +1173,7 @@ export class ImportModel {
                                 }
 
                                 result.created_vehicles += 1;
+                                rememberPlate(row.license_plate, created.id);
                             } else if (action === "update") {
                                 const vehicleId = findVehicleIdByPlate(
                                     companyId,
@@ -1130,9 +1183,11 @@ export class ImportModel {
                                 if (vehicleId === undefined) {
                                     abortRow(
                                         row,
-                                        `Kennzeichen ${row.license_plate} wurde nicht gefunden.`,
+                                        `Fahrzeug ${row.license_plate} ist nicht im Bestand. Aktion „Neu anlegen“ wählen oder das Kennzeichen prüfen.`,
                                     );
                                 }
+
+                                rememberPlate(row.license_plate, vehicleId);
 
                                 const previous = VehicleModel.getById(
                                     vehicleId,
@@ -1186,14 +1241,15 @@ export class ImportModel {
                             continue;
                         }
 
-                        const vehicleId = findVehicleIdByPlate(
-                            companyId,
-                            row.license_plate,
-                        );
+                        const vehicleId = resolveVehicleId(row.license_plate);
                         if (vehicleId === undefined) {
                             abortRow(
                                 row,
-                                `Kennzeichen ${row.license_plate} wurde nicht gefunden.`,
+                                missingVehicleMessage(
+                                    row.license_plate,
+                                    stored.rows,
+                                    rowActionsInput,
+                                ),
                             );
                         }
 
