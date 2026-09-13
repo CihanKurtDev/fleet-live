@@ -5,6 +5,7 @@ import type {
     ImportPreviewInput,
     ImportPreviewResponse,
     ImportRowAction,
+    ImportRunListResponse,
     ImportStatusMapping,
 } from "@fleet-live/shared";
 import { request } from "./client";
@@ -23,6 +24,10 @@ export function commitImport(input: ImportCommitInput) {
         body: input,
         timeoutMs: 30_000,
     });
+}
+
+export function listImportRuns() {
+    return request<ImportRunListResponse>("/api/import/runs?limit=10");
 }
 
 export type {

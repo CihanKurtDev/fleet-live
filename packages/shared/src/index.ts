@@ -203,15 +203,21 @@ export type {
     ImportColumnTarget,
     ImportCommitInput,
     ImportCommitResult,
+    ImportMappingProfile,
     ImportPreviewCounts,
     ImportPreviewInput,
     ImportPreviewResponse,
     ImportPreviewRow,
     ImportPreviewSheet,
+    ImportProfileInput,
     ImportRowAction,
     ImportRowIssue,
+    ImportRun,
+    ImportRunListQuery,
+    ImportRunListResponse,
     ImportSheetKind,
     ImportSheetMappings,
+    ImportSource,
     ImportStatusMapping,
 } from "./models/import";
 
@@ -219,6 +225,8 @@ export {
     IMPORT_COLUMN_TARGETS,
     IMPORT_ROW_ACTIONS,
     IMPORT_SHEET_KINDS,
+    IMPORT_SHEET_KIND_LABELS,
+    IMPORT_SOURCES,
     importActionKey,
     importRequiredTargets,
     isImportColumnTarget,
@@ -226,6 +234,8 @@ export {
     isImportSheetKind,
     parseImportCommitInput,
     parseImportPreviewInput,
+    parseImportProfileInput,
+    parseImportRunListQuery,
 } from "./models/import";
 
 export type {

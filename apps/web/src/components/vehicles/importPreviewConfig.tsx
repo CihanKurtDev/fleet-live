@@ -1,9 +1,10 @@
-import type {
-    ImportPreviewRow,
-    ImportRowAction,
-    ImportSheetKind,
+import {
+    IMPORT_ROW_ACTIONS,
+    IMPORT_SHEET_KIND_LABELS,
+    type ImportPreviewRow,
+    type ImportRowAction,
+    type ImportSheetKind,
 } from "@fleet-live/shared";
-import { IMPORT_ROW_ACTIONS } from "@fleet-live/shared";
 
 import type { TableColumn } from "../../types/table";
 import { vehicleStatusLabel } from "./vehicleStatus";
@@ -36,7 +37,7 @@ export const importPreviewColumns = (
                     className={styles.select}
                     value={value}
                     disabled={hasError}
-                    aria-label={`Aktion für ${kind} Zeile ${row.row_index}`}
+                    aria-label={`Aktion für ${IMPORT_SHEET_KIND_LABELS[kind]} Zeile ${row.row_index}`}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => {
                         onActionChange(
