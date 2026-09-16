@@ -1,6 +1,7 @@
 import {
     IMPORT_ROW_ACTIONS,
     IMPORT_SHEET_KIND_LABELS,
+    VEHICLE_TYPE_LABELS,
     type ImportPreviewRow,
     type ImportRowAction,
     type ImportSheetKind,
@@ -93,6 +94,11 @@ export const importPreviewColumns = (
                 displayText: "Fahrer",
                 render: (value) => value ?? "—",
             },
+            {
+                key: "phone",
+                displayText: "Telefon",
+                render: (value) => value ?? "—",
+            },
             actionColumn,
             issuesColumn,
         ];
@@ -121,6 +127,32 @@ export const importPreviewColumns = (
         {
             key: "license_plate",
             displayText: "Kennzeichen",
+            render: (value) => value ?? "—",
+        },
+        {
+            key: "vin",
+            displayText: "VIN",
+            render: (value) => value ?? "—",
+        },
+        {
+            key: "vehicle_type",
+            displayText: "Typ",
+            render: (value) =>
+                value ? VEHICLE_TYPE_LABELS[value] : "—",
+        },
+        {
+            key: "depot",
+            displayText: "Standort",
+            render: (value) => value ?? "—",
+        },
+        {
+            key: "hu_due_on",
+            displayText: "HU",
+            render: (value) => value ?? "—",
+        },
+        {
+            key: "cost_center",
+            displayText: "KSt",
             render: (value) => value ?? "—",
         },
         {

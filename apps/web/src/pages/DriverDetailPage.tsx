@@ -1,7 +1,12 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { DriverAssignmentPanel } from "../components/drivers/DriverAssignmentPanel";
+import { DriverEditForm } from "../components/drivers/DriverEditForm";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
+import { Button } from "../components/ui/Button/Button";
+import { Modal } from "../components/ui/Modal/Modal";
+import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useDriver } from "../hooks/useDriver";
 import layout from "../styles/detailLayout.module.scss";
@@ -10,10 +15,12 @@ import styles from "./DriverDetailPage.module.scss";
 export const DriverDetailPage = () => {
     const { id } = useParams();
     const { user } = useAuth();
+    const { refetchLists } = useVehicles();
     const canWrite = user?.role === "dispatcher";
     const driverId = Number(id);
     const parsedId = Number.isInteger(driverId) ? driverId : null;
     const { driver, isLoading, error, notFound } = useDriver(parsedId);
+    const [isEditing, setIsEditing] = useState(false);
 
     if (isLoading && !driver) {
         return (
@@ -53,19 +60,33 @@ export const DriverDetailPage = () => {
             <DetailBackLink fallback="/drivers" />
 
             <header className={styles.header}>
-                <h1 className={styles.title}>{driver.name}</h1>
-                <p className={styles.openCount}>
-                    {driver.open_warnings > 0 ? (
-                        <Link to={openInboxHref}>
-                            {driver.open_warnings}{" "}
-                            {driver.open_warnings === 1
-                                ? "offene Warnung"
-                                : "offene Warnungen"}
-                        </Link>
-                    ) : (
-                        "Keine offenen Warnungen"
-                    )}
-                </p>
+                <div>
+                    <h1 className={styles.title}>{driver.name}</h1>
+                    <p className={styles.openCount}>
+                        {driver.open_warnings > 0 ? (
+                            <Link to={openInboxHref}>
+                                {driver.open_warnings}{" "}
+                                {driver.open_warnings === 1
+                                    ? "offene Warnung"
+                                    : "offene Warnungen"}
+                            </Link>
+                        ) : (
+                            "Keine offenen Warnungen"
+                        )}
+                    </p>
+                    <p className={styles.openCount}>
+                        Telefon: {driver.phone ?? "—"}
+                    </p>
+                </div>
+                {canWrite && (
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsEditing(true)}
+                    >
+                        Bearbeiten
+                    </Button>
+                )}
             </header>
 
             <DriverAssignmentPanel driver={driver} canWrite={canWrite} />
@@ -104,6 +125,21 @@ export const DriverDetailPage = () => {
                     </Link>
                 </p>
             </section>
+
+            <Modal
+                open={canWrite && isEditing}
+                onClose={() => setIsEditing(false)}
+                title="Fahrer bearbeiten"
+            >
+                <DriverEditForm
+                    driver={driver}
+                    onCancel={() => setIsEditing(false)}
+                    onSaved={() => {
+                        refetchLists();
+                        setIsEditing(false);
+                    }}
+                />
+            </Modal>
         </section>
     );
 };

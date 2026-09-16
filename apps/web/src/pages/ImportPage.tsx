@@ -48,6 +48,12 @@ const COLUMN_TARGET_LABELS: Record<ImportColumnTarget, string> = {
     fuel_level: "Tankstand (%)",
     status: "Status",
     driver_name: "Fahrer",
+    vin: "VIN",
+    vehicle_type: "Fahrzeugtyp",
+    hu_due_on: "HU fällig",
+    depot: "Standort",
+    cost_center: "Kostenstelle",
+    phone: "Telefon",
     ignore: "Ignorieren",
 };
 

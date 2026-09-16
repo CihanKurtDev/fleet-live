@@ -2,21 +2,19 @@ import { useId, useState, type FormEvent } from "react";
 import {
     DRIVER_NAME_MAX,
     DRIVER_PHONE_MAX,
+    type Driver,
 } from "@fleet-live/shared";
 
 import { ApiError } from "../../api/client";
-import { createDriver } from "../../api/drivers";
+import { updateDriver } from "../../api/drivers";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import styles from "../vehicles/VehicleForm.module.scss";
 
-interface DriverCreateFormProps {
+interface DriverEditFormProps {
+    driver: Pick<Driver, "id" | "name" | "phone">;
     submitLabel?: string;
-    onCreated: (driver: {
-        id: number;
-        name: string;
-        phone: string | null;
-    }) => void;
+    onSaved: (driver: Driver) => void;
     onCancel?: () => void;
 }
 
@@ -45,20 +43,25 @@ function validateDriverFields(name: string, phone: string): {
     return errors;
 }
 
-export const DriverCreateForm = ({
-    submitLabel = "Anlegen",
-    onCreated,
+export const DriverEditForm = ({
+    driver,
+    submitLabel = "Speichern",
+    onSaved,
     onCancel,
-}: DriverCreateFormProps) => {
+}: DriverEditFormProps) => {
     const fieldId = useId();
-    const [name, setName] = useState("");
-    const [phone, setPhone] = useState("");
+    const [name, setName] = useState(driver.name);
+    const [phone, setPhone] = useState(driver.phone ?? "");
     const [errors, setErrors] = useState<{
         name?: string;
         phone?: string;
         form?: string;
     }>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const isDirty =
+        name.trim() !== driver.name ||
+        (phone.trim() === "" ? null : phone.trim()) !== driver.phone;
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
@@ -72,11 +75,11 @@ export const DriverCreateForm = ({
         setErrors({});
 
         try {
-            const created = await createDriver({
+            const updated = await updateDriver(driver.id, {
                 name: name.trim(),
                 phone: phone.trim() === "" ? null : phone.trim(),
             });
-            onCreated(created);
+            onSaved(updated);
         } catch (caught) {
             if (caught instanceof ApiError) {
                 const fields = caught.fields as
@@ -89,7 +92,7 @@ export const DriverCreateForm = ({
                 });
             } else {
                 setErrors({
-                    form: "Fahrer konnte nicht angelegt werden.",
+                    form: "Fahrer konnte nicht gespeichert werden.",
                 });
             }
         } finally {
@@ -168,7 +171,11 @@ export const DriverCreateForm = ({
                         Abbrechen
                     </Button>
                 )}
-                <Button type="submit" size="sm" disabled={isSubmitting}>
+                <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isSubmitting || !isDirty}
+                >
                     {submitLabel}
                 </Button>
             </div>

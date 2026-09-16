@@ -23,7 +23,7 @@ const useDriverListQueryBase = createListQueryHook<Driver, DriverListQuery>({
     serialize: serializeDriverListQuery,
     readParams: readDriverParams,
     fields: ["search", "page", "limit", "sort", "dir"],
-    defaultSort: { key: "name", dir: "asc", mode: "implied" },
+    defaultSort: { key: "open_warnings", dir: "desc", mode: "implied" },
     debounceSearch: true,
 });
 

@@ -1,7 +1,8 @@
+import { VEHICLE_TYPE_LABELS } from "@fleet-live/shared";
+import { decodePolyline, speedBand } from "@fleet-live/shared";
+import type { Trip, TripListItem, VehicleInput } from "@fleet-live/shared";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import type { Trip, TripListItem, VehicleInput } from "@fleet-live/shared";
-import { decodePolyline, speedBand } from "@fleet-live/shared";
 
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
@@ -23,7 +24,11 @@ import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useVehicle } from "../hooks/useVehicle";
-import { formatRelativeTimestamp, formatTimestamp } from "../utils/dateTime";
+import {
+    formatIsoDate,
+    formatRelativeTimestamp,
+    formatTimestamp,
+} from "../utils/dateTime";
 import layout from "../styles/detailLayout.module.scss";
 import styles from "./VehicleDetailPage.module.scss";
 
@@ -367,6 +372,36 @@ export const VehicleDetailPage = () => {
             </section>
 
             <section className={layout.panel}>
+                <h2 className={layout.panelTitle}>Stammdaten</h2>
+                <dl className={layout.facts}>
+                    <div>
+                        <dt>VIN</dt>
+                        <dd>{vehicle.vin ?? "—"}</dd>
+                    </div>
+                    <div>
+                        <dt>Typ</dt>
+                        <dd>
+                            {vehicle.vehicle_type
+                                ? VEHICLE_TYPE_LABELS[vehicle.vehicle_type]
+                                : "—"}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>HU fällig</dt>
+                        <dd>{formatIsoDate(vehicle.hu_due_on)}</dd>
+                    </div>
+                    <div>
+                        <dt>Standort</dt>
+                        <dd>{vehicle.depot ?? "—"}</dd>
+                    </div>
+                    <div>
+                        <dt>Kostenstelle</dt>
+                        <dd>{vehicle.cost_center ?? "—"}</dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section className={layout.panel}>
                 <h2 className={layout.panelTitle}>Standort</h2>
 
                 {position ? (
@@ -443,13 +478,18 @@ export const VehicleDetailPage = () => {
             <Modal
                 open={canWrite && isEditingMaster}
                 onClose={() => setIsEditingMaster(false)}
-                title="Kennzeichen"
+                title="Stammdaten"
             >
                 <VehicleForm
                     initialValue={{
                         license_plate: vehicle.license_plate,
                         fuel_level: vehicle.fuel_level,
                         status: vehicle.status,
+                        vin: vehicle.vin,
+                        vehicle_type: vehicle.vehicle_type,
+                        hu_due_on: vehicle.hu_due_on,
+                        depot: vehicle.depot,
+                        cost_center: vehicle.cost_center,
                     }}
                     isFuelMeasured={false}
                     submitLabel="Speichern"
