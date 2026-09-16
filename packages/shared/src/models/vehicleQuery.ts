@@ -9,6 +9,9 @@ export const VEHICLE_SORT_KEYS = [
     "fuel_level",
     "speed",
     "active_alerts",
+    "vehicle_type",
+    "depot",
+    "hu_due_on",
 ] as const;
 
 export const VEHICLE_FILTERS = [

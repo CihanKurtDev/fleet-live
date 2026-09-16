@@ -2,7 +2,10 @@ import { z } from "zod";
 import { ALERT_TYPES } from "./alert";
 import { emptyToUndefined, firstQueryString } from "./queryPreprocess";
 import type { VehicleStatus } from "./vehicle";
+import { DRIVER_NAME_MAX } from "./vehicle";
 import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
+
+export const DRIVER_PHONE_MAX = 32;
 
 export type DriverIncidentCounts = {
     all: number;
@@ -14,6 +17,7 @@ export type DriverIncidentCounts = {
 export type Driver = {
     id: number;
     name: string;
+    phone: string | null;
     created_at: string;
     vehicle_count: number;
     /** Kennzeichen, wenn genau ein Fahrzeug freigegeben ist. */
@@ -156,13 +160,47 @@ export function isDriverSortKey(value: unknown): value is DriverSortKey {
     );
 }
 
+const driverNameField = z
+    .string({ error: "Name ist erforderlich." })
+    .trim()
+    .min(1, "Name ist erforderlich.")
+    .max(
+        DRIVER_NAME_MAX,
+        `Name darf höchstens ${DRIVER_NAME_MAX} Zeichen haben.`,
+    );
+
+const driverPhoneField = z
+    .union([
+        z.null(),
+        z
+            .string()
+            .trim()
+            .max(
+                DRIVER_PHONE_MAX,
+                `Telefon darf höchstens ${DRIVER_PHONE_MAX} Zeichen haben.`,
+            )
+            .refine(
+                (value) => value === "" || /[0-9]/.test(value),
+                "Telefonnummer muss Ziffern enthalten.",
+            ),
+    ])
+    .optional()
+    .transform((value) => (value === "" ? null : value));
+
 export const driverCreateSchema = z.object({
-    name: z
-        .string({ error: "Name ist erforderlich." })
-        .trim()
-        .min(1, "Name ist erforderlich.")
-        .max(80, "Name darf höchstens 80 Zeichen haben."),
+    name: driverNameField,
+    phone: driverPhoneField,
 });
+
+export const driverPatchSchema = z
+    .object({
+        name: driverNameField.optional(),
+        phone: driverPhoneField,
+    })
+    .refine(
+        (value) => value.name !== undefined || value.phone !== undefined,
+        "Mindestens ein Feld ist erforderlich.",
+    );
 
 export const driverVehicleAssignSchema = z.object({
     vehicle_id: z.coerce
@@ -183,6 +221,7 @@ export const driverCurrentVehicleSchema = z.object({
 });
 
 export type DriverCreateInput = z.infer<typeof driverCreateSchema>;
+export type DriverPatchInput = z.infer<typeof driverPatchSchema>;
 export type DriverVehicleAssignInput = z.infer<
     typeof driverVehicleAssignSchema
 >;
@@ -192,6 +231,10 @@ export type DriverCurrentVehicleInput = z.infer<
 
 export function parseDriverCreate(input: unknown): DriverCreateInput {
     return driverCreateSchema.parse(input);
+}
+
+export function parseDriverPatch(input: unknown): DriverPatchInput {
+    return driverPatchSchema.parse(input);
 }
 
 export function parseDriverVehicleAssign(
