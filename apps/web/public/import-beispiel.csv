@@ -1,5 +1,5 @@
-Kennzeichen;Tank;Status;Fahrer
-K-IMP 1001;82;Auf Fahrt;Nora Weber
-K-IMP 1002;14;Standby;
-K-IMP 1003;55;Feierabend;Leo Krüger
-K-IMP 1004;;Kein Signal;
+Kennzeichen;Tank;Status;Fahrer;VIN;Fahrzeugtyp;Standort;HU;Kostenstelle
+K-IMP 1001;82;Auf Fahrt;Nora Weber;WVWZZZ1JZXW000001;LKW;Hof Nord;15.06.2027;KST-100
+K-IMP 1002;14;Standby;;WVWZZZ1JZXW000002;Transporter;Hof Nord;01.03.2026;KST-100
+K-IMP 1003;55;Feierabend;Leo Krüger;WVWZZZ1JZXW000003;PKW;Hof Süd;30.11.2027;KST-200
+K-IMP 1004;;Kein Signal;;;Sonstiges;Hof Süd;;

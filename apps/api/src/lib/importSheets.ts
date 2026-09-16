@@ -22,6 +22,17 @@ const VEHICLE_COLUMN_HINTS: Array<{
     { pattern: /tank|fuel|kraftstoff/i, target: "fuel_level" },
     { pattern: /status|zustand|state/i, target: "status" },
     { pattern: /fahrer|driver|lenker/i, target: "driver_name" },
+    { pattern: /\bvin\b|fahrgestell|chassis/i, target: "vin" },
+    {
+        pattern: /fahrzeugtyp|fzg[.\s-]?typ|vehicle[_\s-]?type/i,
+        target: "vehicle_type",
+    },
+    { pattern: /\bhu\b|hauptuntersuchung|tuev|tüv/i, target: "hu_due_on" },
+    { pattern: /standort|depot|hof|niederlassung|site/i, target: "depot" },
+    {
+        pattern: /kostenstelle|cost[_\s-]?center|k[.\s-]?stelle/i,
+        target: "cost_center",
+    },
 ];
 
 const NAME_COLUMN_HINTS: Array<{
@@ -29,6 +40,7 @@ const NAME_COLUMN_HINTS: Array<{
     target: ImportColumnTarget;
 }> = [
     { pattern: /kennzeichen|license|plate|fahrzeug/i, target: "license_plate" },
+    { pattern: /telefon|phone|handy|mobil/i, target: "phone" },
     { pattern: /fahrer|driver|lenker|name/i, target: "driver_name" },
 ];
 

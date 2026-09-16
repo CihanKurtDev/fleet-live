@@ -20,15 +20,24 @@ import type {
     VehicleStatus,
 } from "@fleet-live/shared";
 import {
+    COST_CENTER_MAX,
+    DEPOT_MAX,
     DRIVER_NAME_MAX,
+    DRIVER_PHONE_MAX,
     FUEL_LEVEL_MAX,
     FUEL_LEVEL_MIN,
     importActionKey,
     IMPORT_SHEET_KIND_LABELS,
     isVehicleStatus,
     LICENSE_PLATE_MAX,
+    normalizeVin,
+    parseHuDate,
     parseImportProfileInput,
+    parseVehicleType,
     VEHICLE_STATUSES,
+    VEHICLE_TYPE_LABELS,
+    VIN_LENGTH,
+    type VehicleType,
 } from "@fleet-live/shared";
 import { type CsvTable } from "../lib/csvParse";
 import {
@@ -76,7 +85,28 @@ type ParsedImportRow = {
     fuel_level: number | null;
     status: VehicleStatus | null;
     driver_name: string | null;
+    vin: string | null;
+    vehicle_type: VehicleType | null;
+    hu_due_on: string | null;
+    depot: string | null;
+    cost_center: string | null;
+    phone: string | null;
+    vin_invalid: boolean;
+    vehicle_type_invalid: boolean;
+    hu_invalid: boolean;
+    depot_too_long: boolean;
+    cost_center_too_long: boolean;
+    phone_invalid: boolean;
 };
+
+const EMPTY_OPTIONALS = {
+    vin: null,
+    vehicle_type: null,
+    hu_due_on: null,
+    depot: null,
+    cost_center: null,
+    phone: null,
+} as const;
 
 function suggestStatusMapping(values: string[]): ImportStatusMapping {
     const mapping: ImportStatusMapping = {};
@@ -115,6 +145,21 @@ function findVehicleIdByPlate(
         LIMIT 1
         `,
     ).get(companyId, licensePlate) as { id: number } | undefined;
+
+    return row?.id;
+}
+
+function findVehicleIdByVin(
+    companyId: number,
+    vin: string,
+): number | undefined {
+    const row = stmt(
+        `
+        SELECT id FROM vehicles
+        WHERE company_id = ? AND vin = ?
+        LIMIT 1
+        `,
+    ).get(companyId, vin) as { id: number } | undefined;
 
     return row?.id;
 }
@@ -178,6 +223,89 @@ function parseFuelLevel(raw: string | undefined): number | null {
     }
 
     return parsed;
+}
+
+function parseOptionalText(
+    raw: string | undefined,
+    max: number,
+): { value: string | null; tooLong?: boolean } {
+    if (raw === undefined || raw.trim() === "") {
+        return { value: null };
+    }
+
+    const trimmed = raw.trim();
+    if (trimmed.length > max) {
+        return { value: null, tooLong: true };
+    }
+
+    return { value: trimmed };
+}
+
+function parseImportVin(raw: string | undefined): {
+    value: string | null;
+    raw: string | null;
+    invalid?: boolean;
+} {
+    if (raw === undefined || raw.trim() === "") {
+        return { value: null, raw: null };
+    }
+
+    const compact = normalizeVin(raw);
+    if (compact.length !== VIN_LENGTH || !/^[A-HJ-NPR-Z0-9]+$/.test(compact)) {
+        return { value: null, raw: raw.trim(), invalid: true };
+    }
+
+    return { value: compact, raw: compact };
+}
+
+function parseImportVehicleType(raw: string | undefined): {
+    value: VehicleType | null;
+    raw: string | null;
+    invalid?: boolean;
+} {
+    if (raw === undefined || raw.trim() === "") {
+        return { value: null, raw: null };
+    }
+
+    const parsed = parseVehicleType(raw);
+    if (!parsed) {
+        return { value: null, raw: raw.trim(), invalid: true };
+    }
+
+    return { value: parsed, raw: raw.trim() };
+}
+
+function parseImportHuDate(raw: string | undefined): {
+    value: string | null;
+    raw: string | null;
+    invalid?: boolean;
+} {
+    if (raw === undefined || raw.trim() === "") {
+        return { value: null, raw: null };
+    }
+
+    const parsed = parseHuDate(raw);
+    if (!parsed) {
+        return { value: null, raw: raw.trim(), invalid: true };
+    }
+
+    return { value: parsed, raw: raw.trim() };
+}
+
+function parseImportPhone(raw: string | undefined): {
+    value: string | null;
+    invalid?: boolean;
+} {
+    if (raw === undefined || raw.trim() === "") {
+        return { value: null };
+    }
+
+    const trimmed = raw.trim();
+    if (trimmed.length > DRIVER_PHONE_MAX || !/[0-9]/.test(trimmed)) {
+        return { value: null, invalid: true };
+    }
+
+    return { value: trimmed };
 }
 
 function parseStatus(
@@ -244,6 +372,12 @@ function mapTableRows(
         }
 
         const driverRaw = read("driver_name")?.trim() ?? "";
+        const vinParsed = parseImportVin(read("vin"));
+        const typeParsed = parseImportVehicleType(read("vehicle_type"));
+        const huParsed = parseImportHuDate(read("hu_due_on"));
+        const depotParsed = parseOptionalText(read("depot"), DEPOT_MAX);
+        const costParsed = parseOptionalText(read("cost_center"), COST_CENTER_MAX);
+        const phoneParsed = parseImportPhone(read("phone"));
 
         rows.push({
             row_index: rowIndex + 1,
@@ -251,6 +385,18 @@ function mapTableRows(
             fuel_level: parseFuelLevel(read("fuel_level")),
             status: statusParsed.value,
             driver_name: driverRaw === "" ? null : driverRaw,
+            vin: vinParsed.value,
+            vehicle_type: typeParsed.value,
+            hu_due_on: huParsed.value,
+            depot: depotParsed.tooLong ? null : depotParsed.value,
+            cost_center: costParsed.tooLong ? null : costParsed.value,
+            phone: phoneParsed.value,
+            vin_invalid: Boolean(vinParsed.invalid),
+            vehicle_type_invalid: Boolean(typeParsed.invalid),
+            hu_invalid: Boolean(huParsed.invalid),
+            depot_too_long: Boolean(depotParsed.tooLong),
+            cost_center_too_long: Boolean(costParsed.tooLong),
+            phone_invalid: Boolean(phoneParsed.invalid),
         });
     }
 
@@ -354,16 +500,21 @@ function buildVehiclePreviewRows(
     companyId: number,
 ): ImportPreviewRow[] {
     const platesInFile = new Map<string, number[]>();
+    const vinsInFile = new Map<string, number[]>();
 
     for (const row of parsedRows) {
-        if (!row.license_plate) {
-            continue;
+        if (row.license_plate) {
+            const key = row.license_plate.toLowerCase();
+            const existing = platesInFile.get(key) ?? [];
+            existing.push(row.row_index);
+            platesInFile.set(key, existing);
         }
 
-        const key = row.license_plate.toLowerCase();
-        const existing = platesInFile.get(key) ?? [];
-        existing.push(row.row_index);
-        platesInFile.set(key, existing);
+        if (row.vin) {
+            const existing = vinsInFile.get(row.vin) ?? [];
+            existing.push(row.row_index);
+            vinsInFile.set(row.vin, existing);
+        }
     }
 
     return parsedRows.map((row) => {
@@ -410,6 +561,77 @@ function buildVehiclePreviewRows(
             }
         }
 
+        if (row.vin_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_VIN",
+                message: `VIN muss ${VIN_LENGTH} Zeichen haben (ohne I, O, Q).`,
+            });
+            defaultAction = "skip";
+        } else if (row.vin) {
+            const duplicateVinRows = vinsInFile.get(row.vin) ?? [];
+            if (duplicateVinRows.length > 1) {
+                issues.push({
+                    level: "error",
+                    code: "DUPLICATE_VIN_IN_FILE",
+                    message: `VIN ${row.vin} kommt mehrfach in der Datei vor.`,
+                });
+                defaultAction = "skip";
+            } else {
+                const vinOwner = findVehicleIdByVin(companyId, row.vin);
+                const plateOwner = row.license_plate
+                    ? findVehicleIdByPlate(companyId, row.license_plate)
+                    : undefined;
+                if (
+                    vinOwner !== undefined &&
+                    (plateOwner === undefined || vinOwner !== plateOwner)
+                ) {
+                    issues.push({
+                        level: "error",
+                        code: "EXISTING_VIN",
+                        message: `VIN ${row.vin} ist bereits vergeben.`,
+                    });
+                    defaultAction = "skip";
+                }
+            }
+        }
+
+        if (row.vehicle_type_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_VEHICLE_TYPE",
+                message: `Fahrzeugtyp ist ungültig (erlaubt: ${Object.values(VEHICLE_TYPE_LABELS).join(", ")}).`,
+            });
+            defaultAction = "skip";
+        }
+
+        if (row.hu_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_HU_DATE",
+                message: "HU-Datum muss JJJJ-MM-TT oder TT.MM.JJJJ sein.",
+            });
+            defaultAction = "skip";
+        }
+
+        if (row.depot_too_long) {
+            issues.push({
+                level: "error",
+                code: "DEPOT_TOO_LONG",
+                message: `Standort darf höchstens ${DEPOT_MAX} Zeichen haben.`,
+            });
+            defaultAction = "skip";
+        }
+
+        if (row.cost_center_too_long) {
+            issues.push({
+                level: "error",
+                code: "COST_CENTER_TOO_LONG",
+                message: `Kostenstelle darf höchstens ${COST_CENTER_MAX} Zeichen haben.`,
+            });
+            defaultAction = "skip";
+        }
+
         if (row.status === "DRIVING") {
             issues.push({
                 level: "warning",
@@ -424,6 +646,12 @@ function buildVehiclePreviewRows(
             fuel_level: row.fuel_level,
             status: row.status,
             driver_name: row.driver_name,
+            vin: row.vin,
+            vehicle_type: row.vehicle_type,
+            hu_due_on: row.hu_due_on,
+            depot: row.depot,
+            cost_center: row.cost_center,
+            phone: null,
             default_action: defaultAction,
             issues,
         });
@@ -485,12 +713,23 @@ function buildDriverPreviewRows(
             }
         }
 
+        if (row.phone_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_PHONE",
+                message: `Telefon darf höchstens ${DRIVER_PHONE_MAX} Zeichen haben und muss Ziffern enthalten.`,
+            });
+            defaultAction = "skip";
+        }
+
         return withKind("drivers", {
             row_index: row.row_index,
             license_plate: null,
             fuel_level: null,
             status: null,
             driver_name: row.driver_name,
+            ...EMPTY_OPTIONALS,
+            phone: row.phone,
             default_action: defaultAction,
             issues,
         });
@@ -723,6 +962,7 @@ function buildLinkPreviewRows(
             fuel_level: null,
             status: null,
             driver_name: row.driver_name,
+            ...EMPTY_OPTIONALS,
             default_action: defaultAction,
             issues,
         });
@@ -1111,11 +1351,33 @@ export class ImportModel {
                                 continue;
                             }
 
+                            if (action === "update") {
+                                const driverId = findDriverId(
+                                    companyId,
+                                    row.driver_name,
+                                );
+                                if (driverId === undefined) {
+                                    abortRow(
+                                        row,
+                                        `Fahrer ${row.driver_name} ist nicht im Bestand. Aktion „Neu anlegen“ wählen.`,
+                                    );
+                                }
+
+                                DriverModel.update(driverId, companyId, {
+                                    phone: row.phone,
+                                });
+                                continue;
+                            }
+
                             const created = !driverExists(
                                 companyId,
                                 row.driver_name,
                             );
-                            DriverModel.upsert(companyId, row.driver_name);
+                            DriverModel.upsert(
+                                companyId,
+                                row.driver_name,
+                                row.phone,
+                            );
                             if (created) {
                                 result.created_drivers += 1;
                             }
@@ -1130,6 +1392,19 @@ export class ImportModel {
 
                             const fuelLevel = row.fuel_level ?? 100;
                             const status = row.status ?? "IDLE";
+                            const yardFields = {
+                                ...(row.vin ? { vin: row.vin } : {}),
+                                ...(row.vehicle_type
+                                    ? { vehicle_type: row.vehicle_type }
+                                    : {}),
+                                ...(row.hu_due_on
+                                    ? { hu_due_on: row.hu_due_on }
+                                    : {}),
+                                ...(row.depot ? { depot: row.depot } : {}),
+                                ...(row.cost_center
+                                    ? { cost_center: row.cost_center }
+                                    : {}),
+                            };
 
                             if (action === "create") {
                                 const createdDriver = Boolean(
@@ -1148,6 +1423,7 @@ export class ImportModel {
                                     driver_name: hasCurrentSheet
                                         ? undefined
                                         : (row.driver_name ?? undefined),
+                                    ...yardFields,
                                 });
 
                                 if (hasCurrentSheet && row.driver_name) {
@@ -1198,6 +1474,7 @@ export class ImportModel {
                                     {
                                         fuel_level: fuelLevel,
                                         status,
+                                        ...yardFields,
                                     },
                                     companyId,
                                 );
