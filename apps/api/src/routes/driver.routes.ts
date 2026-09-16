@@ -7,6 +7,7 @@ import {
     getDrivers,
     setDriverCurrentVehicle,
     unassignDriverVehicle,
+    updateDriver,
 } from "../controllers/driver.controller";
 
 const router = express.Router();
@@ -14,6 +15,7 @@ const router = express.Router();
 router.get("/", getDrivers);
 router.post("/", requireDispatcher, createDriver);
 router.get("/:id", getDriverById);
+router.patch("/:id", requireDispatcher, updateDriver);
 router.post("/:id/vehicles", requireDispatcher, assignDriverVehicle);
 router.delete(
     "/:id/vehicles/:vehicleId",

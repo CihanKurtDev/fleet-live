@@ -26,9 +26,21 @@ import { ExceptionEventModel } from "./exceptionEvent.model";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 import { pagedQuery } from "../lib/pagination";
+import { ConflictError, isUniqueConstraintError } from "../lib/errors";
 
 export type VehicleCreateInput = Pick<VehicleInput, "license_plate"> &
-    Partial<Pick<VehicleInput, "fuel_level" | "status">> & {
+    Partial<
+        Pick<
+            VehicleInput,
+            | "fuel_level"
+            | "status"
+            | "vin"
+            | "vehicle_type"
+            | "hu_due_on"
+            | "depot"
+            | "cost_center"
+        >
+    > & {
         company_id?: number;
         /** Nur Seed/Tests: legt Freigabe an und setzt aktuell, wenn frei. */
         driver_name?: string;
@@ -45,6 +57,9 @@ const SORT_COLUMNS: Record<VehicleSortKey, string> = {
     fuel_level: "v.fuel_level",
     speed: "t.speed",
     active_alerts: "v.active_alerts",
+    vehicle_type: "v.vehicle_type",
+    depot: "v.depot",
+    hu_due_on: "v.hu_due_on",
 };
 
 const FILTER_SQL: Record<VehicleFilterId, string> = {
@@ -82,6 +97,11 @@ const SELECT_ONE = `
         v.current_driver_id,
         v.fuel_level,
         v.status,
+        v.vin,
+        v.vehicle_type,
+        v.hu_due_on,
+        v.depot,
+        v.cost_center,
         t.latitude,
         t.longitude,
         t.speed,
@@ -103,14 +123,26 @@ const INSERT_VEHICLE = `
         current_driver_id,
         fuel_level,
         status,
+        vin,
+        vehicle_type,
+        hu_due_on,
+        depot,
+        cost_center,
         company_id
     )
-    VALUES (?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const UPDATE_VEHICLE = `
     UPDATE vehicles
-    SET license_plate = ?, fuel_level = ?, status = ?
+    SET license_plate = ?,
+        fuel_level = ?,
+        status = ?,
+        vin = ?,
+        vehicle_type = ?,
+        hu_due_on = ?,
+        depot = ?,
+        cost_center = ?
     WHERE id = ? AND company_id = ?
 `;
 
@@ -131,6 +163,9 @@ function searchMatchSql(
             WHERE dv.vehicle_id = v.id
               AND lower(d.name) LIKE ${eligibleLikePlaceholder} ESCAPE '#'
         )
+        OR lower(coalesce(v.vin, '')) LIKE ${likePlaceholder} ESCAPE '#'
+        OR lower(coalesce(v.depot, '')) LIKE ${likePlaceholder} ESCAPE '#'
+        OR lower(coalesce(v.cost_center, '')) LIKE ${likePlaceholder} ESCAPE '#'
     )`;
 }
 
@@ -193,6 +228,30 @@ function toLikePattern(search: string): string {
     return `%${escaped.toLowerCase()}%`;
 }
 
+function throwIfUniqueConflict(error: unknown): never {
+    const message = error instanceof Error ? error.message : "";
+
+    if (/vin/i.test(message)) {
+        throw new ConflictError("VIN ist bereits vergeben.", {
+            vin: "VIN ist bereits vergeben.",
+        });
+    }
+
+    throw new ConflictError();
+}
+
+function runUnique(run: () => ReturnType<ReturnType<typeof stmt>["run"]>) {
+    try {
+        return run();
+    } catch (error) {
+        if (isUniqueConstraintError(error)) {
+            throwIfUniqueConflict(error);
+        }
+
+        throw error;
+    }
+}
+
 function toVehicle(row: ListRow): Vehicle {
     const { total: _total, speeding_open, open_alert_types, ...vehicle } = row;
     return {
@@ -222,7 +281,11 @@ export class VehicleModel {
         // Fehlende Werte (kein Fahrer, kein Tempo) immer ans Ende — sonst
         // landen Pool-Fahrzeuge vor „A“ bzw. nach dem Umdrehen vor „Z“.
         const nullsLast =
-            query.sort === "speed" || query.sort === "driver_name"
+            query.sort === "speed" ||
+            query.sort === "driver_name" ||
+            query.sort === "vehicle_type" ||
+            query.sort === "depot" ||
+            query.sort === "hu_due_on"
                 ? `${sortColumn} IS NULL, `
                 : "";
 
@@ -234,6 +297,11 @@ export class VehicleModel {
                 v.current_driver_id,
                 v.fuel_level,
                 v.status,
+                v.vin,
+                v.vehicle_type,
+                v.hu_due_on,
+                v.depot,
+                v.cost_center,
                 t.latitude,
                 t.longitude,
                 t.speed,
@@ -261,9 +329,9 @@ export class VehicleModel {
         `;
         const { data, meta } = pagedQuery<ListRow, Vehicle>({
             listSql,
-            listParams: [companyId, search, like, like, query.limit, offset],
+            listParams: [companyId, search, like, like, like, like, like, query.limit, offset],
             countSql,
-            countParams: [companyId, search, like, like],
+            countParams: [companyId, search, like, like, like, like, like],
             page: query.page,
             limit: query.limit,
             map: toVehicle,
@@ -272,6 +340,9 @@ export class VehicleModel {
         const counts = stmt(FACET_SQL).get(
             companyId,
             search,
+            like,
+            like,
+            like,
             like,
             like,
         ) as FacetRow;
@@ -349,6 +420,9 @@ export class VehicleModel {
         const params = [
             companyId,
             search,
+            like,
+            like,
+            like,
             like,
             like,
             ...selectedDrivers,
@@ -524,13 +598,20 @@ export class VehicleModel {
 
     static create(input: VehicleCreateInput): Vehicle {
         const companyId = input.company_id ?? 1;
-        const result = stmt(INSERT_VEHICLE).run(
-            input.license_plate,
-            null,
-            null,
-            input.fuel_level ?? 100,
-            input.status ?? "IDLE",
-            companyId,
+        const result = runUnique(() =>
+            stmt(INSERT_VEHICLE).run(
+                input.license_plate,
+                null,
+                null,
+                input.fuel_level ?? 100,
+                input.status ?? "IDLE",
+                input.vin ?? null,
+                input.vehicle_type ?? null,
+                input.hu_due_on ?? null,
+                input.depot ?? null,
+                input.cost_center ?? null,
+                companyId,
+            ),
         );
 
         const id = Number(result.lastInsertRowid);
@@ -564,12 +645,19 @@ export class VehicleModel {
         input: VehiclePutInput,
         companyId: number,
     ): Vehicle | undefined {
-        const result = stmt(UPDATE_VEHICLE).run(
-            input.license_plate,
-            input.fuel_level,
-            input.status,
-            id,
-            companyId,
+        const result = runUnique(() =>
+            stmt(UPDATE_VEHICLE).run(
+                input.license_plate,
+                input.fuel_level,
+                input.status,
+                input.vin ?? null,
+                input.vehicle_type ?? null,
+                input.hu_due_on ?? null,
+                input.depot ?? null,
+                input.cost_center ?? null,
+                id,
+                companyId,
+            ),
         );
 
         if (result.changes === 0) {
@@ -588,12 +676,25 @@ export class VehicleModel {
             return undefined;
         }
 
-        const result = stmt(UPDATE_VEHICLE).run(
-            input.license_plate ?? current.license_plate,
-            input.fuel_level ?? current.fuel_level,
-            input.status ?? current.status,
-            id,
-            companyId,
+        const result = runUnique(() =>
+            stmt(UPDATE_VEHICLE).run(
+                input.license_plate ?? current.license_plate,
+                input.fuel_level ?? current.fuel_level,
+                input.status ?? current.status,
+                input.vin !== undefined ? input.vin : current.vin,
+                input.vehicle_type !== undefined
+                    ? input.vehicle_type
+                    : current.vehicle_type,
+                input.hu_due_on !== undefined
+                    ? input.hu_due_on
+                    : current.hu_due_on,
+                input.depot !== undefined ? input.depot : current.depot,
+                input.cost_center !== undefined
+                    ? input.cost_center
+                    : current.cost_center,
+                id,
+                companyId,
+            ),
         );
 
         if (result.changes === 0) {
