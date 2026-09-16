@@ -112,6 +112,13 @@ describe("GET /api/drivers", () => {
         );
         assert.equal(ordered.body.data[0].open_warnings, 2);
 
+        const byDefault = await api.get("/api/drivers");
+        assert.equal(byDefault.status, 200);
+        assert.deepEqual(
+            byDefault.body.data.map((row: { name: string }) => row.name),
+            ["Anna", "Ben"],
+        );
+
         const rejected = await api.get("/api/drivers").query({
             sort: "name;DROP TABLE drivers",
         });
@@ -280,6 +287,7 @@ describe("POST /api/drivers", () => {
 
         assert.equal(created.status, 201);
         assert.equal(created.body.data.name, "Elisa");
+        assert.equal(created.body.data.phone, null);
         assert.equal(
             created.headers.location,
             `/api/drivers/${created.body.data.id}`,
@@ -292,6 +300,21 @@ describe("POST /api/drivers", () => {
         const listed = await api.get("/api/drivers").query({ search: "Elisa" });
         assert.equal(listed.body.data[0].current_vehicle_plate, null);
         assert.equal(listed.body.data[0].current_vehicle_status, null);
+        assert.equal(listed.body.data[0].phone, null);
+    });
+
+    it("stores an optional phone number", async () => {
+        const created = await api.post("/api/drivers").send({
+            name: "Elisa",
+            phone: "+49 170 1234567",
+        });
+
+        assert.equal(created.status, 201);
+        assert.equal(created.body.data.phone, "+49 170 1234567");
+
+        const detail = await api.get(`/api/drivers/${created.body.data.id}`);
+        assert.equal(detail.status, 200);
+        assert.equal(detail.body.data.phone, "+49 170 1234567");
     });
 
     it("rejects an empty name", async () => {
@@ -304,6 +327,40 @@ describe("POST /api/drivers", () => {
     it("forbids a viewer from creating drivers", async () => {
         const viewer = (await loginAs(1, "viewer")).agent;
         const response = await viewer.post("/api/drivers").send({ name: "No" });
+
+        assert.equal(response.status, 403);
+        assert.equal(response.body.code, "FORBIDDEN");
+    });
+});
+
+describe("PATCH /api/drivers/:id", () => {
+    it("renames a driver and updates the denormalized current name", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-REN 1",
+            driver_name: "Altname",
+            company_id: 1,
+        });
+        const driverId = requireCurrentDriver(vehicle);
+
+        const patched = await api.patch(`/api/drivers/${driverId}`).send({
+            name: "Neuname",
+            phone: "0221 123",
+        });
+
+        assert.equal(patched.status, 200);
+        assert.equal(patched.body.data.name, "Neuname");
+        assert.equal(patched.body.data.phone, "0221 123");
+
+        const listed = await api.get(`/api/vehicles/${vehicle.id}`);
+        assert.equal(listed.body.driver_name, "Neuname");
+    });
+
+    it("forbids a viewer from patching drivers", async () => {
+        const created = await api.post("/api/drivers").send({ name: "View" });
+        const viewer = (await loginAs(1, "viewer")).agent;
+        const response = await viewer
+            .patch(`/api/drivers/${created.body.data.id}`)
+            .send({ phone: "1" });
 
         assert.equal(response.status, 403);
         assert.equal(response.body.code, "FORBIDDEN");

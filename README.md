@@ -31,10 +31,11 @@ What you can do in the app today, and what lands next — like a game patch list
 * Trip archive on the vehicle: browse past drives and show a closed route on the map
 * Import vehicles, drivers, eligibility and current assignment from CSV or Excel (`/vehicles/import`)
 * Company remembers the last column mapping; each import is logged
+* Yard master data on vehicles (VIN, type, HU due, depot, cost center)
+* Drivers with phone; rename without the vehicle form; list opens with problem drivers first
 
 ## Next
 
-* Yard fields (VIN, HU, depot); drivers you can maintain without the vehicle form
 * A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
 * Depot geofences
 * Due-date reminders (HU, licence, UVV)
@@ -182,9 +183,10 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 | `GET`    | `/api/alerts`                    | Paginated alerts (`filter` open/resolved/all, optional `type`, `vehicle_id`, `driver_id`, `page`, `limit`) |
 | `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }` — close; `dispatcher` only |
 | `GET`    | `/api/briefing`                  | Company snapshot for the home page (counts, newest open alerts, no-signal, drivers with open warnings) |
-| `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`, optional `vehicle_id`) |
-| `POST`   | `/api/drivers`                   | `{ name }` — create roster row; `dispatcher` |
+| `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`, optional `vehicle_id`; default sort open warnings) |
+| `POST`   | `/api/drivers`                   | `{ name, phone? }` — create roster row; `dispatcher` |
 | `GET`    | `/api/drivers/:id`               | Driver, eligible vehicles, current vehicle (`404` if missing **or** other company) |
+| `PATCH`  | `/api/drivers/:id`               | `{ name?, phone? }` — rename / phone; `dispatcher` |
 | `POST`   | `/api/drivers/:id/vehicles`      | `{ vehicle_id }` — eligibility; `dispatcher` |
 | `DELETE` | `/api/drivers/:id/vehicles/:vehicleId` | Remove eligibility; `dispatcher` |
 | `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` or `{ vehicle_id: null }` — current vehicle; `dispatcher` |
@@ -214,13 +216,13 @@ Validation example:
 }
 ```
 
-Vehicle JSON includes last telemetry (or `null`), `speed_limit_kmh`, `active_alerts`, `speeding_open` (unfinished SPEEDING event), `current_driver_id`, and denormalized `driver_name` (null when the vehicle is in the pool). HTTP create/update takes plate, fuel and status — not a driver name. Dispatchers assign drivers via `/api/drivers`.
+Vehicle JSON includes last telemetry (or `null`), `speed_limit_kmh`, `active_alerts`, `speeding_open` (unfinished SPEEDING event), `current_driver_id`, denormalized `driver_name` (null when the vehicle is in the pool), and yard fields (`vin`, `vehicle_type`, `hu_due_on`, `depot`, `cost_center`). HTTP create/update takes plate, fuel, status and those yard fields — not a driver name. Dispatchers assign drivers via `/api/drivers`.
 
 ---
 
 # Vehicle Model
 
-Master data a person maintains: license plate (and fuel when not driving). Who may drive it and who has it **now** live on the driver assignment API, not on the vehicle form. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
+Master data a person maintains: license plate, VIN, type, HU due, depot, cost center (and fuel when not driving). Who may drive it and who has it **now** live on the driver assignment API, not on the vehicle form. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
 
 Responses also include last position/speed/`speed_limit_kmh`/`recorded_at`, `active_alerts`, `speeding_open`, and `created_at`.
 
@@ -321,7 +323,7 @@ Live speed stays in the telemetry window; the trip polyline has no per-point spe
 
 `drivers` is a real entity (`UNIQUE (company_id, name)`). **Eligibility** is M:N (`driver_vehicles`). **Current** is at most one vehicle per driver (`vehicles.current_driver_id`, partial unique; `NULL` = pool). `driver_name` on the vehicle is the current driver’s name, or `NULL`.
 
-`POST /api/drivers` creates a roster row. Assign / unassign / set current hang off the driver (`dispatcher`). HTTP vehicle writes do not upsert a driver by name. `GET /api/drivers` and `GET /api/drivers/:id` aggregate SPEEDING counts (including resolved) and open SPEEDING warnings. Isolation is still company. `GET /api/vehicles/drivers` remains the fleet-map name picker, not this roster.
+`POST /api/drivers` creates a roster row (`name`, optional `phone`). `PATCH /api/drivers/:id` renames or updates phone (`dispatcher`); renaming also updates denormalized `vehicles.driver_name` when that driver is current. Assign / unassign / set current hang off the driver. HTTP vehicle writes do not upsert a driver by name. `GET /api/drivers` defaults to open SPEEDING warnings descending and aggregates SPEEDING counts (including resolved). Isolation is still company. `GET /api/vehicles/drivers` remains the fleet-map name picker, not this roster.
 
 ---
 

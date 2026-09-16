@@ -52,6 +52,45 @@ describe("POST /api/import/preview", () => {
         assert.equal(response.body.data.can_commit, true);
     });
 
+    it("maps optional yard columns and commits them", async () => {
+        const { agent } = await loginAs(1);
+        const csv = `Kennzeichen;VIN;Fahrzeugtyp;Standort;HU;Kostenstelle
+B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;KST-10
+`;
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv })
+            .expect(200);
+
+        assert.equal(preview.body.data.suggested_mapping.VIN, "vin");
+        assert.equal(
+            preview.body.data.suggested_mapping.Fahrzeugtyp,
+            "vehicle_type",
+        );
+        assert.equal(preview.body.data.rows[0].vin, "WVWZZZ1JZXW000011");
+        assert.equal(preview.body.data.rows[0].vehicle_type, "TRUCK");
+        assert.equal(preview.body.data.rows[0].depot, "Hof Nord");
+        assert.equal(preview.body.data.rows[0].hu_due_on, "2027-06-15");
+        assert.equal(preview.body.data.rows[0].cost_center, "KST-10");
+
+        const committed = await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        assert.equal(committed.body.data.created_vehicles, 1);
+
+        const listed = await agent
+            .get("/api/vehicles")
+            .query({ search: "B-YARD 1" });
+        assert.equal(listed.body.data[0].vin, "WVWZZZ1JZXW000011");
+        assert.equal(listed.body.data[0].vehicle_type, "TRUCK");
+        assert.equal(listed.body.data[0].depot, "Hof Nord");
+        assert.equal(listed.body.data[0].hu_due_on, "2027-06-15");
+        assert.equal(listed.body.data[0].cost_center, "KST-10");
+    });
+
     it("flags duplicate plates in the same file as errors", async () => {
         const { agent } = await loginAs(1);
         const csv = `Kennzeichen;Tank
