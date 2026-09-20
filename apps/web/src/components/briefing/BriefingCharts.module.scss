@@ -7,6 +7,40 @@
     gap: 12px;
 }
 
+@media (max-width: 700px) {
+    .section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: auto;
+    }
+
+    .hero,
+    .card {
+        min-height: 320px;
+        height: auto;
+    }
+
+    .card {
+        padding: 12px;
+    }
+
+    .chart,
+    .chartCompact {
+        flex: none;
+        height: 220px;
+        min-height: 220px;
+    }
+
+    .legend {
+        gap: 6px 12px;
+    }
+
+    .lead {
+        font-size: 12.5px;
+    }
+}
+
 .hero {
     grid-column: 1 / -1;
     min-height: 0;
