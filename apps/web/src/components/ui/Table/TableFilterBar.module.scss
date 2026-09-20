@@ -14,6 +14,14 @@
     color: var(--text);
 }
 
+.mobileSelect {
+    display: none;
+}
+
+.groupLabel + .mobileSelect span {
+    display: none;
+}
+
 .filterBar {
     display: inline-flex;
     flex-wrap: wrap;
@@ -98,22 +106,36 @@
 }
 
 @media (max-width: 700px) {
-    .filterBar {
+    .mobileSelect {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         width: 100%;
-        box-sizing: border-box;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text);
 
-        &::-webkit-scrollbar {
-            display: none;
+        select {
+            flex: 1;
+            min-width: 0;
+            height: 40px;
+            padding: 0 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface);
+            color: var(--text-h);
+            font: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: normal;
+            text-transform: none;
         }
     }
 
-    .chip {
-        flex: 0 0 auto;
-        min-height: 40px;
+    .filterBar {
+        display: none;
     }
 }

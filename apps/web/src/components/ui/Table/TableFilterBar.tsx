@@ -35,6 +35,26 @@ export const TableFilterBar = <RowType,>({
     return (
         <div className={className ? `${styles.group} ${className}` : styles.group}>
             {groupLabel && <p className={styles.groupLabel}>{groupLabel}</p>}
+            <label className={styles.mobileSelect}>
+                <span>{groupLabel ?? "Status"}</span>
+                <select
+                    aria-label={ariaLabel}
+                    value={activeFilterId ?? ""}
+                    onChange={(event) =>
+                        onFilterChange(event.target.value || null)
+                    }
+                >
+                    {includeAll && <option value="">{allLabel}</option>}
+                    {filters.map((filter) => (
+                        <option key={filter.id} value={filter.id}>
+                            {filter.displayText}
+                            {filter.count !== undefined
+                                ? ` (${formatCount(filter.count)})`
+                                : ""}
+                        </option>
+                    ))}
+                </select>
+            </label>
             <div className={styles.filterBar} role="group" aria-label={ariaLabel}>
                 {includeAll && (
                     <button
