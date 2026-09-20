@@ -7,7 +7,8 @@ import {
 import type { TableColumn, TableFilter } from "../../types/table";
 import { formatTimestamp } from "../../utils/dateTime";
 import { DriverNameLink } from "../drivers/DriverNameLink";
-import { ALERT_SEVERITY_LABELS, ALERT_TYPE_LABELS } from "./alertLabels";
+import { AlertSeverityChip, AlertTypeChip } from "./AlertSemantics";
+import { ALERT_TYPE_LABELS } from "./alertLabels";
 
 export const alertFilters: Array<
     TableFilter<Alert> & { id: Exclude<AlertFilterId, "all"> }
@@ -32,13 +33,13 @@ export const alertColumns: TableColumn<Alert>[] = [
         key: "type",
         displayText: "Art",
         sortable: true,
-        render: (value) => ALERT_TYPE_LABELS[value],
+        render: (value) => <AlertTypeChip type={value} />,
     },
     {
         key: "severity",
         displayText: "Schwere",
         sortable: true,
-        render: (value) => ALERT_SEVERITY_LABELS[value],
+        render: (value) => <AlertSeverityChip severity={value} />,
     },
     {
         key: "driver_name",
