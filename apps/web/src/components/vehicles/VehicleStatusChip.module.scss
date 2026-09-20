@@ -1,0 +1,78 @@
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--code-bg);
+    color: var(--text-h);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--text);
+}
+
+.chip[data-status="DRIVING"] {
+    border-color: color-mix(in srgb, var(--success) 38%, var(--border));
+    background: color-mix(in srgb, var(--success) 12%, var(--surface));
+}
+
+.chip[data-status="DRIVING"] .dot {
+    background: var(--success);
+}
+
+.chip[data-status="IDLE"] {
+    border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+    background: color-mix(in srgb, var(--warning) 13%, var(--surface));
+}
+
+.chip[data-status="IDLE"] .dot {
+    background: var(--warning);
+}
+
+.chip[data-status="STOPPED"] {
+    border-color: color-mix(in srgb, #475569 42%, var(--border));
+    background: color-mix(in srgb, #e2e8f0 72%, var(--bg));
+}
+
+.chip[data-status="STOPPED"] .dot {
+    background: #475569;
+}
+
+.chip[data-status="OFFLINE"] {
+    border-color: color-mix(in srgb, var(--danger) 48%, var(--border));
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+    color: var(--danger);
+}
+
+.chip[data-status="OFFLINE"] .dot {
+    background: var(--danger);
+}
+
+@media (prefers-color-scheme: dark) {
+    .chip[data-status="DRIVING"] {
+        background: color-mix(in srgb, var(--success) 22%, var(--surface));
+    }
+
+    .chip[data-status="IDLE"] {
+        background: color-mix(in srgb, var(--warning) 22%, var(--surface));
+    }
+
+    .chip[data-status="STOPPED"] {
+        background: color-mix(in srgb, #334155 48%, var(--bg));
+    }
+
+    .chip[data-status="OFFLINE"] {
+        background: color-mix(in srgb, var(--danger) 22%, var(--surface));
+    }
+}

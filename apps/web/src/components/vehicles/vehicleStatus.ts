@@ -12,10 +12,10 @@ export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
 
 /** Farben für Marker, Spur und Legende — gleiche Semantik wie die Labels. */
 export const VEHICLE_STATUS_COLORS: Record<VehicleStatus, string> = {
-    DRIVING: "#16a34a",
-    IDLE: "#d97706",
+    DRIVING: "#15803d",
+    IDLE: "#b45309",
     STOPPED: "#475569",
-    OFFLINE: "#94a3b8",
+    OFFLINE: "#b91c1c",
 };
 
 export const vehicleStatusLabel = (status: VehicleStatus) =>

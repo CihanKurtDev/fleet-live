@@ -7,9 +7,9 @@ export type ChartTheme = {
 };
 
 const FALLBACK: ChartTheme = {
-    text: "#6b6375",
-    border: "#e5e4e7",
-    accent: "#aa3bff",
+    text: "#514b5d",
+    border: "#d9d6df",
+    accent: "#6d28d9",
 };
 
 const readTheme = (): ChartTheme => {

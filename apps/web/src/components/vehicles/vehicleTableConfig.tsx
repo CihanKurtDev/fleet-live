@@ -14,7 +14,7 @@ import { formatIsoDate } from "../../utils/dateTime";
 import { DriverNameLink } from "../drivers/DriverNameLink";
 import { WarningChip } from "../alerts/WarningChip";
 import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
-import { vehicleStatusLabel } from "./vehicleStatus";
+import { VehicleStatusChip } from "./VehicleStatusChip";
 import styles from "./vehicleTableConfig.module.scss";
 
 export const vehicleFilters: Array<
@@ -80,7 +80,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "status",
         displayText: "Status",
         sortable: true,
-        render: (value) => vehicleStatusLabel(value),
+        render: (value) => <VehicleStatusChip status={value} />,
     },
     {
         key: "fuel_level",

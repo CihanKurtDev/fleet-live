@@ -3,7 +3,7 @@
     margin: 0;
     border: 1px solid var(--border);
     border-radius: 6px;
-    background: var(--bg);
+    background: var(--surface);
 
     font: inherit;
     color: var(--text-h);
@@ -18,8 +18,8 @@
 
     &:focus {
         outline: none;
-        border-color: var(--accent-border);
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        border-color: var(--focus-ring);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 24%, transparent);
     }
 
     &[aria-invalid="true"] {

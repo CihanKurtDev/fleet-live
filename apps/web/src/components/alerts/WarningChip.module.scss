@@ -14,17 +14,34 @@
     white-space: nowrap;
 
     &[data-type="SPEEDING"] {
-        border-color: color-mix(in srgb, #dc2626 45%, var(--border));
-        color: #dc2626;
+        border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+        background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+        color: var(--danger);
     }
 
     &[data-type="LOW_FUEL"] {
-        border-color: color-mix(in srgb, #d97706 50%, var(--border));
-        color: #d97706;
+        border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+        background: color-mix(in srgb, var(--warning) 13%, var(--surface));
+        color: var(--warning);
     }
 
     &[data-type="OFFLINE"] {
-        border-color: color-mix(in srgb, #94a3b8 55%, var(--border));
-        color: #94a3b8;
+        border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+        background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+        color: var(--danger);
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    .chip[data-type="SPEEDING"] {
+        background: color-mix(in srgb, var(--danger) 22%, var(--surface));
+    }
+
+    .chip[data-type="LOW_FUEL"] {
+        background: color-mix(in srgb, var(--warning) 22%, var(--surface));
+    }
+
+    .chip[data-type="OFFLINE"] {
+        background: color-mix(in srgb, var(--danger) 22%, var(--surface));
     }
 }
