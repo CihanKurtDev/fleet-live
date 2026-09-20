@@ -59,6 +59,34 @@
         }
     }
 
+    @media (max-width: 700px) {
+        .header {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .title {
+            font-size: 26px;
+            line-height: 1.1;
+        }
+
+        .openCount {
+            font-size: 14px;
+        }
+
+        .header > :global(button) {
+            align-self: stretch;
+            min-height: 40px;
+        }
+
+        .vehicles li {
+            align-items: flex-start;
+            gap: 6px;
+            flex-direction: column;
+        }
+    }
+
     span {
         font-size: 13px;
         color: var(--text);

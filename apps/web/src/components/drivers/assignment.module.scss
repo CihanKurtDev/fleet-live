@@ -266,3 +266,34 @@
         background: var(--accent-bg);
     }
 }
+
+@media (max-width: 700px) {
+    .headerActions {
+        width: 100%;
+    }
+
+    .headerActions > :global(button) {
+        flex: 1 1 auto;
+        min-height: 40px;
+    }
+
+    .rosterRow {
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .rosterActions {
+        width: 100%;
+        margin-left: 34px;
+    }
+
+    .rosterActions > :global(button) {
+        flex: 1 1 0;
+        min-height: 40px;
+    }
+
+    .statusLine {
+        white-space: normal;
+        line-height: 1.4;
+    }
+}
