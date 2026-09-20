@@ -121,7 +121,7 @@ export const TablePagination = ({
             >
                 <button
                     type="button"
-                    className={styles.pageButton}
+                    className={`${styles.pageButton} ${styles.firstPageButton}`}
                     aria-label="Erste Seite"
                     disabled={isFirstPage}
                     onClick={() => onPageChange(1)}
@@ -131,7 +131,7 @@ export const TablePagination = ({
 
                 <button
                     type="button"
-                    className={styles.pageButton}
+                    className={`${styles.pageButton} ${styles.previousPageButton}`}
                     aria-label="Vorherige Seite"
                     disabled={isFirstPage}
                     onClick={() => onPageChange(page - 1)}
@@ -172,7 +172,7 @@ export const TablePagination = ({
 
                 <button
                     type="button"
-                    className={styles.pageButton}
+                    className={`${styles.pageButton} ${styles.nextPageButton}`}
                     aria-label="Nächste Seite"
                     disabled={isLastPage}
                     onClick={() => onPageChange(page + 1)}
@@ -182,7 +182,7 @@ export const TablePagination = ({
 
                 <button
                     type="button"
-                    className={styles.pageButton}
+                    className={`${styles.pageButton} ${styles.lastPageButton}`}
                     aria-label="Letzte Seite"
                     disabled={isLastPage}
                     onClick={() => onPageChange(pageCount)}

@@ -112,6 +112,11 @@
             box-shadow: var(--shadow);
         }
 
+        :global(.tableRowInteractive:hover),
+        :global(.tableRowInteractive:focus-within) {
+            background: var(--surface);
+        }
+
         :global(td) {
             display: grid;
             grid-template-columns: minmax(72px, 0.35fr) minmax(0, 1fr);
