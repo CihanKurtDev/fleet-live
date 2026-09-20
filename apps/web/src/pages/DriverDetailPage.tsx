@@ -61,14 +61,16 @@ export const DriverDetailPage = () => {
             <DetailBackLink fallback="/drivers" />
 
             <header className={styles.header}>
-                <div>
+                <div className={styles.identity}>
                     <h1 className={styles.title}>{driver.name}</h1>
-                    <p className={styles.openCount}>
+                    <div className={styles.statusRow}>
                         <DriverWarningCell driver={driver} />
                         {driver.open_warnings > 0 ? (
-                            <Link to={openInboxHref}>Inbox öffnen</Link>
+                            <Link className={styles.inboxLink} to={openInboxHref}>
+                                Inbox öffnen
+                            </Link>
                         ) : null}
-                    </p>
+                    </div>
                     <p className={styles.openCount}>
                         Telefon: {driver.phone ?? "—"}
                     </p>

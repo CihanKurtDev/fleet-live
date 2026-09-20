@@ -7,6 +7,33 @@
     min-width: 0;
 }
 
+.identity {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.statusRow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.inboxLink {
+    color: var(--text-h);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+        color: var(--accent);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+}
+
 .openCount {
     display: flex;
     align-items: center;
@@ -16,15 +43,6 @@
     font-size: 15px;
     color: var(--text);
 
-    a {
-        color: var(--text-h);
-        text-decoration: underline;
-        text-underline-offset: 2px;
-
-        &:hover {
-            color: var(--accent);
-        }
-    }
 }
 
 .title {
@@ -59,36 +77,36 @@
         }
     }
 
-    @media (max-width: 700px) {
-        .header {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .title {
-            font-size: 26px;
-            line-height: 1.1;
-        }
-
-        .openCount {
-            font-size: 14px;
-        }
-
-        .header > :global(button) {
-            align-self: stretch;
-            min-height: 40px;
-        }
-
-        .vehicles li {
-            align-items: flex-start;
-            gap: 6px;
-            flex-direction: column;
-        }
-    }
-
     span {
         font-size: 13px;
         color: var(--text);
+    }
+}
+
+@media (max-width: 700px) {
+    .header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .title {
+        font-size: 26px;
+        line-height: 1.1;
+    }
+
+    .openCount {
+        font-size: 14px;
+    }
+
+    .header > :global(button) {
+        align-self: stretch;
+        min-height: 40px;
+    }
+
+    .vehicles li {
+        align-items: flex-start;
+        gap: 6px;
+        flex-direction: column;
     }
 }
