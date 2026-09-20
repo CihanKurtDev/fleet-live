@@ -64,7 +64,7 @@ export const BriefingRateChart = ({
 }) => {
     const theme = useChartTheme();
     const tick = { fill: theme.text, fontSize: 12 } as const;
-    const yMax = yCeiling(series.map((row) => row.rate), 12);
+    const yMax = yCeiling(series.map((row) => row.rate), 3, 1);
 
     return (
         <ChartCard
