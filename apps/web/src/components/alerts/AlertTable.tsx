@@ -162,6 +162,7 @@ export const AlertTable = ({
                         ? "Keine offenen Warnungen."
                         : "Keine Warnungen passen zum Filter.",
                 )}
+                className={styles.mobileCards}
             />
 
             {showPagination && (
