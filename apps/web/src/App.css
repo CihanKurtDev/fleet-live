@@ -7,4 +7,5 @@ main {
   overflow: auto;
   /* Reserve scrollbar width so expanding content does not shift the layout. */
   scrollbar-gutter: stable;
+  background: var(--bg);
 }
