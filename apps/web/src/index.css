@@ -16,6 +16,11 @@
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /* Import / surfaces; global component sweep stays out of this branch. */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --surface-well: var(--code-bg);
+
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
@@ -45,6 +50,7 @@
     --danger: #f87171;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --surface-well: #171c24;
   }
 }
 

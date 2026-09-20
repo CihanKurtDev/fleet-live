@@ -25,22 +25,53 @@
     }
 }
 
-.issues {
+.driverName {
+    font-weight: 650;
+    color: var(--text-h);
+}
+
+.statusCell {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: 4px;
+    min-width: 10rem;
 }
 
-.issueError,
-.issueWarning {
-    margin: 0;
-    font-size: 13px;
+.statusPill {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+    white-space: nowrap;
 }
 
-.issueError {
-    color: var(--danger);
+.statusPillCaution {
+    background: color-mix(in srgb, #d97706 28%, transparent);
+    color: #fbbf24;
 }
 
-.issueWarning {
+.statusPillError {
+    background: color-mix(in srgb, var(--danger) 22%, transparent);
+    color: #f87171;
+}
+
+.statusPillReady {
+    background: color-mix(in srgb, #22c55e 18%, transparent);
+    color: #86efac;
+}
+
+.statusPillMuted {
+    background: var(--code-bg);
+    color: var(--text);
+}
+
+.statusSub {
+    font-size: 12px;
+    line-height: 1.35;
     color: var(--text);
 }

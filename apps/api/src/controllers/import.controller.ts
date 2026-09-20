@@ -2,7 +2,9 @@ import type { Request, Response } from "express";
 import { ZodError } from "zod";
 import {
     parseImportCommitInput,
+    parseImportPreviewActionsInput,
     parseImportPreviewInput,
+    parseImportPreviewRowsQuery,
     parseImportProfileInput,
     parseImportRunListQuery,
 } from "@fleet-live/shared";
@@ -34,7 +36,7 @@ export function previewImport(req: Request, res: Response): void {
 
         const preview = ImportModel.preview(input, companyId, userId);
 
-        if (preview.columns.length === 0) {
+        if (preview.columns.length === 0 && preview.sheets.length === 0) {
             throw new BadRequestError(
                 "Die Datei enthält keine erkennbaren Spalten.",
             );
@@ -42,6 +44,54 @@ export function previewImport(req: Request, res: Response): void {
 
         res.json({ data: preview });
     } catch (error) {
+        asBadRequest(error);
+    }
+}
+
+export function listPreviewRows(req: Request, res: Response): void {
+    try {
+        const previewId = String(req.params.previewId ?? "");
+        const query = parseImportPreviewRowsQuery(req.query);
+        const companyId = sessionCompany(req);
+
+        res.json(ImportModel.listRows(previewId, companyId, query));
+    } catch (error) {
+        if (error instanceof NotFoundError) {
+            throw error;
+        }
+        asBadRequest(error);
+    }
+}
+
+export function patchPreviewActions(req: Request, res: Response): void {
+    try {
+        const previewId = String(req.params.previewId ?? "");
+        const input = parseImportPreviewActionsInput(req.body);
+        const companyId = sessionCompany(req);
+        const outcome = ImportModel.patchActions(
+            previewId,
+            companyId,
+            input.row_actions,
+        );
+        res.json({ data: outcome });
+    } catch (error) {
+        if (error instanceof NotFoundError) {
+            throw error;
+        }
+        asBadRequest(error);
+    }
+}
+
+export function markExistingPreview(req: Request, res: Response): void {
+    try {
+        const previewId = String(req.params.previewId ?? "");
+        const companyId = sessionCompany(req);
+        const outcome = ImportModel.markExistingUpdate(previewId, companyId);
+        res.json({ data: outcome });
+    } catch (error) {
+        if (error instanceof NotFoundError) {
+            throw error;
+        }
         asBadRequest(error);
     }
 }

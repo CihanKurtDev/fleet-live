@@ -5,4 +5,6 @@ main {
   display: flex;
   flex-direction: column;
   overflow: auto;
+  /* Reserve scrollbar width so expanding content does not shift the layout. */
+  scrollbar-gutter: stable;
 }

@@ -497,7 +497,7 @@ describe("driver assignment", () => {
         assert.equal(switchCurrent.body.code, "CONFLICT");
         assert.equal(
             switchCurrent.body.error,
-            "Fahrer ist noch unterwegs. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.",
+            "Karl ist noch unterwegs auf K-DRV 1. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.",
         );
 
         const clearCurrent = await api

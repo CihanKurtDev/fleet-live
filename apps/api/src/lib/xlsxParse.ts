@@ -365,14 +365,17 @@ export function buildXlsxWorkbook(
     sheets: Array<{ name: string; rows: string[][] }>,
 ): Buffer {
     const strings: string[] = [];
+    const stringIndex = new Map<string, number>();
     const indexOf = (value: string): number => {
-        const existing = strings.indexOf(value);
-        if (existing >= 0) {
+        const existing = stringIndex.get(value);
+        if (existing !== undefined) {
             return existing;
         }
 
+        const index = strings.length;
         strings.push(value);
-        return strings.length - 1;
+        stringIndex.set(value, index);
+        return index;
     };
 
     const worksheetXml = sheets.map((sheet) => {

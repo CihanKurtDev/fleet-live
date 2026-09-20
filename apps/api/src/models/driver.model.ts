@@ -474,26 +474,29 @@ export class DriverModel {
 
         const drivingCurrent = stmt(
             `
-            SELECT id
+            SELECT id, license_plate
             FROM vehicles
             WHERE company_id = ?
               AND current_driver_id = ?
               AND status = 'DRIVING'
             LIMIT 1
             `,
-        ).get(companyId, driverId) as { id: number } | undefined;
+        ).get(companyId, driverId) as
+            | { id: number; license_plate: string }
+            | undefined;
 
         if (
             drivingCurrent &&
             (vehicleId === null || drivingCurrent.id !== vehicleId)
         ) {
-            throw new ConflictError(
-                "Fahrer ist noch unterwegs. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.",
-                {
-                    vehicle_id:
-                        "Fahrer ist noch unterwegs. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.",
-                },
-            );
+            const message =
+                vehicleId === null
+                    ? `${driver.name} ist noch unterwegs auf ${drivingCurrent.license_plate}. Das aktuelle Fahrzeug lässt sich erst nach der Fahrt aufheben.`
+                    : `${driver.name} ist noch unterwegs auf ${drivingCurrent.license_plate}. Aktuelles Fahrzeug lässt sich erst nach der Fahrt wechseln.`;
+
+            throw new ConflictError(message, {
+                vehicle_id: message,
+            });
         }
 
         withTransaction(() => {

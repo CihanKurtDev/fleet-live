@@ -56,7 +56,7 @@ export function createApp() {
         }),
     );
     app.use((req, res, next) => {
-        const limit = req.path.startsWith("/api/import") ? "2mb" : "16kb";
+        const limit = req.path.startsWith("/api/import") ? "32mb" : "16kb";
         express.json({ limit })(req, res, next);
     });
     app.use(attachSession);

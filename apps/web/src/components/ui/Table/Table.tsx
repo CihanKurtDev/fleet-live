@@ -11,6 +11,7 @@ export const Table = <RowType,>({
     selectedRows = [],
     onSelectRow,
     onRowClick,
+    getRowClassName,
     sortConfig = null,
     onSort,
     isLoading = false,
@@ -22,6 +23,7 @@ export const Table = <RowType,>({
     const columnCount = isEditing
         ? columns.length + 1
         : columns.length;
+    const interactive = isEditing || Boolean(onRowClick);
 
     return (
         <div className={[styles.tableContainer, className].filter(Boolean).join(" ")}>
@@ -96,8 +98,14 @@ export const Table = <RowType,>({
                                             rowKey,
                                         )}
                                         isEditing={isEditing}
+                                        interactive={interactive}
+                                        rowClassName={getRowClassName?.(row)}
                                         onSelect={() => onSelectRow?.(rowKey)}
-                                        onClick={() => onRowClick?.(row)}
+                                        onClick={
+                                            onRowClick
+                                                ? () => onRowClick(row)
+                                                : undefined
+                                        }
                                     />
                                 );
                             })

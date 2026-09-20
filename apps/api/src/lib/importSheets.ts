@@ -8,8 +8,8 @@ const SHEET_NAME_HINTS: Array<{
     kind: ImportSheetKind;
     pattern: RegExp;
 }> = [
-    { kind: "eligibility", pattern: /eignung|eligible|berechtigt|zuordnung/i },
-    { kind: "current", pattern: /aktuell|current|besatzung|eingesetzt/i },
+    { kind: "eligibility", pattern: /eignung|eligible|berechtigt|zuordnung|freigabe/i },
+    { kind: "current", pattern: /aktuell|current|besatzung|crew|eingesetzt/i },
     { kind: "drivers", pattern: /fahrer|driver|personal|roster/i },
     { kind: "vehicles", pattern: /fahrzeug|vehicle|flotte|kennzeichen/i },
 ];

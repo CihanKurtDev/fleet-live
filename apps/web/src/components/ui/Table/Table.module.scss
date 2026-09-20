@@ -58,17 +58,44 @@
     padding-right: 0;
 }
 
-.tableRow {
+.tableRowInteractive {
     cursor: pointer;
 }
 
-.tableRow:hover {
+.tableRowInteractive:hover {
     background-color: var(--code-bg);
 }
 
 .tableRowSelected,
 .tableRowSelected:hover {
     background-color: var(--accent-bg);
+}
+
+.tableRowProblem {
+    background-color: color-mix(in srgb, #d97706 12%, var(--bg));
+    box-shadow: inset 3px 0 0 #d97706;
+}
+
+.tableRowProblem:hover {
+    background-color: color-mix(in srgb, #d97706 18%, var(--bg));
+}
+
+.tableRowDeferred {
+    background-color: color-mix(in srgb, var(--code-bg) 70%, var(--bg));
+    box-shadow: inset 3px 0 0 var(--border);
+}
+
+.tableRowDeferred:hover {
+    background-color: var(--code-bg);
+}
+
+.tableRowError {
+    background-color: color-mix(in srgb, #dc2626 10%, var(--bg));
+    box-shadow: inset 3px 0 0 #dc2626;
+}
+
+.tableRowError:hover {
+    background-color: color-mix(in srgb, #dc2626 16%, var(--bg));
 }
 
 .empty {

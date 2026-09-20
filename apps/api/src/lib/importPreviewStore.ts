@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
     ImportColumnMapping,
     ImportPreviewRow,
+    ImportRowAction,
     ImportSheetMappings,
     ImportSource,
     ImportStatusMapping,
@@ -19,6 +20,7 @@ export type StoredImportPreview = {
     columnMapping: ImportColumnMapping;
     statusMapping: ImportStatusMapping;
     warningCount: number;
+    rowActions: Record<string, ImportRowAction>;
 };
 
 const store = new Map<string, StoredImportPreview>();
@@ -34,11 +36,17 @@ function purgeExpired(): void {
 }
 
 export function saveImportPreview(
-    preview: Omit<StoredImportPreview, "createdAt">,
+    preview: Omit<StoredImportPreview, "createdAt" | "rowActions"> & {
+        rowActions?: Record<string, ImportRowAction>;
+    },
 ): string {
     purgeExpired();
     const previewId = randomUUID();
-    store.set(previewId, { ...preview, createdAt: Date.now() });
+    store.set(previewId, {
+        ...preview,
+        rowActions: preview.rowActions ?? {},
+        createdAt: Date.now(),
+    });
     return previewId;
 }
 
@@ -53,6 +61,20 @@ export function getImportPreview(
         return undefined;
     }
 
+    return preview;
+}
+
+export function patchImportPreviewActions(
+    previewId: string,
+    companyId: number,
+    rowActions: Record<string, ImportRowAction>,
+): StoredImportPreview | undefined {
+    const preview = getImportPreview(previewId, companyId);
+    if (!preview) {
+        return undefined;
+    }
+
+    preview.rowActions = { ...preview.rowActions, ...rowActions };
     return preview;
 }
 

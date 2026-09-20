@@ -12,6 +12,8 @@ interface TableRowProps<RowType> {
 
     isSelected: boolean;
     isEditing: boolean;
+    interactive: boolean;
+    rowClassName?: string;
 
     onSelect: () => void;
     onClick?: () => void;
@@ -22,6 +24,8 @@ const TableRowComponent = <RowType,>({
     columns,
     isSelected,
     isEditing,
+    interactive,
+    rowClassName,
     onSelect,
     onClick,
 }: TableRowProps<RowType>) => {
@@ -34,6 +38,10 @@ const TableRowComponent = <RowType,>({
     };
 
     const handleRowClick = () => {
+        if (!interactive) {
+            return;
+        }
+
         if (isEditing) {
             onSelect();
             return;
@@ -44,7 +52,9 @@ const TableRowComponent = <RowType,>({
 
     const className = [
         styles.tableRow,
+        interactive && styles.tableRowInteractive,
         isSelected && styles.tableRowSelected,
+        rowClassName,
     ]
         .filter(Boolean)
         .join(" ");
@@ -52,9 +62,9 @@ const TableRowComponent = <RowType,>({
     return (
         <tr
             className={className}
-            onClick={handleRowClick}
+            onClick={interactive ? handleRowClick : undefined}
             onKeyDown={(event) => {
-                if (isEditing || !onClick) {
+                if (!interactive || isEditing || !onClick) {
                     return;
                 }
 
@@ -63,7 +73,7 @@ const TableRowComponent = <RowType,>({
                     onClick();
                 }
             }}
-            tabIndex={isEditing || !onClick ? undefined : 0}
+            tabIndex={interactive && !isEditing && onClick ? 0 : undefined}
             aria-selected={isSelected}
         >
             {isEditing && (

@@ -1,14 +1,14 @@
 import {
     IMPORT_ROW_ACTIONS,
     IMPORT_SHEET_KIND_LABELS,
-    VEHICLE_TYPE_LABELS,
+    getImportRowOutcome,
     type ImportPreviewRow,
     type ImportRowAction,
+    type ImportRowOutcome,
     type ImportSheetKind,
 } from "@fleet-live/shared";
 
 import type { TableColumn } from "../../types/table";
-import { vehicleStatusLabel } from "./vehicleStatus";
 import styles from "./importPreviewConfig.module.scss";
 
 const ROW_ACTION_LABELS: Record<ImportRowAction, string> = {
@@ -19,26 +19,118 @@ const ROW_ACTION_LABELS: Record<ImportRowAction, string> = {
 
 export type ImportPreviewTableRow = ImportPreviewRow & {
     action: ImportRowAction;
+    outcome: ImportRowOutcome;
 };
 
-export const importPreviewColumns = (
-    kind: ImportSheetKind,
-    onActionChange: (row: ImportPreviewTableRow, action: ImportRowAction) => void,
-): TableColumn<ImportPreviewTableRow>[] => {
-    const actionColumn: TableColumn<ImportPreviewTableRow> = {
+export function previewTableRow(
+    row: ImportPreviewRow,
+    action: ImportRowAction,
+): ImportPreviewTableRow {
+    return {
+        ...row,
+        action,
+        outcome: getImportRowOutcome(row, action),
+    };
+}
+
+function deferredTripHint(message: string): string {
+    const plateMatch = message.match(/unterwegs auf\s+(.+?)(?:\.|$)/);
+    if (plateMatch?.[1]) {
+        return `Noch unterwegs auf ${plateMatch[1].trim()}`;
+    }
+
+    return "Noch unterwegs";
+}
+
+function StatusCell({ outcome }: { outcome: ImportRowOutcome }) {
+    if (outcome.status === "blocked") {
+        return (
+            <div className={styles.statusCell}>
+                <span className={`${styles.statusPill} ${styles.statusPillError}`}>
+                    Fehler
+                </span>
+                <span className={styles.statusSub}>{outcome.issue.message}</span>
+            </div>
+        );
+    }
+
+    if (outcome.status === "deferred") {
+        return (
+            <div className={styles.statusCell}>
+                <span
+                    className={`${styles.statusPill} ${styles.statusPillCaution}`}
+                >
+                    Manuell später
+                </span>
+                <span className={styles.statusSub}>
+                    {deferredTripHint(outcome.issue.message)}
+                </span>
+            </div>
+        );
+    }
+
+    if (outcome.status === "ready") {
+        return (
+            <div className={styles.statusCell}>
+                <span className={`${styles.statusPill} ${styles.statusPillReady}`}>
+                    Übernehmen
+                </span>
+            </div>
+        );
+    }
+
+    return (
+        <div className={styles.statusCell}>
+            <span className={`${styles.statusPill} ${styles.statusPillMuted}`}>
+                Schon da
+            </span>
+        </div>
+    );
+}
+
+export const unifiedImportPreviewColumns = (
+    onActionChange: (
+        row: ImportPreviewTableRow,
+        action: ImportRowAction,
+    ) => void,
+): TableColumn<ImportPreviewTableRow>[] => [
+    {
+        key: "sheet_kind",
+        displayText: "Blatt",
+        render: (value: ImportSheetKind) => IMPORT_SHEET_KIND_LABELS[value],
+    },
+    {
+        key: "row_index",
+        displayText: "Zeile",
+    },
+    {
+        key: "driver_name",
+        displayText: "Fahrer",
+        render: (value) =>
+            value ? <span className={styles.driverName}>{value}</span> : "",
+    },
+    {
+        key: "license_plate",
+        displayText: "Kennzeichen",
+        render: (value) => value ?? "",
+    },
+    {
+        key: "outcome",
+        displayText: "Status",
+        render: (value) => <StatusCell outcome={value} />,
+    },
+    {
         key: "action",
         displayText: "Aktion",
         render: (value, { row }) => {
-            const hasError = row.issues.some(
-                (issue) => issue.level === "error",
-            );
+            const blocked = row.outcome.status === "blocked";
 
             return (
                 <select
                     className={styles.select}
                     value={value}
-                    disabled={hasError}
-                    aria-label={`Aktion für ${IMPORT_SHEET_KIND_LABELS[kind]} Zeile ${row.row_index}`}
+                    disabled={blocked}
+                    aria-label={`Aktion für ${IMPORT_SHEET_KIND_LABELS[row.sheet_kind]} Zeile ${row.row_index}`}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => {
                         onActionChange(
@@ -55,125 +147,5 @@ export const importPreviewColumns = (
                 </select>
             );
         },
-    };
-
-    const issuesColumn: TableColumn<ImportPreviewTableRow> = {
-        key: "issues",
-        displayText: "Hinweise",
-        render: (value) =>
-            value.length === 0 ? (
-                "—"
-            ) : (
-                <div className={styles.issues}>
-                    {value.map((issue) => (
-                        <p
-                            key={`${issue.code}-${issue.message}`}
-                            className={
-                                issue.level === "error"
-                                    ? styles.issueError
-                                    : styles.issueWarning
-                            }
-                        >
-                            {issue.message}
-                        </p>
-                    ))}
-                </div>
-            ),
-    };
-
-    const indexColumn: TableColumn<ImportPreviewTableRow> = {
-        key: "row_index",
-        displayText: "Zeile",
-    };
-
-    if (kind === "drivers") {
-        return [
-            indexColumn,
-            {
-                key: "driver_name",
-                displayText: "Fahrer",
-                render: (value) => value ?? "—",
-            },
-            {
-                key: "phone",
-                displayText: "Telefon",
-                render: (value) => value ?? "—",
-            },
-            actionColumn,
-            issuesColumn,
-        ];
-    }
-
-    if (kind === "eligibility" || kind === "current") {
-        return [
-            indexColumn,
-            {
-                key: "license_plate",
-                displayText: "Kennzeichen",
-                render: (value) => value ?? "—",
-            },
-            {
-                key: "driver_name",
-                displayText: "Fahrer",
-                render: (value) => value ?? "—",
-            },
-            actionColumn,
-            issuesColumn,
-        ];
-    }
-
-    return [
-        indexColumn,
-        {
-            key: "license_plate",
-            displayText: "Kennzeichen",
-            render: (value) => value ?? "—",
-        },
-        {
-            key: "vin",
-            displayText: "VIN",
-            render: (value) => value ?? "—",
-        },
-        {
-            key: "vehicle_type",
-            displayText: "Typ",
-            render: (value) =>
-                value ? VEHICLE_TYPE_LABELS[value] : "—",
-        },
-        {
-            key: "depot",
-            displayText: "Standort",
-            render: (value) => value ?? "—",
-        },
-        {
-            key: "hu_due_on",
-            displayText: "HU",
-            render: (value) => value ?? "—",
-        },
-        {
-            key: "cost_center",
-            displayText: "KSt",
-            render: (value) => value ?? "—",
-        },
-        {
-            key: "fuel_level",
-            displayText: "Tank",
-            render: (value) =>
-                value === null ? "100 % (Standard)" : `${value} %`,
-        },
-        {
-            key: "status",
-            displayText: "Status",
-            render: (value) =>
-                value ? vehicleStatusLabel(value) : "Standby (Standard)",
-        },
-        {
-            key: "driver_name",
-            displayText: "Fahrer",
-            render: (value) => value ?? "—",
-        },
-        actionColumn,
-        issuesColumn,
-    ];
-};
-
+    },
+];
