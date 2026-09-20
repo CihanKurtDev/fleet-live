@@ -5,8 +5,11 @@ import type {
     ImportMappingProfile,
     ImportPreviewCounts,
     ImportPreviewInput,
+    ImportPreviewOutcome,
     ImportPreviewResponse,
     ImportPreviewRow,
+    ImportPreviewRowsQuery,
+    ImportPreviewRowsResponse,
     ImportPreviewSheet,
     ImportProfileInput,
     ImportRowAction,
@@ -26,14 +29,19 @@ import {
     DRIVER_PHONE_MAX,
     FUEL_LEVEL_MAX,
     FUEL_LEVEL_MIN,
+    IMPORT_MAX_DATA_ROWS,
     importActionKey,
     IMPORT_SHEET_KIND_LABELS,
+    isAlreadyThereRow,
     isVehicleStatus,
     LICENSE_PLATE_MAX,
     normalizeVin,
     parseHuDate,
     parseImportProfileInput,
     parseVehicleType,
+    getImportRowOutcome,
+    rowSubject,
+    summarizeImportOutcomes,
     VEHICLE_STATUSES,
     VEHICLE_TYPE_LABELS,
     VIN_LENGTH,
@@ -49,8 +57,13 @@ import { tablesFromImportInput } from "../lib/importSource";
 import {
     deleteImportPreview,
     getImportPreview,
+    patchImportPreviewActions,
     saveImportPreview,
 } from "../lib/importPreviewStore";
+import {
+    loadCompanyImportLookup,
+    type CompanyImportLookup,
+} from "../lib/importCompanyLookup";
 import { DriverModel } from "./driver.model";
 import { VehicleModel } from "./vehicle.model";
 import { stmt } from "../db/statements";
@@ -60,6 +73,7 @@ import { TripModel } from "./trip.model";
 import { TelemetryModel } from "./telemetry.model";
 import { SpeedingEventModel } from "./speedingEvent.model";
 import {
+    BadRequestError,
     ConflictError,
     NotFoundError,
     isUniqueConstraintError,
@@ -176,6 +190,24 @@ function findDriverId(
     ).get(companyId, name) as { id: number } | undefined;
 
     return row?.id;
+}
+
+function findDrivingCurrentForDriver(
+    companyId: number,
+    driverId: number,
+): { id: number; license_plate: string } | undefined {
+    return stmt(
+        `
+        SELECT id, license_plate
+        FROM vehicles
+        WHERE company_id = ?
+          AND current_driver_id = ?
+          AND status = 'DRIVING'
+        LIMIT 1
+        `,
+    ).get(companyId, driverId) as
+        | { id: number; license_plate: string }
+        | undefined;
 }
 
 function driverExists(companyId: number, name: string): boolean {
@@ -474,6 +506,20 @@ function emptyCounts(): ImportPreviewCounts {
     };
 }
 
+function emptyOutcome(): ImportPreviewOutcome {
+    return {
+        ready_count: 0,
+        already_there_count: 0,
+        deferred_count: 0,
+        blocked_count: 0,
+        skipped_count: 0,
+        deferred_examples: [],
+        blocked_examples: [],
+        can_commit: false,
+        disable_reason: "all_skipped",
+    };
+}
+
 function emptyPreview(): ImportPreviewResponse {
     return {
         preview_id: "",
@@ -481,10 +527,29 @@ function emptyPreview(): ImportPreviewResponse {
         columns: [],
         suggested_mapping: {},
         unmapped_status_values: [],
-        rows: [],
         counts: emptyCounts(),
-        can_commit: false,
+        outcome: emptyOutcome(),
+        total_rows: 0,
         profile_applied: false,
+    };
+}
+
+/** Maps internal camelCase summary → API ImportPreviewOutcome. */
+function outcomeFromSummary(
+    summary: ReturnType<typeof summarizeImportOutcomes>,
+): ImportPreviewOutcome {
+    return {
+        ready_count: summary.readyCount,
+        already_there_count: summary.alreadyThereCount,
+        deferred_count: summary.deferredCount,
+        blocked_count: summary.blockedCount,
+        skipped_count: summary.skippedCount,
+        deferred_examples: summary.deferredRows.map(({ row }) =>
+            rowSubject(row),
+        ),
+        blocked_examples: summary.blockedRows.map(({ row }) => rowSubject(row)),
+        can_commit: summary.canCommit,
+        disable_reason: summary.disableReason,
     };
 }
 
@@ -497,7 +562,7 @@ function withKind(
 
 function buildVehiclePreviewRows(
     parsedRows: ParsedImportRow[],
-    companyId: number,
+    lookup: CompanyImportLookup,
 ): ImportPreviewRow[] {
     const platesInFile = new Map<string, number[]>();
     const vinsInFile = new Map<string, number[]>();
@@ -546,16 +611,15 @@ function buildVehiclePreviewRows(
                 });
                 defaultAction = "skip";
             } else {
-                const existingId = findVehicleIdByPlate(
-                    companyId,
-                    row.license_plate,
+                const existingId = lookup.plateToId.get(
+                    row.license_plate.toLowerCase(),
                 );
                 if (existingId !== undefined) {
                     defaultAction = "skip";
                     issues.push({
                         level: "warning",
                         code: "EXISTING_PLATE",
-                        message: `Kennzeichen ${row.license_plate} existiert bereits — standardmäßig überspringen.`,
+                        message: `Kennzeichen ${row.license_plate} existiert bereits und wird standardmäßig übersprungen.`,
                     });
                 }
             }
@@ -578,9 +642,9 @@ function buildVehiclePreviewRows(
                 });
                 defaultAction = "skip";
             } else {
-                const vinOwner = findVehicleIdByVin(companyId, row.vin);
+                const vinOwner = lookup.vinToId.get(row.vin);
                 const plateOwner = row.license_plate
-                    ? findVehicleIdByPlate(companyId, row.license_plate)
+                    ? lookup.plateToId.get(row.license_plate.toLowerCase())
                     : undefined;
                 if (
                     vinOwner !== undefined &&
@@ -636,7 +700,8 @@ function buildVehiclePreviewRows(
             issues.push({
                 level: "warning",
                 code: "DRIVING_STATUS",
-                message: "Status DRIVING öffnet eine Fahrt — für den Import IDLE empfohlen.",
+                message:
+                    "Status DRIVING öffnet eine Fahrt. Für den Import ist IDLE empfohlen.",
             });
         }
 
@@ -660,7 +725,7 @@ function buildVehiclePreviewRows(
 
 function buildDriverPreviewRows(
     parsedRows: ParsedImportRow[],
-    companyId: number,
+    lookup: CompanyImportLookup,
 ): ImportPreviewRow[] {
     const namesInFile = new Map<string, number[]>();
 
@@ -703,12 +768,12 @@ function buildDriverPreviewRows(
                     message: `Fahrer ${row.driver_name} kommt mehrfach in der Datei vor.`,
                 });
                 defaultAction = "skip";
-            } else if (driverExists(companyId, row.driver_name)) {
+            } else if (lookup.driverNameToId.has(row.driver_name)) {
                 defaultAction = "skip";
                 issues.push({
                     level: "warning",
                     code: "EXISTING_DRIVER",
-                    message: `Fahrer ${row.driver_name} existiert bereits — standardmäßig überspringen.`,
+                    message: `Fahrer ${row.driver_name} existiert bereits und wird standardmäßig übersprungen.`,
                 });
             }
         }
@@ -779,30 +844,30 @@ function knownNames(
 }
 
 function plateKnown(
-    companyId: number,
+    lookup: CompanyImportLookup,
     plate: string,
     filePlates: Set<string>,
 ): boolean {
     return (
         filePlates.has(plate.toLowerCase()) ||
-        findVehicleIdByPlate(companyId, plate) !== undefined
+        lookup.plateToId.has(plate.toLowerCase())
     );
 }
 
 function nameKnown(
-    companyId: number,
+    lookup: CompanyImportLookup,
     name: string,
     fileNames: Set<string>,
 ): boolean {
     return (
-        fileNames.has(name.toLowerCase()) || driverExists(companyId, name)
+        fileNames.has(name.toLowerCase()) || lookup.driverNameToId.has(name)
     );
 }
 
 function buildLinkPreviewRows(
     kind: "eligibility" | "current",
     parsedRows: ParsedImportRow[],
-    companyId: number,
+    lookup: CompanyImportLookup,
     filePlates: Set<string>,
     fileNames: Set<string>,
 ): ImportPreviewRow[] {
@@ -888,22 +953,22 @@ function buildLinkPreviewRows(
         }
 
         if (row.license_plate && defaultAction !== "skip") {
-            if (!plateKnown(companyId, row.license_plate, filePlates)) {
+            if (!plateKnown(lookup, row.license_plate, filePlates)) {
                 issues.push({
                     level: "error",
                     code: "UNKNOWN_PLATE",
-                    message: `Kennzeichen ${row.license_plate} ist unbekannt — weder in der Datei noch im Bestand.`,
+                    message: `Kennzeichen ${row.license_plate} ist unbekannt: weder in der Datei noch im Bestand.`,
                 });
                 defaultAction = "skip";
             }
         }
 
         if (row.driver_name && defaultAction !== "skip") {
-            if (!nameKnown(companyId, row.driver_name, fileNames)) {
+            if (!nameKnown(lookup, row.driver_name, fileNames)) {
                 issues.push({
                     level: "error",
                     code: "UNKNOWN_DRIVER",
-                    message: `Fahrer ${row.driver_name} ist unbekannt — weder in der Datei noch im Bestand.`,
+                    message: `Fahrer ${row.driver_name} ist unbekannt: weder in der Datei noch im Bestand.`,
                 });
                 defaultAction = "skip";
             }
@@ -914,7 +979,9 @@ function buildLinkPreviewRows(
             row.driver_name &&
             row.license_plate &&
             defaultAction !== "skip" &&
-            eligibilityExists(companyId, row.driver_name, row.license_plate)
+            lookup.eligibility.has(
+                `${row.driver_name.toLowerCase()}|${row.license_plate.toLowerCase()}`,
+            )
         ) {
             defaultAction = "skip";
             issues.push({
@@ -930,28 +997,43 @@ function buildLinkPreviewRows(
             row.license_plate &&
             defaultAction !== "skip"
         ) {
-            const vehicleId = findVehicleIdByPlate(
-                companyId,
-                row.license_plate,
+            const vehicleId = lookup.plateToId.get(
+                row.license_plate.toLowerCase(),
             );
-            const driverId = findDriverId(companyId, row.driver_name);
-            if (vehicleId !== undefined && driverId !== undefined) {
-                const current = stmt(
-                    `
-                    SELECT current_driver_id FROM vehicles
-                    WHERE id = ? AND company_id = ?
-                    `,
-                ).get(vehicleId, companyId) as
-                    | { current_driver_id: number | null }
-                    | undefined;
+            const driverId = lookup.driverNameToId.get(row.driver_name);
+            if (driverId !== undefined) {
+                const onTrip = lookup.drivingByDriverId.get(driverId);
 
-                if (current?.current_driver_id === driverId) {
+                if (
+                    onTrip &&
+                    onTrip.license_plate.toLowerCase() ===
+                        row.license_plate.toLowerCase()
+                ) {
                     defaultAction = "skip";
                     issues.push({
                         level: "warning",
                         code: "ALREADY_CURRENT",
                         message: `${row.driver_name} ist bereits aktuell auf ${row.license_plate}.`,
                     });
+                } else if (onTrip) {
+                    defaultAction = "skip";
+                    issues.push({
+                        level: "warning",
+                        code: "DRIVER_ON_TRIP",
+                        message: `${row.driver_name} ist noch unterwegs auf ${onTrip.license_plate}. Aktuelles Fahrzeug wird übersprungen (erst nach der Fahrt wechseln).`,
+                    });
+                } else if (vehicleId !== undefined) {
+                    const currentDriverId =
+                        lookup.vehicleCurrentDriverId.get(vehicleId) ?? null;
+
+                    if (currentDriverId === driverId) {
+                        defaultAction = "skip";
+                        issues.push({
+                            level: "warning",
+                            code: "ALREADY_CURRENT",
+                            message: `${row.driver_name} ist bereits aktuell auf ${row.license_plate}.`,
+                        });
+                    }
                 }
             }
         }
@@ -1179,13 +1261,14 @@ export class ImportModel {
             });
         }
 
+        const lookup = loadCompanyImportLookup(companyId);
         const vehicleParsed = parsedByKind.get("vehicles");
         const driverParsed = parsedByKind.get("drivers");
         const vehicleRows = vehicleParsed
-            ? buildVehiclePreviewRows(vehicleParsed.parsed, companyId)
+            ? buildVehiclePreviewRows(vehicleParsed.parsed, lookup)
             : [];
         const driverRows = driverParsed
-            ? buildDriverPreviewRows(driverParsed.parsed, companyId)
+            ? buildDriverPreviewRows(driverParsed.parsed, lookup)
             : [];
 
         const filePlates = knownPlates(vehicleRows);
@@ -1200,6 +1283,7 @@ export class ImportModel {
         }
 
         const sheets: ImportPreviewSheet[] = [];
+        const allRows: ImportPreviewRow[] = [];
 
         for (const kind of COMMIT_ORDER) {
             const parsed = parsedByKind.get(kind);
@@ -1216,30 +1300,35 @@ export class ImportModel {
                 rows = buildLinkPreviewRows(
                     kind,
                     parsed.parsed,
-                    companyId,
+                    lookup,
                     filePlates,
                     fileNames,
                 );
             }
 
+            allRows.push(...rows);
             sheets.push({
                 kind,
                 name: parsed.name,
                 columns: parsed.table.columns,
                 suggested_mapping: parsed.mapping,
                 unmapped_status_values: parsed.unmapped,
-                rows,
                 counts: countPreview(rows),
             });
         }
 
-        const rows = sheets.flatMap((sheet) => sheet.rows);
-        const counts = sumCounts(sheets);
-        const canCommit =
-            counts.errors === 0 &&
-            counts.to_create + counts.to_update > 0;
+        if (allRows.length > IMPORT_MAX_DATA_ROWS) {
+            throw new BadRequestError(
+                `Die Datei hat ${allRows.length.toLocaleString("de-DE")} Zeilen. Maximal ${IMPORT_MAX_DATA_ROWS.toLocaleString("de-DE")} sind erlaubt.`,
+            );
+        }
 
-        const primary = sheets.find((sheet) => sheet.kind === "vehicles") ?? sheets[0];
+        const counts = sumCounts(sheets);
+        const outcomeSummary = summarizeImportOutcomes(allRows, {});
+        const outcome = outcomeFromSummary(outcomeSummary);
+
+        const primary =
+            sheets.find((sheet) => sheet.kind === "vehicles") ?? sheets[0];
         const sheetMappings: ImportSheetMappings = {};
         for (const [kind, parsed] of parsedByKind) {
             sheetMappings[kind] = parsed.mapping;
@@ -1249,7 +1338,7 @@ export class ImportModel {
             companyId,
             userId,
             source: input.xlsx ? "xlsx" : "csv",
-            rows,
+            rows: allRows,
             sheetMappings,
             columnMapping: primary?.suggested_mapping ?? {},
             statusMapping: {
@@ -1267,11 +1356,157 @@ export class ImportModel {
             columns: primary?.columns ?? [],
             suggested_mapping: primary?.suggested_mapping ?? {},
             unmapped_status_values: primary?.unmapped_status_values ?? [],
-            rows,
             counts,
-            can_commit: canCommit,
+            outcome,
+            total_rows: allRows.length,
             profile_applied: profileApplied,
         };
+    }
+
+    /**
+     * Facetten: `sheet_counts` nach Suche `q`, vor Sheet-Filter.
+     * `status_counts` nach Sheet-Filter. Skip ohne „already“ nur unter status=all.
+     * Aktionen kommen aus dem Preview-Store (vorher PATCH /actions).
+     */
+    static listRows(
+        previewId: string,
+        companyId: number,
+        query: ImportPreviewRowsQuery,
+    ): ImportPreviewRowsResponse {
+        const stored = getImportPreview(previewId, companyId);
+        if (!stored) {
+            throw new NotFoundError("Import-Vorschau nicht gefunden.");
+        }
+
+        const actions = stored.rowActions;
+        const sheetCounts: Partial<Record<ImportSheetKind, number>> = {};
+        const statusCounts: ImportPreviewRowsResponse["meta"]["status_counts"] =
+            {
+                all: 0,
+                ready: 0,
+                already: 0,
+                deferred: 0,
+                blocked: 0,
+            };
+
+        const q = query.q.trim().toLowerCase();
+        const matched: ImportPreviewRow[] = [];
+
+        for (const row of stored.rows) {
+            const searchOk =
+                !q ||
+                (row.driver_name?.toLowerCase().includes(q) ?? false) ||
+                (row.license_plate?.toLowerCase().includes(q) ?? false);
+            if (!searchOk) {
+                continue;
+            }
+
+            sheetCounts[row.sheet_kind] =
+                (sheetCounts[row.sheet_kind] ?? 0) + 1;
+
+            const sheetOk =
+                !query.sheet_kind || row.sheet_kind === query.sheet_kind;
+            if (!sheetOk) {
+                continue;
+            }
+
+            const action = resolveAction(row, actions);
+            const outcome = getImportRowOutcome(row, action);
+
+            let statusKey: keyof typeof statusCounts | null = null;
+            if (outcome.status === "blocked") {
+                statusKey = "blocked";
+            } else if (outcome.status === "deferred") {
+                statusKey = "deferred";
+            } else if (outcome.status === "ready") {
+                statusKey = "ready";
+            } else if (isAlreadyThereRow(row)) {
+                statusKey = "already";
+            }
+
+            statusCounts.all += 1;
+            if (statusKey) {
+                statusCounts[statusKey] += 1;
+            }
+
+            const statusOk =
+                query.status === "all" ||
+                (statusKey !== null && query.status === statusKey);
+
+            if (statusOk) {
+                matched.push(row);
+            }
+        }
+
+        const offset = (query.page - 1) * query.limit;
+        const pageRows = matched.slice(offset, offset + query.limit).map((row) => ({
+            ...row,
+            action: resolveAction(row, actions),
+        }));
+
+        return {
+            data: pageRows,
+            meta: {
+                total: matched.length,
+                page: query.page,
+                limit: query.limit,
+                sheet_counts: sheetCounts,
+                status_counts: statusCounts,
+            },
+        };
+    }
+
+    static patchActions(
+        previewId: string,
+        companyId: number,
+        rowActions: Record<string, ImportRowAction>,
+    ): ImportPreviewOutcome {
+        const stored = patchImportPreviewActions(
+            previewId,
+            companyId,
+            rowActions,
+        );
+        if (!stored) {
+            throw new NotFoundError("Import-Vorschau nicht gefunden.");
+        }
+
+        return outcomeFromSummary(
+            summarizeImportOutcomes(stored.rows, stored.rowActions),
+        );
+    }
+
+    static markExistingUpdate(
+        previewId: string,
+        companyId: number,
+    ): ImportPreviewOutcome {
+        const stored = getImportPreview(previewId, companyId);
+        if (!stored) {
+            throw new NotFoundError("Import-Vorschau nicht gefunden.");
+        }
+
+        const next: Record<string, ImportRowAction> = {
+            ...stored.rowActions,
+        };
+
+        for (const row of stored.rows) {
+            if (!isAlreadyThereRow(row)) {
+                continue;
+            }
+
+            const key = importActionKey(row.sheet_kind, row.row_index);
+            const action = resolveAction(row, next);
+            const outcome = getImportRowOutcome(row, action);
+            if (
+                outcome.status === "blocked" ||
+                outcome.status === "deferred"
+            ) {
+                continue;
+            }
+
+            next[key] = "update";
+        }
+
+        return ImportModel.patchActions(previewId, companyId, next);
     }
 
     static commit(
@@ -1285,6 +1520,11 @@ export class ImportModel {
         if (!stored) {
             throw new NotFoundError("Import-Vorschau nicht gefunden.");
         }
+
+        const mergedActions = {
+            ...stored.rowActions,
+            ...rowActionsInput,
+        };
 
         const hasCurrentSheet = stored.rows.some(
             (row) => row.sheet_kind === "current",
@@ -1321,7 +1561,7 @@ export class ImportModel {
                             continue;
                         }
 
-                        const action = resolveAction(row, rowActionsInput);
+                        const action = resolveAction(row, mergedActions);
                         const hasError = row.issues.some(
                             (issue) => issue.level === "error",
                         );
@@ -1525,7 +1765,7 @@ export class ImportModel {
                                 missingVehicleMessage(
                                     row.license_plate,
                                     stored.rows,
-                                    rowActionsInput,
+                                    mergedActions,
                                 ),
                             );
                         }
@@ -1553,12 +1793,25 @@ export class ImportModel {
                             continue;
                         }
 
-                        DriverModel.setCurrentVehicle(
-                            driverId,
-                            vehicleId,
-                            companyId,
-                        );
-                        result.set_current += 1;
+                        try {
+                            DriverModel.setCurrentVehicle(
+                                driverId,
+                                vehicleId,
+                                companyId,
+                            );
+                            result.set_current += 1;
+                        } catch (error) {
+                            if (!(error instanceof ConflictError)) {
+                                throw error;
+                            }
+
+                            // Stammdaten ja, Besatzung mid-trip nein; restlicher Import bleibt.
+                            result.failed_rows += 1;
+                            result.errors.push({
+                                row_index: row.row_index,
+                                message: `${IMPORT_SHEET_KIND_LABELS.current}, Zeile ${row.row_index}: ${error.message}`,
+                            });
+                        }
                     }
                 }
 

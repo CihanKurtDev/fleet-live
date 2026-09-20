@@ -2,6 +2,7 @@ import "./env";
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import request from "supertest";
+import type { ImportPreviewRow } from "@fleet-live/shared";
 import { app } from "../app";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
@@ -21,6 +22,19 @@ const SAMPLE_XLSX = buildXlsx([
     ["B-XLS 101", "80", "Standby", "Anna Schmidt"],
     ["B-XLS 102", "", "Unterwegs", "Ben Müller"],
 ]).toString("base64");
+
+type TestAgent = Awaited<ReturnType<typeof loginAs>>["agent"];
+
+async function fetchPreviewRows(
+    agent: TestAgent,
+    previewId: string,
+): Promise<ImportPreviewRow[]> {
+    const response = await agent
+        .get(`/api/import/preview/${previewId}/rows`)
+        .query({ limit: 100 })
+        .expect(200);
+    return response.body.data as ImportPreviewRow[];
+}
 
 afterEach(() => {
     ImportModel.resetForTests();
@@ -43,13 +57,19 @@ describe("POST /api/import/preview", () => {
             response.body.data.suggested_mapping.Kennzeichen,
             "license_plate",
         );
-        assert.equal(response.body.data.rows.length, 2);
-        assert.equal(response.body.data.rows[0].license_plate, "B-IMP 101");
-        assert.equal(response.body.data.rows[0].status, "IDLE");
-        assert.equal(response.body.data.rows[1].status, "DRIVING");
-        assert.equal(response.body.data.rows[0].default_action, "create");
+        const rows = await fetchPreviewRows(
+            agent,
+            response.body.data.preview_id,
+        );
+        assert.equal(rows.length, 2);
+        assert.equal(rows[0].license_plate, "B-IMP 101");
+        assert.equal(rows[0].status, "IDLE");
+        assert.equal(rows[1].status, "DRIVING");
+        assert.equal(rows[0].default_action, "create");
         assert.ok(response.body.data.preview_id);
-        assert.equal(response.body.data.can_commit, true);
+        assert.equal(response.body.data.outcome.can_commit, true);
+        assert.equal(response.body.data.outcome.ready_count, 2);
+        assert.equal(response.body.data.total_rows, 2);
     });
 
     it("maps optional yard columns and commits them", async () => {
@@ -68,11 +88,12 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;KST-10
             preview.body.data.suggested_mapping.Fahrzeugtyp,
             "vehicle_type",
         );
-        assert.equal(preview.body.data.rows[0].vin, "WVWZZZ1JZXW000011");
-        assert.equal(preview.body.data.rows[0].vehicle_type, "TRUCK");
-        assert.equal(preview.body.data.rows[0].depot, "Hof Nord");
-        assert.equal(preview.body.data.rows[0].hu_due_on, "2027-06-15");
-        assert.equal(preview.body.data.rows[0].cost_center, "KST-10");
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        assert.equal(rows[0].vin, "WVWZZZ1JZXW000011");
+        assert.equal(rows[0].vehicle_type, "TRUCK");
+        assert.equal(rows[0].depot, "Hof Nord");
+        assert.equal(rows[0].hu_due_on, "2027-06-15");
+        assert.equal(rows[0].cost_center, "KST-10");
 
         const committed = await agent
             .post("/api/import/commit")
@@ -104,7 +125,7 @@ B-DUP 1;60
             .expect(200);
 
         assert.equal(response.body.data.counts.errors, 2);
-        assert.equal(response.body.data.can_commit, false);
+        assert.equal(response.body.data.outcome.can_commit, false);
     });
 
     it("defaults existing plates to skip with a warning", async () => {
@@ -119,9 +140,10 @@ B-DUP 1;60
             .send({ csv: "Kennzeichen;Tank\nB-OLD 1;40\n" })
             .expect(200);
 
-        assert.equal(response.body.data.rows[0].default_action, "skip");
+        const rows = await fetchPreviewRows(agent, response.body.data.preview_id);
+        assert.equal(rows[0].default_action, "skip");
         assert.ok(
-            response.body.data.rows[0].issues.some(
+            rows[0].issues.some(
                 (issue: { code: string }) => issue.code === "EXISTING_PLATE",
             ),
         );
@@ -149,9 +171,13 @@ B-DUP 1;60
             response.body.data.suggested_mapping.Kennzeichen,
             "license_plate",
         );
-        assert.equal(response.body.data.rows[0].license_plate, "B-XLS 101");
-        assert.equal(response.body.data.rows[1].status, "DRIVING");
-        assert.equal(response.body.data.can_commit, true);
+        const rows = await fetchPreviewRows(
+            agent,
+            response.body.data.preview_id,
+        );
+        assert.equal(rows[0].license_plate, "B-XLS 101");
+        assert.equal(rows[1].status, "DRIVING");
+        assert.equal(response.body.data.outcome.can_commit, true);
     });
 
     it("rejects preview when csv and xlsx are both sent", async () => {
@@ -223,11 +249,13 @@ B-DUP 1;60
             "eligibility",
             "current",
         ]);
-        assert.equal(response.body.data.can_commit, true);
+        assert.equal(response.body.data.outcome.can_commit, true);
+        const rows = await fetchPreviewRows(
+            agent,
+            response.body.data.preview_id,
+        );
         assert.equal(
-            response.body.data.sheets.find(
-                (sheet: { kind: string }) => sheet.kind === "vehicles",
-            ).rows[0].license_plate,
+            rows.find((row) => row.sheet_kind === "vehicles")?.license_plate,
             "B-SH 1",
         );
     });
@@ -267,7 +295,8 @@ describe("POST /api/import/commit", () => {
             .send({ csv: "Kennzeichen;Tank\nB-UPD 1;20\n" })
             .expect(200);
 
-        const rowIndex = preview.body.data.rows[0].row_index;
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        const rowIndex = rows[0].row_index;
 
         const commit = await agent
             .post("/api/import/commit")
@@ -345,7 +374,8 @@ B-TXN 2;50
             .expect(200);
         assert.equal(leaked.body.data.length, 0);
 
-        const rowTwo = preview.body.data.rows[1].row_index as number;
+        const previewRows = await fetchPreviewRows(agent, previewId);
+        const rowTwo = previewRows[1].row_index as number;
 
         const retry = await agent
             .post("/api/import/commit")
@@ -419,6 +449,90 @@ B-TXN 2;50
             .expect(200);
         assert.equal(drivers.body.data.length, 1);
         assert.equal(drivers.body.data[0].current_vehicle_plate, "B-SH 9");
+    });
+
+    it("keeps the import when a driver on trip cannot change current vehicle", async () => {
+        VehicleModel.create({
+            license_plate: "K-TRIP 1",
+            driver_name: "Nora Weber",
+            company_id: 1,
+            status: "DRIVING",
+        });
+
+        const { agent } = await loginAs(1);
+        const xlsx = buildXlsxWorkbook([
+            {
+                name: "Fahrzeuge",
+                rows: [
+                    ["Kennzeichen", "Tank", "Status"],
+                    ["B-NEW 1", "80", "Standby"],
+                ],
+            },
+            {
+                name: "Fahrer",
+                rows: [["Name"], ["Nora Weber"]],
+            },
+            {
+                name: "Eignung",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "B-NEW 1"],
+                ],
+            },
+            {
+                name: "Aktuell",
+                rows: [
+                    ["Fahrer", "Kennzeichen"],
+                    ["Nora Weber", "B-NEW 1"],
+                ],
+            },
+        ]).toString("base64");
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ xlsx })
+            .expect(200);
+
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        const currentRow = rows.find(
+            (row: { sheet_kind: string }) => row.sheet_kind === "current",
+        );
+        assert.ok(currentRow);
+        assert.equal(currentRow.default_action, "skip");
+        assert.ok(
+            currentRow.issues.some(
+                (issue: { code: string }) => issue.code === "DRIVER_ON_TRIP",
+            ),
+        );
+        assert.match(
+            currentRow.issues.find(
+                (issue: { code: string }) => issue.code === "DRIVER_ON_TRIP",
+            ).message,
+            /Nora Weber ist noch unterwegs auf K-TRIP 1/,
+        );
+
+        const forceKey = importActionKey("current", currentRow.row_index);
+        const commit = await agent
+            .post("/api/import/commit")
+            .send({
+                preview_id: preview.body.data.preview_id,
+                row_actions: { [forceKey]: "create" },
+            })
+            .expect(200);
+
+        assert.equal(commit.body.data.created_vehicles, 1);
+        assert.equal(commit.body.data.assigned_eligibility, 1);
+        assert.equal(commit.body.data.set_current, 0);
+        assert.equal(commit.body.data.failed_rows, 1);
+        assert.match(
+            commit.body.data.errors[0].message,
+            /Nora Weber ist noch unterwegs auf K-TRIP 1/,
+        );
+
+        const drivers = await agent
+            .get("/api/drivers?search=Nora")
+            .expect(200);
+        assert.equal(drivers.body.data[0].current_vehicle_plate, "K-TRIP 1");
     });
 
     it("commits the sample workbook with driving and offline statuses", async () => {
@@ -500,10 +614,11 @@ B-TXN 2;50
             .send({ xlsx })
             .expect(200);
 
-        const vehicleRow = preview.body.data.rows.find(
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        const vehicleRow = rows.find(
             (row: { sheet_kind: string }) => row.sheet_kind === "vehicles",
         );
-        const eligibilityRow = preview.body.data.rows.find(
+        const eligibilityRow = rows.find(
             (row: { sheet_kind: string }) => row.sheet_kind === "eligibility",
         );
 
@@ -520,7 +635,7 @@ B-TXN 2;50
             })
             .expect(409);
 
-        assert.match(failed.body.error, /Eignung, Zeile/i);
+        assert.match(failed.body.error, /Freigaben, Zeile/i);
         assert.match(failed.body.error, /übersprungen/i);
         assert.doesNotMatch(failed.body.error, /eligibility/i);
         assert.doesNotMatch(failed.body.error, /wurde nicht gefunden/i);
@@ -555,8 +670,9 @@ describe("import profile and log", () => {
             .expect(200);
 
         assert.equal(preview.body.data.profile_applied, true);
-        assert.equal(preview.body.data.rows[0].license_plate, "B-PRF 1");
-        assert.equal(preview.body.data.can_commit, true);
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        assert.equal(rows[0].license_plate, "B-PRF 1");
+        assert.equal(preview.body.data.outcome.can_commit, true);
     });
 
     it("does not apply another company's profile", async () => {
@@ -573,8 +689,12 @@ describe("import profile and log", () => {
             .expect(200);
 
         assert.equal(preview.body.data.profile_applied, false);
-        assert.equal(preview.body.data.rows[0].license_plate, null);
-        assert.equal(preview.body.data.can_commit, false);
+        const rows = await fetchPreviewRows(
+            companyTwo.agent,
+            preview.body.data.preview_id,
+        );
+        assert.equal(rows[0].license_plate, null);
+        assert.equal(preview.body.data.outcome.can_commit, false);
 
         const profile = await companyTwo.agent
             .get("/api/import/profile")
@@ -674,5 +794,121 @@ B-TXN 2;50
         await agent.get("/api/import/profile").expect(403);
         await agent.put("/api/import/profile").send({}).expect(403);
         await agent.get("/api/import/runs").expect(403);
+    });
+});
+
+describe("import preview rows and actions", () => {
+    it("returns slim preview without embedded sheet rows", async () => {
+        const { agent } = await loginAs(1);
+
+        const response = await agent
+            .post("/api/import/preview")
+            .send({ csv: SAMPLE_CSV })
+            .expect(200);
+
+        assert.ok(response.body.data.outcome);
+        assert.equal(response.body.data.total_rows, 2);
+        for (const sheet of response.body.data.sheets) {
+            assert.equal(sheet.rows, undefined);
+        }
+    });
+
+    it("pages and filters rows; action reflects store", async () => {
+        const { agent } = await loginAs(1);
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv: SAMPLE_CSV })
+            .expect(200);
+        const previewId = preview.body.data.preview_id as string;
+
+        const page1 = await agent
+            .get(`/api/import/preview/${previewId}/rows`)
+            .query({ page: 1, limit: 10 })
+            .expect(200);
+        assert.equal(page1.body.meta.total, 2);
+        assert.equal(page1.body.data.length, 2);
+        assert.equal(page1.body.data[0].action, "create");
+        assert.equal(page1.body.meta.status_counts.ready, 2);
+
+        const key = importActionKey("vehicles", page1.body.data[0].row_index);
+        const patched = await agent
+            .patch(`/api/import/preview/${previewId}/actions`)
+            .send({ row_actions: { [key]: "skip" } })
+            .expect(200);
+        assert.equal(patched.body.data.ready_count, 1);
+        assert.equal(patched.body.data.can_commit, true);
+
+        const ready = await agent
+            .get(`/api/import/preview/${previewId}/rows`)
+            .query({ status: "ready", limit: 50 })
+            .expect(200);
+        assert.equal(ready.body.meta.total, 1);
+        assert.equal(ready.body.data[0].action, "create");
+
+        const pageOnly = await agent
+            .get(`/api/import/preview/${previewId}/rows`)
+            .query({ page: 2, limit: 10 })
+            .expect(200);
+        assert.equal(pageOnly.body.meta.total, 2);
+        assert.equal(pageOnly.body.data.length, 0);
+    });
+
+    it("mark-existing flips Bestand rows to update", async () => {
+        const { agent } = await loginAs(1);
+        VehicleModel.create({
+            license_plate: "B-IMP 101",
+            company_id: 1,
+            fuel_level: 10,
+            status: "IDLE",
+        });
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({
+                csv: `Kennzeichen;Tank;Status
+B-IMP 101;80;Standby
+B-NEW 999;50;Standby
+`,
+            })
+            .expect(200);
+        const previewId = preview.body.data.preview_id as string;
+        assert.equal(preview.body.data.outcome.already_there_count, 1);
+        assert.equal(preview.body.data.outcome.ready_count, 1);
+
+        const marked = await agent
+            .post(`/api/import/preview/${previewId}/mark-existing`)
+            .send({})
+            .expect(200);
+        assert.equal(marked.body.data.ready_count, 2);
+        assert.equal(marked.body.data.can_commit, true);
+
+        const rows = await agent
+            .get(`/api/import/preview/${previewId}/rows`)
+            .query({ limit: 50 })
+            .expect(200);
+        const existing = rows.body.data.find(
+            (row: { license_plate: string }) =>
+                row.license_plate === "B-IMP 101",
+        );
+        assert.equal(existing.action, "update");
+    });
+
+    it("returns 404 for another company's preview id", async () => {
+        const company1 = await loginAs(1);
+        const preview = await company1.agent
+            .post("/api/import/preview")
+            .send({ csv: SAMPLE_CSV })
+            .expect(200);
+        const previewId = preview.body.data.preview_id as string;
+
+        const company2 = await loginAs(2);
+        await company2.agent
+            .get(`/api/import/preview/${previewId}/rows`)
+            .expect(404);
+        await company2.agent
+            .patch(`/api/import/preview/${previewId}/actions`)
+            .send({ row_actions: {} })
+            .expect(404);
     });
 });
