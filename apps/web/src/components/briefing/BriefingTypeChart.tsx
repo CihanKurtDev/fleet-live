@@ -151,6 +151,7 @@ export const BriefingTypeChart = ({
                 <XAxis
                     dataKey="month"
                     tick={tick}
+                    interval={1}
                     axisLine={{ stroke: theme.border }}
                     tickLine={false}
                 />

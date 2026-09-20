@@ -30,6 +30,7 @@
         flex: none;
         height: 220px;
         min-height: 220px;
+        min-width: 0;
     }
 
     .legend {
@@ -98,6 +99,7 @@
     flex: 1;
     min-height: 0;
     width: 100%;
+    min-width: 0;
 }
 
 .legend {

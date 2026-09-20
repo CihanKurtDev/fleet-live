@@ -3,7 +3,6 @@ import {
     CartesianGrid,
     ComposedChart,
     Line,
-    ReferenceDot,
     ReferenceLine,
     Tooltip,
     XAxis,
@@ -65,8 +64,6 @@ export const BriefingRateChart = ({
 }) => {
     const theme = useChartTheme();
     const tick = { fill: theme.text, fontSize: 12 } as const;
-    const last = series[series.length - 1];
-    const before = series[series.length - 2];
     const yMax = yCeiling(series.map((row) => row.rate), 12);
 
     return (
@@ -99,6 +96,7 @@ export const BriefingRateChart = ({
                 <XAxis
                     dataKey="month"
                     tick={tick}
+                    interval={1}
                     axisLine={{ stroke: theme.border }}
                     tickLine={false}
                 />
@@ -118,12 +116,6 @@ export const BriefingRateChart = ({
                     y={baseline}
                     stroke={theme.text}
                     strokeDasharray="3 5"
-                    label={{
-                        value: `Schnitt Vormonate ${baseline}%`,
-                        position: "insideTopLeft",
-                        fill: theme.text,
-                        fontSize: 11,
-                    }}
                 />
                 <Area
                     type="monotone"
@@ -149,32 +141,6 @@ export const BriefingRateChart = ({
                     }}
                     isAnimationActive={false}
                 />
-                {before ? (
-                    <ReferenceDot
-                        x={before.month}
-                        y={before.rate}
-                        r={0}
-                        label={{
-                            value: `${before.verstoss} / ${before.aktiveFahrer}`,
-                            position: "top",
-                            fill: theme.text,
-                            fontSize: 11,
-                        }}
-                    />
-                ) : null}
-                {last ? (
-                    <ReferenceDot
-                        x={last.month}
-                        y={last.rate}
-                        r={0}
-                        label={{
-                            value: `${last.verstoss} / ${last.aktiveFahrer}`,
-                            position: "top",
-                            fill: CHART_SERIES.speeding,
-                            fontSize: 11,
-                        }}
-                    />
-                ) : null}
             </ComposedChart>
         </ChartCard>
     );

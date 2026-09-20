@@ -117,6 +117,7 @@ export const BriefingKmChart = ({
                 <XAxis
                     dataKey="month"
                     tick={tick}
+                    interval={1}
                     axisLine={{ stroke: theme.border }}
                     tickLine={false}
                 />
@@ -148,12 +149,6 @@ export const BriefingKmChart = ({
                         yAxisId="left"
                         stroke={theme.border}
                         strokeDasharray="3 5"
-                        label={{
-                            value: "km erst ab hier",
-                            position: "insideTopLeft",
-                            fill: theme.text,
-                            fontSize: 11,
-                        }}
                     />
                 ) : null}
                 <Bar
