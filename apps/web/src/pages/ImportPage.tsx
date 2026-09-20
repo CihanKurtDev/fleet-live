@@ -857,6 +857,25 @@ export const ImportPage = () => {
             {step === "result" && commitSummary && (
                 <section className={layout.panel}>
                     <h2 className={layout.panelTitle}>Ergebnis</h2>
+                    <div
+                        className={
+                            commitSummary.errors.length > 0
+                                ? `${styles.resultBanner} ${styles.resultBannerCaution}`
+                                : `${styles.resultBanner} ${styles.resultBannerSuccess}`
+                        }
+                        role="status"
+                    >
+                        <strong>
+                            {commitSummary.errors.length > 0
+                                ? "Import teilweise abgeschlossen"
+                                : "Import erfolgreich abgeschlossen"}
+                        </strong>
+                        <span>
+                            {commitSummary.failed_rows > 0
+                                ? `${commitSummary.failed_rows.toLocaleString("de-DE")} Zeilen brauchen noch Aufmerksamkeit. Die übrigen Daten wurden übernommen.`
+                                : "Die übernommenen Daten stehen jetzt in Fahrzeugen, Fahrern und Zuordnungen zur Verfügung."}
+                        </span>
+                    </div>
                     <dl className={layout.facts}>
                         <div>
                             <dt>Fahrzeuge angelegt</dt>

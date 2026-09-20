@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 
 import { DriverAssignmentPanel } from "../components/drivers/DriverAssignmentPanel";
 import { DriverEditForm } from "../components/drivers/DriverEditForm";
+import { DriverWarningCell } from "../components/drivers/DriverTableCells";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { Button } from "../components/ui/Button/Button";
 import { Modal } from "../components/ui/Modal/Modal";
@@ -63,16 +64,10 @@ export const DriverDetailPage = () => {
                 <div>
                     <h1 className={styles.title}>{driver.name}</h1>
                     <p className={styles.openCount}>
+                        <DriverWarningCell driver={driver} />
                         {driver.open_warnings > 0 ? (
-                            <Link to={openInboxHref}>
-                                {driver.open_warnings}{" "}
-                                {driver.open_warnings === 1
-                                    ? "offene Warnung"
-                                    : "offene Warnungen"}
-                            </Link>
-                        ) : (
-                            "Keine offenen Warnungen"
-                        )}
+                            <Link to={openInboxHref}>Inbox öffnen</Link>
+                        ) : null}
                     </p>
                     <p className={styles.openCount}>
                         Telefon: {driver.phone ?? "—"}

@@ -185,7 +185,7 @@
 
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     margin: 0;
     padding: 8px 10px;
 
@@ -197,6 +197,21 @@
     font-size: 11px;
     line-height: 1.3;
     box-shadow: none;
+}
+
+.legendTitle {
+    color: var(--text-h);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.legendList {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 
     li {
         display: flex;
@@ -211,4 +226,18 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
+}
+
+.legendCount {
+    min-width: 1.5em;
+    margin-left: auto;
+    color: var(--text-h);
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    text-align: right;
+}
+
+.legendHint {
+    color: var(--text);
+    font-size: 10px;
 }

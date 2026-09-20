@@ -30,7 +30,7 @@
 .error {
     flex-shrink: 0;
     margin: 8px 0 0;
-    color: var(--danger, #b42318);
+    color: var(--danger);
     font-size: 14px;
 }
 
@@ -40,4 +40,3 @@
     color: var(--text);
     font-size: 13px;
 }
-

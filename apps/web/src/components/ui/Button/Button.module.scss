@@ -22,7 +22,7 @@
 
     &:focus-visible {
         outline: none;
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 38%, transparent);
     }
 
     &:active:not(:disabled) {
@@ -38,7 +38,7 @@
 
 .primary {
     background: var(--accent);
-    color: #fff;
+    color: var(--bg);
 
     &:hover:not(:disabled) {
         filter: brightness(0.95);
@@ -46,7 +46,7 @@
 }
 
 .secondary {
-    background: var(--bg);
+    background: var(--surface);
     color: var(--text-h);
     border-color: var(--border);
 
@@ -61,13 +61,13 @@
 
     &:hover:not(:disabled) {
         background: var(--accent-bg);
-        color: var(--text-h);
+        color: var(--accent);
     }
 }
 
 .danger {
     background: var(--danger);
-    color: #fff;
+    color: var(--bg);
 
     &:hover:not(:disabled) {
         filter: brightness(0.95);

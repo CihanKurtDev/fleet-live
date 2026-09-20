@@ -57,6 +57,13 @@ export const FleetMap = ({
     onBoundsChange,
     onSelect,
 }: FleetMapProps) => {
+    const vehiclesByStatus = vehicles.reduce<Partial<Record<VehicleStatus, number>>>(
+        (counts, vehicle) => {
+            counts[vehicle.status] = (counts[vehicle.status] ?? 0) + 1;
+            return counts;
+        },
+        {},
+    );
     const containerRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<L.Map | null>(null);
     const canvasRef = useRef<L.Canvas | null>(null);
@@ -214,7 +221,7 @@ export const FleetMap = ({
                 role="img"
                 aria-label="Flottenkarte mit letzten Positionen. Ein Marker öffnet das Fahrzeug."
             />
-            <MapStatusLegend />
+            <MapStatusLegend vehiclesByStatus={vehiclesByStatus} />
         </div>
     );
 };

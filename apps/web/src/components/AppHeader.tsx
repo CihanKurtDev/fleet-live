@@ -20,11 +20,29 @@ export const AppHeader = ({
                 </Link>
                 {user && (
                     <nav className={styles.nav} aria-label="Hauptnavigation">
-                        <NavLink to="/vehicles">Fahrzeuge</NavLink>
-                        <NavLink to="/fleet" aria-label="Flottenkarte">
+                        <NavLink
+                            to="/vehicles"
+                            className={({ isActive }) =>
+                                isActive ? styles.active : undefined
+                            }
+                        >
+                            Fahrzeuge
+                        </NavLink>
+                        <NavLink
+                            to="/fleet"
+                            aria-label="Flottenkarte"
+                            className={({ isActive }) =>
+                                isActive ? styles.active : undefined
+                            }
+                        >
                             Karte
                         </NavLink>
-                        <NavLink to="/alerts">
+                        <NavLink
+                            to="/alerts"
+                            className={({ isActive }) =>
+                                isActive ? styles.active : undefined
+                            }
+                        >
                             Warnungen
                             {openAlertCount !== undefined &&
                             openAlertCount > 0 ? (
@@ -33,7 +51,14 @@ export const AppHeader = ({
                                 </span>
                             ) : null}
                         </NavLink>
-                        <NavLink to="/drivers">Fahrer</NavLink>
+                        <NavLink
+                            to="/drivers"
+                            className={({ isActive }) =>
+                                isActive ? styles.active : undefined
+                            }
+                        >
+                            Fahrer
+                        </NavLink>
                     </nav>
                 )}
             </div>

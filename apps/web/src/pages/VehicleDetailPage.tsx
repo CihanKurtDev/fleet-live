@@ -16,8 +16,8 @@ import {
     type MapPoint,
 } from "../components/vehicles/VehicleMap";
 import { VehicleTripArchive } from "../components/vehicles/VehicleTripArchive";
-import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
+import { VehicleStatusChip } from "../components/vehicles/VehicleStatusChip";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Modal } from "../components/ui/Modal/Modal";
@@ -308,12 +308,7 @@ export const VehicleDetailPage = () => {
                     <h1 className={styles.title}>
                         {vehicle.license_plate}
                     </h1>
-                    <span
-                        className={styles.badge}
-                        data-status={vehicle.status}
-                    >
-                        {vehicleStatusLabel(vehicle.status)}
-                    </span>
+                    <VehicleStatusChip status={vehicle.status} />
                 </div>
 
                 {canWrite && (

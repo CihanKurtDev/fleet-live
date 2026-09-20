@@ -46,7 +46,7 @@
 
     border: 1px solid var(--border);
     border-radius: 10px;
-    background: var(--bg);
+    background: var(--surface);
     color: inherit;
     text-decoration: none;
     text-align: left;
@@ -72,9 +72,18 @@ a.kpi:hover {
     color: var(--text-h);
     font-variant-numeric: tabular-nums;
 
-    &[data-accent="true"] {
-        color: var(--accent);
-    }
+}
+
+.kpiCritical .kpiValue {
+    color: var(--danger);
+}
+
+.kpiWarning .kpiValue {
+    color: var(--warning);
+}
+
+.kpiPositive .kpiValue {
+    color: var(--success);
 }
 
 .kpiHint {

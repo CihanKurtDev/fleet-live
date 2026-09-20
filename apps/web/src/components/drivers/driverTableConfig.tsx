@@ -1,29 +1,17 @@
 import type { Driver } from "@fleet-live/shared";
 import type { TableColumn } from "../../types/table";
-import { DriverNameLink } from "./DriverNameLink";
-
-function vehicleLabel(driver: Driver): string {
-    if (driver.current_vehicle_plate) {
-        return driver.vehicle_count > 1
-            ? `${driver.current_vehicle_plate} · ${driver.vehicle_count} freigegeben`
-            : driver.current_vehicle_plate;
-    }
-
-    if (driver.vehicle_count === 0) {
-        return "—";
-    }
-
-    return `${driver.vehicle_count} Fahrzeuge`;
-}
+import {
+    DriverNameCell,
+    DriverVehicleCell,
+    DriverWarningCell,
+} from "./DriverTableCells";
 
 export const driverColumns: TableColumn<Driver>[] = [
     {
         key: "name",
         displayText: "Fahrer",
         sortable: true,
-        render: (value, { row }) => (
-            <DriverNameLink driverId={row.id} name={value} />
-        ),
+        render: (_value, { row }) => <DriverNameCell driver={row} />,
     },
     {
         key: "phone",
@@ -35,7 +23,7 @@ export const driverColumns: TableColumn<Driver>[] = [
         key: "vehicle_count",
         displayText: "Fahrzeug(e)",
         sortable: true,
-        render: (_value, { row }) => vehicleLabel(row),
+        render: (_value, { row }) => <DriverVehicleCell driver={row} />,
     },
     {
         key: "counts",
@@ -47,6 +35,6 @@ export const driverColumns: TableColumn<Driver>[] = [
         key: "open_warnings",
         displayText: "Davon offen",
         sortable: true,
-        render: (value) => `${value} offen`,
+        render: (_value, { row }) => <DriverWarningCell driver={row} />,
     },
 ];

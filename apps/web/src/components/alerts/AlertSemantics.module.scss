@@ -1,0 +1,48 @@
+.type,
+.severity {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.type[data-type="SPEEDING"] {
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+    background: color-mix(in srgb, var(--danger) 11%, var(--surface));
+    color: var(--danger);
+}
+
+.type[data-type="LOW_FUEL"] {
+    border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+    color: var(--warning);
+}
+
+.type[data-type="OFFLINE"] {
+    border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+    color: var(--danger);
+}
+
+.severity {
+    color: var(--text);
+}
+
+.severity[data-severity="HIGH"] {
+    border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+    background: color-mix(in srgb, var(--danger) 13%, var(--surface));
+    color: var(--danger);
+    font-weight: 650;
+}
+
+.severity[data-severity="MEDIUM"] {
+    border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+    background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+    color: var(--warning);
+}
+
