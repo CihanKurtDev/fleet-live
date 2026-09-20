@@ -26,6 +26,12 @@ export const driverColumns: TableColumn<Driver>[] = [
         ),
     },
     {
+        key: "phone",
+        displayText: "Telefon",
+        sortable: false,
+        render: (value) => value ?? "—",
+    },
+    {
         key: "vehicle_count",
         displayText: "Fahrzeug(e)",
         sortable: true,

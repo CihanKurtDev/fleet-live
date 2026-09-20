@@ -15,14 +15,14 @@ import { ConflictError, NotFoundError, isUniqueConstraintError } from "../lib/er
 import { pagedQuery, type SqlParam } from "../lib/pagination";
 
 const INSERT_OR_IGNORE = `
-    INSERT INTO drivers (company_id, name)
-    VALUES (?, ?)
+    INSERT INTO drivers (company_id, name, phone)
+    VALUES (?, ?, ?)
     ON CONFLICT(company_id, name) DO NOTHING
 `;
 
 const INSERT_DRIVER = `
-    INSERT INTO drivers (company_id, name)
-    VALUES (?, ?)
+    INSERT INTO drivers (company_id, name, phone)
+    VALUES (?, ?, ?)
 `;
 
 const SELECT_ID = `
@@ -30,7 +30,7 @@ const SELECT_ID = `
 `;
 
 const SELECT_ONE = `
-    SELECT id, name, created_at
+    SELECT id, name, phone, created_at
     FROM drivers
     WHERE id = ? AND company_id = ?
 `;
@@ -38,6 +38,7 @@ const SELECT_ONE = `
 type DriverRow = {
     id: number;
     name: string;
+    phone: string | null;
     created_at: string;
     vehicle_count: number;
     vehicle_plate: string | null;
@@ -73,6 +74,7 @@ function toDriver(row: DriverRow): Driver {
     return {
         id: row.id,
         name: row.name,
+        phone: row.phone,
         created_at: row.created_at,
         vehicle_count: Number(row.vehicle_count),
         vehicle_plate: row.vehicle_plate,
@@ -86,6 +88,7 @@ function toDriver(row: DriverRow): Driver {
 const AGG_SELECT = `
     d.id,
     d.name,
+    d.phone,
     d.created_at,
     (
         SELECT COUNT(*)
@@ -179,8 +182,8 @@ function mapAssigned(
 }
 
 export class DriverModel {
-    static upsert(companyId: number, name: string): number {
-        stmt(INSERT_OR_IGNORE).run(companyId, name);
+    static upsert(companyId: number, name: string, phone?: string | null): number {
+        stmt(INSERT_OR_IGNORE).run(companyId, name, phone ?? null);
         const row = stmt(SELECT_ID).get(companyId, name) as
             | { id: number }
             | undefined;
@@ -195,9 +198,10 @@ export class DriverModel {
     static create(
         companyId: number,
         name: string,
-    ): { id: number; name: string; created_at: string } {
+        phone?: string | null,
+    ): { id: number; name: string; phone: string | null; created_at: string } {
         try {
-            const result = stmt(INSERT_DRIVER).run(companyId, name);
+            const result = stmt(INSERT_DRIVER).run(companyId, name, phone ?? null);
             const created = this.getById(
                 Number(result.lastInsertRowid),
                 companyId,
@@ -223,10 +227,63 @@ export class DriverModel {
     static getById(
         id: number,
         companyId: number,
-    ): { id: number; name: string; created_at: string } | undefined {
+    ): { id: number; name: string; phone: string | null; created_at: string } | undefined {
         return stmt(SELECT_ONE).get(id, companyId) as
-            | { id: number; name: string; created_at: string }
+            | { id: number; name: string; phone: string | null; created_at: string }
             | undefined;
+    }
+
+    static update(
+        id: number,
+        companyId: number,
+        input: { name?: string; phone?: string | null },
+    ): { id: number; name: string; phone: string | null; created_at: string } {
+        const current = this.getById(id, companyId);
+        if (!current) {
+            throw new NotFoundError("Fahrer nicht gefunden.");
+        }
+
+        const name = input.name ?? current.name;
+        const phone = input.phone !== undefined ? input.phone : current.phone;
+
+        try {
+            withTransaction(() => {
+                stmt(
+                    `
+                    UPDATE drivers
+                    SET name = ?, phone = ?
+                    WHERE id = ? AND company_id = ?
+                    `,
+                ).run(name, phone, id, companyId);
+
+                if (name !== current.name) {
+                    stmt(
+                        `
+                        UPDATE vehicles
+                        SET driver_name = ?
+                        WHERE current_driver_id = ?
+                          AND company_id = ?
+                        `,
+                    ).run(name, id, companyId);
+                }
+            });
+        } catch (error) {
+            if (isUniqueConstraintError(error)) {
+                throw new ConflictError(
+                    "Ein Fahrer mit diesem Namen existiert bereits.",
+                    { name: "Ein Fahrer mit diesem Namen existiert bereits." },
+                );
+            }
+
+            throw error;
+        }
+
+        const updated = this.getById(id, companyId);
+        if (!updated) {
+            throw new NotFoundError("Fahrer nicht gefunden.");
+        }
+
+        return updated;
     }
 
     static list(query: DriverListQuery, companyId: number): DriverListResponse {
@@ -243,9 +300,13 @@ export class DriverModel {
                       AND dv.vehicle_id = ?
                   )`
                 : "";
-        const sortKey = query.sort ?? "name";
+        const sortKey = query.sort ?? "open_warnings";
         const sortColumn = SORT_SQL[sortKey];
-        const sortDirection = query.dir === "desc" ? "DESC" : "ASC";
+        const sortDirection = query.sort
+            ? query.dir === "desc"
+                ? "DESC"
+                : "ASC"
+            : "DESC";
 
         const listSql = `
             SELECT

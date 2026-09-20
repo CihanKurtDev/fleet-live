@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { emptyToUndefined } from "./queryPreprocess";
-import { VEHICLE_STATUSES, type VehicleStatus } from "./vehicle";
+import { VEHICLE_STATUSES, type VehicleStatus, type VehicleType } from "./vehicle";
 import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
 
 export const IMPORT_COLUMN_TARGETS = [
@@ -8,6 +8,12 @@ export const IMPORT_COLUMN_TARGETS = [
     "fuel_level",
     "status",
     "driver_name",
+    "vin",
+    "vehicle_type",
+    "hu_due_on",
+    "depot",
+    "cost_center",
+    "phone",
     "ignore",
 ] as const;
 
@@ -54,6 +60,12 @@ export type ImportPreviewRow = {
     fuel_level: number | null;
     status: VehicleStatus | null;
     driver_name: string | null;
+    vin: string | null;
+    vehicle_type: VehicleType | null;
+    hu_due_on: string | null;
+    depot: string | null;
+    cost_center: string | null;
+    phone: string | null;
     default_action: ImportRowAction;
     issues: ImportRowIssue[];
 };

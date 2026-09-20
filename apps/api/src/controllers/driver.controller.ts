@@ -3,6 +3,7 @@ import {
     parseDriverCreate,
     parseDriverCurrentVehicle,
     parseDriverListQuery,
+    parseDriverPatch,
     parseDriverVehicleAssign,
 } from "@fleet-live/shared";
 import { DriverModel } from "../models/driver.model";
@@ -46,10 +47,25 @@ export function getDriverById(req: Request, res: Response) {
 export function createDriver(req: Request, res: Response) {
     const companyId = sessionCompany(req);
     const input = parseDriverCreate(req.body);
-    const driver = DriverModel.create(companyId, input.name);
+    const driver = DriverModel.create(companyId, input.name, input.phone);
 
     notifyVehiclesChanged(companyId);
     res.status(201).location(`/api/drivers/${driver.id}`).json({ data: driver });
+}
+
+export function updateDriver(req: Request, res: Response) {
+    const companyId = sessionCompany(req);
+    const id = parseId(req.params.id, "Fahrer-ID");
+    const input = parseDriverPatch(req.body);
+    const updated = DriverModel.update(id, companyId, input);
+    const driver = DriverModel.getDetail(updated.id, companyId);
+
+    if (!driver) {
+        throw new NotFoundError("Fahrer nicht gefunden.");
+    }
+
+    notifyVehiclesChanged(companyId);
+    res.json({ data: driver });
 }
 
 export function assignDriverVehicle(req: Request, res: Response) {

@@ -5,6 +5,7 @@ import type {
     DriverDetailResponse,
     DriverListQuery,
     DriverListResponse,
+    DriverPatchInput,
     DriverVehicleAssignInput,
 } from "@fleet-live/shared";
 import { serializeDriverListQuery } from "@fleet-live/shared";
@@ -27,10 +28,24 @@ export function getDriver(id: number, signal?: AbortSignal) {
 }
 
 export function createDriver(input: DriverCreateInput) {
-    return request<{ data: { id: number; name: string; created_at: string } }>(
-        "/api/drivers",
-        { method: "POST", body: input },
-    ).then((response) => response.data);
+    return request<{
+        data: {
+            id: number;
+            name: string;
+            phone: string | null;
+            created_at: string;
+        };
+    }>("/api/drivers", {
+        method: "POST",
+        body: input,
+    }).then((response) => response.data);
+}
+
+export function updateDriver(id: number, input: DriverPatchInput) {
+    return request<{ data: DriverDetail }>(`/api/drivers/${id}`, {
+        method: "PATCH",
+        body: input,
+    }).then((response) => response.data);
 }
 
 export function assignDriverVehicle(

@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     company_id INTEGER NOT NULL,
     name TEXT NOT NULL,
+    phone TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (company_id)
@@ -54,6 +55,14 @@ CREATE TABLE IF NOT EXISTS vehicles (
         CHECK (fuel_level >= 0 AND fuel_level <= 100),
     status TEXT NOT NULL DEFAULT 'IDLE'
         CHECK (status IN ('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE')),
+    vin TEXT,
+    vehicle_type TEXT
+        CHECK (vehicle_type IS NULL OR vehicle_type IN (
+            'TRUCK', 'VAN', 'CAR', 'TRAILER', 'OTHER'
+        )),
+    hu_due_on TEXT,
+    depot TEXT,
+    cost_center TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_telemetry_id INTEGER,
     active_alerts INTEGER NOT NULL DEFAULT 0,

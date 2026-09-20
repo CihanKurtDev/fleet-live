@@ -112,3 +112,17 @@ export const formatSinceTimestamp = (value: string | null): string => {
     return formatTimestamp(value);
 };
 
+/** Kalenderdatum `YYYY-MM-DD` ohne Zeitzonen-Verschiebung. */
+export const formatIsoDate = (value: string | null | undefined): string => {
+    if (!value) {
+        return "—";
+    }
+
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) {
+        return value;
+    }
+
+    return `${match[3]}.${match[2]}.${match[1]}`;
+};
+

@@ -27,7 +27,7 @@ export type ListQueryDefaultSort<TSort extends string = string> = {
     dir: SortDir;
     /**
      * `implied`: fehlendes URL-`sort` zählt im Zyklus und in `tableState`
-     * (Fahrer: `name`).
+     * (Fahrer: `open_warnings` desc).
      * `sticky`: Sortierung wird nicht gelöscht; nach `desc` zurück zum Default
      * (Alerts: `created_at` desc).
      */

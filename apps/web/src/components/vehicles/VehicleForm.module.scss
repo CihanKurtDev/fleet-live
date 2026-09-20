@@ -17,6 +17,26 @@
     }
 }
 
+.select {
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text-h);
+    font: inherit;
+    font-size: 14px;
+
+    &:disabled {
+        opacity: 0.6;
+    }
+
+    &[aria-invalid="true"] {
+        border-color: #dc2626;
+    }
+}
+
 .hint {
     margin: 0;
     font-size: 12px;

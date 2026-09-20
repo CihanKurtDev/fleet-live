@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 15;
+const SCHEMA_VERSION = 16;
 
 type TableColumn = {
     name: string;
@@ -894,6 +894,58 @@ function migrateToV15(database: DatabaseSync) {
     ensureImportTables(database);
 }
 
+function ensureDriversPhone(database: DatabaseSync) {
+    const names = columnNames(database, "drivers");
+
+    if (names.size === 0 || names.has("phone")) {
+        return;
+    }
+
+    database.exec("ALTER TABLE drivers ADD COLUMN phone TEXT");
+}
+
+function ensureVehicleYardColumns(database: DatabaseSync) {
+    const names = columnNames(database, "vehicles");
+
+    if (names.size === 0) {
+        return;
+    }
+
+    if (!names.has("vin")) {
+        database.exec("ALTER TABLE vehicles ADD COLUMN vin TEXT");
+    }
+
+    if (!names.has("vehicle_type")) {
+        database.exec("ALTER TABLE vehicles ADD COLUMN vehicle_type TEXT");
+    }
+
+    if (!names.has("hu_due_on")) {
+        database.exec("ALTER TABLE vehicles ADD COLUMN hu_due_on TEXT");
+    }
+
+    if (!names.has("depot")) {
+        database.exec("ALTER TABLE vehicles ADD COLUMN depot TEXT");
+    }
+
+    if (!names.has("cost_center")) {
+        database.exec("ALTER TABLE vehicles ADD COLUMN cost_center TEXT");
+    }
+}
+
+function ensureYardMasterData(database: DatabaseSync) {
+    ensureDriversPhone(database);
+    ensureVehicleYardColumns(database);
+    database.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_company_vin
+            ON vehicles(company_id, vin)
+            WHERE vin IS NOT NULL
+    `);
+}
+
+function migrateToV16(database: DatabaseSync) {
+    ensureYardMasterData(database);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -960,6 +1012,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV15(database);
     }
 
+    if (currentVersion < 16) {
+        migrateToV16(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -973,6 +1029,7 @@ export function migrate(database: DatabaseSync) {
     ensureVehiclesSpeedLimit(database);
     ensureOpenAlertsPerType(database);
     ensureImportTables(database);
+    ensureYardMasterData(database);
     applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {

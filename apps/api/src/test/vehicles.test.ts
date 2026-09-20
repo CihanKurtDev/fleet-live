@@ -769,6 +769,47 @@ describe("vehicle mutations", () => {
         );
     });
 
+    it("stores yard master data and rejects a duplicate VIN", async () => {
+        const created = await api.post("/api/vehicles").send({
+            license_plate: "K-YARD 1",
+            fuel_level: 80,
+            status: "IDLE",
+            vin: "WVWZZZ1JZXW000001",
+            vehicle_type: "TRUCK",
+            hu_due_on: "15.06.2027",
+            depot: "Hof Nord",
+            cost_center: "KST-100",
+        });
+
+        assert.equal(created.status, 201);
+        assert.equal(created.body.vin, "WVWZZZ1JZXW000001");
+        assert.equal(created.body.vehicle_type, "TRUCK");
+        assert.equal(created.body.hu_due_on, "2027-06-15");
+        assert.equal(created.body.depot, "Hof Nord");
+        assert.equal(created.body.cost_center, "KST-100");
+
+        const duplicateVin = await api.post("/api/vehicles").send({
+            license_plate: "K-YARD 2",
+            fuel_level: 50,
+            status: "IDLE",
+            vin: "WVWZZZ1JZXW000001",
+        });
+
+        assert.equal(duplicateVin.status, 409);
+        assert.equal(duplicateVin.body.fields.vin, "VIN ist bereits vergeben.");
+
+        const listed = await api
+            .get("/api/vehicles")
+            .query({ search: "Hof Nord", sort: "depot", dir: "asc" });
+        assert.equal(listed.status, 200);
+        assert.ok(
+            listed.body.data.some(
+                (row: { license_plate: string }) =>
+                    row.license_plate === "K-YARD 1",
+            ),
+        );
+    });
+
     it("rejects missing required fields and oversized strings", async () => {
         const missing = await api.post("/api/vehicles").send({
             fuel_level: 40,

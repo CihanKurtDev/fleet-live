@@ -1,6 +1,7 @@
 import {
     ALERT_TYPES,
     speedBand,
+    VEHICLE_TYPE_LABELS,
     type AlertType,
     type Vehicle,
     type VehicleFilterId,
@@ -9,6 +10,7 @@ import type {
     TableColumn,
     TableFilter,
 } from "../../types/table";
+import { formatIsoDate } from "../../utils/dateTime";
 import { DriverNameLink } from "../drivers/DriverNameLink";
 import { WarningChip } from "../alerts/WarningChip";
 import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
@@ -55,6 +57,24 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
             ) : (
                 "—"
             ),
+    },
+    {
+        key: "vehicle_type",
+        displayText: "Typ",
+        sortable: true,
+        render: (value) => (value ? VEHICLE_TYPE_LABELS[value] : "—"),
+    },
+    {
+        key: "depot",
+        displayText: "Standort",
+        sortable: true,
+        render: (value) => value ?? "—",
+    },
+    {
+        key: "hu_due_on",
+        displayText: "HU",
+        sortable: true,
+        render: (value) => formatIsoDate(value),
     },
     {
         key: "status",

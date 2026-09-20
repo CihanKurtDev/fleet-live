@@ -6,6 +6,9 @@ import {
     parseTripListQuery,
     parseVehicleListQuery,
     validateVehicleInput,
+    normalizeVin,
+    parseHuDate,
+    parseVehicleType,
     type Vehicle,
     type VehicleFieldErrors,
     type VehicleInput,
@@ -32,9 +35,26 @@ function throwFieldErrors(fields: VehicleFieldErrors): never {
     throw new ValidationError(firstMessage ?? "Ungültige Eingabe.", fields);
 }
 
+function emptyToNull(value: unknown): string | null {
+    if (value === null || value === undefined) {
+        return null;
+    }
+
+    const trimmed = String(value).trim();
+    return trimmed === "" ? null : trimmed;
+}
+
 function readInput(body: unknown): Partial<VehicleInput> {
-    const { license_plate, fuel_level, status } =
-        (body ?? {}) as Partial<VehicleInput>;
+    const {
+        license_plate,
+        fuel_level,
+        status,
+        vin,
+        vehicle_type,
+        hu_due_on,
+        depot,
+        cost_center,
+    } = (body ?? {}) as Partial<VehicleInput> & Record<string, unknown>;
 
     const input: Partial<VehicleInput> = {};
 
@@ -46,6 +66,25 @@ function readInput(body: unknown): Partial<VehicleInput> {
     }
     if (status !== undefined) {
         input.status = status;
+    }
+    if (vin !== undefined) {
+        const raw = emptyToNull(vin);
+        input.vin = raw === null ? null : normalizeVin(raw);
+    }
+    if (vehicle_type !== undefined) {
+        const raw = emptyToNull(vehicle_type);
+        input.vehicle_type =
+            raw === null ? null : (parseVehicleType(raw) ?? (raw as VehicleInput["vehicle_type"]));
+    }
+    if (hu_due_on !== undefined) {
+        const raw = emptyToNull(hu_due_on);
+        input.hu_due_on = raw === null ? null : (parseHuDate(raw) ?? raw);
+    }
+    if (depot !== undefined) {
+        input.depot = emptyToNull(depot);
+    }
+    if (cost_center !== undefined) {
+        input.cost_center = emptyToNull(cost_center);
     }
 
     return input;
@@ -220,6 +259,11 @@ export function createVehicle(req: Request, res: Response) {
         license_plate: license_plate!,
         fuel_level,
         status,
+        vin: input.vin,
+        vehicle_type: input.vehicle_type,
+        hu_due_on: input.hu_due_on,
+        depot: input.depot,
+        cost_center: input.cost_center,
         company_id: sessionCompany(req),
     });
 
