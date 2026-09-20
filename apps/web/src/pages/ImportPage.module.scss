@@ -1,4 +1,4 @@
-﻿// src/pages/ImportPage.module.scss
+// src/pages/ImportPage.module.scss
 .page {
     display: flex;
     flex-direction: column;
@@ -304,13 +304,19 @@
     }
 
     &::before {
-        content: "â–¸";
-        color: var(--text);
+        content: "";
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 4px 0 4px 6px;
+        border-color: transparent transparent transparent var(--text);
     }
 }
 
 .historyDetails[open] > .historySummary::before {
-    content: "â–¾";
+    border-width: 6px 4px 0 4px;
+    border-color: var(--text) transparent transparent transparent;
 }
 
 .historyCount {
@@ -326,5 +332,106 @@
     font-size: 13px;
     line-height: 1.4;
     color: var(--text);
+}
+
+.sheetBlock {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    gap: 12px;
+}
+
+.sheetHeading {
+    margin: 8px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.mappingGrid,
+.statusMapping {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.statusHeading {
+    margin: 8px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.mappingRow {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) minmax(10rem, 14rem);
+    gap: 12px;
+    align-items: center;
+}
+
+.mappingLabel {
+    font-size: 14px;
+    color: var(--text-h);
+}
+
+.select {
+    box-sizing: border-box;
+    width: 100%;
+    height: 36px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    font: inherit;
+    font-size: 14px;
+    color: var(--text-h);
+
+    &:focus {
+        outline: none;
+        border-color: var(--accent-border);
+        box-shadow: 0 0 0 3px var(--accent-bg);
+    }
+}
+
+.tableWrap {
+    flex: none;
+    max-height: 22.5rem;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.sampleLinks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+}
+
+.sampleLink {
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover {
+        color: var(--text-h);
+    }
+}
+
+@media (max-width: 640px) {
+    .mappingRow {
+        grid-template-columns: 1fr;
+    }
 }
 

@@ -1,4 +1,4 @@
-﻿// Styles for ImportPreviewStep (not the upload/mapping wizard shell).
+// Styles for ImportPreviewStep (not the upload/mapping wizard shell).
 .previewOutcome {
     display: flex;
     flex-direction: column;
@@ -150,29 +150,6 @@
     font-size: 15px;
     font-weight: 700;
     color: var(--text-h);
-}
-
-.statusPanelCaution .statusPanelTitle::before {
-    content: "â±";
-    font-size: 14px;
-}
-
-.statusPanelDanger .statusPanelTitle::before {
-    content: "!";
-    display: grid;
-    place-items: center;
-    width: 18px;
-    height: 18px;
-    border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--danger) 25%, transparent);
-    color: #f87171;
-    font-size: 12px;
-    font-weight: 800;
-}
-
-.statusPanelSuccess .statusPanelTitle::before {
-    content: "âœ“";
-    color: #86efac;
 }
 
 .statusPanelBody {
@@ -466,21 +443,27 @@
     }
 
     &::before {
-        content: "â–¸ ";
-        color: var(--text);
+        content: "";
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 4px 0 4px 6px;
+        border-color: transparent transparent transparent var(--text);
     }
 }
 
 .rowDetails[open] > .rowDetailsSummary::before {
-    content: "â–¾ ";
+    border-width: 6px 4px 0 4px;
+    border-color: var(--text) transparent transparent transparent;
 }
 
-// Suche + Status-Filter Ã¼ber den Zeilen-Tabellen.
+/* Search + status filters above the row tables. */
 .searchInput {
     box-sizing: border-box;
     width: 100%;
     height: 40px;
-    padding: 0 12px 0 36px;
+    padding: 0 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg);
@@ -503,17 +486,6 @@
     position: relative;
     display: flex;
     margin-top: 12px;
-
-    &::before {
-        content: "âŒ•";
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--text);
-        font-size: 14px;
-        pointer-events: none;
-    }
 }
 
 .filterRow {
