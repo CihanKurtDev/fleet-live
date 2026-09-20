@@ -8,6 +8,10 @@
 }
 
 .openCount {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
     margin: 0;
     font-size: 15px;
     color: var(--text);

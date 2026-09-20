@@ -1,0 +1,36 @@
+.assignment {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.assignment strong {
+    color: var(--text-h);
+    font-weight: 650;
+}
+
+.meta,
+.muted {
+    color: var(--text);
+    font-size: 12px;
+}
+
+.warning {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.warning[data-active="true"] {
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+    background: color-mix(in srgb, var(--danger) 11%, var(--surface));
+    color: var(--danger);
+    font-weight: 650;
+}
