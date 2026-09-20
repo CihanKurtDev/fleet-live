@@ -31,8 +31,8 @@ export type ImportSheetKind = (typeof IMPORT_SHEET_KINDS)[number];
 export const IMPORT_SHEET_KIND_LABELS: Record<ImportSheetKind, string> = {
     vehicles: "Fahrzeuge",
     drivers: "Fahrer",
-    eligibility: "Eignung",
-    current: "Aktuell",
+    eligibility: "Freigaben",
+    current: "Besatzung",
 };
 
 export const IMPORT_ROW_ACTIONS = ["create", "update", "skip"] as const;
@@ -85,8 +85,23 @@ export type ImportPreviewSheet = {
     columns: string[];
     suggested_mapping: ImportColumnMapping;
     unmapped_status_values: string[];
-    rows: ImportPreviewRow[];
     counts: ImportPreviewCounts;
+};
+
+export type ImportPreviewOutcome = {
+    ready_count: number;
+    already_there_count: number;
+    deferred_count: number;
+    blocked_count: number;
+    skipped_count: number;
+    deferred_examples: string[];
+    blocked_examples: string[];
+    can_commit: boolean;
+    disable_reason:
+        | "all_skipped"
+        | "only_errors"
+        | "mixed_no_ready"
+        | null;
 };
 
 export type ImportPreviewResponse = {
@@ -95,11 +110,45 @@ export type ImportPreviewResponse = {
     columns: string[];
     suggested_mapping: ImportColumnMapping;
     unmapped_status_values: string[];
-    rows: ImportPreviewRow[];
     counts: ImportPreviewCounts;
-    can_commit: boolean;
+    /** Wire-Form der Outcome-Summary (snake_case, capped examples). */
+    outcome: ImportPreviewOutcome;
+    total_rows: number;
     profile_applied: boolean;
 };
+
+export const IMPORT_PREVIEW_ROW_STATUS_FILTERS = [
+    "all",
+    "ready",
+    "already",
+    "deferred",
+    "blocked",
+] as const;
+
+export type ImportPreviewRowStatusFilter =
+    (typeof IMPORT_PREVIEW_ROW_STATUS_FILTERS)[number];
+
+export type ImportPreviewRowsQuery = {
+    page: number;
+    limit: number;
+    sheet_kind?: ImportSheetKind;
+    status: ImportPreviewRowStatusFilter;
+    q: string;
+};
+
+export type ImportPreviewRowsResponse = {
+    data: Array<ImportPreviewRow & { action: ImportRowAction }>;
+    meta: {
+        total: number;
+        page: number;
+        limit: number;
+        sheet_counts: Partial<Record<ImportSheetKind, number>>;
+        status_counts: Record<ImportPreviewRowStatusFilter, number>;
+    };
+};
+
+/** Harte Obergrenze Datenzeilen pro Preview (Schutz). */
+export const IMPORT_MAX_DATA_ROWS = 150_000;
 
 export const IMPORT_SOURCES = ["csv", "xlsx"] as const;
 
@@ -222,6 +271,44 @@ const importRunListQuerySchema = z.object({
     ),
 });
 
+const importPreviewRowsQuerySchema = z.object({
+    page: z.preprocess(
+        emptyToUndefined,
+        z.coerce
+            .number({ error: "Seite muss eine Zahl sein." })
+            .int("Seite muss eine ganze Zahl sein.")
+            .min(1, "Seite muss mindestens 1 sein.")
+            .default(1),
+    ),
+    limit: z.preprocess(
+        emptyToUndefined,
+        z.coerce
+            .number({ error: "Limit muss eine Zahl sein." })
+            .int("Limit muss eine ganze Zahl sein.")
+            .refine(
+                (value) => [10, 25, 50, 100, 200, 500].includes(value),
+                "Limit muss 10, 25, 50, 100, 200 oder 500 sein.",
+            )
+            .default(50),
+    ),
+    sheet_kind: z.preprocess(
+        emptyToUndefined,
+        z.enum(IMPORT_SHEET_KINDS).optional(),
+    ),
+    status: z.preprocess(
+        emptyToUndefined,
+        z.enum(IMPORT_PREVIEW_ROW_STATUS_FILTERS).default("all"),
+    ),
+    q: z.preprocess(
+        emptyToUndefined,
+        z.string().max(120, "Suche ist zu lang.").default(""),
+    ),
+});
+
+const importPreviewActionsInputSchema = z.object({
+    row_actions: rowActionsSchema.default({}),
+});
+
 export type ImportPreviewInput = {
     csv?: string;
     xlsx?: string;
@@ -244,6 +331,10 @@ export type ImportProfileInput = {
 export type ImportRunListQuery = {
     page: number;
     limit: number;
+};
+
+export type ImportPreviewActionsInput = {
+    row_actions: Record<string, ImportRowAction>;
 };
 
 export function parseImportPreviewInput(body: unknown): ImportPreviewInput {
@@ -289,6 +380,28 @@ export function parseImportProfileInput(body: unknown): ImportProfileInput {
 
 export function parseImportRunListQuery(input: unknown): ImportRunListQuery {
     return importRunListQuerySchema.parse(input);
+}
+
+export function parseImportPreviewRowsQuery(
+    input: unknown,
+): ImportPreviewRowsQuery {
+    const parsed = importPreviewRowsQuerySchema.parse(input);
+    return {
+        page: parsed.page,
+        limit: parsed.limit,
+        sheet_kind: parsed.sheet_kind,
+        status: parsed.status,
+        q: parsed.q.trim(),
+    };
+}
+
+export function parseImportPreviewActionsInput(
+    body: unknown,
+): ImportPreviewActionsInput {
+    const parsed = importPreviewActionsInputSchema.parse(body);
+    return {
+        row_actions: parsed.row_actions as Record<string, ImportRowAction>,
+    };
 }
 
 export function isImportColumnTarget(

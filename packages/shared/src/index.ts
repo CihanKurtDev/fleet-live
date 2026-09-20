@@ -219,10 +219,15 @@ export type {
     ImportCommitInput,
     ImportCommitResult,
     ImportMappingProfile,
+    ImportPreviewActionsInput,
     ImportPreviewCounts,
     ImportPreviewInput,
+    ImportPreviewOutcome,
     ImportPreviewResponse,
     ImportPreviewRow,
+    ImportPreviewRowsQuery,
+    ImportPreviewRowsResponse,
+    ImportPreviewRowStatusFilter,
     ImportPreviewSheet,
     ImportProfileInput,
     ImportRowAction,
@@ -238,6 +243,8 @@ export type {
 
 export {
     IMPORT_COLUMN_TARGETS,
+    IMPORT_MAX_DATA_ROWS,
+    IMPORT_PREVIEW_ROW_STATUS_FILTERS,
     IMPORT_ROW_ACTIONS,
     IMPORT_SHEET_KINDS,
     IMPORT_SHEET_KIND_LABELS,
@@ -248,10 +255,28 @@ export {
     isImportRowAction,
     isImportSheetKind,
     parseImportCommitInput,
+    parseImportPreviewActionsInput,
     parseImportPreviewInput,
+    parseImportPreviewRowsQuery,
     parseImportProfileInput,
     parseImportRunListQuery,
 } from "./models/import";
+
+export type {
+    ImportOutcomeDisableReason,
+    ImportOutcomeSummary,
+    ImportRowOutcome,
+} from "./models/importRowOutcome";
+
+export {
+    IMPORT_OUTCOME_EXAMPLE_LIMIT,
+    getImportRowOutcome,
+    importCommitButtonLabel,
+    importCommitDisableMessage,
+    isAlreadyThereRow,
+    rowSubject,
+    summarizeImportOutcomes,
+} from "./models/importRowOutcome";
 
 export type {
     FleetDriver,
