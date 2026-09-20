@@ -30,35 +30,39 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         key: keyof BriefingCounts;
         label: string;
         hint?: string;
-        accent?: boolean;
+        tone: "critical" | "warning" | "positive" | "neutral";
         to?: string;
     }> = [
         {
             key: "open",
             label: "Offen",
             hint: "Inbox",
-            accent: true,
+            tone: "critical",
             to: "/alerts",
         },
         {
             key: "offline",
             label: "Kein Signal",
             hint: "Fahrzeuge",
+            tone: "critical",
             to: "/vehicles?filter=offline",
         },
         {
             key: "driving",
             label: "Auf Fahrt",
+            tone: "positive",
             to: "/vehicles?filter=driving",
         },
         {
             key: "idle",
             label: "Standby",
+            tone: "neutral",
             to: "/vehicles?filter=idle",
         },
         {
             key: "low_fuel",
             label: "Wenig Tank",
+            tone: "warning",
             to: "/vehicles?filter=low_fuel",
         },
     ];
@@ -71,7 +75,6 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
                         <span className={styles.kpiLabel}>{tile.label}</span>
                         <span
                             className={styles.kpiValue}
-                            data-accent={tile.accent ? "true" : undefined}
                         >
                             {formatCount(counts[tile.key])}
                         </span>
@@ -85,7 +88,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
                     return (
                         <Link
                             key={tile.key}
-                            className={styles.kpi}
+                            className={`${styles.kpi} ${styles[`kpi${tile.tone[0].toUpperCase()}${tile.tone.slice(1)}`]}`}
                             to={tile.to}
                         >
                             {body}
