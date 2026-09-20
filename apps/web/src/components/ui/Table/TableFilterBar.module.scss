@@ -96,3 +96,24 @@
     background: var(--surface);
     color: var(--accent);
 }
+
+@media (max-width: 700px) {
+    .filterBar {
+        width: 100%;
+        box-sizing: border-box;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
+
+    .chip {
+        flex: 0 0 auto;
+        min-height: 40px;
+    }
+}
