@@ -7,6 +7,42 @@
     gap: 12px;
 }
 
+@media (max-width: 700px) {
+    .section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: auto;
+    }
+
+    .hero,
+    .card {
+        min-height: 0;
+        height: auto;
+        overflow: hidden;
+    }
+
+    .card {
+        padding: 12px;
+    }
+
+    .chart,
+    .chartCompact {
+        flex: 0 0 180px;
+        height: 180px;
+        min-height: 180px;
+        min-width: 0;
+    }
+
+    .legend {
+        gap: 6px 12px;
+    }
+
+    .lead {
+        font-size: 12.5px;
+    }
+}
+
 .hero {
     grid-column: 1 / -1;
     min-height: 0;
@@ -64,6 +100,7 @@
     flex: 1;
     min-height: 0;
     width: 100%;
+    min-width: 0;
 }
 
 .legend {
@@ -152,4 +189,20 @@
     font-family: var(--mono);
     font-weight: 650;
     font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 700px) {
+    .card,
+    .hero {
+        height: auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .chart,
+    .chartCompact {
+        flex: 0 0 180px;
+        height: 180px;
+        min-height: 180px;
+    }
 }

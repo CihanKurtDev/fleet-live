@@ -84,6 +84,7 @@ export const DriverTable = ({
                         ? "Keine Fahrer passen zur Suche."
                         : "Keine Fahrer.",
                 )}
+                className={styles.mobileCards}
             />
 
             {showPagination && (

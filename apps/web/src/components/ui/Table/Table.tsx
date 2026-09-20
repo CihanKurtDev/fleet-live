@@ -26,7 +26,12 @@ export const Table = <RowType,>({
     const interactive = isEditing || Boolean(onRowClick);
 
     return (
-        <div className={[styles.tableContainer, className].filter(Boolean).join(" ")}>
+        <div
+            className={[styles.tableContainer, className]
+                .filter(Boolean)
+                .join(" ")}
+            data-editing={isEditing ? "true" : "false"}
+        >
             <table
                 className={styles.table}
                 aria-busy={isLoading}

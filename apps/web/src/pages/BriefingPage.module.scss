@@ -5,7 +5,7 @@
     flex-direction: column;
     gap: 12px;
     padding: 0 16px 16px;
-    overflow: hidden;
+    overflow: auto;
     height: 100%;
     box-sizing: border-box;
     text-align: left;
@@ -115,5 +115,50 @@ a.kpi:hover {
 
     .kpiValue {
         font-size: 22px;
+    }
+}
+
+@media (max-width: 560px) {
+    .page {
+        gap: 10px;
+        padding: 0 12px 20px;
+    }
+
+    .header {
+        margin-top: 10px;
+    }
+
+    .title {
+        font-size: 22px;
+    }
+
+    .subtitle {
+        max-width: 34rem;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .kpi {
+        min-height: 74px;
+        padding: 10px 12px;
+        border-radius: 8px;
+    }
+
+    .kpi:first-child {
+        grid-column: 1 / -1;
+        min-height: 82px;
+    }
+
+    .kpiValue {
+        font-size: 24px;
+    }
+
+    .kpiHint {
+        font-size: 11px;
     }
 }

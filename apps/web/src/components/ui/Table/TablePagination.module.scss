@@ -119,3 +119,41 @@
     color: var(--text);
     font-variant-numeric: tabular-nums;
 }
+
+@media (max-width: 700px) {
+    .pagination {
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 0 8px;
+    }
+
+    .limit {
+        order: 2;
+        width: 100%;
+        justify-content: center;
+        font-size: 12px;
+    }
+
+    .pages {
+        order: 1;
+    }
+
+    .range {
+        order: 3;
+        width: 100%;
+        margin: 0;
+        text-align: center;
+        font-size: 12px;
+    }
+
+    .firstPageButton,
+    .lastPageButton {
+        display: none;
+    }
+
+    .pageButton {
+        min-width: 40px;
+        height: 40px;
+    }
+}

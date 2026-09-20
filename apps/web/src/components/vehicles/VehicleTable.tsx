@@ -155,6 +155,7 @@ export const VehicleTable = ({
                         ? "Keine Fahrzeuge passen zu Suche und Filter."
                         : "Keine Fahrzeuge vorhanden.",
                 )}
+                className={styles.mobileCards}
             />
 
             {showPagination && (
