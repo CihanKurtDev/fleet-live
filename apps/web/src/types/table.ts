@@ -71,6 +71,9 @@ export interface TableProps<RowType> {
 
     onRowClick?: (row: RowType) => void;
 
+    /** Zusätzliche Klassen pro Zeile (z. B. Problem-Hervorhebung). */
+    getRowClassName?: (row: RowType) => string | undefined;
+
     sortConfig?: SortConfig<RowType>;
     onSort?: (key: keyof RowType) => void;
 

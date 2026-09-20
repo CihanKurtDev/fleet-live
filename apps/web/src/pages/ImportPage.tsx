@@ -1,7 +1,7 @@
+// src/pages/ImportPage.tsx
 import {
     useCallback,
     useEffect,
-    useMemo,
     useRef,
     useState,
     type ChangeEvent,
@@ -14,9 +14,9 @@ import {
     IMPORT_SHEET_KIND_LABELS,
     IMPORT_SHEET_KINDS,
     VEHICLE_STATUSES,
-    importActionKey,
     importRequiredTargets,
     type ImportColumnTarget,
+    type ImportPreviewOutcome,
     type ImportPreviewResponse,
     type ImportRowAction,
     type ImportRun,
@@ -24,19 +24,19 @@ import {
     type ImportStatusMapping,
 } from "@fleet-live/shared";
 
-import { commitImport, listImportRuns, previewImport } from "../api/import";
+import {
+    commitImport,
+    listImportRuns,
+    previewImport,
+} from "../api/import";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
-import { Checkbox } from "../components/ui/Checkbox/Checkbox";
 import { Table } from "../components/ui/Table/Table";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
+import { ImportPreviewStep } from "../components/vehicles/ImportPreviewStep";
 import { useAuth } from "../hooks/useAuth";
 import { useVehicles } from "../context/vehiclesContext";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
-import {
-    importPreviewColumns,
-    type ImportPreviewTableRow,
-} from "../components/vehicles/importPreviewConfig";
 import { importRunColumns } from "../components/vehicles/importRunConfig";
 import layout from "../styles/detailLayout.module.scss";
 import styles from "./ImportPage.module.scss";
@@ -65,8 +65,8 @@ const STEP_LABELS: Record<WizardStep, string> = {
 };
 
 const STEP_ORDER: WizardStep[] = ["upload", "mapping", "preview", "result"];
-
 const SAMPLE_FILE_HREF = "/import-beispiel.csv";
+const SAMPLE_XLSX_HREF = "/import-beispiel.xlsx";
 const TOAST_DURATION_MS = 8000;
 
 function ImportAlert({
@@ -122,9 +122,16 @@ function ImportAlert({
 
 function ImportLog({ runs }: { runs: ImportRun[] }) {
     return (
-        <section className={layout.panel}>
-            <h2 className={layout.panelTitle}>Letzte Importe</h2>
-            <p className={layout.note}>
+        <details className={styles.historyDetails}>
+            <summary className={styles.historySummary}>
+                Letzte Importe ansehen
+                {runs.length > 0 ? (
+                    <span className={styles.historyCount}>
+                        {runs.length.toLocaleString("de-DE")}
+                    </span>
+                ) : null}
+            </summary>
+            <p className={styles.historyNote}>
                 Wann, wer, und wie viele Zeilen übernommen wurden.
             </p>
             <Table
@@ -135,8 +142,22 @@ function ImportLog({ runs }: { runs: ImportRun[] }) {
                 emptyContent="Noch kein Import in dieser Firma."
                 className={styles.tableWrap}
             />
-        </section>
+        </details>
     );
+}
+
+async function fetchUrlAsBase64(href: string): Promise<string> {
+    const response = await fetch(href);
+    if (!response.ok) {
+        throw new Error("Datei nicht geladen.");
+    }
+    const buffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (const byte of bytes) {
+        binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
 }
 
 function readFileAsText(file: File): Promise<string> {
@@ -214,13 +235,11 @@ export const ImportPage = () => {
     const [fileName, setFileName] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [preview, setPreview] = useState<ImportPreviewResponse | null>(null);
+    const [outcome, setOutcome] = useState<ImportPreviewOutcome | null>(null);
     const [sheetMappings, setSheetMappings] = useState<ImportSheetMappings>(
         {},
     );
     const [statusMapping, setStatusMapping] = useState<ImportStatusMapping>({});
-    const [rowActions, setRowActions] = useState<
-        Record<string, ImportRowAction>
-    >({});
     const [commitSummary, setCommitSummary] = useState<
         Awaited<ReturnType<typeof commitImport>>["data"] | null
     >(null);
@@ -260,19 +279,6 @@ export const ImportPage = () => {
         preview?.unmapped_status_values ??
         [];
 
-    const effectiveRowActions = useMemo(() => {
-        if (!preview) {
-            return {};
-        }
-
-        const actions: Record<string, ImportRowAction> = {};
-        for (const row of preview.rows) {
-            const key = importActionKey(row.sheet_kind, row.row_index);
-            actions[key] = rowActions[key] ?? row.default_action;
-        }
-        return actions;
-    }, [preview, rowActions]);
-
     const previewSheets = preview?.sheets ?? [];
 
     if (!canWrite) {
@@ -295,10 +301,10 @@ export const ImportPage = () => {
                 setCsvContent("");
                 setFileName(file.name);
                 setPreview(null);
+                setOutcome(null);
                 setCommitSummary(null);
                 setSheetMappings({});
                 setStatusMapping({});
-                setRowActions({});
             } catch {
                 setError("Die Datei konnte nicht gelesen werden.");
             }
@@ -317,10 +323,10 @@ export const ImportPage = () => {
             setXlsxBase64(null);
             setFileName(file.name);
             setPreview(null);
+            setOutcome(null);
             setCommitSummary(null);
             setSheetMappings({});
             setStatusMapping({});
-            setRowActions({});
         } catch {
             setError("Die Datei konnte nicht gelesen werden.");
         }
@@ -343,12 +349,32 @@ export const ImportPage = () => {
         }
     };
 
+    const loadSampleXlsx = async () => {
+        setError(null);
+        try {
+            const base64 = await fetchUrlAsBase64(SAMPLE_XLSX_HREF);
+            setXlsxBase64(base64);
+            setCsvContent("");
+            setFileName("import-beispiel.xlsx");
+            setPreview(null);
+            setOutcome(null);
+            setCommitSummary(null);
+            setSheetMappings({});
+            setStatusMapping({});
+        } catch {
+            setError("Beispieldatei konnte nicht geladen werden.");
+        }
+    };
+
     const runPreview = async (
         nextStep: WizardStep,
         mappings = sheetMappings,
         statuses = statusMapping,
+        source?: { csv?: string; xlsx?: string },
     ) => {
-        if (!csvContent.trim() && !xlsxBase64) {
+        const csv = source?.csv ?? csvContent;
+        const xlsx = source?.xlsx ?? xlsxBase64;
+        if (!csv.trim() && !xlsx) {
             setError("Bitte zuerst eine CSV- oder Excel-Datei auswählen.");
             return;
         }
@@ -364,7 +390,7 @@ export const ImportPage = () => {
             );
 
             const response = await previewImport({
-                ...(xlsxBase64 ? { xlsx: xlsxBase64 } : { csv: csvContent }),
+                ...(xlsx ? { xlsx } : { csv }),
                 sheet_mappings: hasSheetMappings ? mappings : undefined,
                 column_mapping:
                     mappings.vehicles &&
@@ -377,6 +403,7 @@ export const ImportPage = () => {
             const data = response.data;
 
             setPreview(data);
+            setOutcome(data.outcome);
             setSheetMappings((current) => {
                 const next: ImportSheetMappings = { ...current };
                 for (const sheet of data.sheets) {
@@ -389,7 +416,6 @@ export const ImportPage = () => {
                 return next;
             });
             setStatusMapping(statuses);
-            setRowActions({});
             setStep(nextStep);
         } catch (caught) {
             setError(
@@ -408,7 +434,7 @@ export const ImportPage = () => {
             for (const target of importRequiredTargets(sheet.kind)) {
                 if (!Object.values(mapping).includes(target)) {
                     setError(
-                        `Blatt „${sheet.name}“: mindestens eine Spalte muss „${COLUMN_TARGET_LABELS[target]}“ sein.`,
+                        `Blatt „${sheet.name}": mindestens eine Spalte muss „${COLUMN_TARGET_LABELS[target]}" sein.`,
                     );
                     return;
                 }
@@ -418,56 +444,8 @@ export const ImportPage = () => {
         await runPreview("preview", sheetMappings, statusMapping);
     };
 
-    const handleCommit = async () => {
+    const handleCommit = async (rowActions: Record<string, ImportRowAction>) => {
         if (!preview?.preview_id) {
-            return;
-        }
-
-        const skippedPlates = new Set(
-            preview.rows
-                .filter((row) => {
-                    if (row.sheet_kind !== "vehicles" || !row.license_plate) {
-                        return false;
-                    }
-
-                    const key = importActionKey(
-                        row.sheet_kind,
-                        row.row_index,
-                    );
-                    const action = effectiveRowActions[key] ?? row.default_action;
-                    const exists = row.issues.some(
-                        (issue) => issue.code === "EXISTING_PLATE",
-                    );
-                    return action === "skip" && !exists;
-                })
-                .map((row) => row.license_plate?.toLowerCase() ?? ""),
-        );
-
-        const blockedLink = preview.rows.find((row) => {
-            if (
-                (row.sheet_kind !== "eligibility" &&
-                    row.sheet_kind !== "current") ||
-                !row.license_plate
-            ) {
-                return false;
-            }
-
-            const key = importActionKey(row.sheet_kind, row.row_index);
-            const action = effectiveRowActions[key] ?? row.default_action;
-            const hasError = row.issues.some(
-                (issue) => issue.level === "error",
-            );
-            return (
-                !hasError &&
-                (action === "create" || action === "update") &&
-                skippedPlates.has(row.license_plate.toLowerCase())
-            );
-        });
-
-        if (blockedLink?.license_plate) {
-            setError(
-                `${IMPORT_SHEET_KIND_LABELS[blockedLink.sheet_kind]}, Zeile ${blockedLink.row_index}: Fahrzeug ${blockedLink.license_plate} wird übersprungen. Unter Fahrzeuge „Neu anlegen“ wählen.`,
-            );
             return;
         }
 
@@ -475,13 +453,9 @@ export const ImportPage = () => {
         setError(null);
 
         try {
-            const payload = Object.fromEntries(
-                Object.entries(effectiveRowActions),
-            );
-
             const response = await commitImport({
                 preview_id: preview.preview_id,
-                row_actions: payload,
+                row_actions: rowActions,
                 save_profile: saveProfile,
             });
 
@@ -534,25 +508,12 @@ export const ImportPage = () => {
         setXlsxBase64(null);
         setFileName(null);
         setPreview(null);
+        setOutcome(null);
         setSheetMappings({});
         setStatusMapping({});
-        setRowActions({});
         setCommitSummary(null);
         setError(null);
     };
-
-    const canCommit =
-        preview !== null &&
-        preview.rows.some((row) => {
-            const hasError = row.issues.some(
-                (issue) => issue.level === "error",
-            );
-            const action =
-                effectiveRowActions[
-                    importActionKey(row.sheet_kind, row.row_index)
-                ];
-            return !hasError && (action === "create" || action === "update");
-        });
 
     return (
         <section className={`${layout.page} ${styles.page}`}>
@@ -561,47 +522,66 @@ export const ImportPage = () => {
             <header>
                 <h1 className={styles.title}>Bestand importieren</h1>
                 <p className={styles.lead}>
-                    Fahrzeuge, Fahrer, Eignung und aktuelle Zuweisung aus CSV
-                    oder Excel laden. Spaltenzuordnung merkt sich die Firma für
-                    den nächsten Export. Jeder Lauf landet im Protokoll.
+                    Stammdaten und Zuweisungen aus CSV oder Excel laden. Die
+                    Spaltenzuordnung merkt sich die Firma. Jeder Lauf landet im
+                    Protokoll.
                 </p>
                 <ol className={styles.steps} aria-label="Importschritte">
                     {STEP_ORDER.map((wizardStep, index) => {
                         const state = stepState(step, wizardStep);
+                        const isLast = index === STEP_ORDER.length - 1;
 
-                        if (state === "done") {
-                            return (
-                                <li key={wizardStep}>
+                        return (
+                            <li
+                                key={wizardStep}
+                                className={styles.stepItem}
+                                aria-current={
+                                    state === "active" ? "step" : undefined
+                                }
+                            >
+                                {state === "done" ? (
                                     <button
                                         type="button"
                                         className={styles.stepDone}
                                         onClick={() => setStep(wizardStep)}
                                     >
-                                        <span className={styles.stepIndex}>
+                                        <span
+                                            className={`${styles.stepBadge} ${styles.stepBadgeDone}`}
+                                        >
+                                            ✓
+                                        </span>
+                                        <span className={styles.stepLabel}>
+                                            {STEP_LABELS[wizardStep]}
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <span
+                                        className={
+                                            state === "active"
+                                                ? styles.stepActive
+                                                : styles.step
+                                        }
+                                    >
+                                        <span
+                                            className={
+                                                state === "active"
+                                                    ? `${styles.stepBadge} ${styles.stepBadgeActive}`
+                                                    : styles.stepBadge
+                                            }
+                                        >
                                             {index + 1}
                                         </span>
-                                        {STEP_LABELS[wizardStep]}
-                                    </button>
-                                </li>
-                            );
-                        }
-
-                        return (
-                            <li
-                                key={wizardStep}
-                                className={
-                                    state === "active"
-                                        ? styles.stepActive
-                                        : styles.step
-                                }
-                                aria-current={
-                                    state === "active" ? "step" : undefined
-                                }
-                            >
-                                <span className={styles.stepIndex}>
-                                    {index + 1}
-                                </span>
-                                {STEP_LABELS[wizardStep]}
+                                        <span className={styles.stepLabel}>
+                                            {STEP_LABELS[wizardStep]}
+                                        </span>
+                                    </span>
+                                )}
+                                {!isLast ? (
+                                    <span
+                                        className={styles.stepConnector}
+                                        aria-hidden
+                                    />
+                                ) : null}
                             </li>
                         );
                     })}
@@ -612,10 +592,9 @@ export const ImportPage = () => {
                 <section className={layout.panel}>
                     <h2 className={layout.panelTitle}>Datei wählen</h2>
                     <p className={layout.note}>
-                        CSV (ein Blatt, Fahrzeuge) oder Excel (.xlsx) mit
-                        benannten Blättern: Fahrzeuge, Fahrer, Eignung, Aktuell.
-                        Ohne passende Namen gilt das erste Blatt als Fahrzeuge.
-                        Alte .xls-Dateien bitte zuerst als .xlsx speichern.
+                        CSV (nur Fahrzeuge) oder Excel (.xlsx) mit Blättern für
+                        Fahrzeuge, Fahrer, Freigaben und Besatzung. Alte
+                        .xls-Dateien bitte zuerst als .xlsx speichern.
                     </p>
                     <div
                         className={
@@ -637,22 +616,47 @@ export const ImportPage = () => {
                             accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             onChange={handleFileChange}
                         />
+                        <svg
+                            className={styles.dropIcon}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            aria-hidden
+                        >
+                            <path d="M12 15V4M7 9l5-5 5 5" />
+                            <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+                        </svg>
                         <p className={styles.dropTitle}>
                             CSV oder Excel (.xlsx) hierher ziehen oder
                             auswählen
                         </p>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            Datei auswählen
-                        </Button>
-                        {fileName ? (
-                            <p className={styles.fileName}>{fileName}</p>
-                        ) : (
-                            <p className={layout.note}>Keine Datei gewählt.</p>
-                        )}
+                        <div className={styles.dropActions}>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    fileInputRef.current?.click();
+                                }}
+                            >
+                                Datei auswählen
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={isLoading}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    void loadSampleXlsx();
+                                }}
+                            >
+                                Beispieldatei laden
+                            </Button>
+                        </div>
+                        <p className={styles.fileName}>
+                            {fileName ?? "Keine Datei gewählt"}
+                        </p>
                     </div>
                     <p className={styles.sampleLinks}>
                         <a
@@ -664,7 +668,7 @@ export const ImportPage = () => {
                         </a>
                         <a
                             className={styles.sampleLink}
-                            href="/import-beispiel.xlsx"
+                            href={SAMPLE_XLSX_HREF}
                             download="import-beispiel.xlsx"
                         >
                             Beispiel-Excel (vier Blätter)
@@ -689,6 +693,7 @@ export const ImportPage = () => {
                             {isLoading ? "Wird gelesen…" : "Weiter"}
                         </Button>
                     </div>
+                    <ImportLog runs={runs} />
                 </section>
             )}
 
@@ -697,20 +702,21 @@ export const ImportPage = () => {
                     <h2 className={layout.panelTitle}>Spalten zuordnen</h2>
                     <p className={layout.note}>
                         {previewSheets.length > 1
-                            ? `${previewSheets.length} Blätter erkannt. Jede Dateispalte braucht ein Feld — oder „Ignorieren“.`
-                            : `${preview.columns.length} Spalten erkannt. Jede Dateispalte braucht ein Feld — oder „Ignorieren“.`}
+                            ? `${previewSheets.length} Blätter erkannt. Jede Dateispalte braucht ein Feld, oder „Ignorieren".`
+                            : `${preview.columns.length} Spalten erkannt. Jede Dateispalte braucht ein Feld, oder „Ignorieren".`}
                     </p>
                     {preview.profile_applied && (
                         <p className={layout.note}>
-                            Firmenprofil angewendet — so sehen eure Exporte
-                            aus. Du kannst die Zuordnung noch ändern.
+                            Firmenprofil angewendet: so sehen eure Exporte aus.
+                            Du kannst die Zuordnung noch ändern.
                         </p>
                     )}
                     {previewSheets.map((sheet) => (
                         <div key={sheet.kind} className={styles.sheetBlock}>
                             <h3 className={styles.sheetHeading}>
                                 {IMPORT_SHEET_KIND_LABELS[sheet.kind]}
-                                {sheet.name !== IMPORT_SHEET_KIND_LABELS[sheet.kind]
+                                {sheet.name !==
+                                IMPORT_SHEET_KIND_LABELS[sheet.kind]
                                     ? ` · ${sheet.name}`
                                     : ""}
                             </h3>
@@ -778,7 +784,7 @@ export const ImportPage = () => {
                                     className={styles.mappingRow}
                                 >
                                     <span className={styles.mappingLabel}>
-                                        „{raw}“
+                                        „{raw}"
                                     </span>
                                     <select
                                         className={styles.select}
@@ -834,115 +840,18 @@ export const ImportPage = () => {
                 </section>
             )}
 
-            {step === "preview" && preview && (
-                <section className={layout.panel}>
-                    <h2 className={layout.panelTitle}>Testlauf</h2>
-                    <p className={layout.note}>
-                        Bestehende Kennzeichen und Fahrernamen werden
-                        übersprungen, bis du die Aktion auf „Aktualisieren“
-                        stellst. Eignung und aktuelles Fahrzeug gelten zusätzlich.
-                    </p>
-                    <dl className={layout.facts}>
-                        <div>
-                            <dt>Zeilen</dt>
-                            <dd>{preview.counts.total_rows}</dd>
-                        </div>
-                        <div>
-                            <dt>Neu / zuweisen</dt>
-                            <dd>{preview.counts.to_create}</dd>
-                        </div>
-                        <div>
-                            <dt>Aktualisieren</dt>
-                            <dd>{preview.counts.to_update}</dd>
-                        </div>
-                        <div>
-                            <dt>Überspringen</dt>
-                            <dd>{preview.counts.to_skip}</dd>
-                        </div>
-                        {preview.counts.errors > 0 && (
-                            <div>
-                                <dt>Fehler</dt>
-                                <dd>{preview.counts.errors}</dd>
-                            </div>
-                        )}
-                    </dl>
-
-                    {previewSheets.map((sheet) => {
-                        const rows: ImportPreviewTableRow[] = sheet.rows.map(
-                            (row) => ({
-                                ...row,
-                                action:
-                                    effectiveRowActions[
-                                        importActionKey(
-                                            row.sheet_kind,
-                                            row.row_index,
-                                        )
-                                    ] ?? row.default_action,
-                            }),
-                        );
-
-                        return (
-                            <div key={sheet.kind} className={styles.sheetBlock}>
-                                <h3 className={styles.sheetHeading}>
-                                    {IMPORT_SHEET_KIND_LABELS[sheet.kind]}
-                                    {` · ${sheet.counts.total_rows} Zeilen`}
-                                </h3>
-                                <Table
-                                    columns={importPreviewColumns(
-                                        sheet.kind,
-                                        (row, action) => {
-                                            setRowActions((current) => ({
-                                                ...current,
-                                                [importActionKey(
-                                                    row.sheet_kind,
-                                                    row.row_index,
-                                                )]: action,
-                                            }));
-                                        },
-                                    )}
-                                    rows={rows}
-                                    getRowKey={(row) =>
-                                        importActionKey(
-                                            row.sheet_kind,
-                                            row.row_index,
-                                        )
-                                    }
-                                    caption={`Vorschau ${IMPORT_SHEET_KIND_LABELS[sheet.kind]}`}
-                                    isLoading={isLoading}
-                                    emptyContent="Keine Zeilen in diesem Blatt."
-                                    className={styles.tableWrap}
-                                />
-                            </div>
-                        );
-                    })}
-
-                    <label className={styles.remember}>
-                        <Checkbox
-                            checked={saveProfile}
-                            onChange={(event) =>
-                                setSaveProfile(event.target.checked)
-                            }
-                        />
-                        Als Firmenprofil merken
-                    </label>
-                    <div className={styles.actions}>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setStep("mapping")}
-                        >
-                            Zurück
-                        </Button>
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            disabled={isLoading || !canCommit}
-                            onClick={() => void handleCommit()}
-                        >
-                            {isLoading ? "Import läuft…" : "Import ausführen"}
-                        </Button>
-                    </div>
-                </section>
+            {step === "preview" && preview && outcome && (
+                <ImportPreviewStep
+                    preview={preview}
+                    outcome={outcome}
+                    saveProfile={saveProfile}
+                    isLoading={isLoading}
+                    onOutcomeChange={setOutcome}
+                    onSaveProfileChange={setSaveProfile}
+                    onBack={() => setStep("mapping")}
+                    onCommit={(actions) => void handleCommit(actions)}
+                    onError={setError}
+                />
             )}
 
             {step === "result" && commitSummary && (
@@ -962,11 +871,11 @@ export const ImportPage = () => {
                             <dd>{commitSummary.created_drivers}</dd>
                         </div>
                         <div>
-                            <dt>Eignung</dt>
+                            <dt>Freigaben</dt>
                             <dd>{commitSummary.assigned_eligibility}</dd>
                         </div>
                         <div>
-                            <dt>Aktuell gesetzt</dt>
+                            <dt>Besatzung gesetzt</dt>
                             <dd>{commitSummary.set_current}</dd>
                         </div>
                         <div>
@@ -986,6 +895,24 @@ export const ImportPage = () => {
                             </div>
                         )}
                     </dl>
+                    {commitSummary.errors.length > 0 && (
+                        <div className={styles.problemBanner} role="alert">
+                            <p className={styles.problemBannerLead}>
+                                {commitSummary.failed_rows === 1
+                                    ? "Eine Zeile konnte nicht übernommen werden, der Rest schon:"
+                                    : `${commitSummary.failed_rows} Zeilen konnten nicht übernommen werden, der Rest schon:`}
+                            </p>
+                            <ul className={styles.problemList}>
+                                {commitSummary.errors.map((entry) => (
+                                    <li
+                                        key={`${entry.row_index}-${entry.message}`}
+                                    >
+                                        {entry.message}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     <div className={styles.actions}>
                         {commitSummary.errors.length > 0 && (
                             <Button
@@ -1011,11 +938,8 @@ export const ImportPage = () => {
                             Zur Fahrzeugliste
                         </Button>
                     </div>
+                    <ImportLog runs={runs} />
                 </section>
-            )}
-
-            {(step === "upload" || step === "result") && (
-                <ImportLog runs={runs} />
             )}
 
             {error && (
