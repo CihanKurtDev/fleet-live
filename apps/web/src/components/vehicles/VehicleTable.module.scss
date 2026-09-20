@@ -46,6 +46,7 @@
     }
 
     .mobileCards {
+        flex: none;
         overflow: visible;
 
         :global(table) {
