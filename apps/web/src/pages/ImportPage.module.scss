@@ -264,6 +264,37 @@
     background: color-mix(in srgb, #d97706 10%, var(--bg));
 }
 
+.resultBanner {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1.45;
+
+    strong {
+        color: var(--text-h);
+        font-weight: 700;
+    }
+
+    span {
+        color: var(--text);
+    }
+}
+
+.resultBannerSuccess {
+    border-color: color-mix(in srgb, var(--success) 42%, var(--border));
+    background: color-mix(in srgb, var(--success) 9%, var(--bg));
+}
+
+.resultBannerCaution {
+    border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
+    background: color-mix(in srgb, var(--warning) 9%, var(--bg));
+}
+
 .problemBannerLead {
     margin: 0;
     font-size: 14px;
@@ -434,4 +465,3 @@
         grid-template-columns: 1fr;
     }
 }
-
