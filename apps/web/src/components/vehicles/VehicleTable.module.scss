@@ -34,3 +34,115 @@
     color: var(--text);
     font-size: 13px;
 }
+
+@media (max-width: 700px) {
+    .vehicleTable {
+        padding: 0 12px 20px;
+    }
+
+    .title {
+        margin-top: 10px;
+        font-size: 20px;
+    }
+
+    .mobileCards {
+        overflow: visible;
+
+        :global(table) {
+            display: block;
+        }
+
+        :global(thead) {
+            display: none;
+        }
+
+        :global(tbody) {
+            display: grid;
+            gap: 10px;
+        }
+
+        :global(tr) {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 7px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        :global(td) {
+            display: grid;
+            grid-template-columns: minmax(82px, 0.38fr) minmax(0, 1fr);
+            gap: 10px;
+            align-items: start;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            font-size: 13px;
+        }
+
+        :global(td)::before {
+            content: attr(data-label);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 650;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        :global(td:first-child) {
+            display: block;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        :global(td:first-child)::before {
+            display: none;
+        }
+
+        :global([data-editing="true"] td:nth-child(2)) {
+            display: block;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        :global([data-editing="true"] td:nth-child(2))::before {
+            display: none;
+        }
+
+        :global(td:last-child) {
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+        }
+
+        :global(.selectCell) {
+            display: block;
+            padding: 0;
+            border: 0;
+        }
+
+        :global(.selectCell)::before {
+            display: none;
+        }
+
+        :global(.skeletonRow) {
+            display: grid;
+            box-shadow: none;
+        }
+
+        :global(.skeletonRow td) {
+            display: block;
+        }
+
+        :global(.empty) {
+            display: block;
+            padding: 24px 12px;
+        }
+    }
+}
