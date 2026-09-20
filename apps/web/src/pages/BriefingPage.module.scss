@@ -45,7 +45,6 @@
     box-sizing: border-box;
 
     border: 1px solid var(--border);
-    border-top: 3px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
     color: inherit;
@@ -55,34 +54,6 @@
 
 a.kpi:hover {
     border-color: var(--accent-border);
-}
-
-.kpiCritical {
-    border-top-color: var(--danger);
-}
-
-.kpiWarning {
-    border-top-color: var(--warning);
-}
-
-.kpiPositive {
-    border-top-color: var(--success);
-}
-
-.kpiNeutral {
-    border-top-color: var(--border);
-}
-
-a.kpiCritical:hover {
-    border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
-}
-
-a.kpiWarning:hover {
-    border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
-}
-
-a.kpiPositive:hover {
-    border-color: color-mix(in srgb, var(--success) 55%, var(--border));
 }
 
 .kpiLabel {
