@@ -92,21 +92,36 @@ export const useFleetDriverFilter = ({
         return () => controller.abort();
     }, [open, selected]);
 
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
+    const searchRequestKey =
+        open && debouncedQuery.length > 0
+            ? `${debouncedQuery}\0${page}`
+            : open
+              ? "empty"
+              : null;
+    const [prevSearchRequestKey, setPrevSearchRequestKey] =
+        useState(searchRequestKey);
 
-        if (debouncedQuery.length === 0) {
+    if (searchRequestKey !== prevSearchRequestKey) {
+        setPrevSearchRequestKey(searchRequestKey);
+
+        if (searchRequestKey === "empty") {
             setHits([]);
             setMatched(0);
             setPageCount(1);
             setIsSearching(false);
+        } else if (searchRequestKey !== null) {
+            setIsSearching(true);
+        } else {
+            setIsSearching(false);
+        }
+    }
+
+    useEffect(() => {
+        if (!open || debouncedQuery.length === 0) {
             return;
         }
 
         const controller = new AbortController();
-        setIsSearching(true);
 
         listFleetDrivers(
             { search: debouncedQuery, page },

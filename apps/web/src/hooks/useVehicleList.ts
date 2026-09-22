@@ -17,9 +17,29 @@ import {
 import { useVehicles } from "../context/vehiclesContext";
 import { applyVehicleOverrides } from "../utils/applyVehicleOverrides";
 
+const vehicleListRequestKey = (query: VehicleListQuery, listEpoch: number) =>
+    [
+        query.search,
+        query.filter,
+        query.sort,
+        query.dir,
+        query.page,
+        query.limit,
+        listEpoch,
+    ].join("\0");
+
 export const useVehicleList = (query: VehicleListQuery) => {
     const { listEpoch, vehicleOverrides } = useVehicles();
-    const cached = getCachedVehicleList(query);
+    const { search, filter, sort, dir, page, limit } = query;
+    const listQuery: VehicleListQuery = {
+        search,
+        filter,
+        sort,
+        dir,
+        page,
+        limit,
+    };
+    const cached = getCachedVehicleList(listQuery);
 
     const [response, setResponse] = useState<VehicleListResponse | null>(
         cached?.data ?? null,
@@ -27,9 +47,12 @@ export const useVehicleList = (query: VehicleListQuery) => {
     const [isFetching, setIsFetching] = useState(!cached);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const controller = new AbortController();
-        const existing = getCachedVehicleList(query);
+    const requestKey = vehicleListRequestKey(listQuery, listEpoch);
+    const [fetchKey, setFetchKey] = useState(requestKey);
+
+    if (requestKey !== fetchKey) {
+        setFetchKey(requestKey);
+        const existing = getCachedVehicleList(listQuery);
 
         if (existing) {
             rememberVehicles(existing.data.data);
@@ -40,9 +63,21 @@ export const useVehicleList = (query: VehicleListQuery) => {
         }
 
         setError(null);
+    }
+
+    useEffect(() => {
+        const controller = new AbortController();
+        const activeQuery: VehicleListQuery = {
+            search,
+            filter,
+            sort,
+            dir,
+            page,
+            limit,
+        };
 
         retryTransient(
-            () => fetchVehicleList(query, controller.signal),
+            () => fetchVehicleList(activeQuery, controller.signal),
             controller.signal,
         )
             .then((data) => {
@@ -68,20 +103,31 @@ export const useVehicleList = (query: VehicleListQuery) => {
             });
 
         return () => controller.abort();
-    }, [query.search, query.filter, query.sort, query.dir, query.page, query.limit, listEpoch]);
+    }, [search, filter, sort, dir, page, limit, listEpoch]);
 
     useEffect(() => {
         let cancelled = false;
+        const activeQuery: VehicleListQuery = {
+            search,
+            filter,
+            sort,
+            dir,
+            page,
+            limit,
+        };
 
         const publishFocus = (list: VehicleListResponse) => {
             const ids = [...list.data.map((vehicle) => vehicle.id)];
 
-            for (const page of [query.page + 1, query.page - 1]) {
-                if (page < 1 || page > list.meta.pageCount) {
+            for (const neighborPage of [page + 1, page - 1]) {
+                if (neighborPage < 1 || neighborPage > list.meta.pageCount) {
                     continue;
                 }
 
-                const neighbor = getCachedVehicleList({ ...query, page });
+                const neighbor = getCachedVehicleList({
+                    ...activeQuery,
+                    page: neighborPage,
+                });
                 if (neighbor) {
                     ids.push(
                         ...neighbor.data.data.map((vehicle) => vehicle.id),
@@ -92,7 +138,7 @@ export const useVehicleList = (query: VehicleListQuery) => {
             setTelemetryFocus("list", ids);
         };
 
-        const current = getCachedVehicleList(query)?.data;
+        const current = getCachedVehicleList(activeQuery)?.data;
 
         if (!current) {
             clearTelemetryFocus("list");
@@ -104,8 +150,9 @@ export const useVehicleList = (query: VehicleListQuery) => {
 
         publishFocus(current);
 
-        const neighborPages = [query.page - 1, query.page + 1].filter(
-            (page) => page >= 1 && page <= current.meta.pageCount,
+        const neighborPages = [page - 1, page + 1].filter(
+            (neighborPage) =>
+                neighborPage >= 1 && neighborPage <= current.meta.pageCount,
         );
 
         const idle =
@@ -115,15 +162,15 @@ export const useVehicleList = (query: VehicleListQuery) => {
 
         const id = idle(() => {
             void Promise.all(
-                neighborPages.map((page) =>
-                    fetchVehicleList({ ...query, page }),
+                neighborPages.map((neighborPage) =>
+                    fetchVehicleList({ ...activeQuery, page: neighborPage }),
                 ),
             ).then(() => {
                 if (cancelled) {
                     return;
                 }
 
-                const latest = getCachedVehicleList(query)?.data;
+                const latest = getCachedVehicleList(activeQuery)?.data;
                 if (latest) {
                     publishFocus(latest);
                 }
@@ -139,15 +186,7 @@ export const useVehicleList = (query: VehicleListQuery) => {
                 clearTimeout(id as number);
             }
         };
-    }, [
-        query.search,
-        query.filter,
-        query.sort,
-        query.dir,
-        query.page,
-        query.limit,
-        response,
-    ]);
+    }, [search, filter, sort, dir, page, limit, response]);
 
     const data = response
         ? applyVehicleOverrides(response.data, vehicleOverrides)

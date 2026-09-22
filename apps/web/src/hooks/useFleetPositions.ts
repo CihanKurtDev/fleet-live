@@ -36,13 +36,31 @@ export const useFleetPositions = ({
     const [hasLoaded, setHasLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const driversKey = drivers.join("\0");
+    const bboxKey = bbox
+        ? `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`
+        : "";
+    const requestKey = bbox
+        ? [bboxKey, filter ?? "", search, driversKey, listEpoch].join("\0")
+        : null;
+    const [fetchKey, setFetchKey] = useState(requestKey);
+
+    if (requestKey !== fetchKey) {
+        setFetchKey(requestKey);
+        if (requestKey !== null) {
+            setIsLoading(true);
+            setError(null);
+        } else {
+            setIsLoading(false);
+        }
+    }
+
     useEffect(() => {
         if (!bbox) {
             return;
         }
 
         const controller = new AbortController();
-        setIsLoading(true);
 
         retryTransient(
             () =>

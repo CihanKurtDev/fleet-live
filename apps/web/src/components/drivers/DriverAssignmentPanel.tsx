@@ -130,17 +130,20 @@ export const DriverAssignmentPanel = ({
         onConfirmAssign,
     });
 
-    candidatesRef.current = candidates;
-
     useEffect(() => {
+        candidatesRef.current = candidates;
+    });
+
+    const vehicleIdsKey = driver.vehicles.map((vehicle) => vehicle.id).join(",");
+    const [prevVehicleIdsKey, setPrevVehicleIdsKey] = useState(vehicleIdsKey);
+    if (vehicleIdsKey !== prevVehicleIdsKey) {
+        setPrevVehicleIdsKey(vehicleIdsKey);
         const allowed = new Set(driver.vehicles.map((vehicle) => vehicle.id));
-        setSelectedIds((current) =>
-            current.filter((id) => allowed.has(id)),
-        );
+        setSelectedIds((current) => current.filter((id) => allowed.has(id)));
         if (driver.vehicles.length === 0) {
             setEditing(false);
         }
-    }, [driver.vehicles]);
+    }
 
     const rosterItems = useMemo(() => {
         return [...driver.vehicles]

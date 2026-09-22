@@ -8,6 +8,7 @@ import {
     INITIAL_MAP_ZOOM,
     useLeafletFollowMap,
 } from "../../hooks/useLeafletFollowMap";
+import { useLatestRef } from "../../hooks/useLatestRef";
 import { useMarkerSlide } from "../../hooks/useMarkerSlide";
 import { MapStatusLegend } from "./MapStatusLegend";
 import type { MapPoint } from "./mapGeometry";
@@ -57,10 +58,8 @@ export const VehicleMap = ({
     const { sync, cancel } = useMarkerSlide();
     const markerRef = useRef<L.Marker | null>(null);
     const lineRef = useRef<L.Polyline | null>(null);
-    const statusRef = useRef(status);
-    const labelRef = useRef(label);
-    statusRef.current = status;
-    labelRef.current = label;
+    const statusRef = useLatestRef(status);
+    const labelRef = useLatestRef(label);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -95,7 +94,7 @@ export const VehicleMap = ({
             markerRef.current?.remove();
             markerRef.current = null;
         };
-    }, [cancel, mapRef, themedRef]);
+    }, [cancel, mapRef, themedRef, statusRef]);
 
     useEffect(() => {
         markerRef.current?.setTooltipContent(markerTooltip(label, status));
@@ -134,7 +133,17 @@ export const VehicleMap = ({
             line,
             panIfFollowing,
         });
-    }, [latitude, longitude, trail, mapRef, panIfFollowing, setViewSilent, sync]);
+    }, [
+        latitude,
+        longitude,
+        trail,
+        mapRef,
+        panIfFollowing,
+        setViewSilent,
+        sync,
+        labelRef,
+        statusRef,
+    ]);
 
     const statusLabel = vehicleStatusLabel(status);
 

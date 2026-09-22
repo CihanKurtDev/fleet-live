@@ -10,7 +10,6 @@ import {
 } from "@fleet-live/shared";
 
 import { useDebouncedValue } from "./useDebouncedValue";
-
 const sameBBox = (left: GeoBBox | null, right: GeoBBox) =>
     left !== null &&
     left.west === right.west &&
@@ -44,12 +43,12 @@ export const useFleetPageQuery = () => {
     const bboxRaw = searchParams.get("bbox");
     const bbox = useMemo(() => readBBox(bboxRaw), [bboxRaw]);
     const [searchDraft, setSearchDraft] = useState(search);
-    const debouncedSearch = useDebouncedValue(searchDraft);
-
-    useEffect(() => {
+    const [prevSearch, setPrevSearch] = useState(search);
+    if (search !== prevSearch) {
+        setPrevSearch(search);
         setSearchDraft(search);
-    }, [search]);
-
+    }
+    const debouncedSearch = useDebouncedValue(searchDraft);
     const writeQuery = useCallback(
         (next: FleetPositionsQuery) => {
             setSearchParams(serializeFleetPositionsQuery(next), {

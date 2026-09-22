@@ -195,13 +195,85 @@ export function ImportPreviewStep({
         ],
     );
 
+    const rowsRequestKey = detailsOpen
+        ? [
+              preview.preview_id,
+              sheetFilter ?? "",
+              rowStatusFilter,
+              debouncedSearch,
+              visibleLimit,
+          ].join("\0")
+        : null;
+    const [prevRowsRequestKey, setPrevRowsRequestKey] = useState(rowsRequestKey);
+
+    if (rowsRequestKey !== prevRowsRequestKey) {
+        setPrevRowsRequestKey(rowsRequestKey);
+        if (rowsRequestKey !== null) {
+            setRowsLoading(true);
+        } else {
+            setRowsLoading(false);
+        }
+    }
+
     useEffect(() => {
         if (!detailsOpen) {
             return;
         }
 
-        void loadRows(visibleLimit);
-    }, [detailsOpen, loadRows, visibleLimit]);
+        const controller = new AbortController();
+
+        void (async () => {
+            try {
+                const response = await listImportPreviewRows(
+                    preview.preview_id,
+                    {
+                        page: 1,
+                        limit: visibleLimit,
+                        sheet_kind: sheetFilter ?? undefined,
+                        status: rowStatusFilter,
+                        q: debouncedSearch,
+                    },
+                );
+
+                if (controller.signal.aborted) {
+                    return;
+                }
+
+                setRows(
+                    response.data.map((row) =>
+                        previewTableRow(row, row.action),
+                    ),
+                );
+                setRowsTotal(response.meta.total);
+                setSheetCounts(response.meta.sheet_counts);
+                setStatusCounts(response.meta.status_counts);
+            } catch (caught) {
+                if (controller.signal.aborted) {
+                    return;
+                }
+
+                onError(
+                    caught instanceof ApiError
+                        ? caught.message
+                        : "Zeilen konnten nicht geladen werden.",
+                );
+            } finally {
+                if (!controller.signal.aborted) {
+                    setRowsLoading(false);
+                }
+            }
+        })();
+
+        return () => controller.abort();
+    }, [
+        detailsOpen,
+        visibleLimit,
+        preview.preview_id,
+        sheetFilter,
+        rowStatusFilter,
+        debouncedSearch,
+        onError,
+    ]);
 
     const handleViewRows = useCallback(
         (filter: ImportPreviewRowStatusFilter) => {
@@ -409,7 +481,7 @@ export function ImportPreviewStep({
                             </Button>
                             <p className={styles.statusPanelFootnote}>
                                 Setzt wiedererkannte Zeilen auf „Aktualisieren“
-                                (z. B. Telefon, Standort, HU). Fahrer auf Fahrt
+                                (z. B. Telefon, Standort, HU). Fahrer auf Fahrt
                                 und Fehlerzeilen bleiben unverändert.
                             </p>
                         </div>
