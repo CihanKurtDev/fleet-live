@@ -1,14 +1,3 @@
-import type { Alert } from "./alert";
-
-/** Newest open inbox rows on the Schicht page — enough to fill the left column. */
-export const BRIEFING_OPEN_ALERT_LIMIT = 25;
-
-/** Offline vehicles in the Kein-Signal list. */
-export const BRIEFING_OFFLINE_LIMIT = 15;
-
-/** Drivers with the most open warnings. */
-export const BRIEFING_DRIVER_LIMIT = 12;
-
 /** Months on the Schicht charts, ending at the current UTC month. */
 export const BRIEFING_HISTORY_MONTHS = 9;
 
@@ -50,26 +39,9 @@ export type BriefingCounts = {
     low_fuel: number;
 };
 
-export type BriefingOfflineVehicle = {
-    id: number;
-    license_plate: string;
-    driver_id: number | null;
-    driver_name: string | null;
-    recorded_at: string | null;
-};
-
-export type BriefingDriver = {
-    id: number;
-    name: string;
-    open_warnings: number;
-};
-
 export type BriefingData = {
     counts: BriefingCounts;
     history: BriefingHistoryMonth[];
-    open_alerts: Alert[];
-    offline_vehicles: BriefingOfflineVehicle[];
-    drivers: BriefingDriver[];
 };
 
 export type BriefingResponse = {

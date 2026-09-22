@@ -1,17 +1,11 @@
 import {
-    BRIEFING_DRIVER_LIMIT,
-    BRIEFING_OFFLINE_LIMIT,
-    BRIEFING_OPEN_ALERT_LIMIT,
     LOW_FUEL_THRESHOLD_PERCENT,
     briefingMonthKeys,
     type BriefingCounts,
     type BriefingHistoryMonth,
-    type BriefingOfflineVehicle,
     type BriefingResponse,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
-import { AlertModel } from "./alert.model";
-import { DriverModel } from "./driver.model";
 
 type StatusCountRow = {
     driving: number;
@@ -197,42 +191,10 @@ export class BriefingModel {
             low_fuel: Number(lowFuel.low_fuel_count),
         };
 
-        const offlineVehicles = stmt(
-            `
-            SELECT
-                v.id,
-                v.license_plate,
-                v.current_driver_id AS driver_id,
-                v.driver_name,
-                t.recorded_at
-            FROM vehicles v
-            LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
-            WHERE v.company_id = ?
-              AND v.status = 'OFFLINE'
-            ORDER BY
-                (t.recorded_at IS NULL),
-                t.recorded_at ASC,
-                v.license_plate COLLATE NOCASE
-            LIMIT ?
-            `,
-        ).all(companyId, BRIEFING_OFFLINE_LIMIT) as BriefingOfflineVehicle[];
-
         return {
             data: {
                 counts,
                 history: listHistory(companyId),
-                open_alerts: AlertModel.listOpenNewest(
-                    companyId,
-                    BRIEFING_OPEN_ALERT_LIMIT,
-                ),
-                offline_vehicles: offlineVehicles.map((row) => ({
-                    ...row,
-                    recorded_at: row.recorded_at ?? null,
-                })),
-                drivers: DriverModel.listTopByOpenWarnings(
-                    companyId,
-                    BRIEFING_DRIVER_LIMIT,
-                ),
             },
         };
     }
