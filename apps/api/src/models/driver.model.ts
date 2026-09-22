@@ -1,5 +1,4 @@
 import type {
-    BriefingDriver,
     Driver,
     DriverDetail,
     DriverIncidentCounts,
@@ -539,38 +538,5 @@ export class DriverModel {
         }
 
         return detail;
-    }
-
-    static listTopByOpenWarnings(
-        companyId: number,
-        limit: number,
-    ): BriefingDriver[] {
-        const rows = stmt(
-            `
-            SELECT
-                d.id,
-                d.name,
-                COUNT(a.id) AS open_warnings
-            FROM drivers d
-            INNER JOIN alerts a
-                ON a.driver_id = d.id
-               AND a.type = 'SPEEDING'
-               AND a.resolved_at IS NULL
-            WHERE d.company_id = ?
-            GROUP BY d.id
-            ORDER BY open_warnings DESC, d.name COLLATE NOCASE, d.id ASC
-            LIMIT ?
-            `,
-        ).all(companyId, limit) as Array<{
-            id: number;
-            name: string;
-            open_warnings: number;
-        }>;
-
-        return rows.map((row) => ({
-            id: row.id,
-            name: row.name,
-            open_warnings: Number(row.open_warnings),
-        }));
     }
 }

@@ -79,39 +79,6 @@ export const formatRelativeTimestamp = (value: string | null): string => {
     return formatTimestamp(value);
 };
 
-/** Dauer seit dem letzten Punkt, z. B. „seit 4 Min.“ auf der Schicht. */
-export const formatSinceTimestamp = (value: string | null): string => {
-    if (value === null) {
-        return "—";
-    }
-
-    const date = parseSqliteUtc(value);
-
-    if (!date) {
-        return "—";
-    }
-
-    const diffMs = Date.now() - date.getTime();
-
-    if (diffMs < 0) {
-        return formatTimestamp(value);
-    }
-
-    const minutes = Math.floor(diffMs / 60_000);
-
-    if (minutes < 60) {
-        return minutes === 1 ? "seit 1 Min." : `seit ${minutes} Min.`;
-    }
-
-    const hours = Math.floor(minutes / 60);
-
-    if (hours < 24) {
-        return hours === 1 ? "seit 1 Std." : `seit ${hours} Std.`;
-    }
-
-    return formatTimestamp(value);
-};
-
 /** Kalenderdatum `YYYY-MM-DD` ohne Zeitzonen-Verschiebung. */
 export const formatIsoDate = (value: string | null | undefined): string => {
     if (!value) {

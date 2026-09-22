@@ -198,7 +198,7 @@ Vehicle, stream and sim routes require a session. `GET /api/health` does not. Us
 
 `GET /api/drivers` returns `{ data, meta }` of drivers for the session company. `counts` and `open_warnings` are **SPEEDING only** (snapshot `alerts.driver_id`). `vehicle_plate` is set when the driver has exactly one eligible vehicle. `current_vehicle_plate` is the vehicle with `current_driver_id`. Optional `vehicle_id` lists drivers eligible for that vehicle (404 if missing or other company). `GET /api/drivers/:id` adds `vehicles` (with `is_current`) and `current_vehicle`.
 
-`GET /api/briefing` returns `{ data }` for the session company: status counts (`driving`, `idle`, `offline`), inbox `open`, open `low_fuel` rows, the newest open alerts, offline vehicles (last `recorded_at`), and drivers with open warnings. Caps are `BRIEFING_OPEN_ALERT_LIMIT` / `BRIEFING_OFFLINE_LIMIT` / `BRIEFING_DRIVER_LIMIT` in `@fleet-live/shared`. `viewer` may read.
+`GET /api/briefing` returns `{ data }` for the session company: status counts (`driving`, `idle`, `offline`), inbox `open`, and `low_fuel` vehicle count, plus monthly `history` for the Schicht charts. `viewer` may read.
 
 `GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions, not the list page. Optional `bbox=west,south,east,north`; `search` matches plate and driver; `drivers` is a view filter (empty means the company snapshot in the bbox, not “no markers”). Over `FLEET_POSITIONS_MAX` (2000) matches → `truncated` and empty `data` (no sample).
 
