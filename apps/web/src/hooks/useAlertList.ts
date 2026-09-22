@@ -7,19 +7,56 @@ import { useVehicles } from "../context/vehiclesContext";
 
 export const useAlertList = (query: AlertListQuery) => {
     const { listEpoch } = useVehicles();
+    const {
+        filter,
+        sort,
+        dir,
+        page,
+        limit,
+        vehicle_id,
+        driver_id,
+        type,
+    } = query;
     const [response, setResponse] = useState<AlertListResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [notFound, setNotFound] = useState(false);
 
-    useEffect(() => {
-        const controller = new AbortController();
+    const requestKey = [
+        filter,
+        sort,
+        dir,
+        page,
+        limit,
+        vehicle_id,
+        driver_id,
+        type,
+        listEpoch,
+    ].join("\0");
+    const [fetchKey, setFetchKey] = useState(requestKey);
+
+    if (requestKey !== fetchKey) {
+        setFetchKey(requestKey);
         setIsFetching(true);
         setError(null);
         setNotFound(false);
+    }
+
+    useEffect(() => {
+        const controller = new AbortController();
+        const activeQuery: AlertListQuery = {
+            filter,
+            sort,
+            dir,
+            page,
+            limit,
+            vehicle_id,
+            driver_id,
+            type,
+        };
 
         retryTransient(
-            () => listAlerts(query, controller.signal),
+            () => listAlerts(activeQuery, controller.signal),
             controller.signal,
         )
             .then((data) => {
@@ -52,14 +89,14 @@ export const useAlertList = (query: AlertListQuery) => {
 
         return () => controller.abort();
     }, [
-        query.filter,
-        query.sort,
-        query.dir,
-        query.page,
-        query.limit,
-        query.vehicle_id,
-        query.driver_id,
-        query.type,
+        filter,
+        sort,
+        dir,
+        page,
+        limit,
+        vehicle_id,
+        driver_id,
+        type,
         listEpoch,
     ]);
 

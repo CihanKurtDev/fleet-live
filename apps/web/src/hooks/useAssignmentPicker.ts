@@ -8,6 +8,7 @@ import {
 
 import { ApiError, isAbortError } from "../api/client";
 import { useVehicles } from "../context/vehiclesContext";
+import { useLatestRef } from "./useLatestRef";
 
 type ConfirmAssignContext = {
     autoCurrent: boolean;
@@ -65,6 +66,10 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
     const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
     const autoCurrentRef = useRef(false);
 
+    const mutationError = config.mutationError;
+    const getAutoCurrentOnOpen = config.getAutoCurrentOnOpen;
+    const onConfirmAssign = config.onConfirmAssign;
+
     const run = useCallback(
         async (action: () => Promise<unknown>) => {
             setBusy(true);
@@ -77,13 +82,13 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
                 setError(
                     caught instanceof ApiError
                         ? caught.message
-                        : config.mutationError,
+                        : mutationError,
                 );
             } finally {
                 setBusy(false);
             }
         },
-        [config.mutationError, refetchLists],
+        [mutationError, refetchLists],
     );
 
     const {
@@ -111,18 +116,22 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
         return ids.sort((left, right) => left - right).join(",");
     }, [assigned, assignedConfig, externalExcludedIds]);
 
-    const excludedIdsRef = useRef(excludedIds);
-    excludedIdsRef.current = excludedIds;
+    const excludedIdsRef = useLatestRef(excludedIds);
+
+    const assignedDepsKey = assignedConfig
+        ? assignedConfig.deps.map(String).join("\0")
+        : "";
+    const assignedFetch = assignedConfig?.fetch;
+    const assignedErrorMessage = assignedConfig?.errorMessage;
 
     useEffect(() => {
-        if (!assignedConfig) {
+        if (!assignedFetch) {
             return;
         }
 
         const controller = new AbortController();
 
-        assignedConfig
-            .fetch(controller.signal)
+        assignedFetch(controller.signal)
             .then((rows) => {
                 setAssigned(rows);
             })
@@ -134,12 +143,28 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
                 setError(
                     caught instanceof Error
                         ? caught.message
-                        : assignedConfig.errorMessage,
+                        : (assignedErrorMessage ??
+                              "Zuweisung konnte nicht geladen werden."),
                 );
             });
 
         return () => controller.abort();
-    }, [assignedConfig, ...(assignedConfig?.deps ?? [])]);
+    }, [assignedDepsKey, assignedErrorMessage, assignedFetch]);
+
+    const candidatesRequestKey = assignOpen
+        ? `${search}\0${excludedIdsKey}`
+        : null;
+    const [prevCandidatesRequestKey, setPrevCandidatesRequestKey] = useState(
+        candidatesRequestKey,
+    );
+    if (candidatesRequestKey !== prevCandidatesRequestKey) {
+        setPrevCandidatesRequestKey(candidatesRequestKey);
+        if (candidatesRequestKey !== null) {
+            setIsLoadingCandidates(true);
+        } else {
+            setIsLoadingCandidates(false);
+        }
+    }
 
     useEffect(() => {
         if (!assignOpen) {
@@ -147,7 +172,6 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
         }
 
         const controller = new AbortController();
-        setIsLoadingCandidates(true);
 
         fetchCandidates(search, controller.signal)
             .then((rows) => {
@@ -176,27 +200,34 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
             });
 
         return () => controller.abort();
-    }, [assignOpen, search, fetchCandidates, candidatesLoadError]);
+    }, [
+        assignOpen,
+        search,
+        fetchCandidates,
+        candidatesLoadError,
+        excludedIdsKey,
+        excludedIdsRef,
+    ]);
 
-    useEffect(() => {
-        if (!assignOpen) {
-            return;
-        }
-
+    const [prevExcludedIdsKey, setPrevExcludedIdsKey] = useState(excludedIdsKey);
+    if (assignOpen && excludedIdsKey !== prevExcludedIdsKey) {
+        setPrevExcludedIdsKey(excludedIdsKey);
         setCandidates((current) =>
             current.filter((row) => {
                 const id = (row as { id: number }).id;
-                return !excludedIdsRef.current.has(id);
+                return !excludedIds.has(id);
             }),
         );
-    }, [assignOpen, excludedIdsKey]);
+    } else if (excludedIdsKey !== prevExcludedIdsKey) {
+        setPrevExcludedIdsKey(excludedIdsKey);
+    }
 
     const openAssignPicker = useCallback(() => {
         setSearch("");
         setIsLoadingCandidates(true);
-        autoCurrentRef.current = config.getAutoCurrentOnOpen();
+        autoCurrentRef.current = getAutoCurrentOnOpen();
         setAssignOpen(true);
-    }, [config.getAutoCurrentOnOpen]);
+    }, [getAutoCurrentOnOpen]);
 
     const closeAssignPicker = useCallback(() => {
         setAssignOpen(false);
@@ -205,7 +236,7 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
     const confirmAssign = useCallback(
         (ids: number[]) => {
             void run(async () => {
-                await config.onConfirmAssign(ids, {
+                await onConfirmAssign(ids, {
                     autoCurrent: autoCurrentRef.current,
                     clearAutoCurrent: () => {
                         autoCurrentRef.current = false;
@@ -216,7 +247,7 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
                 });
             });
         },
-        [config, run],
+        [onConfirmAssign, run],
     );
 
     return {

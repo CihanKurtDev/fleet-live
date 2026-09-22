@@ -10,11 +10,16 @@ export const useBriefing = () => {
     const [response, setResponse] = useState<BriefingResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [fetchKey, setFetchKey] = useState(listEpoch);
+
+    if (listEpoch !== fetchKey) {
+        setFetchKey(listEpoch);
+        setIsFetching(true);
+        setError(null);
+    }
 
     useEffect(() => {
         const controller = new AbortController();
-        setIsFetching(true);
-        setError(null);
 
         retryTransient(
             () => getBriefing(controller.signal),

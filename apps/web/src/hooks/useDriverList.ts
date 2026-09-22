@@ -7,17 +7,41 @@ import { useVehicles } from "../context/vehiclesContext";
 
 export const useDriverList = (query: DriverListQuery) => {
     const { listEpoch } = useVehicles();
+    const { search, sort, dir, page, limit, vehicle_id } = query;
     const [response, setResponse] = useState<DriverListResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const controller = new AbortController();
+    const requestKey = [
+        search,
+        sort,
+        dir,
+        page,
+        limit,
+        vehicle_id,
+        listEpoch,
+    ].join("\0");
+    const [fetchKey, setFetchKey] = useState(requestKey);
+
+    if (requestKey !== fetchKey) {
+        setFetchKey(requestKey);
         setIsFetching(true);
         setError(null);
+    }
+
+    useEffect(() => {
+        const controller = new AbortController();
+        const activeQuery: DriverListQuery = {
+            search,
+            sort,
+            dir,
+            page,
+            limit,
+            vehicle_id,
+        };
 
         retryTransient(
-            () => listDrivers(query, controller.signal),
+            () => listDrivers(activeQuery, controller.signal),
             controller.signal,
         )
             .then((data) => {
@@ -42,7 +66,7 @@ export const useDriverList = (query: DriverListQuery) => {
             });
 
         return () => controller.abort();
-    }, [query.search, query.sort, query.dir, query.page, query.limit, query.vehicle_id, listEpoch]);
+    }, [search, sort, dir, page, limit, vehicle_id, listEpoch]);
 
     return {
         data: response?.data ?? [],

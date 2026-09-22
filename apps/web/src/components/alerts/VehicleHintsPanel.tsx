@@ -34,9 +34,16 @@ export const VehicleHintsPanel = ({
         vehicle.status === "OFFLINE" ||
         vehicle.open_alert_types.includes("OFFLINE");
 
+    const requestKey = `${vehicle.id}\0${listEpoch}`;
+    const [fetchKey, setFetchKey] = useState(requestKey);
+    if (requestKey !== fetchKey) {
+        setFetchKey(requestKey);
+        setError(null);
+        setLiveOfflineAlert(undefined);
+    }
+
     useEffect(() => {
         const controller = new AbortController();
-        setError(null);
 
         retryTransient(
             () =>

@@ -3,6 +3,7 @@ import type { FleetPosition, GeoBBox, VehicleStatus } from "@fleet-live/shared";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+import { useLatestRef } from "../../hooks/useLatestRef";
 import { createThemedMap, prefersDark } from "./leafletMap";
 import { MapStatusLegend } from "./MapStatusLegend";
 import {
@@ -69,10 +70,8 @@ export const FleetMap = ({
     const canvasRef = useRef<L.Canvas | null>(null);
     const markersRef = useRef(new Map<number, MarkerRecord>());
     const initialBboxRef = useRef(initialBbox);
-    const onBoundsChangeRef = useRef(onBoundsChange);
-    onBoundsChangeRef.current = onBoundsChange;
-    const onSelectRef = useRef(onSelect);
-    onSelectRef.current = onSelect;
+    const onBoundsChangeRef = useLatestRef(onBoundsChange);
+    const onSelectRef = useLatestRef(onSelect);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -136,22 +135,24 @@ export const FleetMap = ({
             }
         });
 
+        const markers = markersRef.current;
+
         return () => {
             if (timer !== undefined) {
                 window.clearTimeout(timer);
             }
             map.off("dragend", onUserView);
             map.off("zoomend", onUserView);
-            for (const entry of markersRef.current.values()) {
+            for (const entry of markers.values()) {
                 entry.marker.remove();
             }
-            markersRef.current.clear();
+            markers.clear();
             canvas.remove();
             themed.destroy();
             mapRef.current = null;
             canvasRef.current = null;
         };
-    }, []);
+    }, [onBoundsChangeRef]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -211,7 +212,7 @@ export const FleetMap = ({
                 markers.delete(id);
             }
         }
-    }, [vehicles]);
+    }, [vehicles, onSelectRef]);
 
     return (
         <div className={`${styles.wrap} ${styles.wrapFill}`}>

@@ -57,23 +57,20 @@ export const AssignmentPicker = ({
     const listRef = useRef<HTMLDivElement>(null);
     const [selected, setSelected] = useState<Set<number>>(() => new Set());
     const [focusedIndex, setFocusedIndex] = useState(0);
+    const [wasOpen, setWasOpen] = useState(open);
 
-    useEffect(() => {
+    if (open !== wasOpen) {
+        setWasOpen(open);
         if (open) {
             setSelected(new Set());
             setFocusedIndex(0);
         }
-    }, [open]);
+    }
 
-    useEffect(() => {
-        setFocusedIndex((current) => {
-            if (items.length === 0) {
-                return 0;
-            }
-
-            return Math.min(current, items.length - 1);
-        });
-    }, [items]);
+    const maxFocusedIndex = items.length === 0 ? 0 : items.length - 1;
+    if (focusedIndex > maxFocusedIndex) {
+        setFocusedIndex(maxFocusedIndex);
+    }
 
     useEffect(() => {
         const focused = items[focusedIndex];
@@ -87,7 +84,6 @@ export const AssignmentPicker = ({
         );
         node?.scrollIntoView({ block: "nearest" });
     }, [focusedIndex, items]);
-
     const toggle = (id: number) => {
         setSelected((current) => {
             const next = new Set(current);

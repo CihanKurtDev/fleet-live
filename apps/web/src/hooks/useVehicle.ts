@@ -19,25 +19,39 @@ export const useVehicle = (id: number | null) => {
     const [error, setError] = useState<string | null>(null);
     const [notFound, setNotFound] = useState(false);
 
-    useEffect(() => {
+    const requestKey = id === null ? "null" : `${id}\0${listEpoch}`;
+    const [fetchKey, setFetchKey] = useState(requestKey);
+
+    if (requestKey !== fetchKey) {
+        setFetchKey(requestKey);
+
         if (id === null) {
             setVehicle(undefined);
             setIsLoading(false);
             setNotFound(true);
+            setError(null);
+        } else {
+            const existing = peekVehicle(id);
+            if (existing) {
+                setVehicle(existing);
+                setIsLoading(false);
+                setNotFound(false);
+            } else {
+                setVehicle(undefined);
+                setIsLoading(true);
+                setNotFound(false);
+            }
+            setError(null);
+        }
+    }
+
+    useEffect(() => {
+        if (id === null) {
             return;
         }
 
         const existing = peekVehicle(id);
-        if (existing) {
-            setVehicle(existing);
-            setIsLoading(false);
-            setNotFound(false);
-        } else {
-            setIsLoading(true);
-        }
-
         const controller = new AbortController();
-        setError(null);
 
         retryTransient(
             () => getVehicle(id, controller.signal),
@@ -90,10 +104,13 @@ export const useVehicle = (id: number | null) => {
 
     const override = vehicle ? vehicleOverrides[vehicle.id] : undefined;
     const patched = vehicle && override ? { ...vehicle, ...override } : vehicle;
+    const matchesId = patched !== undefined && id !== null && patched.id === id;
 
     return {
-        vehicle: patched,
-        isLoading: isLoading && !patched,
+        vehicle: matchesId ? patched : undefined,
+        isLoading: Boolean(
+            id !== null && !notFound && (isLoading || !matchesId),
+        ),
         error,
         notFound,
     };

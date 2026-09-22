@@ -93,61 +93,69 @@ export const useMarkerSlide = () => {
         panRef.current(at);
     };
 
-    const tick = (now: number) => {
-        const queue = queueRef.current;
+    const tickRef = useRef<(now: number) => void>(() => undefined);
 
-        if (queue.length < 2 || speedMpsRef.current <= 0) {
-            animationRef.current = null;
-            lastFrameRef.current = null;
-            return;
-        }
+    useEffect(() => {
+        tickRef.current = (now: number) => {
+            const queue = queueRef.current;
 
-        const previous = lastFrameRef.current ?? now;
-        lastFrameRef.current = now;
-        let budget = speedMpsRef.current * Math.min(MAX_FRAME_S, (now - previous) / 1000);
-
-        while (budget > 0 && queue.length >= 2) {
-            const from = queue[0];
-            const to = queue[1];
-
-            if (!from || !to) {
-                break;
+            if (queue.length < 2 || speedMpsRef.current <= 0) {
+                animationRef.current = null;
+                lastFrameRef.current = null;
+                return;
             }
 
-            const segment = from.distanceTo(to);
+            const previous = lastFrameRef.current ?? now;
+            lastFrameRef.current = now;
+            let budget =
+                speedMpsRef.current *
+                Math.min(MAX_FRAME_S, (now - previous) / 1000);
 
-            if (segment <= VERTEX_EPS_M) {
-                bodyRef.current.push(from);
-                queue.shift();
-                continue;
+            while (budget > 0 && queue.length >= 2) {
+                const from = queue[0];
+                const to = queue[1];
+
+                if (!from || !to) {
+                    break;
+                }
+
+                const segment = from.distanceTo(to);
+
+                if (segment <= VERTEX_EPS_M) {
+                    bodyRef.current.push(from);
+                    queue.shift();
+                    continue;
+                }
+
+                if (budget >= segment) {
+                    budget -= segment;
+                    bodyRef.current.push(from);
+                    queue.shift();
+                    continue;
+                }
+
+                queue[0] = lerp(from, to, budget / segment);
+                budget = 0;
             }
 
-            if (budget >= segment) {
-                budget -= segment;
-                bodyRef.current.push(from);
-                queue.shift();
-                continue;
+            const at = queue[0];
+
+            if (at) {
+                paint(at);
             }
 
-            queue[0] = lerp(from, to, budget / segment);
-            budget = 0;
-        }
+            if (queue.length >= 2 && speedMpsRef.current > 0) {
+                animationRef.current = requestAnimationFrame((frame) => {
+                    tickRef.current(frame);
+                });
+            } else {
+                animationRef.current = null;
+                lastFrameRef.current = null;
+            }
+        };
+    });
 
-        const at = queue[0];
-
-        if (at) {
-            paint(at);
-        }
-
-        if (queue.length >= 2 && speedMpsRef.current > 0) {
-            animationRef.current = requestAnimationFrame(tick);
-        } else {
-            animationRef.current = null;
-            lastFrameRef.current = null;
-        }
-    };
-
-    const ensureRunning = () => {
+    const ensureRunning = useCallback(() => {
         if (animationRef.current !== null) {
             return;
         }
@@ -157,8 +165,10 @@ export const useMarkerSlide = () => {
         }
 
         lastFrameRef.current = null;
-        animationRef.current = requestAnimationFrame(tick);
-    };
+        animationRef.current = requestAnimationFrame((now) => {
+            tickRef.current(now);
+        });
+    }, []);
 
     const noteAppend = (meters: number, now: number) => {
         const elapsed =
@@ -255,7 +265,7 @@ export const useMarkerSlide = () => {
                 panIfFollowing(next);
             }
         },
-        [cancel],
+        [cancel, ensureRunning],
     );
 
     useEffect(() => cancel, [cancel]);

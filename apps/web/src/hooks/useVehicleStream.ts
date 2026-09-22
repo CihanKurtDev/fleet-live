@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
     parseStreamConnected,
     parseTelemetryPatches,
     type TelemetryPatch,
 } from "@fleet-live/shared";
 import { setStreamConnection } from "../api/telemetryFocus";
+import { useLatestRef } from "./useLatestRef";
 
 interface UseVehicleStreamHandlers {
     onTelemetry: (patches: TelemetryPatch[]) => void;
@@ -14,8 +15,7 @@ interface UseVehicleStreamHandlers {
 export const useVehicleStream = (
     handlers: UseVehicleStreamHandlers,
 ) => {
-    const handlersRef = useRef(handlers);
-    handlersRef.current = handlers;
+    const handlersRef = useLatestRef(handlers);
 
     useEffect(() => {
         const source = new EventSource("/api/stream");
@@ -56,5 +56,5 @@ export const useVehicleStream = (
             setStreamConnection(null);
             source.close();
         };
-    }, []);
+    }, [handlersRef]);
 };
