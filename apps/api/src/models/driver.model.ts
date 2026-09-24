@@ -413,6 +413,35 @@ export class DriverModel {
             throw new NotFoundError("Fahrer nicht gefunden.");
         }
 
+        const vehicle = stmt(
+            `
+            SELECT id, license_plate, status, current_driver_id
+            FROM vehicles
+            WHERE id = ? AND company_id = ?
+            `,
+        ).get(vehicleId, companyId) as
+            | {
+                  id: number;
+                  license_plate: string;
+                  status: string;
+                  current_driver_id: number | null;
+              }
+            | undefined;
+
+        if (!vehicle) {
+            throw new NotFoundError("Zuweisung nicht gefunden.");
+        }
+
+        if (
+            vehicle.status === "DRIVING" &&
+            vehicle.current_driver_id === driverId
+        ) {
+            const message = `${driver.name} ist noch unterwegs auf ${vehicle.license_plate}. Die Zuweisung lässt sich erst nach der Fahrt entfernen.`;
+            throw new ConflictError(message, {
+                vehicle_id: message,
+            });
+        }
+
         const result = stmt(
             `
             DELETE FROM driver_vehicles
@@ -449,7 +478,11 @@ export class DriverModel {
         if (vehicleId !== null) {
             const assigned = stmt(
                 `
-                SELECT v.id, v.company_id
+                SELECT
+                    v.id,
+                    v.license_plate,
+                    v.status,
+                    v.current_driver_id
                 FROM driver_vehicles dv
                 INNER JOIN vehicles v ON v.id = dv.vehicle_id
                 WHERE dv.driver_id = ?
@@ -457,7 +490,12 @@ export class DriverModel {
                   AND v.company_id = ?
                 `,
             ).get(driverId, vehicleId, companyId) as
-                | { id: number }
+                | {
+                      id: number;
+                      license_plate: string;
+                      status: string;
+                      current_driver_id: number | null;
+                  }
                 | undefined;
 
             if (!assigned) {
@@ -468,6 +506,17 @@ export class DriverModel {
                             "Das Fahrzeug ist diesem Fahrer nicht zugewiesen.",
                     },
                 );
+            }
+
+            if (
+                assigned.status === "DRIVING" &&
+                assigned.current_driver_id !== null &&
+                assigned.current_driver_id !== driverId
+            ) {
+                const message = `${assigned.license_plate} ist unterwegs. Aktueller Fahrer lässt sich erst nach der Fahrt wechseln.`;
+                throw new ConflictError(message, {
+                    vehicle_id: message,
+                });
             }
         }
 

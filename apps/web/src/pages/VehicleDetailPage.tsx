@@ -521,7 +521,7 @@ export const VehicleDetailPage = () => {
                         depot: vehicle.depot,
                         cost_center: vehicle.cost_center,
                     }}
-                    isFuelMeasured={false}
+                    isFuelMeasured={vehicle.status === "DRIVING"}
                     submitLabel="Speichern"
                     onSubmit={handleSubmit}
                     onCancel={() => setIsEditingMaster(false)}

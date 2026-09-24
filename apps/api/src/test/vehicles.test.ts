@@ -878,14 +878,47 @@ describe("vehicle mutations", () => {
             .send({ fuel_level: 12 });
 
         assert.equal(patched.status, 200);
-        assert.equal(patched.body.fuel_level, 12);
+        // Während DRIVING bleibt der gemessene Tankstand (hier noch 70).
+        assert.equal(patched.body.fuel_level, 70);
         assert.equal(patched.body.license_plate, "K-ED 2");
+
+        const stopped = await api
+            .patch(`/api/vehicles/${id}`)
+            .send({ status: "IDLE", fuel_level: 12 });
+
+        assert.equal(stopped.status, 200);
+        assert.equal(stopped.body.status, "IDLE");
+        assert.equal(stopped.body.fuel_level, 12);
 
         const deleted = await api.delete(`/api/vehicles/${id}`);
         assert.equal(deleted.status, 204);
 
         const missing = await api.get(`/api/vehicles/${id}`);
         assert.equal(missing.status, 404);
+    });
+
+    it("keeps measured fuel while the vehicle stays driving", async () => {
+        const created = await api.post("/api/vehicles").send({
+            license_plate: "K-FU 9",
+            fuel_level: 55,
+            status: "DRIVING",
+        });
+        const id = created.body.id as number;
+
+        const replaced = await api.put(`/api/vehicles/${id}`).send({
+            license_plate: "K-FU 9",
+            fuel_level: 10,
+            status: "DRIVING",
+            vin: null,
+            vehicle_type: null,
+            hu_due_on: null,
+            depot: "Nord",
+            cost_center: null,
+        });
+
+        assert.equal(replaced.status, 200);
+        assert.equal(replaced.body.fuel_level, 55);
+        assert.equal(replaced.body.depot, "Nord");
     });
 });
 
