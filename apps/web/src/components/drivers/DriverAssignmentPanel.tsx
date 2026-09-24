@@ -175,6 +175,7 @@ export const DriverAssignmentPanel = ({
                 ),
                 isCurrent: vehicle.is_current,
                 currentLocked: onTrip,
+                removeLocked: onTrip && vehicle.is_current,
             }));
     }, [driver.vehicles, fromHere, onTrip]);
 
@@ -254,7 +255,7 @@ export const DriverAssignmentPanel = ({
             {onTrip && (
                 <p className={layout.note}>
                     Fahrer ist unterwegs — aktuelles Fahrzeug lässt sich erst
-                    nach der Fahrt wechseln.
+                    nach der Fahrt wechseln oder entfernen.
                 </p>
             )}
 

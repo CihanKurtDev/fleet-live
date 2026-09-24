@@ -507,6 +507,62 @@ describe("driver assignment", () => {
         assert.equal(clearCurrent.status, 409);
     });
 
+    it("rejects taking over current on a driving vehicle", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-TO 1",
+            driver_name: "Tom",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const tomId = requireCurrentDriver(vehicle);
+
+        const other = await api.post("/api/drivers").send({ name: "Ute" });
+        const uteId = other.body.data.id as number;
+
+        await api
+            .post(`/api/drivers/${uteId}/vehicles`)
+            .send({ vehicle_id: vehicle.id });
+
+        const takeover = await api
+            .patch(`/api/drivers/${uteId}/current-vehicle`)
+            .send({ vehicle_id: vehicle.id });
+
+        assert.equal(takeover.status, 409);
+        assert.equal(takeover.body.code, "CONFLICT");
+        assert.match(
+            takeover.body.error,
+            /unterwegs.*erst nach der Fahrt wechseln/i,
+        );
+
+        const stillTom = await api.get(`/api/vehicles/${vehicle.id}`);
+        assert.equal(stillTom.body.current_driver_id, tomId);
+    });
+
+    it("rejects unassigning the current driver while the vehicle is driving", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-UN 1",
+            driver_name: "Vera",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const veraId = requireCurrentDriver(vehicle);
+
+        const removed = await api.delete(
+            `/api/drivers/${veraId}/vehicles/${vehicle.id}`,
+        );
+
+        assert.equal(removed.status, 409);
+        assert.equal(removed.body.code, "CONFLICT");
+        assert.match(
+            removed.body.error,
+            /unterwegs.*erst nach der Fahrt entfernen/i,
+        );
+
+        const still = await api.get(`/api/vehicles/${vehicle.id}`);
+        assert.equal(still.body.current_driver_id, veraId);
+        assert.equal(still.body.status, "DRIVING");
+    });
+
     it("clears current when eligibility is removed", async () => {
         const vehicle = VehicleModel.create({
             license_plate: "K-DEL 1",

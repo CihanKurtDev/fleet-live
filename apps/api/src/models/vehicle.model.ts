@@ -645,10 +645,21 @@ export class VehicleModel {
         input: VehiclePutInput,
         companyId: number,
     ): Vehicle | undefined {
+        const current = this.getById(id, companyId);
+        if (!current) {
+            return undefined;
+        }
+
+        // Während DRIVING schreibt die Telemetrie den Tank — kein Formularwert.
+        const fuelLevel =
+            current.status === "DRIVING" && input.status === "DRIVING"
+                ? current.fuel_level
+                : input.fuel_level;
+
         const result = runUnique(() =>
             stmt(UPDATE_VEHICLE).run(
                 input.license_plate,
-                input.fuel_level,
+                fuelLevel,
                 input.status,
                 input.vin ?? null,
                 input.vehicle_type ?? null,
@@ -676,11 +687,17 @@ export class VehicleModel {
             return undefined;
         }
 
+        const nextStatus = input.status ?? current.status;
+        const fuelLevel =
+            current.status === "DRIVING" && nextStatus === "DRIVING"
+                ? current.fuel_level
+                : (input.fuel_level ?? current.fuel_level);
+
         const result = runUnique(() =>
             stmt(UPDATE_VEHICLE).run(
                 input.license_plate ?? current.license_plate,
-                input.fuel_level ?? current.fuel_level,
-                input.status ?? current.status,
+                fuelLevel,
+                nextStatus,
                 input.vin !== undefined ? input.vin : current.vin,
                 input.vehicle_type !== undefined
                     ? input.vehicle_type

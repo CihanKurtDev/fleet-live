@@ -35,6 +35,7 @@ export const VehicleAssignmentPanel = ({
     canWrite,
 }: VehicleAssignmentPanelProps) => {
     const { listEpoch } = useVehicles();
+    const vehicleOnTrip = vehicle.status === "DRIVING";
     const [createOpen, setCreateOpen] = useState(false);
     const [editing, setEditing] = useState(false);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -99,7 +100,12 @@ export const VehicleAssignmentPanel = ({
                       )
                     : undefined;
 
-            if (autoCurrent && canAutoCurrentDriver(picked) && ids[0] !== undefined) {
+            if (
+                autoCurrent &&
+                !vehicleOnTrip &&
+                canAutoCurrentDriver(picked) &&
+                ids[0] !== undefined
+            ) {
                 try {
                     await setDriverCurrentVehicle(ids[0], {
                         vehicle_id: vehicle.id,
@@ -116,7 +122,7 @@ export const VehicleAssignmentPanel = ({
 
             closePicker();
         },
-        [vehicle.id],
+        [vehicle.id, vehicleOnTrip],
     );
 
     const assignedConfig = useMemo(
@@ -185,7 +191,7 @@ export const VehicleAssignmentPanel = ({
             })
             .map((driver) => {
                 const isCurrent = driver.id === vehicle.current_driver_id;
-                const onTrip = driver.current_vehicle_status === "DRIVING";
+                const driverOnTrip = driver.current_vehicle_status === "DRIVING";
 
                 return {
                     id: driver.id,
@@ -203,10 +209,11 @@ export const VehicleAssignmentPanel = ({
                         driver.current_vehicle_plate,
                     ),
                     isCurrent,
-                    currentLocked: onTrip,
+                    currentLocked: vehicleOnTrip || driverOnTrip,
+                    removeLocked: vehicleOnTrip && isCurrent,
                 };
             });
-    }, [assigned, vehicle.current_driver_id]);
+    }, [assigned, vehicle.current_driver_id, vehicleOnTrip]);
 
     const pendingCount = pendingUnassign?.length ?? 0;
     const pendingCurrent =
@@ -286,6 +293,12 @@ export const VehicleAssignmentPanel = ({
             {error && (
                 <p className={styles.error} role="alert">
                     {error}
+                </p>
+            )}
+            {vehicleOnTrip && (
+                <p className={layout.note}>
+                    Fahrzeug ist unterwegs — aktueller Fahrer lässt sich erst
+                    nach der Fahrt wechseln oder entfernen.
                 </p>
             )}
 
@@ -411,7 +424,10 @@ export const VehicleAssignmentPanel = ({
                                 vehicle_id: vehicle.id,
                             });
 
-                            if (vehicle.current_driver_id === null) {
+                            if (
+                                vehicle.current_driver_id === null &&
+                                !vehicleOnTrip
+                            ) {
                                 try {
                                     await setDriverCurrentVehicle(created.id, {
                                         vehicle_id: vehicle.id,

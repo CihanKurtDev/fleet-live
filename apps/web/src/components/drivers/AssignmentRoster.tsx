@@ -14,6 +14,7 @@ export type AssignmentRosterRow = {
     status: AssignmentStatusLine;
     isCurrent: boolean;
     currentLocked?: boolean;
+    removeLocked?: boolean;
 };
 
 type AssignmentRosterProps = {
@@ -123,7 +124,7 @@ export const AssignmentRoster = ({
                                     variant="secondary"
                                     size="sm"
                                     className={styles.removeBtn}
-                                    disabled={busy}
+                                    disabled={busy || Boolean(item.removeLocked)}
                                     onClick={() => onRemove(item.id)}
                                 >
                                     Entfernen
