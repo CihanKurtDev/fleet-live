@@ -4,6 +4,8 @@ import {
     parseTelemetryPatches,
     type TelemetryPatch,
 } from "@fleet-live/shared";
+import { getMe } from "../api/auth";
+import { isAbortError } from "../api/client";
 import { setStreamConnection } from "../api/telemetryFocus";
 import { useLatestRef } from "./useLatestRef";
 
@@ -19,6 +21,7 @@ export const useVehicleStream = (
 
     useEffect(() => {
         const source = new EventSource("/api/stream");
+        let sessionProbe: AbortController | null = null;
 
         source.addEventListener("connected", (event) => {
             try {
@@ -52,7 +55,23 @@ export const useVehicleStream = (
             handlersRef.current.onVehiclesChanged();
         });
 
+        // EventSource liefert bei abgelaufener Session keinen Status — einmal /me prüfen.
+        source.onerror = () => {
+            if (sessionProbe) {
+                return;
+            }
+
+            sessionProbe = new AbortController();
+            void getMe(sessionProbe.signal).catch((caught: unknown) => {
+                if (isAbortError(caught)) {
+                    return;
+                }
+                // 401 löst über request() → notifyUnauthorized den Login-Redirect aus.
+            });
+        };
+
         return () => {
+            sessionProbe?.abort();
             setStreamConnection(null);
             source.close();
         };

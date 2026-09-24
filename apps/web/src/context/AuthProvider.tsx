@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthUser } from "@fleet-live/shared";
 import { getMe } from "../api/auth";
-import { ApiError, isAbortError } from "../api/client";
+import {
+    ApiError,
+    isAbortError,
+    setUnauthorizedHandler,
+} from "../api/client";
 import { AuthContext } from "./authContext";
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        setUnauthorizedHandler(() => setUser(null));
+        return () => setUnauthorizedHandler(null);
+    }, []);
 
     useEffect(() => {
         const controller = new AbortController();

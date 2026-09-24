@@ -1,3 +1,5 @@
+import { notifyUnauthorized } from "./client";
+
 const sources = new Map<string, number[]>();
 let publishTimer: ReturnType<typeof setTimeout> | undefined;
 let connectionId: string | null = null;
@@ -26,7 +28,13 @@ function publish() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ connection_id: connectionId, ids }),
-    }).catch(() => undefined);
+    })
+        .then((response) => {
+            if (response.status === 401) {
+                notifyUnauthorized();
+            }
+        })
+        .catch(() => undefined);
 }
 
 function schedulePublish() {

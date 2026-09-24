@@ -82,7 +82,7 @@ What you can do in the app today, and what lands next — like a game patch list
 ### Technical debt (not production-ready)
 
 * Cookie session is correct for **same-origin** (Vite proxies `/api`). That is not production auth: no password reset, lockout, invite, or CSRF strategy for a cross-origin cookie deployment. Before splitting web and API onto different hosts, set `CORS_ORIGIN` to the web origin and allow credentials — do not switch to JWT for that
-* An expired session is detected on load (`GET /api/auth/me`). Later `401`s do not send the UI back to `/login`
+* An expired session is detected on load (`GET /api/auth/me`) and on later `401`s from API calls (UI clears the user and returns to `/login`, except wrong-password on `POST /api/auth/login`)
 * Sim pause is in-memory per company; an API restart resumes every tenant
 * No frontend tests
 * No CI/CD
