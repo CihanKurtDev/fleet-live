@@ -23,6 +23,22 @@ interface RequestOptions {
     timeoutMs?: number;
 }
 
+/** Falsches Login-Passwort ist auch 401 — Session nicht als abgelaufen behandeln. */
+const isLoginAttempt = (path: string) => path === "/api/auth/login";
+
+type UnauthorizedHandler = () => void;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/** Wird von AuthProvider gesetzt: User leeren → RequireAuth schickt zu /login. */
+export const setUnauthorizedHandler = (handler: UnauthorizedHandler | null) => {
+    unauthorizedHandler = handler;
+};
+
+export const notifyUnauthorized = () => {
+    unauthorizedHandler?.();
+};
+
 async function parseBody(response: Response): Promise<unknown> {
     if (response.status === 204) {
         return undefined;
@@ -74,6 +90,10 @@ export async function request<T>(
         | undefined;
 
     if (!response.ok) {
+        if (response.status === 401 && !isLoginAttempt(path)) {
+            notifyUnauthorized();
+        }
+
         const errorPayload = payload as
             | { error?: string; fields?: VehicleFieldErrors }
             | undefined;
