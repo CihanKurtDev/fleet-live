@@ -8,7 +8,10 @@ import {
 
 import { ApiError, isAbortError } from "../api/client";
 import { useVehicles } from "../context/vehiclesContext";
+import { useDebouncedValue } from "./useDebouncedValue";
 import { useLatestRef } from "./useLatestRef";
+
+export const ASSIGNMENT_PICKER_PAGE_SIZE = 25;
 
 type ConfirmAssignContext = {
     autoCurrent: boolean;
@@ -16,13 +19,21 @@ type ConfirmAssignContext = {
     closePicker: () => void;
 };
 
+export type AssignmentCandidatePage<TCandidate> = {
+    data: TCandidate[];
+    page: number;
+    pageCount: number;
+    total: number;
+};
+
 export type EntityAssignmentPickerConfig<TCandidate, TAssigned = never> = {
     mode: "entity";
     excludedIds?: Set<number>;
     fetchCandidates: (
         search: string,
+        page: number,
         signal: AbortSignal,
-    ) => Promise<TCandidate[]>;
+    ) => Promise<AssignmentCandidatePage<TCandidate>>;
     candidatesLoadError: string;
     mutationError: string;
     getAutoCurrentOnOpen: () => boolean;
@@ -47,6 +58,11 @@ type EntityAssignmentPickerResult<TCandidate, TAssigned> = {
     closeAssignPicker: () => void;
     search: string;
     setSearch: (value: string) => void;
+    searchPending: boolean;
+    page: number;
+    pageCount: number;
+    total: number;
+    setPage: (page: number) => void;
     candidates: TCandidate[];
     isLoadingCandidates: boolean;
     confirmAssign: (ids: number[]) => void;
@@ -63,8 +79,14 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
     const [assignOpen, setAssignOpen] = useState(false);
     const [candidates, setCandidates] = useState<TCandidate[]>([]);
     const [search, setSearch] = useState("");
-    const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
+    const [page, setPage] = useState(1);
+    const [pageCount, setPageCount] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [loadedKey, setLoadedKey] = useState<string | null>(null);
     const autoCurrentRef = useRef(false);
+    const fetchGenerationRef = useRef(0);
+    const debouncedSearch = useDebouncedValue(search, 250);
+    const searchPending = assignOpen && search !== debouncedSearch;
 
     const mutationError = config.mutationError;
     const getAutoCurrentOnOpen = config.getAutoCurrentOnOpen;
@@ -151,39 +173,57 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
         return () => controller.abort();
     }, [assignedDepsKey, assignedErrorMessage, assignedFetch]);
 
-    const candidatesRequestKey = assignOpen
-        ? `${search}\0${excludedIdsKey}`
-        : null;
-    const [prevCandidatesRequestKey, setPrevCandidatesRequestKey] = useState(
-        candidatesRequestKey,
-    );
-    if (candidatesRequestKey !== prevCandidatesRequestKey) {
-        setPrevCandidatesRequestKey(candidatesRequestKey);
-        if (candidatesRequestKey !== null) {
-            setIsLoadingCandidates(true);
-        } else {
-            setIsLoadingCandidates(false);
+    const [prevDebouncedSearch, setPrevDebouncedSearch] =
+        useState(debouncedSearch);
+    if (assignOpen && debouncedSearch !== prevDebouncedSearch) {
+        setPrevDebouncedSearch(debouncedSearch);
+        if (page !== 1) {
+            setPage(1);
         }
+    } else if (!assignOpen && debouncedSearch !== prevDebouncedSearch) {
+        setPrevDebouncedSearch(debouncedSearch);
     }
 
+    // Nur Suche/Seite triggern Voll-Laden — nicht excludedIds (sonst Scroll-Sprung).
+    const candidatesRequestKey = assignOpen
+        ? `${debouncedSearch}\0${page}`
+        : null;
+    const isLoadingCandidates =
+        assignOpen &&
+        candidatesRequestKey !== null &&
+        candidatesRequestKey !== loadedKey;
+
     useEffect(() => {
-        if (!assignOpen) {
+        if (!assignOpen || candidatesRequestKey === null) {
             return;
         }
 
+        const generation = ++fetchGenerationRef.current;
         const controller = new AbortController();
 
-        fetchCandidates(search, controller.signal)
-            .then((rows) => {
+        fetchCandidates(debouncedSearch, page, controller.signal)
+            .then((response) => {
+                if (generation !== fetchGenerationRef.current) {
+                    return;
+                }
+
                 setCandidates(
-                    rows.filter((row) => {
+                    response.data.filter((row) => {
                         const id = (row as { id: number }).id;
                         return !excludedIdsRef.current.has(id);
                     }),
                 );
+                setPageCount(Math.max(1, response.pageCount));
+                // total/pageCount nie zwischen Seiten auf 0 setzen — nur echte Antwort.
+                setTotal(response.total);
+                setLoadedKey(candidatesRequestKey);
             })
             .catch((caught: unknown) => {
-                if (controller.signal.aborted || isAbortError(caught)) {
+                if (
+                    generation !== fetchGenerationRef.current ||
+                    controller.signal.aborted ||
+                    isAbortError(caught)
+                ) {
                     return;
                 }
 
@@ -192,20 +232,19 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
                         ? caught.message
                         : candidatesLoadError,
                 );
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) {
-                    setIsLoadingCandidates(false);
-                }
+                setLoadedKey(candidatesRequestKey);
             });
 
-        return () => controller.abort();
+        return () => {
+            controller.abort();
+        };
     }, [
         assignOpen,
-        search,
+        candidatesRequestKey,
+        debouncedSearch,
+        page,
         fetchCandidates,
         candidatesLoadError,
-        excludedIdsKey,
         excludedIdsRef,
     ]);
 
@@ -222,16 +261,25 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
         setPrevExcludedIdsKey(excludedIdsKey);
     }
 
-    const openAssignPicker = useCallback(() => {
+    const resetCandidates = useCallback(() => {
+        setCandidates([]);
+        setPageCount(1);
+        setTotal(0);
+        setLoadedKey(null);
+        setPage(1);
         setSearch("");
-        setIsLoadingCandidates(true);
+    }, []);
+
+    const openAssignPicker = useCallback(() => {
+        resetCandidates();
         autoCurrentRef.current = getAutoCurrentOnOpen();
         setAssignOpen(true);
-    }, [getAutoCurrentOnOpen]);
+    }, [getAutoCurrentOnOpen, resetCandidates]);
 
     const closeAssignPicker = useCallback(() => {
         setAssignOpen(false);
-    }, []);
+        resetCandidates();
+    }, [resetCandidates]);
 
     const confirmAssign = useCallback(
         (ids: number[]) => {
@@ -260,6 +308,11 @@ export function useAssignmentPicker<TCandidate, TAssigned = never>(
         closeAssignPicker,
         search,
         setSearch,
+        searchPending,
+        page,
+        pageCount,
+        total,
+        setPage,
         candidates,
         isLoadingCandidates,
         confirmAssign,

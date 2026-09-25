@@ -9,7 +9,7 @@ import {
 } from "../../api/drivers";
 import { ApiError } from "../../api/client";
 import { listVehicles } from "../../api/vehicles";
-import { useAssignmentPicker } from "../../hooks/useAssignmentPicker";
+import { useAssignmentPicker, ASSIGNMENT_PICKER_PAGE_SIZE } from "../../hooks/useAssignmentPicker";
 import { Button } from "../ui/Button/Button";
 import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
 import { AssignmentPicker } from "./AssignmentPicker";
@@ -42,17 +42,22 @@ export const DriverAssignmentPanel = ({
     const candidatesRef = useRef<Vehicle[]>([]);
 
     const fetchCandidates = useCallback(
-        (search: string, signal: AbortSignal) =>
+        (search: string, page: number, signal: AbortSignal) =>
             listVehicles(
                 {
                     search,
-                    page: 1,
-                    limit: 100,
+                    page,
+                    limit: ASSIGNMENT_PICKER_PAGE_SIZE,
                     dir: "asc",
                     sort: "license_plate",
                 },
                 signal,
-            ).then((response) => response.data),
+            ).then((response) => ({
+                data: response.data,
+                page: response.meta.page,
+                pageCount: response.meta.pageCount,
+                total: response.meta.total,
+            })),
         [],
     );
 
@@ -117,6 +122,11 @@ export const DriverAssignmentPanel = ({
         closeAssignPicker,
         search,
         setSearch,
+        searchPending,
+        page,
+        pageCount,
+        total,
+        setPage,
         candidates,
         isLoadingCandidates,
         confirmAssign,
@@ -315,6 +325,11 @@ export const DriverAssignmentPanel = ({
                 loadingLabel="Fahrzeuge werden geladen…"
                 empty="Keine weiteren Fahrzeuge."
                 busy={busy}
+                page={page}
+                pageCount={pageCount}
+                total={total}
+                onPageChange={setPage}
+                searchPending={searchPending}
                 onConfirm={confirmAssign}
             />
 
