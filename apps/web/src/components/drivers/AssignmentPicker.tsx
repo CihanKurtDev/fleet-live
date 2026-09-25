@@ -7,15 +7,16 @@ import {
     type ReactNode,
 } from "react";
 
+import { formatCount } from "../../utils/formatCount";
 import { Avatar } from "../ui/Avatar/Avatar";
 import { Button } from "../ui/Button/Button";
 import { Checkbox } from "../ui/Checkbox/Checkbox";
 import { Input } from "../ui/Input/Input";
 import { Modal } from "../ui/Modal/Modal";
+import { TablePagination } from "../ui/Table/TablePagination";
 import { AssignmentStatusMeta } from "./AssignmentRoster";
 import type { AssignmentStatusLine } from "./assignmentMeta";
 import styles from "./assignment.module.scss";
-
 export type AssignmentPickerItem = {
     id: number;
     title: string;
@@ -36,6 +37,11 @@ interface AssignmentPickerProps {
     busy: boolean;
     onConfirm: (ids: number[]) => void;
     extraFooter?: ReactNode;
+    page: number;
+    pageCount: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    searchPending?: boolean;
 }
 
 export const AssignmentPicker = ({
@@ -52,9 +58,15 @@ export const AssignmentPicker = ({
     busy,
     onConfirm,
     extraFooter,
+    page,
+    pageCount,
+    total,
+    onPageChange,
+    searchPending = false,
 }: AssignmentPickerProps) => {
     const labelId = useId();
     const listRef = useRef<HTMLDivElement>(null);
+    const scrollFocusedRef = useRef(false);
     const [selected, setSelected] = useState<Set<number>>(() => new Set());
     const [focusedIndex, setFocusedIndex] = useState(0);
     const [wasOpen, setWasOpen] = useState(open);
@@ -73,6 +85,11 @@ export const AssignmentPicker = ({
     }
 
     useEffect(() => {
+        if (!scrollFocusedRef.current) {
+            return;
+        }
+
+        scrollFocusedRef.current = false;
         const focused = items[focusedIndex];
 
         if (!focused) {
@@ -84,6 +101,15 @@ export const AssignmentPicker = ({
         );
         node?.scrollIntoView({ block: "nearest" });
     }, [focusedIndex, items]);
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        listRef.current?.scrollTo({ top: 0 });
+    }, [open, page]);
+
     const toggle = (id: number) => {
         setSelected((current) => {
             const next = new Set(current);
@@ -108,16 +134,27 @@ export const AssignmentPicker = ({
             : count === 1
               ? "1 zuweisen"
               : `${count} zuweisen`;
+    const waiting = isLoading || searchPending;
+    const pagerBusy = busy || waiting;
+    // Beim Seitenwechsel total nicht durch „Laden…“/0 ersetzen.
+    const summary =
+        total > 0
+            ? `${formatCount(total)} Treffer`
+            : waiting
+              ? "Laden…"
+              : "0 Treffer";
 
     const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
         if (event.key === "ArrowDown" && items.length > 0) {
             event.preventDefault();
+            scrollFocusedRef.current = true;
             setFocusedIndex((current) => (current + 1) % items.length);
             return;
         }
 
         if (event.key === "ArrowUp" && items.length > 0) {
             event.preventDefault();
+            scrollFocusedRef.current = true;
             setFocusedIndex(
                 (current) => (current - 1 + items.length) % items.length,
             );
@@ -156,38 +193,44 @@ export const AssignmentPicker = ({
     return (
         <Modal open={open} onClose={onClose} title={title} size="lg">
             <div className={styles.picker} onKeyDown={handleKeyDown}>
-                <div className={styles.searchWrap}>
-                    <svg
-                        className={styles.searchIcon}
-                        viewBox="0 0 24 24"
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        aria-hidden="true"
-                    >
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="m20 20-3.5-3.5" />
-                    </svg>
-                    <Input
-                        className={styles.search}
-                        type="search"
-                        size="lg"
-                        fullWidth
-                        value={search}
-                        placeholder={searchPlaceholder}
-                        aria-controls={labelId}
-                        onChange={(event) =>
-                            onSearchChange(event.target.value)
-                        }
-                    />
+                <div className={styles.searchBlock}>
+                    <div className={styles.searchWrap}>
+                        <svg
+                            className={styles.searchIcon}
+                            viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            aria-hidden="true"
+                        >
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-3.5-3.5" />
+                        </svg>
+                        <Input
+                            className={styles.search}
+                            type="search"
+                            size="lg"
+                            fullWidth
+                            value={search}
+                            placeholder={searchPlaceholder}
+                            aria-controls={labelId}
+                            onChange={(event) =>
+                                onSearchChange(event.target.value)
+                            }
+                        />
+                    </div>
+                    <p className={styles.pickerSummary} aria-live="polite">
+                        {summary}
+                    </p>
                 </div>
-                {isLoading ? (
-                    <p className={styles.pickerStatus}>{loadingLabel}</p>
-                ) : items.length === 0 ? (
-                    <p className={styles.pickerStatus}>{empty}</p>
+
+                {items.length === 0 ? (
+                    <p className={styles.pickerStatus}>
+                        {waiting ? loadingLabel : empty}
+                    </p>
                 ) : (
                     <div
                         ref={listRef}
@@ -198,6 +241,7 @@ export const AssignmentPicker = ({
                         aria-multiselectable="true"
                         aria-label={title}
                         aria-activedescendant={activeId}
+                        aria-busy={waiting}
                     >
                         {items.map((item, index) => {
                             const checked = selected.has(item.id);
@@ -246,6 +290,20 @@ export const AssignmentPicker = ({
                         })}
                     </div>
                 )}
+
+                {pageCount > 1 && (
+                    <div className={styles.pickerPager}>
+                        <TablePagination
+                            compact
+                            page={page}
+                            pageCount={pageCount}
+                            total={total}
+                            onPageChange={onPageChange}
+                            disabled={pagerBusy}
+                        />
+                    </div>
+                )}
+
                 <div className={styles.pickerFooter}>
                     <div className={styles.pickerFooterStart}>
                         {extraFooter}

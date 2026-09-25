@@ -9,7 +9,10 @@ import {
 } from "../../api/drivers";
 import { ApiError } from "../../api/client";
 import { useVehicles } from "../../context/vehiclesContext";
-import { useAssignmentPicker } from "../../hooks/useAssignmentPicker";
+import {
+    ASSIGNMENT_PICKER_PAGE_SIZE,
+    useAssignmentPicker,
+} from "../../hooks/useAssignmentPicker";
 import { Button } from "../ui/Button/Button";
 import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
 import { Modal } from "../ui/Modal/Modal";
@@ -60,16 +63,21 @@ export const VehicleAssignmentPanel = ({
     );
 
     const fetchCandidates = useCallback(
-        (search: string, signal: AbortSignal) =>
+        (search: string, page: number, signal: AbortSignal) =>
             listDrivers(
                 {
                     search,
-                    page: 1,
-                    limit: 100,
+                    page,
+                    limit: ASSIGNMENT_PICKER_PAGE_SIZE,
                     dir: "asc",
                 },
                 signal,
-            ).then((response) => response.data),
+            ).then((response) => ({
+                data: response.data,
+                page: response.meta.page,
+                pageCount: response.meta.pageCount,
+                total: response.meta.total,
+            })),
         [],
     );
 
@@ -143,6 +151,11 @@ export const VehicleAssignmentPanel = ({
         closeAssignPicker,
         search,
         setSearch,
+        searchPending,
+        page,
+        pageCount,
+        total,
+        setPage,
         candidates,
         isLoadingCandidates,
         confirmAssign,
@@ -353,6 +366,11 @@ export const VehicleAssignmentPanel = ({
                 loadingLabel="Fahrer werden geladen…"
                 empty="Keine weiteren Fahrer."
                 busy={busy}
+                page={page}
+                pageCount={pageCount}
+                total={total}
+                onPageChange={setPage}
+                searchPending={searchPending}
                 extraFooter={
                     canWrite ? (
                         <Button
@@ -364,7 +382,7 @@ export const VehicleAssignmentPanel = ({
                                 setCreateOpen(true);
                             }}
                         >
-                            Neuen Fahrer anlegen
+                            Fahrer anlegen
                         </Button>
                     ) : null
                 }

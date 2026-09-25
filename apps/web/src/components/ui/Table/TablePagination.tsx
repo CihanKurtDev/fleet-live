@@ -45,26 +45,33 @@ const Chevron = ({
 interface TablePaginationProps {
     page: number;
     pageCount: number;
-    limit: number;
+    limit?: number;
 
     /** Gesamtzahl der Zeilen nach Suche und Filter. */
     total: number;
 
     onPageChange: (page: number) => void;
-    onLimitChange: (limit: number) => void;
+    onLimitChange?: (limit: number) => void;
 
     /** Erlaubte Seitengrößen. Standard: 10, 25, 50, 100. */
     limitOptions?: readonly number[];
+
+    /** Nur Seitennavigation — ohne Limit-Auswahl und Bereichstext. */
+    compact?: boolean;
+
+    disabled?: boolean;
 }
 
 export const TablePagination = ({
     page,
     pageCount,
-    limit,
+    limit = LIMIT_OPTIONS[1],
     total,
     onPageChange,
     onLimitChange,
     limitOptions: allowedLimits = LIMIT_OPTIONS,
+    compact = false,
+    disabled = false,
 }: TablePaginationProps) => {
     const limitSelectId = useId();
 
@@ -90,6 +97,87 @@ export const TablePagination = ({
 
     const pageItems = getPageWindow(page, pageCount);
 
+    const pages = (
+        <nav
+            className={styles.pages}
+            aria-label="Seitennavigation"
+        >
+            <button
+                type="button"
+                className={`${styles.pageButton} ${styles.firstPageButton}`}
+                aria-label="Erste Seite"
+                disabled={disabled || isFirstPage}
+                onClick={() => onPageChange(1)}
+            >
+                <Chevron direction="left" double />
+            </button>
+
+            <button
+                type="button"
+                className={`${styles.pageButton} ${styles.previousPageButton}`}
+                aria-label="Vorherige Seite"
+                disabled={disabled || isFirstPage}
+                onClick={() => onPageChange(page - 1)}
+            >
+                <Chevron direction="left" />
+            </button>
+
+            {pageItems.map((item) =>
+                typeof item === "number" ? (
+                    <button
+                        key={item}
+                        type="button"
+                        className={
+                            item === page
+                                ? `${styles.pageButton} ${styles.pageButtonActive}`
+                                : styles.pageButton
+                        }
+                        aria-label={`Seite ${item}`}
+                        aria-current={
+                            item === page ? "page" : undefined
+                        }
+                        disabled={disabled}
+                        onClick={() => onPageChange(item)}
+                    >
+                        {item}
+                    </button>
+                ) : (
+                    <span
+                        key={item}
+                        className={styles.ellipsis}
+                        aria-hidden="true"
+                    >
+                        …
+                    </span>
+                ),
+            )}
+
+            <button
+                type="button"
+                className={`${styles.pageButton} ${styles.nextPageButton}`}
+                aria-label="Nächste Seite"
+                disabled={disabled || isLastPage}
+                onClick={() => onPageChange(page + 1)}
+            >
+                <Chevron direction="right" />
+            </button>
+
+            <button
+                type="button"
+                className={`${styles.pageButton} ${styles.lastPageButton}`}
+                aria-label="Letzte Seite"
+                disabled={disabled || isLastPage}
+                onClick={() => onPageChange(pageCount)}
+            >
+                <Chevron direction="right" double />
+            </button>
+        </nav>
+    );
+
+    if (compact) {
+        return pages;
+    }
+
     return (
         <div className={styles.pagination}>
             <div className={styles.limit}>
@@ -97,8 +185,9 @@ export const TablePagination = ({
                     id={limitSelectId}
                     className={styles.limitSelect}
                     value={limit}
+                    disabled={disabled || onLimitChange === undefined}
                     onChange={(event) =>
-                        onLimitChange(
+                        onLimitChange?.(
                             Number(event.target.value),
                         )
                     }
@@ -115,81 +204,7 @@ export const TablePagination = ({
                 </label>
             </div>
 
-            <nav
-                className={styles.pages}
-                aria-label="Seitennavigation"
-            >
-                <button
-                    type="button"
-                    className={`${styles.pageButton} ${styles.firstPageButton}`}
-                    aria-label="Erste Seite"
-                    disabled={isFirstPage}
-                    onClick={() => onPageChange(1)}
-                >
-                    <Chevron direction="left" double />
-                </button>
-
-                <button
-                    type="button"
-                    className={`${styles.pageButton} ${styles.previousPageButton}`}
-                    aria-label="Vorherige Seite"
-                    disabled={isFirstPage}
-                    onClick={() => onPageChange(page - 1)}
-                >
-                    <Chevron direction="left" />
-                </button>
-
-                {pageItems.map((item) =>
-                    typeof item === "number" ? (
-                        <button
-                            key={item}
-                            type="button"
-                            className={
-                                item === page
-                                    ? `${styles.pageButton} ${styles.pageButtonActive}`
-                                    : styles.pageButton
-                            }
-                            aria-label={`Seite ${item}`}
-                            aria-current={
-                                item === page
-                                    ? "page"
-                                    : undefined
-                            }
-                            onClick={() => onPageChange(item)}
-                        >
-                            {item}
-                        </button>
-                    ) : (
-                        <span
-                            key={item}
-                            className={styles.ellipsis}
-                            aria-hidden="true"
-                        >
-                            …
-                        </span>
-                    ),
-                )}
-
-                <button
-                    type="button"
-                    className={`${styles.pageButton} ${styles.nextPageButton}`}
-                    aria-label="Nächste Seite"
-                    disabled={isLastPage}
-                    onClick={() => onPageChange(page + 1)}
-                >
-                    <Chevron direction="right" />
-                </button>
-
-                <button
-                    type="button"
-                    className={`${styles.pageButton} ${styles.lastPageButton}`}
-                    aria-label="Letzte Seite"
-                    disabled={isLastPage}
-                    onClick={() => onPageChange(pageCount)}
-                >
-                    <Chevron direction="right" double />
-                </button>
-            </nav>
+            {pages}
 
             <p className={styles.range} aria-live="polite">
                 {formatCount(firstRow)}–{formatCount(lastRow)} von{" "}
