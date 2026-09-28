@@ -4,9 +4,11 @@ import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import { listDrivers } from "../api/drivers";
 import { useVehicles } from "../context/vehiclesContext";
+import { useRetryTrigger } from "./useRetryTrigger";
 
 export const useDriverList = (query: DriverListQuery) => {
     const { listEpoch } = useVehicles();
+    const { retryKey, retry } = useRetryTrigger();
     const { search, sort, dir, page, limit, vehicle_id } = query;
     const [response, setResponse] = useState<DriverListResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
@@ -20,6 +22,7 @@ export const useDriverList = (query: DriverListQuery) => {
         limit,
         vehicle_id,
         listEpoch,
+        retryKey,
     ].join("\0");
     const [fetchKey, setFetchKey] = useState(requestKey);
 
@@ -66,7 +69,16 @@ export const useDriverList = (query: DriverListQuery) => {
             });
 
         return () => controller.abort();
-    }, [search, sort, dir, page, limit, vehicle_id, listEpoch]);
+    }, [
+        search,
+        sort,
+        dir,
+        page,
+        limit,
+        vehicle_id,
+        listEpoch,
+        retryKey,
+    ]);
 
     return {
         data: response?.data ?? [],
@@ -74,6 +86,7 @@ export const useDriverList = (query: DriverListQuery) => {
         isLoading: response === null && isFetching,
         isFetching,
         error,
+        retry,
         pageCount: response?.meta.pageCount ?? 1,
         total: response?.meta.total ?? 0,
     };

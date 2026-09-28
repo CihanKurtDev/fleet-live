@@ -3,6 +3,7 @@ import type { Alert } from "@fleet-live/shared";
 import { Table } from "../ui/Table/Table";
 import { TableFilterBar } from "../ui/Table/TableFilterBar";
 import { TablePagination } from "../ui/Table/TablePagination";
+import { RetryMessage } from "../ui/RetryMessage";
 import { useServerTable } from "../../hooks/useServerTable";
 import { useAlertList } from "../../hooks/useAlertList";
 import { useAlertListQuery } from "../../hooks/useAlertListQuery";
@@ -132,9 +133,13 @@ export const AlertTable = ({
                 </div>
             )}
 
-            {(error || actionError) && (
+            {error && (
+                <RetryMessage message={error} onRetry={listResult.retry} />
+            )}
+
+            {actionError && (
                 <p className={styles.error} role="alert">
-                    {error ?? actionError}
+                    {actionError}
                 </p>
             )}
 

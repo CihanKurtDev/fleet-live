@@ -4,9 +4,11 @@ import { ApiError, isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import { listAlerts } from "../api/alerts";
 import { useVehicles } from "../context/vehiclesContext";
+import { useRetryTrigger } from "./useRetryTrigger";
 
 export const useAlertList = (query: AlertListQuery) => {
     const { listEpoch } = useVehicles();
+    const { retryKey, retry } = useRetryTrigger();
     const {
         filter,
         sort,
@@ -32,6 +34,7 @@ export const useAlertList = (query: AlertListQuery) => {
         driver_id,
         type,
         listEpoch,
+        retryKey,
     ].join("\0");
     const [fetchKey, setFetchKey] = useState(requestKey);
 
@@ -98,6 +101,7 @@ export const useAlertList = (query: AlertListQuery) => {
         driver_id,
         type,
         listEpoch,
+        retryKey,
     ]);
 
     return {
@@ -106,6 +110,7 @@ export const useAlertList = (query: AlertListQuery) => {
         isLoading: response === null && isFetching,
         isFetching,
         error,
+        retry,
         notFound,
         pageCount: response?.meta.pageCount ?? 1,
         total: response?.meta.total ?? 0,

@@ -6,6 +6,7 @@ import { TableToolbar } from "../ui/Table/TableToolbar";
 import { TableFilterBar } from "../ui/Table/TableFilterBar";
 import { TablePagination } from "../ui/Table/TablePagination";
 import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
+import { RetryMessage } from "../ui/RetryMessage";
 import { useServerTable } from "../../hooks/useServerTable";
 import { useVehicleList } from "../../hooks/useVehicleList";
 import { useVehicleListQuery } from "../../hooks/useVehicleListQuery";
@@ -13,7 +14,7 @@ import { vehicleColumns, vehicleFilters } from "./vehicleTableConfig";
 import styles from "./VehicleTable.module.scss";
 
 interface VehicleTableProps {
-    onDeleteVehicles?: (ids: number[]) => void;
+    onDeleteVehicles?: (ids: number[]) => Promise<void>;
     onAddVehicle?: () => void;
     onImport?: () => void;
     onSelectVehicle?: (vehicle: Vehicle) => void;
@@ -55,6 +56,8 @@ export const VehicleTable = ({
     const [pendingDeleteIds, setPendingDeleteIds] = useState<number[] | null>(
         null,
     );
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const toggleEditMode = () => {
         setIsEditing((current) => !current);
@@ -77,14 +80,27 @@ export const VehicleTable = ({
               )
             : undefined;
 
-    const confirmDelete = () => {
+    const confirmDelete = async () => {
         if (!pendingDeleteIds) {
             return;
         }
 
-        onDeleteVehicles?.(pendingDeleteIds);
-        setSelectedIds([]);
-        setPendingDeleteIds(null);
+        setDeleteError(null);
+        setIsDeleting(true);
+
+        try {
+            await onDeleteVehicles?.(pendingDeleteIds);
+            setSelectedIds([]);
+            setPendingDeleteIds(null);
+        } catch (caught: unknown) {
+            setDeleteError(
+                caught instanceof Error
+                    ? caught.message
+                    : "Fahrzeuge konnten nicht gelöscht werden.",
+            );
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     return (
@@ -126,9 +142,7 @@ export const VehicleTable = ({
             )}
 
             {error && (
-                <p className={styles.error} role="alert">
-                    {error}
-                </p>
+                <RetryMessage message={error} onRetry={listResult.retry} />
             )}
 
             {isLoading && (
@@ -171,13 +185,17 @@ export const VehicleTable = ({
 
             <ConfirmDialog
                 open={pendingDeleteIds !== null}
-                onClose={() => setPendingDeleteIds(null)}
+                onClose={() => {
+                    setPendingDeleteIds(null);
+                    setDeleteError(null);
+                }}
                 title={
                     pendingCount === 1
                         ? "Fahrzeug löschen?"
                         : `${pendingCount} Fahrzeuge löschen?`
                 }
                 confirmLabel="Löschen"
+                isBusy={isDeleting}
                 onConfirm={confirmDelete}
             >
                 {pendingCount === 1 ? (
@@ -190,6 +208,11 @@ export const VehicleTable = ({
                     <p>
                         Diese {pendingCount} Fahrzeuge wirklich löschen? Das
                         kann nicht rückgängig gemacht werden.
+                    </p>
+                )}
+                {deleteError && (
+                    <p className={styles.error} role="alert">
+                        {deleteError}
                     </p>
                 )}
             </ConfirmDialog>

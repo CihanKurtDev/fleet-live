@@ -9,9 +9,11 @@ import {
 } from "../api/telemetryFocus";
 import { getVehicle } from "../api/vehicles";
 import { useVehicles } from "../context/vehiclesContext";
+import { useRetryTrigger } from "./useRetryTrigger";
 
 export const useVehicle = (id: number | null) => {
     const { listEpoch, vehicleOverrides } = useVehicles();
+    const { retryKey, retry } = useRetryTrigger();
     const cached = id !== null ? peekVehicle(id) : undefined;
 
     const [vehicle, setVehicle] = useState<Vehicle | undefined>(cached);
@@ -19,7 +21,8 @@ export const useVehicle = (id: number | null) => {
     const [error, setError] = useState<string | null>(null);
     const [notFound, setNotFound] = useState(false);
 
-    const requestKey = id === null ? "null" : `${id}\0${listEpoch}`;
+    const requestKey =
+        id === null ? "null" : `${id}\0${listEpoch}\0${retryKey}`;
     const [fetchKey, setFetchKey] = useState(requestKey);
 
     if (requestKey !== fetchKey) {
@@ -90,7 +93,7 @@ export const useVehicle = (id: number | null) => {
             });
 
         return () => controller.abort();
-    }, [id, listEpoch]);
+    }, [id, listEpoch, retryKey]);
 
     useEffect(() => {
         if (id === null) {
@@ -112,6 +115,7 @@ export const useVehicle = (id: number | null) => {
             id !== null && !notFound && (isLoading || !matchesId),
         ),
         error,
+        retry,
         notFound,
     };
 };
