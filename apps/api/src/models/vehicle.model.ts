@@ -1,6 +1,7 @@
 import type {
     AlertType,
     FleetDriver,
+    FleetDensityCell,
     FleetDriversQuery,
     FleetDriversResponse,
     FleetPosition,
@@ -23,6 +24,7 @@ import {
 import { DriverModel } from "./driver.model";
 import { SpeedingEventModel } from "./speedingEvent.model";
 import { ExceptionEventModel } from "./exceptionEvent.model";
+import { config } from "../config";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 import { pagedQuery } from "../lib/pagination";
@@ -364,11 +366,7 @@ export class VehicleModel {
         };
     }
 
-    /**
-     * Letzte Positionen für die Flottenkarte. Ohne Telemetrie kein Punkt.
-     * `bbox` schränkt auf den sichtbaren Ausschnitt ein. Mehr Treffer als
-     * `FLEET_POSITIONS_MAX` → `truncated`, keine Punkte (kein ID-Sample).
-     */
+    /** Letzte Positionen oder serverseitig aggregierte Dichtezellen. */
     static positions(
         query: FleetPositionsQuery,
         companyId: number,
@@ -392,20 +390,14 @@ export class VehicleModel {
                     )
                 )`
                 : "";
-        const bboxSql = query.bbox
+        // Die Kennzeichensuche ist absichtlich company-weit, damit ein
+        // Fahrzeug außerhalb des aktuellen Kartenausschnitts gefunden wird.
+        const activeBbox = search === "" ? query.bbox : undefined;
+        const bboxSql = activeBbox
             ? `AND t.latitude BETWEEN ? AND ?
                AND t.longitude BETWEEN ? AND ?`
             : "";
-        const sql = `
-            SELECT
-                v.id,
-                v.license_plate,
-                v.driver_name,
-                v.status,
-                t.latitude,
-                t.longitude,
-                t.speed,
-                t.recorded_at
+        const whereSql = `
             FROM vehicles v
             INNER JOIN telemetry t ON t.id = v.last_telemetry_id
             WHERE v.company_id = ?
@@ -413,10 +405,7 @@ export class VehicleModel {
               ${filterSql}
               ${driverSql}
               ${bboxSql}
-            ORDER BY v.id ASC
-            LIMIT ?
         `;
-        const limit = FLEET_POSITIONS_MAX + 1;
         const params = [
             companyId,
             search,
@@ -427,23 +416,112 @@ export class VehicleModel {
             like,
             ...selectedDrivers,
             ...selectedDrivers,
-            ...(query.bbox
+            ...(activeBbox
                 ? [
-                      query.bbox.south,
-                      query.bbox.north,
-                      query.bbox.west,
-                      query.bbox.east,
+                      activeBbox.south,
+                      activeBbox.north,
+                      activeBbox.west,
+                      activeBbox.east,
                   ]
                 : []),
-            limit,
         ];
-        const rows = stmt(sql).all(...params) as FleetPosition[];
-        const truncated = rows.length > FLEET_POSITIONS_MAX;
-
-        return {
-            data: truncated ? [] : rows,
-            meta: { truncated },
+        const extent = stmt(
+            `
+            SELECT
+                COUNT(*) AS total,
+                MIN(t.latitude) AS min_latitude,
+                MAX(t.latitude) AS max_latitude,
+                MIN(t.longitude) AS min_longitude,
+                MAX(t.longitude) AS max_longitude
+            ${whereSql}
+            `,
+        ).get(...params) as {
+            total: number;
+            min_latitude: number | null;
+            max_latitude: number | null;
+            min_longitude: number | null;
+            max_longitude: number | null;
         };
+        const total = Number(extent.total);
+
+        if (total <= FLEET_POSITIONS_MAX) {
+            const rows = stmt(
+                `
+            SELECT
+                v.id,
+                v.license_plate,
+                v.driver_name,
+                v.status,
+                t.latitude,
+                t.longitude,
+                t.speed,
+                t.recorded_at
+            ${whereSql}
+            ORDER BY v.id ASC
+                `,
+            ).all(...params) as FleetPosition[];
+
+            return { mode: "positions", data: rows, meta: { total } };
+        }
+
+        const columns = 32;
+        const rows = 20;
+        const west = activeBbox?.west ?? Number(extent.min_longitude);
+        const east = activeBbox?.east ?? Number(extent.max_longitude);
+        const south = activeBbox?.south ?? Number(extent.min_latitude);
+        const north = activeBbox?.north ?? Number(extent.max_latitude);
+        const cellWidth = Math.max((east - west) / columns, 1e-9);
+        const cellHeight = Math.max((north - south) / rows, 1e-9);
+        type DensityRow = {
+            cell_x: number;
+            cell_y: number;
+            latitude: number;
+            longitude: number;
+            total: number;
+            idle_count: number;
+            driving_count: number;
+            stopped_count: number;
+            offline_count: number;
+        };
+        const densityRows = stmt(
+            `
+            SELECT
+                MIN(${columns - 1}, MAX(0, CAST((t.longitude - ?) / ? AS INTEGER))) AS cell_x,
+                MIN(${rows - 1}, MAX(0, CAST((t.latitude - ?) / ? AS INTEGER))) AS cell_y,
+                AVG(t.latitude) AS latitude,
+                AVG(t.longitude) AS longitude,
+                COUNT(*) AS total,
+                SUM(CASE WHEN v.status = 'IDLE' THEN 1 ELSE 0 END) AS idle_count,
+                SUM(CASE WHEN v.status = 'DRIVING' THEN 1 ELSE 0 END) AS driving_count,
+                SUM(CASE WHEN v.status = 'STOPPED' THEN 1 ELSE 0 END) AS stopped_count,
+                SUM(CASE WHEN v.status = 'OFFLINE' THEN 1 ELSE 0 END) AS offline_count
+            ${whereSql}
+            GROUP BY cell_x, cell_y
+            ORDER BY cell_y, cell_x
+            `,
+        ).all(west, cellWidth, south, cellHeight, ...params) as DensityRow[];
+        const data: FleetDensityCell[] = densityRows.map((row) => ({
+            latitude: Number(row.latitude),
+            longitude: Number(row.longitude),
+            bbox: {
+                west: west + Number(row.cell_x) * cellWidth,
+                south: south + Number(row.cell_y) * cellHeight,
+                east: Math.min(east, west + (Number(row.cell_x) + 1) * cellWidth),
+                north: Math.min(
+                    north,
+                    south + (Number(row.cell_y) + 1) * cellHeight,
+                ),
+            },
+            total: Number(row.total),
+            counts: {
+                IDLE: Number(row.idle_count),
+                DRIVING: Number(row.driving_count),
+                STOPPED: Number(row.stopped_count),
+                OFFLINE: Number(row.offline_count),
+            },
+        }));
+
+        return { mode: "density", data, meta: { total } };
     }
 
     static drivers(
@@ -597,6 +675,12 @@ export class VehicleModel {
     }
 
     static create(input: VehicleCreateInput): Vehicle {
+        if (input.company_id === undefined && !config.isTest) {
+            throw new Error("Vehicle company_id is required.");
+        }
+
+        // Tests default to company 1 for compact fixtures. Runtime callers must
+        // always pass the authenticated or imported company explicitly.
         const companyId = input.company_id ?? 1;
         const result = runUnique(() =>
             stmt(INSERT_VEHICLE).run(

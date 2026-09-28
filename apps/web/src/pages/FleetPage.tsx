@@ -2,6 +2,7 @@ import { useNavigate } from "react-router";
 import type { VehicleFilterId } from "@fleet-live/shared";
 
 import { Input } from "../components/ui/Input/Input";
+import { RetryMessage } from "../components/ui/RetryMessage";
 import { TableFilterBar } from "../components/ui/Table/TableFilterBar";
 import { FleetDriverPicker } from "../components/vehicles/FleetDriverPicker";
 import { FleetMap } from "../components/vehicles/FleetMap";
@@ -25,7 +26,17 @@ export const FleetPage = () => {
         setBBox,
         searchParams,
     } = useFleetPageQuery();
-    const { vehicles, truncated, isLoading, hasLoaded, error, snapshotLength } =
+    const {
+        vehicles,
+        densityCells,
+        mode,
+        total,
+        isLoading,
+        hasLoaded,
+        error,
+        retry,
+        snapshotLength,
+    } =
         useFleetPositions({
             bbox,
             filter,
@@ -33,8 +44,12 @@ export const FleetPage = () => {
             drivers,
         });
 
-    const countLabel = `${formatCount(vehicles.length)} ${vehicles.length === 1 ? "Fahrzeug" : "Fahrzeuge"}`;
+    const countLabel = `${formatCount(total)} ${total === 1 ? "Fahrzeug" : "Fahrzeuge"}`;
     const queryString = searchParams.toString();
+    const focusPosition =
+        search && mode === "positions" && total === 1
+            ? (vehicles[0] ?? null)
+            : null;
 
     return (
         <section className={styles.page}>
@@ -69,20 +84,24 @@ export const FleetPage = () => {
                 <div className={styles.meta}>
                     {isLoading &&
                         snapshotLength === 0 &&
-                        !truncated && (
+                        densityCells.length === 0 && (
                             <p className={styles.note}>
                                 Positionen werden geladen…
                             </p>
                         )}
-                    {hasLoaded && !error && !truncated && (
+                    {hasLoaded && !error && (
                         <p className={styles.count} aria-live="polite">
                             {countLabel}
                         </p>
                     )}
-                    {error && (
-                        <p className={styles.error} role="alert">
-                            {error}
+                    {hasLoaded && !error && mode === "density" && (
+                        <p className={styles.note}>
+                            Dichteansicht: Kreisgröße zeigt die Fahrzeugzahl.
+                            Klicken zum Vergrößern.
                         </p>
+                    )}
+                    {error && (
+                        <RetryMessage message={error} onRetry={retry} />
                     )}
                 </div>
             </div>
@@ -90,7 +109,15 @@ export const FleetPage = () => {
             <div className={styles.mapArea}>
                 <FleetMap
                     vehicles={vehicles}
+                    densityCells={densityCells}
+                    mode={mode}
                     initialBbox={bbox}
+                    focusKey={
+                        focusPosition
+                            ? `${search}\0${focusPosition.id}`
+                            : null
+                    }
+                    focusPosition={focusPosition}
                     onBoundsChange={setBBox}
                     onSelect={(id) =>
                         navigate(`/vehicles/${id}`, {
@@ -103,12 +130,10 @@ export const FleetPage = () => {
                     }
                 />
                 {hasLoaded &&
-                    vehicles.length === 0 &&
+                    total === 0 &&
                     !error && (
                         <p className={styles.empty} role="status">
-                            {truncated
-                                ? "Zu viele Fahrzeuge in diesem Ausschnitt. Zoome näher oder schränke die Auswahl ein."
-                                : "Keine Fahrzeuge mit Position in diesem Ausschnitt."}
+                            Keine Fahrzeuge mit Position in diesem Ausschnitt.
                         </p>
                     )}
             </div>
