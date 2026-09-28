@@ -6,7 +6,6 @@ import {
     SPEEDING_HYSTERESIS_MS,
     SPEEDING_OPEN_AFTER_MS,
 } from "@fleet-live/shared";
-import { app } from "../app";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
@@ -57,7 +56,7 @@ afterEach(() => {
 describe("stepSpeeding", () => {
     it("opens after 8s over the class limit and ends after hysteresis", () => {
         const start = 1_000_000;
-        let state = stepSpeeding(undefined, {
+        const state = stepSpeeding(undefined, {
             speed: OVER_CITY,
             status: "DRIVING",
             nowMs: start,

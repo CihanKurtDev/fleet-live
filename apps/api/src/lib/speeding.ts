@@ -56,7 +56,7 @@ export function stepSpeeding(
     );
 
     if (!state) {
-        if (!exceeding) {
+        if (!exceeding || input.speed === null) {
             return { action: "none", state: undefined };
         }
 
@@ -71,7 +71,7 @@ export function stepSpeeding(
     }
 
     if (state.phase === "candidate") {
-        if (!exceeding) {
+        if (!exceeding || input.speed === null) {
             return { action: "none", state: undefined };
         }
 
@@ -91,7 +91,7 @@ export function stepSpeeding(
         return { action: "end", state: undefined };
     }
 
-    if (exceeding) {
+    if (exceeding && input.speed !== null) {
         const maxSpeed = Math.max(state.maxSpeed, input.speed);
         const durationS = speedingDurationS(state.startedAtMs, input.nowMs);
         const limitKmh = input.limit_kmh ?? state.writtenLimitKmh;

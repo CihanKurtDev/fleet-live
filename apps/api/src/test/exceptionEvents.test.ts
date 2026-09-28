@@ -6,7 +6,6 @@ import {
     LOW_FUEL_THRESHOLD_PERCENT,
     OFFLINE_AFTER_MS,
 } from "@fleet-live/shared";
-import { app } from "../app";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";

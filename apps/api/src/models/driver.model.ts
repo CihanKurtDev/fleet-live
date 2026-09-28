@@ -145,10 +145,14 @@ const SORT_SQL: Record<DriverSortKey, string> = {
     counts: "all_incidents",
 };
 
+type DriverVehicleRow = Omit<DriverVehicle, "is_current"> & {
+    is_current: number;
+};
+
 function loadAssignedVehicles(
     driverId: number,
     companyId: number,
-): DriverVehicle[] {
+): DriverVehicleRow[] {
     return stmt(
         `
         SELECT
@@ -163,14 +167,10 @@ function loadAssignedVehicles(
           AND v.company_id = ?
         ORDER BY v.license_plate COLLATE NOCASE
         `,
-    ).all(driverId, driverId, companyId) as Array<
-        Omit<DriverVehicle, "is_current"> & { is_current: number }
-    >;
+    ).all(driverId, driverId, companyId) as DriverVehicleRow[];
 }
 
-function mapAssigned(
-    rows: Array<Omit<DriverVehicle, "is_current"> & { is_current: number }>,
-): DriverVehicle[] {
+function mapAssigned(rows: DriverVehicleRow[]): DriverVehicle[] {
     return rows.map((row) => ({
         id: row.id,
         license_plate: row.license_plate,
