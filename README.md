@@ -357,7 +357,7 @@ npm test
 npm run test:web
 ```
 
-`npm run verify` macht Typecheck, beide Testsuiten, Lint und Production-Build. Derselbe Lauf liegt als GitHub Action. Bench: `npm run bench` (`apps/api/scripts/bench.ts`).
+`npm run verify` macht Typecheck, beide Testsuiten, Lint und Production-Build. Bench: `npm run bench` (`apps/api/scripts/bench.ts`).
 
 Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `development-only-password` vorausfüllen (Dispatcher, Rheinland Logistik). `viewer@example.com` gleiches Passwort, nur Lesen. Beide Firma 1. Der Seed legt trotzdem Fahrzeuge für Firma 2 und 3 an. Die haben keinen Demo-User. Isolation in der UI ist eine fremde ID und dann „nicht gefunden“. `db:seed:large` packt fast alles auf Firma 1, Firma 2 und 3 bekommen je etwa 1 %. Nur migrierte alte DBs behalten alle Fahrzeuge auf Firma 1.
 

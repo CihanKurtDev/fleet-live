@@ -1,3 +1,6 @@
+# Disabled while the GitHub account is locked for billing.
+# Rename back to verify.yml once Actions can start jobs again.
+
 name: Verify
 
 on:
