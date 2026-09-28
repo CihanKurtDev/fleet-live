@@ -8,6 +8,15 @@ import { upsertDevAccounts } from "./devAccounts";
 
 const largeMode = process.argv.includes("--large");
 
+if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_DEMO_ACCOUNTS !== "true"
+) {
+    throw new Error(
+        "Demo-Seed ist in Produktion deaktiviert. Zum bewussten Freigeben ALLOW_DEMO_ACCOUNTS=true setzen.",
+    );
+}
+
 const insertDriver = db.prepare(`
     INSERT INTO drivers (company_id, name)
     VALUES (?, ?)

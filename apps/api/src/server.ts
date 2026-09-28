@@ -1,12 +1,31 @@
 import { app } from "./app";
 import { config } from "./config";
 import { closeDatabase } from "./db/database";
+import { stmt } from "./db/statements";
 import { logger } from "./logger";
 import { closeAllSseClients } from "./sse/hub";
 import {
     startTelemetryTicker,
     stopTelemetryTicker,
 } from "./sse/telemetryTicker";
+
+if (config.isProduction && !config.allowDemoAccounts) {
+    const demoAccounts = stmt(
+        `
+        SELECT COUNT(*) AS total
+        FROM users
+        WHERE lower(email) IN ('cihan@example.com', 'viewer@example.com')
+        `,
+    ).get() as { total: number };
+
+    if (Number(demoAccounts.total) > 0) {
+        logger.fatal(
+            "production start refused: demo accounts exist; remove them or set ALLOW_DEMO_ACCOUNTS=true intentionally",
+        );
+        closeDatabase();
+        process.exit(1);
+    }
+}
 
 const server = app.listen(config.port, () => {
     logger.info(`API running on http://localhost:${config.port}`);

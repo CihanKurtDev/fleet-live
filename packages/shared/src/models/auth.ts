@@ -15,7 +15,7 @@ export type AuthUser = {
 export type LoginInput = {
     email: string;
     password: string;
-    remember?: boolean;
+    remember: boolean;
 };
 
 const loginSchema = z.object({
