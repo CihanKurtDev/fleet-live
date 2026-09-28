@@ -107,6 +107,25 @@ export function lowFuelSeverity(
     return fuelLevel < LOW_FUEL_CRITICAL_PERCENT ? "HIGH" : "MEDIUM";
 }
 
+export function formatAlertDuration(durationSeconds: number): string {
+    const seconds = Math.max(0, Math.round(durationSeconds));
+
+    if (seconds < 60) {
+        return `${seconds} s`;
+    }
+
+    if (seconds < 3_600) {
+        return `${Math.round(seconds / 60)} Min.`;
+    }
+
+    if (seconds < 86_400) {
+        return `${Math.round(seconds / 3_600)} Std.`;
+    }
+
+    const days = Math.round(seconds / 86_400);
+    return `${days} ${days === 1 ? "Tag" : "Tage"}`;
+}
+
 /**
  * Ereigniszeile für die Inbox: aus `type` + `details`, sonst `message`.
  */
@@ -114,7 +133,7 @@ export function formatAlertEvent(
     alert: Pick<Alert, "type" | "message" | "details">,
 ): string {
     if (alert.type === "SPEEDING" && isSpeedingAlertDetails(alert.details)) {
-        return `${Math.round(alert.details.max_speed_kmh)} km/h bei Limit ${Math.round(alert.details.limit_kmh)} · ${Math.round(alert.details.duration_s)} s`;
+        return `${Math.round(alert.details.max_speed_kmh)} km/h bei Limit ${Math.round(alert.details.limit_kmh)} · ${formatAlertDuration(alert.details.duration_s)}`;
     }
 
     if (alert.type === "LOW_FUEL" && isLowFuelAlertDetails(alert.details)) {
