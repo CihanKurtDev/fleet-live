@@ -98,95 +98,6 @@ Was die App heute kann, und was als Nächstes kommt.
 
 ---
 
-## Aktueller Stand
-
-### Umgesetzt
-
-* Monorepo: `apps/api`, `apps/web`, `packages/shared`
-* Express 5, SQLite (WAL, Statement-Cache, schlanke Migrationen)
-* Fahrzeug-CRUD, Liste serverseitig (Suche, Filter, Sortierung, Seiten, Facetten)
-* Vertrag in `@fleet-live/shared`. Fehlermeldungen `error`/`fields` auf Deutsch, `code` auf Englisch
-* Telemetrie als kurzes rollierendes Fenster, Fahrwege als kodierte Polylines
-* SSE mit Fokus pro Verbindung. Telemetrie-Patches und `vehicles-changed` nur für die eigene Firma
-* Leaflet auf der Detailseite: Marker, Bewegung, Spur
-* Flottenkarte (`/fleet`): Positionen im Viewport, Dichtezellen ab 2000 Treffern, Drill-down, Kennzeichen-Sprung in der ganzen Firma
-* Simulation auf eingebackenen Strecken (Stadt/Autobahn, Kraftstoff). Pause pro Firma über `GET`/`PATCH /api/sim`
-* Unternehmen. Ein Nutzer gehört zu genau einer Firma
-* Session-Login
-* `dispatcher` darf schreiben, die Sim pausieren und Warnungen erledigen. `viewer` liest nur
-* `company_id` kommt aus der Session, nie aus dem Body. Kennzeichen eindeutig pro Firma. SSE und Sim nur für diese Firma. Fahrten über `trip → vehicle → company`
-* Warnungen: `GET`/`PATCH /api/alerts`, Inbox `/alerts`. SPEEDING und OFFLINE live, LOW_FUEL als Seed. `ended_at`, `details`, `active_alerts` am Fahrzeug
-* Fahrer als eigene Tabelle, `vehicle.current_driver_id`. Liste und Detail unter `/drivers`
-* Tempointer `speedBand`: orange über `speed_limit_kmh`, rot bei `speeding_open`
-* Schichtüberblick auf `/` (`GET /api/briefing`)
-* Fahrtarchiv: `GET /api/vehicles/:id/trips`
-* Import: Preview (`csv` oder `xlsx`), Commit, Mapping-Profil, Importlog, Assistent `/vehicles/import`
-* API-Tests mit `node:test` und SuperTest
-
-### Demo, absichtlich so
-
-* Bewegung kommt aus dem Simulator.
-* Login-Hinweise nur in Vite `DEV`: `cihan@example.com` (Dispatcher) und `viewer@example.com` (nur Lesen). Passwort `development-only-password`. Beide Firma 1.
-* Firmen 2 und 3 liegen im Seed für Isolationstests, haben aber keinen Demo-Login. Fremde Fahrzeug-IDs geben `404`. Der Rest steckt in den API-Tests.
-* SQLite-Datei
-* Ein Unternehmen pro Nutzer. Kein Firmenwechsel.
-* SPEEDING und OFFLINE schreibt der Ticker (eine offene Zeile pro Fahrzeug und Typ). LOW_FUEL-Zeilen sind Seed. Der aktuelle Tankstand kommt aus `vehicles.fuel_level`. Das ist keine OSM-Regelengine.
-* Die Tempofarbe hängt am Sim-Limit (`speedBand`, `speed_limit_kmh`, `speeding_open`), nicht an Kartenlimits. Ein Teil der Fahrzeuge fährt über dem Limit, sonst gäbe es keine SPEEDING-Events. Zu langsam wird nicht eingefärbt.
-* Kartenkacheln von OSM über Leaflet
-
-### Grenzen
-
-* Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Passwort-Reset und Invites gibt es nicht.
-* Abgelaufene Session: `GET /api/auth/me` und spätere `401`. Die UI räumt den Nutzer weg und geht nach `/login`. Falsches Passwort auf `POST /api/auth/login` zählt nicht als Session-Ende.
-* Sim-Pause liegt im Speicher. API-Neustart startet alle Firmen wieder.
-* Frontend-Tests nur für ein paar riskante Abläufe.
-* Logs für Request, SSE, Ticker und Import. Kein Metrik-Stack.
-
----
-
-# Architektur
-
-```text
-fleet-live/
-├── apps/
-│   ├── api/          Express 5 + SQLite (node:sqlite)
-│   └── web/          React 19 + Vite + React Router
-└── packages/
-    └── shared/       Domain-Typen, Zod, Listen/SSE/Auth
-```
-
-```text
-                    ┌─────────────────┐
-                    │  React-Frontend │
-                    └────────┬────────┘
-                             │
-                    HTTP + SSE (/api)  Cookie-Session
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │  Express-API    │
-                    └────────┬────────┘
-                             │
-                    ┌────────┴────────┐
-                    ▼                 ▼
-               Controller          Models
-                                      │
-                                      ▼
-                                   SQLite
-
-                    ┌─────────────────┐
-                    │ @fleet-live/shared │
-                    └─────────────────┘
-```
-
-Controller kennen HTTP. Models kennen SQL und kriegen kein `req`/`res`. Die UI kennt SQLite nicht.
-
-Schemas für Fahrzeug, Liste, Telemetrie, Stream und Login liegen in `@fleet-live/shared`. Nicht in api oder web nochmal bauen.
-
-Die Firma steht in der Session. Telemetrie, Fahrten und Warnungen hängen an `vehicle_id`. Fahrer hängen an `company_id`. Fahrzeuge zeigen auf `current_driver_id`. HTTP prüft zuerst die Firma. Fahrten joinen `vehicles` (`trip → vehicle → company`). Auf `trips` und `alerts` gibt es kein `company_id`.
-
----
-
 # Tech-Stack
 
 **Backend:** Node.js, TypeScript, Express 5, SQLite (`node:sqlite`)
@@ -504,18 +415,16 @@ Controller validieren und mappen HTTP. Models führen SQL aus. Dünn gehalten.
 
 ---
 
-# Aktuelle Grenzen
+# Grenzen
 
-Nicht für Produktion:
-
-* Cookie nur same origin. Kein Reset, Lockout, Invite
-* Sim-Pause im Prozessspeicher. Neustart setzt alle Firmen wieder auf laufend
-* Keine Produktionsdatenbank, kein Observability-Stack
-* Cross-Origin ist nicht vorgesehen. Produktion braucht genau einen Origin
-* Ein Unternehmen pro Nutzer
+* Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Passwort-Reset und Invites gibt es nicht.
+* Abgelaufene Session: `GET /api/auth/me` und spätere `401`. Die UI räumt den Nutzer weg und geht nach `/login`. Falsches Passwort auf `POST /api/auth/login` zählt nicht als Session-Ende.
+* Sim-Pause liegt im Speicher. API-Neustart startet alle Firmen wieder.
+* Frontend-Tests nur für ein paar riskante Abläufe.
+* Logs für Request, SSE, Ticker und Import. Kein Metrik-Stack.
 
 ---
 
-## Warum dieses Projekt?
+# Warum dieses Projekt?
 
 Eine App statt eines Tutorials. REST, relationale Daten, TypeScript, Frontend und Backend getrennt, Karten, SSE, Simulation, Sessions, Mandanten.
