@@ -17,7 +17,7 @@ Phases 1–10 are in place (including yard Stammdaten: VIN, type, HU, depot, cos
 
 - Code is what exists. If README and code disagree, code wins. README describes the running system and user-visible upcoming work, not the engineering backlog.
 - `apps/docs/table.md` is the table-component spec, not a backlog. Do not add client-side vehicle-list sorting because `sortRows.ts` exists.
-- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts` with optional `type`). SPEEDING, LOW_FUEL and OFFLINE rows are live ticker events (8 s over the current sim road-class limit; fuel under 15% while `DRIVING`; no report for 15 s after a company pause, or status `OFFLINE`). That is not OSM and not a general rule engine. Home `/` is the company shift briefing (`GET /api/briefing`). Next engineering item is Phase 11 (map at fleet scale).
+- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts` with optional `type`). SPEEDING and OFFLINE rows are live events (8 s over the current sim road-class limit; no report for 15 s after a company pause, or status `OFFLINE`). LOW_FUEL is a current vehicle reading/filter plus seeded alert history, not a ticker event. That is not OSM and not a general rule engine. Home `/` is the company shift briefing (`GET /api/briefing`). Next engineering item is Phase 11 (map at fleet scale).
 
 ## Workflow
 

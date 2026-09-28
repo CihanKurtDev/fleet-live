@@ -1,97 +1,150 @@
 # fleet-live 🚚
 
-A full-stack fleet management application built with **TypeScript, Node.js, Express, React and SQLite**.
+> Lokale Portfolio-Demo
 
-> **Status: Work in progress.** Live speeding, low-fuel and no-signal warnings, an inbox you can filter, fleet map, trip trails, and company login. GPS is simulated.
+Flottenleitstelle für Dispatcher. Schichtüberblick, Live-Karte, Fahrten, Fahrer, Warnungen und Stammdatenimport in einer App. TypeScript-Monorepo, serverseitige Listen, SSE mit Fokus, Mandantentrennung, SQLite. GPS kommt aus dem Simulator, absichtlich, damit die Demo lokal und reproduzierbar bleibt.
 
-This is closer to a real fleet system than a tutorial: server-driven lists, SSE with per-connection focus, trips as encoded polylines, and tenant isolation by company. SPEEDING, LOW_FUEL and OFFLINE warnings are live ticker events. List colour for speed uses the current sim road-class limit.
+## Einblicke
 
----
+### Live-Flottenkarte
 
-## Overview
+![Flottenkarte mit Statusmarkern](docs/screenshots/fleet-map.png)
 
-`fleet-live` monitors vehicles, last positions, live movement and trip paths for **one company per logged-in user**.
+### Schichtüberblick
 
-The React UI talks to the Express API over HTTP and SSE (`/api`). Unauthenticated vehicle, stream, sim and alert requests are `401`. Other companies’ vehicles are `404`, not listed.
+![Schichtüberblick mit Kennzahlen und Monatsverlauf](docs/screenshots/briefing.png)
 
----
+### Warnungs-Inbox
 
-# Roadmap
+![Filterbare Warnungs-Inbox](docs/screenshots/alerts.png)
 
-What you can do in the app today, and what lands next — like a game patch list, not an engineering backlog.
+### Fahrzeug und Fahrt
 
-## Now
+![Fahrzeugdetail mit Live-Fahrt](docs/screenshots/vehicle-detail.png)
 
-* Speeding warnings while a vehicle is over the route limit
-* Low-fuel warnings under 15% on the road
-* No-signal warnings when a vehicle goes quiet, or is marked offline
-* Inbox: open / done, and filter by speeding / low fuel / no signal
-* Shift briefing on the home page, with the open-warning count in the nav
-* Fleet map, trip trail on the vehicle, drivers, company login
-* Trip archive on the vehicle: browse past drives and show a closed route on the map
-* Import vehicles, drivers, eligibility and current assignment from CSV or Excel (`/vehicles/import`)
-* Company remembers the last column mapping; each import is logged
-* Yard master data on vehicles (VIN, type, HU due, depot, cost center)
-* Drivers with phone; rename without the vehicle form; list opens with problem drivers first
+### Stammdatenimport
 
-## Next
+![Importvorschau mit Prüfung, Blättern und Zeilenaktionen](docs/screenshots/import-preview.png)
 
-* A fleet map that still orients when many vehicles are in view; plate search that jumps to the marker
-* Depot geofences
-* Due-date reminders (HU, licence, UVV)
-* A CSV for the boss
+## In fünf Minuten starten
 
----
+Node.js 24 und npm 11.
 
-## Current Status
+```bash
+npm ci
+npm run db:seed
+npm run dev
+```
 
-### Implemented
+Dann `http://localhost:5173` öffnen.
 
-* TypeScript monorepo: `apps/api`, `apps/web`, `packages/shared`
-* Express 5 API, SQLite (WAL, statement cache, lightweight migrations)
-* Vehicle CRUD; server-driven list (search, filter, sort, pagination, facet counts)
-* Shared Zod contract (`@fleet-live/shared`); field-level German `error`/`fields`; English `code`
-* Telemetry hot buffer (rolling window) and trip paths as encoded polylines
-* SSE with per-connection focus; telemetry patches and `vehicles-changed` scoped to the session company
-* Leaflet detail map (marker, SSE movement, trail from the trip)
-* Fleet map (`/fleet`): last positions in the viewport for the session company
-* Route simulation (baked geometries, city/highway profile, fuel); pause per company (`GET`/`PATCH /api/sim`)
-* Companies; users belong to exactly one company
-* Session login
-* Roles: `dispatcher` (write + sim pause + resolve alerts) and `viewer` (read only)
-* Tenant isolation: `company_id` from the session, never from the client body; plates unique per company; SSE and sim scoped to that company; trips via `trip → vehicle → company`
-* Alerts REST (`GET`/`PATCH /api/alerts`) and UI (inbox `/alerts` with open/resolved and `type` chips); live SPEEDING, LOW_FUEL and OFFLINE from the ticker; `ended_at` / `details`; `active_alerts` on the vehicle
-* Drivers as entities (`drivers` table, `vehicle.driver_id`); list/detail `/drivers` with incident counts
-* Live speed indicator (`speedBand`: orange over the current `speed_limit_kmh` until the event opens, red while `speeding_open`)
-* Shift briefing on `/` (`GET /api/briefing`); Warnungen nav shows the open inbox count
-* Trip archive on vehicle detail (`GET /api/vehicles/:id/trips`, paginated list; closed trip polyline on map)
-* Stammdaten import (`POST /api/import/preview` with `csv` or named `xlsx` sheets, `POST /api/import/commit`, company mapping profile `GET`/`PUT /api/import/profile`, import log `GET /api/import/runs`, wizard `/vehicles/import`)
-* API integration tests (`node:test` + SuperTest)
+- Dispatcher: `cihan@example.com`
+- Viewer: `viewer@example.com`
+- Passwort für beide: `development-only-password`
 
-### Consciously simplified / demo
+Qualitätslauf:
 
-* Movement comes from the simulator, not GPS hardware
-* Seed login is shown on the login page only in Vite `DEV`: `cihan@example.com` (dispatcher) and `viewer@example.com` (read-only), both `development-only-password`, both company 1
-* Companies 2 and 3 exist in seed for isolation. There is no demo login for them — cross-tenant checks are API tests, or a company-1 user opening another company’s vehicle id (`404`)
-* SQLite file database
-* One company per user (no membership table, no company switcher)
-* Alerts: SPEEDING, LOW_FUEL and OFFLINE are written by the ticker (one open row per vehicle per type). Not OSM, not a general rule engine
-* Live tempo colour uses the current sim road-class limit (`speedBand` + `speed_limit_kmh` + `speeding_open`) — not map/OSM limits. A minority of simulated vehicles exceed their class so SPEEDING still fires. No low-speed colour
-* OSM tiles via Leaflet
+```bash
+npm run verify
+```
 
-### Technical debt (not production-ready)
+## Architektur in Kürze
 
-* Cookie session is correct for **same-origin** (Vite proxies `/api`). That is not production auth: no password reset, lockout, invite, or CSRF strategy for a cross-origin cookie deployment. Before splitting web and API onto different hosts, set `CORS_ORIGIN` to the web origin and allow credentials — do not switch to JWT for that
-* An expired session is detected on load (`GET /api/auth/me`) and on later `401`s from API calls (UI clears the user and returns to `/login`, except wrong-password on `POST /api/auth/login`)
-* Sim pause is in-memory per company; an API restart resumes every tenant
-* No frontend tests
-* No CI/CD
-* `CORS_ORIGIN` defaults to `*`; rate limiting is production-only (`NODE_ENV=production`) and is not login-specific
-* No observability beyond request logs
+```text
+React 19 + Vite ── HTTP + SSE /api ──▶ Express 5
+        │                                  │
+        └──── @fleet-live/shared ──────────┤
+                                           ▼
+                                  Models ──▶ SQLite
+```
+
+Routes und Controller machen HTTP. Models machen SQL. Der Browser fasst die Datenbank nicht an. `@fleet-live/shared` hält Domain-Typen, Zod, Listen, Auth und SSE.
+
+## Warum so gebaut
+
+- Telemetrie kommt aus dem Simulator. Kein GPS-Dongle, keine Cloud.
+- SQLite und ein Monolith, weil das für eine lokale Demo reicht.
+- Ein Unternehmen pro Nutzer. Keine öffentliche Registrierung.
+- Cookie-Session über den Vite-Proxy (same origin). Hier gibt es kein öffentliches Hosting.
+- Große Kartenausschnitte werden auf dem Server zu Dichtezellen. Es kommt keine Stichprobe von Markern.
+
+[Demo-Skript](docs/demo-script.md): 60 bis 90 Sekunden durch Login, Briefing, Dichtekarte, Live-Fahrt, Warnungen und Import.
 
 ---
 
-# Architecture
+# Produktumfang
+
+Was die App heute kann, und was als Nächstes kommt.
+
+## Jetzt
+
+* Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt
+* Niedriger Tankstand aus der aktuellen Messung, plus geseedete Warnungshistorie
+* Funk-Ausfall, wenn ein Fahrzeug verstummt oder offline gemeldet ist
+* Inbox offen oder erledigt, Filter nach Geschwindigkeit, Tank, Funk
+* Schichtüberblick auf der Startseite, offene Warnungen in der Navigation
+* Flottenkarte mit Dichtezellen und Kennzeichen-Sprung, Fahrspur am Fahrzeug, Fahrer, Firmen-Login
+* Fahrtarchiv am Fahrzeug: alte Fahrten durchblättern, abgeschlossene Strecke auf der Karte
+* Fahrzeuge, Fahrer, Freigaben und aktuelle Besatzung aus CSV oder Excel (`/vehicles/import`)
+* Letzte Spaltenzuordnung bleibt pro Firma gespeichert, jeder Import steht im Log
+* Hof-Stammdaten am Fahrzeug: VIN, Typ, HU-Fälligkeit, Depot, Kostenstelle
+* Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
+
+## Als Nächstes
+
+* Depot-Geofences
+* Erinnerungen zu HU, Führerschein, UVV
+* CSV-Export
+
+---
+
+## Aktueller Stand
+
+### Umgesetzt
+
+* Monorepo: `apps/api`, `apps/web`, `packages/shared`
+* Express 5, SQLite (WAL, Statement-Cache, schlanke Migrationen)
+* Fahrzeug-CRUD, Liste serverseitig (Suche, Filter, Sortierung, Seiten, Facetten)
+* Vertrag in `@fleet-live/shared`. Fehlermeldungen `error`/`fields` auf Deutsch, `code` auf Englisch
+* Telemetrie als kurzes rollierendes Fenster, Fahrwege als kodierte Polylines
+* SSE mit Fokus pro Verbindung. Telemetrie-Patches und `vehicles-changed` nur für die eigene Firma
+* Leaflet auf der Detailseite: Marker, Bewegung, Spur
+* Flottenkarte (`/fleet`): Positionen im Viewport, Dichtezellen ab 2000 Treffern, Drill-down, Kennzeichen-Sprung in der ganzen Firma
+* Simulation auf eingebackenen Strecken (Stadt/Autobahn, Kraftstoff). Pause pro Firma über `GET`/`PATCH /api/sim`
+* Unternehmen. Ein Nutzer gehört zu genau einer Firma
+* Session-Login
+* `dispatcher` darf schreiben, die Sim pausieren und Warnungen erledigen. `viewer` liest nur
+* `company_id` kommt aus der Session, nie aus dem Body. Kennzeichen eindeutig pro Firma. SSE und Sim nur für diese Firma. Fahrten über `trip → vehicle → company`
+* Warnungen: `GET`/`PATCH /api/alerts`, Inbox `/alerts`. SPEEDING und OFFLINE live, LOW_FUEL als Seed. `ended_at`, `details`, `active_alerts` am Fahrzeug
+* Fahrer als eigene Tabelle, `vehicle.current_driver_id`. Liste und Detail unter `/drivers`
+* Tempointer `speedBand`: orange über `speed_limit_kmh`, rot bei `speeding_open`
+* Schichtüberblick auf `/` (`GET /api/briefing`)
+* Fahrtarchiv: `GET /api/vehicles/:id/trips`
+* Import: Preview (`csv` oder `xlsx`), Commit, Mapping-Profil, Importlog, Assistent `/vehicles/import`
+* API-Tests mit `node:test` und SuperTest
+
+### Demo, absichtlich so
+
+* Bewegung kommt aus dem Simulator.
+* Login-Hinweise nur in Vite `DEV`: `cihan@example.com` (Dispatcher) und `viewer@example.com` (nur Lesen). Passwort `development-only-password`. Beide Firma 1.
+* Firmen 2 und 3 liegen im Seed für Isolationstests, haben aber keinen Demo-Login. Fremde Fahrzeug-IDs geben `404`. Der Rest steckt in den API-Tests.
+* SQLite-Datei
+* Ein Unternehmen pro Nutzer. Kein Firmenwechsel.
+* SPEEDING und OFFLINE schreibt der Ticker (eine offene Zeile pro Fahrzeug und Typ). LOW_FUEL-Zeilen sind Seed. Der aktuelle Tankstand kommt aus `vehicles.fuel_level`. Das ist keine OSM-Regelengine.
+* Die Tempofarbe hängt am Sim-Limit (`speedBand`, `speed_limit_kmh`, `speeding_open`), nicht an Kartenlimits. Ein Teil der Fahrzeuge fährt über dem Limit, sonst gäbe es keine SPEEDING-Events. Zu langsam wird nicht eingefärbt.
+* Kartenkacheln von OSM über Leaflet
+
+### Grenzen
+
+* Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Passwort-Reset und Invites gibt es nicht.
+* Abgelaufene Session: `GET /api/auth/me` und spätere `401`. Die UI räumt den Nutzer weg und geht nach `/login`. Falsches Passwort auf `POST /api/auth/login` zählt nicht als Session-Ende.
+* Sim-Pause liegt im Speicher. API-Neustart startet alle Firmen wieder.
+* Frontend-Tests nur für ein paar riskante Abläufe.
+* Logs für Request, SSE, Ticker und Import. Kein Metrik-Stack.
+
+---
+
+# Architektur
 
 ```text
 fleet-live/
@@ -99,24 +152,24 @@ fleet-live/
 │   ├── api/          Express 5 + SQLite (node:sqlite)
 │   └── web/          React 19 + Vite + React Router
 └── packages/
-    └── shared/       Domain types, Zod validation, list/SSE/auth contracts
+    └── shared/       Domain-Typen, Zod, Listen/SSE/Auth
 ```
 
 ```text
                     ┌─────────────────┐
-                    │  React Frontend │
+                    │  React-Frontend │
                     └────────┬────────┘
                              │
-                    HTTP + SSE (/api)  cookie session
+                    HTTP + SSE (/api)  Cookie-Session
                              │
                              ▼
                     ┌─────────────────┐
-                    │  Express API    │
+                    │  Express-API    │
                     └────────┬────────┘
                              │
                     ┌────────┴────────┐
                     ▼                 ▼
-               Controllers         Models
+               Controller          Models
                                       │
                                       ▼
                                    SQLite
@@ -126,85 +179,85 @@ fleet-live/
                     └─────────────────┘
 ```
 
-Routes/controllers handle HTTP. Models own SQL and do not take `req`/`res`. The UI never touches SQLite.
+Controller kennen HTTP. Models kennen SQL und kriegen kein `req`/`res`. Die UI kennt SQLite nicht.
 
-`@fleet-live/shared` is the contract. Do not duplicate vehicle, list-query, telemetry, stream or login schemas in api or web.
+Schemas für Fahrzeug, Liste, Telemetrie, Stream und Login liegen in `@fleet-live/shared`. Nicht in api oder web nochmal bauen.
 
-Company membership is read from the session. Child rows (telemetry, trips, alerts) hang off `vehicle_id`. Drivers hang off `company_id`; vehicles point at `driver_id`. HTTP access checks the vehicle’s or driver’s company first. Trip reads also join `vehicles` (`trip → vehicle → company`). There is no `company_id` on `trips` or `alerts`.
+Die Firma steht in der Session. Telemetrie, Fahrten und Warnungen hängen an `vehicle_id`. Fahrer hängen an `company_id`. Fahrzeuge zeigen auf `current_driver_id`. HTTP prüft zuerst die Firma. Fahrten joinen `vehicles` (`trip → vehicle → company`). Auf `trips` und `alerts` gibt es kein `company_id`.
 
 ---
 
-# Tech Stack
+# Tech-Stack
 
 **Backend:** Node.js, TypeScript, Express 5, SQLite (`node:sqlite`)
 
 **Frontend:** React 19, TypeScript, Vite, React Router, Sass / CSS Modules, Leaflet
 
-**Shared:** `@fleet-live/shared` — snake_case domain types, Zod, list/fleet/SSE/sim/auth contracts, polyline codec
+**Shared:** `@fleet-live/shared` (snake_case, Zod, Listen, Flotte, SSE, Sim, Auth, Polyline)
 
-**Development:** npm workspaces, tsx, ESLint, `node:test` + SuperTest (API), autocannon bench
+**Entwicklung:** npm workspaces, tsx, ESLint, `node:test` + SuperTest, autocannon
 
 ---
 
 # API
 
-Vehicle, stream and sim routes require a session. `GET /api/health` does not. User-facing `error`/`fields` are German; `code` is English.
+Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error` und `fields` auf Deutsch, `code` auf Englisch.
 
 ## Auth
 
-| Method | Endpoint | Description |
-| ------ | -------- | ----------- |
-| `POST` | `/api/auth/login` | `{ email, password, remember? }` — sets `fleet_session` |
-| `POST` | `/api/auth/logout` | Clears the session |
-| `GET`  | `/api/auth/me` | Current user (`id`, `name`, `email`, `company_id`, `role`) or `401` |
+| Methode | Endpoint | Beschreibung |
+| ------- | -------- | ------------ |
+| `POST` | `/api/auth/login` | `{ email, password, remember? }`, setzt `fleet_session` |
+| `POST` | `/api/auth/logout` | Löscht die Session |
+| `GET`  | `/api/auth/me` | Aktueller Nutzer (`id`, `name`, `email`, `company_id`, `role`) oder `401` |
 
-`remember: true` persists the cookie for seven days; otherwise the session lasts twelve hours (and the cookie is session-scoped). Wrong password returns `401` without saying which field failed.
+`remember: true` hält das Cookie sieben Tage. Sonst zwölf Stunden, Cookie nur für die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld.
 
-## Vehicles and live data
+## Fahrzeuge und Livedaten
 
-| Method   | Endpoint                         | Description |
-| -------- | -------------------------------- | ----------- |
-| `GET`    | `/api/vehicles`                  | Paginated list (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
-| `GET`    | `/api/vehicles/positions`        | Last positions for the fleet map (`bbox`, `search`, `filter`, `drivers`) |
-| `GET`    | `/api/vehicles/drivers`          | Driver search (`search`, `page`; optional `names` hydrates a selection) |
-| `GET`    | `/api/vehicles/:id`              | One vehicle (`404` if missing **or** other company) |
-| `GET`    | `/api/vehicles/:id/telemetry`    | Recent points (`limit`: 10, 25, 50, 100; default 50) |
-| `GET`    | `/api/vehicles/:id/trips/latest` | Running trip, else last finished (`data: null` if never driven) |
-| `GET`    | `/api/vehicles/:id/trips`        | Paginated archive (facts only, no `path`)                       |
-| `GET`    | `/api/vehicles/:id/trips/:tripId`| One trip including `path` (`404` if missing or other company)   |
-| `POST`   | `/api/vehicles`                  | Create (`Location` on `201`); `company_id` from the session |
-| `PUT`    | `/api/vehicles/:id`              | Replace |
-| `PATCH`  | `/api/vehicles/:id`              | Update |
-| `DELETE` | `/api/vehicles/:id`              | Delete |
-| `GET`    | `/api/stream`                    | SSE: `connected` (`connection_id`), telemetry, `vehicles-changed` |
-| `POST`   | `/api/stream/focus`              | `{ connection_id, ids }` — only vehicles of this company; connection must belong to this company |
-| `GET`    | `/api/sim`                       | `{ running, available }` for **this** company |
-| `PATCH`  | `/api/sim`                       | `{ running }` — pause/resume this company’s simulation |
-| `GET`    | `/api/alerts`                    | Paginated alerts (`filter` open/resolved/all, optional `type`, `vehicle_id`, `driver_id`, `page`, `limit`) |
-| `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }` — close; `dispatcher` only |
-| `GET`    | `/api/briefing`                  | Company snapshot for the home page (counts, newest open alerts, no-signal, drivers with open warnings) |
-| `GET`    | `/api/drivers`                   | Paginated drivers (`search`, `page`, `limit`, optional `vehicle_id`; default sort open warnings) |
-| `POST`   | `/api/drivers`                   | `{ name, phone? }` — create roster row; `dispatcher` |
-| `GET`    | `/api/drivers/:id`               | Driver, eligible vehicles, current vehicle (`404` if missing **or** other company) |
-| `PATCH`  | `/api/drivers/:id`               | `{ name?, phone? }` — rename / phone; `dispatcher` |
-| `POST`   | `/api/drivers/:id/vehicles`      | `{ vehicle_id }` — eligibility; `dispatcher` |
-| `DELETE` | `/api/drivers/:id/vehicles/:vehicleId` | Remove eligibility; `dispatcher` |
-| `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` or `{ vehicle_id: null }` — current vehicle; `dispatcher` |
+| Methode  | Endpoint                         | Beschreibung |
+| -------- | -------------------------------- | ------------ |
+| `GET`    | `/api/vehicles`                  | Liste (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
+| `GET`    | `/api/vehicles/positions`        | Letzte Positionen für die Karte (`bbox`, `search`, `filter`, `drivers`) |
+| `GET`    | `/api/vehicles/drivers`          | Fahrersuche (`search`, `page`; `names` lädt eine Auswahl nach) |
+| `GET`    | `/api/vehicles/:id`              | Ein Fahrzeug. `404` wenn weg oder andere Firma |
+| `GET`    | `/api/vehicles/:id/telemetry`    | Letzte Punkte (`limit` 10, 25, 50, 100, Standard 50) |
+| `GET`    | `/api/vehicles/:id/trips/latest` | Laufende Fahrt, sonst die letzte abgeschlossene. `data: null` wenn nie gefahren |
+| `GET`    | `/api/vehicles/:id/trips`        | Archiv ohne `path` |
+| `GET`    | `/api/vehicles/:id/trips/:tripId`| Eine Fahrt inklusive `path`. `404` wenn weg oder andere Firma |
+| `POST`   | `/api/vehicles`                  | Anlegen, `Location` bei `201`. `company_id` aus der Session |
+| `PUT`    | `/api/vehicles/:id`              | Ersetzen |
+| `PATCH`  | `/api/vehicles/:id`              | Aktualisieren |
+| `DELETE` | `/api/vehicles/:id`              | Löschen |
+| `GET`    | `/api/stream`                    | SSE: `connected` (`connection_id`), Telemetrie, `vehicles-changed` |
+| `POST`   | `/api/stream/focus`              | `{ connection_id, ids }`. Nur Fahrzeuge dieser Firma, Verbindung muss dazugehören |
+| `GET`    | `/api/sim`                       | `{ running, available }` für diese Firma |
+| `PATCH`  | `/api/sim`                       | `{ running }`, Sim dieser Firma pausieren oder fortsetzen |
+| `GET`    | `/api/alerts`                    | Warnungen (`filter` open/resolved/all, optional `type`, `vehicle_id`, `driver_id`, `page`, `limit`) |
+| `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }`, nur `dispatcher` |
+| `GET`    | `/api/briefing`                  | Snapshot für die Startseite |
+| `GET`    | `/api/drivers`                   | Fahrer (`search`, `page`, `limit`, optional `vehicle_id`). Sortierung: offene Warnungen |
+| `POST`   | `/api/drivers`                   | `{ name, phone? }`, `dispatcher` |
+| `GET`    | `/api/drivers/:id`               | Fahrer, Freigaben, aktuelles Fahrzeug. `404` wenn weg oder andere Firma |
+| `PATCH`  | `/api/drivers/:id`               | `{ name?, phone? }`, `dispatcher` |
+| `POST`   | `/api/drivers/:id/vehicles`      | `{ vehicle_id }`, Freigabe, `dispatcher` |
+| `DELETE` | `/api/drivers/:id/vehicles/:vehicleId` | Freigabe weg, `dispatcher` |
+| `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` oder `{ vehicle_id: null }`, `dispatcher` |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
-`GET /api/vehicles` returns `{ data, meta }`. `meta` includes `total`, `pageCount` and facet `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
+`GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
 
-`GET /api/alerts` returns `{ data, meta }` of alerts joined with plate and the **snapshot** driver (`driver_id` / `driver_name` at open). Rows include `ended_at` and `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Default `filter=open` is `resolved_at IS NULL` (independent of `ended_at`). Optional `type` is `SPEEDING` / `LOW_FUEL` / `OFFLINE` (omit = all types). `meta.counts` is `open` / `resolved` / `all` and ignores `type`. `meta.type_counts` is per-type and respects `filter`. Optional `vehicle_id` or `driver_id` (404 if missing or other company). Reassignment does not move old rows.
+`GET /api/alerts` gibt Warnungen mit Kennzeichen und dem Fahrer zum Zeitpunkt des Öffnens (`driver_id` / `driver_name`). Dazu `ended_at` und `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Standardfilter `open` heißt `resolved_at IS NULL`. `ended_at` spielt dafür keine Rolle. `type` optional: `SPEEDING`, `LOW_FUEL`, `OFFLINE`. `meta.counts` ist `open` / `resolved` / `all` und ignoriert `type`. `meta.type_counts` hängt am Filter. `vehicle_id` oder `driver_id` optional, sonst 404 wenn fremd. Umbesetzung ändert alte Zeilen nicht.
 
-`GET /api/drivers` returns `{ data, meta }` of drivers for the session company. `counts` and `open_warnings` are **SPEEDING only** (snapshot `alerts.driver_id`). `vehicle_plate` is set when the driver has exactly one eligible vehicle. `current_vehicle_plate` is the vehicle with `current_driver_id`. Optional `vehicle_id` lists drivers eligible for that vehicle (404 if missing or other company). `GET /api/drivers/:id` adds `vehicles` (with `is_current`) and `current_vehicle`.
+`GET /api/drivers` listet Fahrer der Session-Firma. `counts` und `open_warnings` zählen nur SPEEDING (über den Snapshot `alerts.driver_id`). `vehicle_plate` nur wenn genau ein freigegebenes Fahrzeug. `current_vehicle_plate` ist das Fahrzeug mit `current_driver_id`. Mit `vehicle_id` kommen die Fahrer, die für dieses Fahrzeug frei sind. `GET /api/drivers/:id` hängt `vehicles` (`is_current`) und `current_vehicle` an.
 
-`GET /api/briefing` returns `{ data }` for the session company: status counts (`driving`, `idle`, `offline`), inbox `open`, and `low_fuel` vehicle count, plus monthly `history` for the Schicht charts. `viewer` may read.
+`GET /api/briefing` gibt Statuszähler (`driving`, `idle`, `offline`), Inbox `open`, `low_fuel` und monatliche `history` für die Diagramme. `viewer` darf lesen.
 
-`GET /api/vehicles/positions` returns `{ data, meta.truncated }` — slim last-known positions, not the list page. Optional `bbox=west,south,east,north`; `search` matches plate and driver; `drivers` is a view filter (empty means the company snapshot in the bbox, not “no markers”). Over `FLEET_POSITIONS_MAX` (2000) matches → `truncated` and empty `data` (no sample).
+`GET /api/vehicles/positions` ist entweder `positions` oder `density`, plus `meta.total`. `bbox=west,south,east,north` optional. `search` trifft Kennzeichen und Fahrer in der ganzen Firma. `drivers` filtert nur die Ansicht. Bis `FLEET_POSITIONS_MAX` (2000) kommen Einzelpositionen. Darüber höchstens 32 mal 20 Zellen mit Statuszählern.
 
-Query parameters live in `@fleet-live/shared`. Invalid sort keys or limits are `400`. Default page size `10`; allowed limits `10`, `25`, `50`, `100`. `license_plate` max 32 characters, driver `name` max 80. Plates and driver names are unique **per company**.
+Query-Parameter stehen in `@fleet-live/shared`. Kaputte Sortierung oder Limits: `400`. Seitengröße 10, erlaubt 10, 25, 50, 100. Kennzeichen max. 32 Zeichen, Fahrername max. 80. Beides eindeutig pro Firma.
 
-Validation example:
+Validierung:
 
 ```json
 {
@@ -216,118 +269,118 @@ Validation example:
 }
 ```
 
-Vehicle JSON includes last telemetry (or `null`), `speed_limit_kmh`, `active_alerts`, `speeding_open` (unfinished SPEEDING event), `current_driver_id`, denormalized `driver_name` (null when the vehicle is in the pool), and yard fields (`vin`, `vehicle_type`, `hu_due_on`, `depot`, `cost_center`). HTTP create/update takes plate, fuel, status and those yard fields — not a driver name. Dispatchers assign drivers via `/api/drivers`.
+Fahrzeug-JSON: letzte Telemetrie oder `null`, `speed_limit_kmh`, `active_alerts`, `speeding_open`, `current_driver_id`, `driver_name` (null im Pool), Hof-Felder `vin`, `vehicle_type`, `hu_due_on`, `depot`, `cost_center`. Anlegen und Update nehmen Kennzeichen, Tank, Status und Hof-Felder. Keinen Fahrernamen. Zuweisung läuft über `/api/drivers`.
 
 ---
 
-# Vehicle Model
+# Fahrzeugmodell
 
-Master data a person maintains: license plate, VIN, type, HU due, depot, cost center (and fuel when not driving). Who may drive it and who has it **now** live on the driver assignment API, not on the vehicle form. `status` is what the vehicle reports (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) — not a form control. `fuel_level` is measured while `DRIVING`; otherwise it stays manually maintainable.
+Was ein Mensch pflegt: Kennzeichen, VIN, Typ, HU-Fälligkeit, Depot, Kostenstelle. Tankstand, wenn das Fahrzeug nicht fährt. Wer fahren darf und wer es gerade hat, hängt an der Fahrer-API, nicht am Fahrzeugformular. `status` kommt vom Fahrzeug (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) und ist kein Formularfeld. `fuel_level` wird während `DRIVING` gemessen, sonst von Hand.
 
-Responses also include last position/speed/`speed_limit_kmh`/`recorded_at`, `active_alerts`, `speeding_open`, and `created_at`.
+Zusätzlich in der Antwort: Position, Geschwindigkeit, `speed_limit_kmh`, `recorded_at`, `active_alerts`, `speeding_open`, `created_at`.
 
-`company_id` is assigned from the session on create. The client cannot choose it.
+`company_id` setzt die Session beim Anlegen. Der Client wählt sie nicht.
 
 ---
 
 # Frontend
 
-Vite proxies `/api` to `http://localhost:3000` so the browser uses same-origin `fetch` / EventSource with `credentials: "include"`.
+Vite schickt `/api` nach `http://localhost:3000`. `fetch` und EventSource laufen same origin mit `credentials: "include"`.
 
-List state lives in the URL. Reloading keeps the view; a fresh visit to `/vehicles` starts on page 1.
+Listenstand steht in der URL. Reload behält die Ansicht. Frischer Besuch von `/vehicles` startet auf Seite 1.
 
-| Route           | Description |
-| --------------- | ----------- |
-| `/login`        | Session login |
-| `/`             | Shift briefing (auth required) |
-| `/vehicles`     | List and create dialog |
-| `/vehicles/:id` | Detail, map/trail, assignment, tank/funk alerts, edit, delete |
-| `/fleet`        | Fleet map |
-| `/alerts`       | Warning inbox (open/resolved, optional `type`, `vehicle_id` / `driver_id`) |
-| `/drivers`      | Driver list (SPEEDING counts) |
-| `/drivers/:id`  | Driver detail, eligibility / current vehicle, SPEEDING history |
+| Route           | Beschreibung |
+| --------------- | ------------ |
+| `/login`        | Login |
+| `/`             | Schichtüberblick |
+| `/vehicles`     | Liste, Anlegen |
+| `/vehicles/:id` | Detail, Karte, Zuweisung, Warnungen, Bearbeiten, Löschen |
+| `/fleet`        | Flottenkarte |
+| `/alerts`       | Inbox (offen/erledigt, optional `type`, `vehicle_id` / `driver_id`) |
+| `/drivers`      | Fahrerliste |
+| `/drivers/:id`  | Fahrer, Freigaben, aktuelles Fahrzeug, SPEEDING-Historie |
 
-Unauthenticated visits to vehicle, fleet, alert and driver routes go to `/login`. After login the home page is `/`.
+Ohne Session landet man auf `/login`. Danach ist `/` die Startseite.
 
-## Shift briefing
+## Schichtüberblick
 
-`/` is the company snapshot for the current shift: five counts (open inbox, no-signal, driving, standby, open low fuel), the newest open alerts with resolve for dispatchers, vehicles with status `OFFLINE`, and drivers with the most open warnings. The Warnungen nav shows the open inbox count. `viewer` may read; only `dispatcher` resolves.
+Fünf Zahlen: offene Inbox, Funk-Ausfall, fahrend, bereit, niedriger Tank. Dazu die neuesten offenen Warnungen (Dispatcher kann erledigen), Fahrzeuge mit `OFFLINE`, Fahrer mit den meisten offenen Warnungen. Die Navigation zeigt den Inbox-Zähler. `viewer` liest, `dispatcher` erledigt.
 
-## Vehicle list
+## Fahrzeugliste
 
-Generic table; vehicle columns/filters are configuration, not table internals. Search, filters, sort and pagination run **on the server**. Live patches apply to the current page plus neighbours.
+Normale Tabelle. Spalten und Filter sind Konfiguration. Suche, Filter, Sortierung und Seiten laufen auf dem Server. Live-Patches treffen die aktuelle Seite und die Nachbarn.
 
-## Vehicle management
+## Fahrzeugverwaltung
 
-Create, edit, delete. Status is a badge. Fuel is read-only while driving. The header pauses/resumes **this company’s** simulator and switches list ↔ map.
+Anlegen, bearbeiten, löschen. Status als Badge. Tank während der Fahrt nur lesen. Der Header pausiert den Simulator dieser Firma und wechselt zwischen Liste und Karte.
 
-## Fleet map
+## Flottenkarte
 
-`/fleet` loads last positions for the **session company** in the visible bbox. The driver picker is an optional view filter, not a requirement. Status chips and plate search apply to that snapshot. More than 2000 matches → no markers (`truncated`), not a sample. **Fahrer** is a modal (driver name, current plate or —). Driving vehicles in the snapshot get SSE ticks (focus cap 150). No trails here — the path stays on the detail page.
+`/fleet` lädt Positionen der eigenen Firma im sichtbaren Ausschnitt. Der Fahrer-Picker ist ein Filter, kein Muss. Status-Chips und Kennzeichensuche gelten für diesen Ausschnitt. Über 2000 Treffer werden Dichtekreise. Klick zoomt, bis Marker gehen. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (max. 150 im Fokus). Spuren gibt es hier nicht, die liegen auf der Detailseite.
 
-See [apps/docs/table.md](apps/docs/table.md) for the table component.
-
----
-
-# Telemetry
-
-Hot buffer: vehicle, latitude, longitude, speed, `recorded_at`. Last point is on the vehicle JSON. `GET /api/vehicles/:id/telemetry` returns `{ data }` in chronological order — marker and newest movement, not the trail.
-
-A ticker writes only for focused `DRIVING` vehicles whose company has not paused the sim. The `connected` event includes `connection_id`. The UI posts `{ connection_id, ids }` (list page plus neighbours, open detail vehicle, driving vehicles on the fleet map). Each connection has its own focus; the ticker uses the union **of that company’s running simulations**. Without focus, nothing is written. Telemetry patches go only to connections that focused that id **and** belong to the same company. `vehicles-changed` goes only to that company’s connections.
-
-At most `TELEMETRY_KEEP_PER_VEHICLE` raw rows remain per vehicle (default 100). That **is** the telemetry retention. Ending a trip writes speed `0` at the last position.
-
-Focused `DRIVING` vehicles follow baked OSRM polylines. Speed follows a city/highway profile with light noise. A time scale keeps a typical corridor in the 1–2 minute range.
-
-## Trips
-
-A trip is the durable record of one drive. A rolling window of raw points is the wrong unit for a route: visible length would depend on tick rate, not on the drive.
-
-Each reported position is appended to `trips.path` as an [encoded polyline](https://developers.google.com/maps/documentation/utilities/polylinealgorithm) (precision 5):
-
-* **Append is O(1)** (`path = path || ?`; predecessor in `last_latitude` / `last_longitude`). Points closer than 20 m are dropped.
-* **Close simplifies** with Ramer-Douglas-Peucker at 12 m.
-* **`distance_m`** is the sum of reported segments, not the simplified line.
-
-Access is `trip → vehicle → company`. There is no `company_id` on `trips` and no top-level `GET /api/trips/:id`. List rows omit `path`; the polyline is loaded with `GET /api/vehicles/:id/trips/:tripId`.
-
-Closed trips older than `TRIP_RETENTION_DAYS` (default 90) are deleted **per company**. Open trips stay. Prune runs after a trip is closed and after a telemetry tick for companies in that batch. `TRIP_RETENTION_DAYS=0` turns prune off.
-
-Deliberate trade-offs:
-
-* No per-point speed or time on the polyline; aggregates live on the trip.
-* Distance and top speed are shown for finished trips only (fetched once).
-* The row is rewritten on every append; chunking would be the fix at larger scale.
+Tabellenkomponente: [apps/docs/table.md](apps/docs/table.md).
 
 ---
 
-# Alerts, warnings, violations
+# Telemetrie
 
-Three layers share the same `alerts` rows; they are not three tables:
+Kurzer Puffer: Fahrzeug, Latitude, Longitude, Geschwindigkeit, `recorded_at`. Der letzte Punkt steckt im Fahrzeug-JSON. `GET /api/vehicles/:id/telemetry` gibt `{ data }` chronologisch. Das ist Marker und letzte Bewegung, nicht die Spur.
 
-* **Indicator** — `speedBand` plus `speeding_open`. Orange while over the current `speed_limit_kmh` without an open event; red while a SPEEDING row has `ended_at` null. Only `DRIVING`. After the event ends the cell is normal even if the inbox row is still unresolved.
-* **Warning** — `alerts` where `resolved_at IS NULL`. Operative inbox `/alerts`. Dispatcher acknowledges with `PATCH`. Event end (`ended_at`) is not the same as resolved.
-* **Violation history** — SPEEDING rows, including resolved, counted per snapshot driver on `/drivers`. Tank and radio stay on the vehicle. `resolved_at` means “seen”, not “did not happen”.
+Der Ticker schreibt nur für fokussierte `DRIVING`-Fahrzeuge, deren Firma die Sim laufen lässt. `connected` liefert `connection_id`. Die UI schickt `{ connection_id, ids }` (Liste plus Nachbarn, offenes Detail, fahrende auf der Flottenkarte). Jede Verbindung hat eigenen Fokus. Der Ticker nimmt die Vereinigung der laufenden Sims dieser Firma. Ohne Fokus passiert nichts. Patches nur an Verbindungen, die die ID fokussiert haben und zur Firma gehören. `vehicles-changed` nur an diese Firma.
 
-The `alerts` table hangs off `vehicle_id`. Access is `alert → vehicle → company`. `driver_id` is copied from `vehicles.current_driver_id` **when the row opens** and is never rewritten. `active_alerts` is the unresolved count (triggers) and remains on the vehicle JSON and list filter.
+Pro Fahrzeug bleiben `TELEMETRY_KEEP_PER_VEHICLE` Rohzeilen (Standard 100). Das ist die Retention. Trip-Ende schreibt Speed 0 an der letzten Position.
 
-`GET /api/alerts` is the company inbox (`{ data, meta }`). Default `filter=open`. Optional `type` (`SPEEDING` / `LOW_FUEL` / `OFFLINE`), `vehicle_id` or `driver_id` (404 if missing or another company). `PATCH /api/alerts/:id` with `{ resolved: true }` closes a row (`dispatcher`). A second close is idempotent. Viewer may read, not resolve. After a close the API broadcasts `vehicles-changed` so the list count updates.
+Fokussierte Fahrzeuge fahren auf eingebackenen OSRM-Linien. Tempo nach Stadt/Autobahn plus etwas Rauschen. Zeitskala so, dass ein typischer Korridor in 1 bis 2 Minuten durch ist.
 
-The ticker writes SPEEDING: 8 s consecutive over the current sim road-class limit (`speedLimitKmh`: city 50 / highway 120), one open row per vehicle (`ended_at` null), `details` with limit / max / duration; 2 s hysteresis or leaving `DRIVING` sets `ended_at`. Every 8th simulated vehicle may exceed its class so events still occur. LOW_FUEL opens under 15% while `DRIVING` and ends on refill. OFFLINE opens after 15 s without ticks while that company’s simulation is paused (vehicles last simulated here), or when status is `OFFLINE`. One open row per vehicle per type. The inbox event line is `formatAlertEvent` (`type` + `details`, else `message`). Driver names in the tables link to `/drivers/:id`; row click on a warning still opens the vehicle.
+## Fahrten
 
-Live speed stays in the telemetry window; the trip polyline has no per-point speed.
+Eine Fahrt ist der Datensatz einer Fahrt. Ein Fenster aus Rohpunkten wäre die falsche Einheit. Dann würde die sichtbare Länge von der Tickrate abhängen.
+
+Jede Position kommt an `trips.path` als [kodierte Polyline](https://developers.google.com/maps/documentation/utilities/polylinealgorithm) (Präzision 5).
+
+* Anhängen ist O(1): `path = path || ?`, Vorgänger in `last_latitude` / `last_longitude`. Unter 20 m Abstand fliegt der Punkt raus.
+* Beim Schließen vereinfacht Ramer-Douglas-Peucker auf 12 m.
+* `distance_m` ist die Summe der gemeldeten Segmente, nicht die vereinfachte Linie.
+
+Zugriff: `trip → vehicle → company`. Kein `company_id` auf `trips`, kein `GET /api/trips/:id`. Die Liste lässt `path` weg. Die Linie kommt mit `GET /api/vehicles/:id/trips/:tripId`.
+
+Abgeschlossene Fahrten älter als `TRIP_RETENTION_DAYS` (90) werden pro Firma gelöscht. Offene bleiben. Prune nach Trip-Close und nach Ticks für die Firmen im Batch. `TRIP_RETENTION_DAYS=0` schaltet das aus.
+
+Kompromisse:
+
+* Keine Speed- oder Zeitreihe auf der Polyline. Aggregate liegen an der Fahrt.
+* Distanz und Höchstgeschwindigkeit nur bei abgeschlossenen Fahrten, einmal geladen.
+* Die Zeile wird bei jedem Append neu geschrieben. Bei mehr Last wäre Chunking der nächste Schritt.
 
 ---
 
-# Drivers
+# Warnungen, Hinweise, Verstöße
 
-`drivers` is a real entity (`UNIQUE (company_id, name)`). **Eligibility** is M:N (`driver_vehicles`). **Current** is at most one vehicle per driver (`vehicles.current_driver_id`, partial unique; `NULL` = pool). `driver_name` on the vehicle is the current driver’s name, or `NULL`.
+Drei Schichten, eine Tabelle `alerts`.
 
-`POST /api/drivers` creates a roster row (`name`, optional `phone`). `PATCH /api/drivers/:id` renames or updates phone (`dispatcher`); renaming also updates denormalized `vehicles.driver_name` when that driver is current. Assign / unassign / set current hang off the driver. HTTP vehicle writes do not upsert a driver by name. `GET /api/drivers` defaults to open SPEEDING warnings descending and aggregates SPEEDING counts (including resolved). Isolation is still company. `GET /api/vehicles/drivers` remains the fleet-map name picker, not this roster.
+* **Indikator.** `speedBand` und `speeding_open`. Orange über `speed_limit_kmh` ohne offenes Event. Rot, solange SPEEDING `ended_at` null hat. Nur bei `DRIVING`. Nach Event-Ende ist die Zelle wieder normal, auch wenn die Inbox-Zeile noch offen ist.
+* **Warnung.** `resolved_at IS NULL`. Inbox `/alerts`. Dispatcher quittiert per `PATCH`. `ended_at` ist nicht dasselbe wie erledigt.
+* **Verstoßhistorie.** SPEEDING-Zeilen, auch erledigte, gezählt pro Snapshot-Fahrer auf `/drivers`. Tank und Funk bleiben am Fahrzeug. `resolved_at` heißt gesehen, nicht „war nie“.
+
+`alerts` hängt an `vehicle_id`. Zugriff über `alert → vehicle → company`. `driver_id` wird beim Öffnen aus `vehicles.current_driver_id` kopiert und danach nicht mehr angefasst. `active_alerts` ist der offene Zähler am Fahrzeug und im Listenfilter.
+
+`GET /api/alerts` ist die Inbox. Standard `filter=open`. Optional `type`, `vehicle_id`, `driver_id`. `PATCH` mit `{ resolved: true }` schließt (`dispatcher`). Zweites Schließen ist egal. Viewer lesen. Nach dem Close kommt `vehicles-changed`.
+
+Ticker SPEEDING: 8 s am Stück über dem Sim-Limit (`speedLimitKmh`, Stadt 50 / Autobahn 120). Eine offene Zeile pro Fahrzeug. `details` mit Limit, Max, Dauer. 2 s Hysterese oder raus aus `DRIVING` setzt `ended_at`. Jedes achte simulierte Fahrzeug darf über dem Limit fahren. OFFLINE nach 15 s ohne Ticks bei pausierter Sim, oder Status `OFFLINE`. Niedriger Tank ist Messung und Filter. LOW_FUEL in der Inbox kommt aus dem Seed. Eine offene Zeile pro Fahrzeug und Typ. Anzeige: `formatAlertEvent`. Fahrernamen gehen nach `/drivers/:id`. Klick auf die Warnung öffnet das Fahrzeug.
+
+Live-Speed sitzt in der Telemetrie. Die Polyline hat keinen Speed pro Punkt.
 
 ---
 
-# Database
+# Fahrer
+
+Eigene Entität, Name eindeutig pro Firma. Freigabe ist `driver_vehicles` (M:N). Aktuell höchstens ein Fahrzeug (`vehicles.current_driver_id`). `NULL` heißt Pool. `driver_name` am Fahrzeug ist der aktuelle Name oder `NULL`.
+
+`POST /api/drivers` legt an (`name`, optional `phone`). `PATCH` ändert Name oder Telefon. Umbenennen schreibt `vehicles.driver_name` mit, wenn der Fahrer aktuell ist. Zuweisen hängt am Fahrer, nicht am Fahrzeug-Write. `GET /api/drivers` sortiert nach offenen SPEEDING-Warnungen und zählt SPEEDING inklusive erledigter. `GET /api/vehicles/drivers` ist nur der Namensfilter auf der Karte.
+
+---
+
+# Datenbank
 
 ```text
 companies
@@ -337,32 +390,32 @@ drivers        → company_id   UNIQUE (company_id, name)
 driver_vehicles → driver_id, vehicle_id
 vehicles       → company_id, current_driver_id   UNIQUE (company_id, license_plate)
 telemetry      → vehicle_id
-trips          → vehicle_id   (one open trip per vehicle)
-alerts         → vehicle_id, driver_id (snapshot at open)
+trips          → vehicle_id   (eine offene Fahrt pro Fahrzeug)
+alerts         → vehicle_id, driver_id (Snapshot beim Öffnen)
 ```
 
-A partial unique index on `trips(vehicle_id) WHERE ended_at IS NULL` enforces one drive at a time.
+Partieller Unique-Index `trips(vehicle_id) WHERE ended_at IS NULL`: eine offene Fahrt gleichzeitig.
 
 ---
 
-# Authentication and tenants
+# Authentifizierung und Mandanten
 
-Implemented:
+Da:
 
-* Login / logout / me
-* scrypt password hashes
-* HttpOnly session cookie
-* Isolation by `company_id` on the user (one company per account)
-* Roles: `dispatcher` may mutate vehicles, pause the sim, resolve alerts and assign drivers; `viewer` may only read (including inbox, drivers, indicators)
-* SSE connections and sim pause bound to that company
+* Login, Logout, me
+* scrypt
+* HttpOnly-Cookie
+* Isolation über `company_id` (eine Firma pro Konto)
+* `dispatcher` schreibt, pausiert die Sim, erledigt Warnungen, weist Fahrer zu. `viewer` liest.
+* SSE und Sim-Pause an diese Firma gebunden
 
-Not the same as production auth: no reset, lockout, invite, or multi-company membership. CORS `*` is a local default; cookies work because the Vite proxy is same-origin. A split-host deploy needs an explicit origin plus credentialed CORS, not a token redesign.
+Kein Passwort-Reset, kein Invite, keine öffentliche Registrierung, keine Membership in mehreren Firmen. CORS `*` nur lokal. Produktion ohne gesetzten Origin startet nicht und prüft den Origin bei Schreibzugriffen.
 
 ---
 
-# Local Development
+# Lokale Entwicklung
 
-## Requirements
+## Voraussetzungen
 
 * Node.js
 * npm
@@ -372,7 +425,7 @@ npm install
 npm run dev
 ```
 
-API only: `npm run dev:api`. Web only: `npm run dev:web`.
+Nur API: `npm run dev:api`. Nur Web: `npm run dev:web`.
 
 Seed:
 
@@ -380,37 +433,39 @@ Seed:
 npm run db:seed
 ```
 
-Large set (tens of thousands of vehicles, unique plates and driver names):
+Großer Satz (Zehntausende Fahrzeuge):
 
 ```bash
 npm run db:seed:large
 ```
 
-API tests:
+Tests:
 
 ```bash
 npm test
+npm run test:web
 ```
 
-List-query bench: `npm run bench` (see `apps/api/scripts/bench.ts`).
+`npm run verify` macht Typecheck, beide Testsuiten, Lint und Production-Build. Derselbe Lauf liegt als GitHub Action. Bench: `npm run bench` (`apps/api/scripts/bench.ts`).
 
-After `db:seed`, in development the login page can fill `cihan@example.com` / `development-only-password` (dispatcher, Rheinland Logistik). `viewer@example.com` uses the same password and can only read. Both accounts are company 1. Sample seed still creates vehicles for companies 2 and 3, but those firms have no demo user — isolation in the UI is a foreign vehicle id returning “not found”. `db:seed:large` puts almost all vehicles on company 1 so the demo login sees the load; companies 2 and 3 get about 1 % each for isolation tests. Existing databases that were only migrated (no reseed) keep every old vehicle on company 1.
+Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `development-only-password` vorausfüllen (Dispatcher, Rheinland Logistik). `viewer@example.com` gleiches Passwort, nur Lesen. Beide Firma 1. Der Seed legt trotzdem Fahrzeuge für Firma 2 und 3 an. Die haben keinen Demo-User. Isolation in der UI ist eine fremde ID und dann „nicht gefunden“. `db:seed:large` packt fast alles auf Firma 1, Firma 2 und 3 bekommen je etwa 1 %. Nur migrierte alte DBs behalten alle Fahrzeuge auf Firma 1.
 
-| Variable | Default | Notes |
-| -------- | ------- | ----- |
+| Variable | Standard | Hinweise |
+| -------- | -------- | -------- |
 | `PORT` | `3000` | |
-| `DATABASE_PATH` | `apps/api/data/fleetlive.db` | `:memory:` in tests |
-| `CORS_ORIGIN` | `*` | Same-origin in dev via Vite proxy |
-| `TELEMETRY_TICK_MS` | `400` | `0` disables the simulator |
-| `TELEMETRY_BATCH_SIZE` | `32` | Cap per tick on the union of focus ids |
-| `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Live buffer only |
-| `TRIP_RETENTION_DAYS` | `90` | Closed trips older than this, per company; `0` disables |
+| `DATABASE_PATH` | `apps/api/data/fleetlive.db` | `:memory:` in Tests |
+| `CORS_ORIGIN` | `*` | Same origin über den Vite-Proxy |
+| `TELEMETRY_TICK_MS` | `400` | `0` schaltet den Simulator aus |
+| `TELEMETRY_BATCH_SIZE` | `32` | Cap pro Tick über die Fokus-IDs |
+| `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
+| `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
 | `LOG_LEVEL` | `info` | |
-| `NODE_ENV` | `development` | Rate limiting is production-only |
+| `NODE_ENV` | `development` | Rate-Limit nur in Produktion |
+| `ALLOW_DEMO_ACCOUNTS` | `false` | Für Demo-Seed unter `NODE_ENV=production` auf `true` setzen |
 
 ---
 
-# Example: login then create a vehicle
+# Beispiel: einloggen, dann Fahrzeug anlegen
 
 ```http
 POST /api/auth/login
@@ -435,33 +490,32 @@ Cookie: fleet_session=…
 }
 ```
 
-`company_id` in the body is ignored.
+`company_id` im Body wird ignoriert.
 
 ---
 
-# API Design
+# API-Design
 
 ```text
-Routes → Controllers → Models → SQLite
+Routes → Controller → Models → SQLite
 ```
 
-Controllers validate and map HTTP. Models run SQL. This stays intentionally thin.
+Controller validieren und mappen HTTP. Models führen SQL aus. Dünn gehalten.
 
 ---
 
-# Current Limitations
+# Aktuelle Grenzen
 
-Not production-ready:
+Nicht für Produktion:
 
-* Cookie session is same-origin only; no password reset, lockout, or invite
-* Sim pause lives in process memory; an API restart resumes every tenant
-* Fleet map draws nothing when the viewport exceeds `FLEET_POSITIONS_MAX`
-* No frontend tests, CI/CD, production database, or observability
-* CORS `*` is a local default; a split-host deploy needs an explicit origin plus credentials
-* One company per user (no membership table, no company switcher)
+* Cookie nur same origin. Kein Reset, Lockout, Invite
+* Sim-Pause im Prozessspeicher. Neustart setzt alle Firmen wieder auf laufend
+* Keine Produktionsdatenbank, kein Observability-Stack
+* Cross-Origin ist nicht vorgesehen. Produktion braucht genau einen Origin
+* Ein Unternehmen pro Nutzer
 
 ---
 
-## Why this project?
+## Warum dieses Projekt?
 
-Closer to a real application than a tutorial. The domain covers REST, relational data, TypeScript, frontend/backend split, maps, SSE, simulation, sessions and tenant isolation.
+Eine App statt eines Tutorials. REST, relationale Daten, TypeScript, Frontend und Backend getrennt, Karten, SSE, Simulation, Sessions, Mandanten.
