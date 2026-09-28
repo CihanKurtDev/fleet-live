@@ -9,7 +9,9 @@ interface ConfirmDialogProps {
     title: string;
     children: ReactNode;
     confirmLabel: string;
-    onConfirm: () => void;
+    busyLabel?: string;
+    isBusy?: boolean;
+    onConfirm: () => void | Promise<void>;
 }
 
 export const ConfirmDialog = ({
@@ -18,6 +20,8 @@ export const ConfirmDialog = ({
     title,
     children,
     confirmLabel,
+    busyLabel = "Wird ausgeführt…",
+    isBusy = false,
     onConfirm,
 }: ConfirmDialogProps) => (
     <Modal open={open} onClose={onClose} title={title}>
@@ -28,6 +32,7 @@ export const ConfirmDialog = ({
                     type="button"
                     variant="secondary"
                     size="sm"
+                    disabled={isBusy}
                     onClick={onClose}
                 >
                     Abbrechen
@@ -36,9 +41,10 @@ export const ConfirmDialog = ({
                     type="button"
                     variant="danger"
                     size="sm"
+                    disabled={isBusy}
                     onClick={onConfirm}
                 >
-                    {confirmLabel}
+                    {isBusy ? busyLabel : confirmLabel}
                 </Button>
             </div>
         </div>

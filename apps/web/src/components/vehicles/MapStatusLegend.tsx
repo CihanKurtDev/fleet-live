@@ -9,10 +9,12 @@ import styles from "./leafletMap.module.scss";
 
 type MapStatusLegendProps = {
     vehiclesByStatus?: Partial<Record<VehicleStatus, number>>;
+    density?: boolean;
 };
 
 export const MapStatusLegend = ({
     vehiclesByStatus = {},
+    density = false,
 }: MapStatusLegendProps) => (
     <aside className={styles.legend} aria-label="Statuslegende der sichtbaren Fahrzeuge">
         <strong className={styles.legendTitle}>Sichtbare Fahrzeuge</strong>
@@ -32,6 +34,10 @@ export const MapStatusLegend = ({
                 </li>
             ))}
         </ul>
-        <span className={styles.legendHint}>Marker öffnen das Fahrzeug</span>
+        <span className={styles.legendHint}>
+            {density
+                ? "Kreise öffnen einen kleineren Ausschnitt"
+                : "Marker öffnen das Fahrzeug"}
+        </span>
     </aside>
 );

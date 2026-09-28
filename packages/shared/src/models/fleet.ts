@@ -32,6 +32,14 @@ export type FleetPosition = {
     recorded_at: string;
 };
 
+export type FleetDensityCell = {
+    latitude: number;
+    longitude: number;
+    bbox: GeoBBox;
+    total: number;
+    counts: Record<VehicleStatus, number>;
+};
+
 export type FleetPositionsQuery = {
     bbox?: GeoBBox;
     filter?: VehicleFilterId;
@@ -70,13 +78,21 @@ export type FleetDriversResponse = {
     };
 };
 
-export type FleetPositionsResponse = {
-    data: FleetPosition[];
-    meta: {
-        /** `true`, wenn mehr Treffer als `FLEET_POSITIONS_MAX` liegen. Dann ist `data` leer — kein Sample. */
-        truncated: boolean;
-    };
-};
+export type FleetPositionsResponse =
+    | {
+          mode: "positions";
+          data: FleetPosition[];
+          meta: {
+              total: number;
+          };
+      }
+    | {
+          mode: "density";
+          data: FleetDensityCell[];
+          meta: {
+              total: number;
+          };
+      };
 
 const toDriverList = (value: unknown): unknown => {
     if (value === "" || value === null || value === undefined) {

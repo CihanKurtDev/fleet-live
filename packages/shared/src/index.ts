@@ -105,6 +105,7 @@ export {
     ALERT_TYPES,
     alertListQuerySchema,
     alertPatchSchema,
+    formatAlertDuration,
     formatAlertEvent,
     isAlertFilterId,
     isAlertSeverity,
@@ -275,6 +276,7 @@ export {
 
 export type {
     FleetDriver,
+    FleetDensityCell,
     FleetDriversQuery,
     FleetDriversResponse,
     FleetPosition,

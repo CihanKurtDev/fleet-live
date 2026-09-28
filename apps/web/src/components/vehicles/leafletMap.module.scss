@@ -32,6 +32,69 @@
     }
 }
 
+.vehicleList {
+    position: absolute;
+    left: 12px;
+    bottom: 28px;
+    z-index: 500;
+    width: min(260px, calc(100% - 24px));
+    max-height: min(55%, 340px);
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text-h);
+    box-shadow: var(--shadow);
+    font-size: 12px;
+    text-align: left;
+
+    summary {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: 7px 10px;
+        border-bottom: 1px solid transparent;
+        background: var(--bg);
+        cursor: pointer;
+        font-weight: 650;
+    }
+
+    &[open] summary {
+        border-bottom-color: var(--border);
+    }
+
+    ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    button {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        padding: 7px 10px;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+
+        &:hover,
+        &:focus-visible {
+            background: var(--code-bg);
+        }
+    }
+
+    p {
+        margin: 0;
+        padding: 7px 10px;
+        color: var(--text);
+    }
+}
+
 .map {
     width: 100%;
     max-width: 100%;

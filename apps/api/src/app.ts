@@ -35,7 +35,12 @@ export function createApp() {
         }),
     );
     app.use(helmet());
-    app.use(cors({ origin: config.corsOrigin }));
+    app.use(
+        cors({
+            origin: config.corsOrigin,
+            credentials: config.corsOrigin !== "*",
+        }),
+    );
     app.use(
         compression({
             filter: (req, res) => {
@@ -58,6 +63,29 @@ export function createApp() {
     app.use((req, res, next) => {
         const limit = req.path.startsWith("/api/import") ? "32mb" : "16kb";
         express.json({ limit })(req, res, next);
+    });
+    app.use((req, res, next) => {
+        if (
+            !config.isProduction ||
+            ["GET", "HEAD", "OPTIONS"].includes(req.method)
+        ) {
+            next();
+            return;
+        }
+
+        const origin = req.get("Origin");
+        const allowedOrigins =
+            config.corsOrigin === "*" ? [] : config.corsOrigin;
+
+        if (!origin || !allowedOrigins.includes(origin)) {
+            res.status(403).json({
+                error: "Anfrage stammt nicht von einer erlaubten Origin.",
+                code: "ORIGIN_FORBIDDEN",
+            });
+            return;
+        }
+
+        next();
     });
     app.use(attachSession);
     app.use(

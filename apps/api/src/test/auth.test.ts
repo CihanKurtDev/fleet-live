@@ -5,6 +5,11 @@ import request from "supertest";
 import { app } from "../app";
 import { UserModel } from "../models/user.model";
 
+function setCookieHeader(response: request.Response): string {
+    const header = response.headers["set-cookie"];
+    return Array.isArray(header) ? header.join(";") : (header ?? "");
+}
+
 afterEach(() => {
     UserModel.resetForTests();
 });
@@ -28,7 +33,7 @@ describe("POST /api/auth/login", () => {
         assert.equal(response.body.company_id, 1);
         assert.equal(response.body.role, "dispatcher");
         assert.equal(response.body.password_hash, undefined);
-        const cookie = response.headers["set-cookie"]?.join(";") ?? "";
+        const cookie = setCookieHeader(response);
         assert.match(cookie, /fleet_session=/);
         assert.doesNotMatch(cookie, /Max-Age=/);
     });
@@ -49,7 +54,7 @@ describe("POST /api/auth/login", () => {
 
         assert.equal(response.status, 200);
         assert.match(
-            response.headers["set-cookie"]?.join(";") ?? "",
+            setCookieHeader(response),
             /Max-Age=604800/,
         );
     });
@@ -112,5 +117,27 @@ describe("GET /api/auth/me and logout", () => {
 
         const after = await agent.get("/api/auth/me");
         assert.equal(after.status, 401);
+    });
+
+    it("invalidates every user session on logout-all", async () => {
+        UserModel.create({
+            name: "Test User",
+            email: "test@example.com",
+            password: "secret-pass",
+            company_id: 1,
+        });
+        const first = request.agent(app);
+        const second = request.agent(app);
+        const credentials = {
+            email: "test@example.com",
+            password: "secret-pass",
+        };
+
+        await first.post("/api/auth/login").send(credentials).expect(200);
+        await second.post("/api/auth/login").send(credentials).expect(200);
+        await first.post("/api/auth/logout-all").expect(204);
+
+        await first.get("/api/auth/me").expect(401);
+        await second.get("/api/auth/me").expect(401);
     });
 });

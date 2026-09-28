@@ -5,6 +5,7 @@ import { DriverAssignmentPanel } from "../components/drivers/DriverAssignmentPan
 import { DriverEditForm } from "../components/drivers/DriverEditForm";
 import { DriverWarningCell } from "../components/drivers/DriverTableCells";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
+import { RetryMessage } from "../components/ui/RetryMessage";
 import { Button } from "../components/ui/Button/Button";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
@@ -20,7 +21,8 @@ export const DriverDetailPage = () => {
     const canWrite = user?.role === "dispatcher";
     const driverId = Number(id);
     const parsedId = Number.isInteger(driverId) ? driverId : null;
-    const { driver, isLoading, error, notFound } = useDriver(parsedId);
+    const { driver, isLoading, error, retry, notFound } =
+        useDriver(parsedId);
     const [isEditing, setIsEditing] = useState(false);
 
     if (isLoading && !driver) {
@@ -36,7 +38,7 @@ export const DriverDetailPage = () => {
             <section className={layout.page}>
                 <DetailBackLink fallback="/drivers" />
                 <h1 className={styles.title}>Fehler</h1>
-                <p>{error}</p>
+                <RetryMessage message={error} onRetry={retry} />
             </section>
         );
     }

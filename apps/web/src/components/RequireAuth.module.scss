@@ -1,0 +1,9 @@
+.loading {
+    display: grid;
+    place-content: center;
+    flex: 1;
+    min-height: 240px;
+    padding: 24px;
+    color: var(--text);
+    text-align: center;
+}

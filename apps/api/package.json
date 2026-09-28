@@ -7,6 +7,8 @@
     "dev": "tsx watch src/server.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:large": "tsx src/db/seed.ts --large",
+    "lint": "eslint src scripts",
+    "typecheck": "tsc --noEmit",
     "test": "tsx --test --test-concurrency=1 src/test/vehicles.test.ts src/test/auth.test.ts src/test/alerts.test.ts src/test/briefing.test.ts src/test/speedBand.test.ts src/test/drivers.test.ts src/test/speedingEvents.test.ts src/test/exceptionEvents.test.ts src/test/migrate-assignment.test.ts src/test/streamParse.test.ts src/test/import.test.ts src/test/importRowOutcome.test.ts",
     "bench": "tsx scripts/bench.ts"
   },
@@ -27,15 +29,19 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
     "@types/supertest": "^7.2.1",
     "autocannon": "^8.0.0",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
     "pino-pretty": "^13.1.3",
     "supertest": "^7.2.2",
     "tsx": "^4.23.12",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.70.1"
   }
 }

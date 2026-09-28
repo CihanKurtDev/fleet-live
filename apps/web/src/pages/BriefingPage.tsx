@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { BriefingCounts, BriefingData } from "@fleet-live/shared";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
+import { RetryMessage } from "../components/ui/RetryMessage";
 import { useBriefing } from "../hooks/useBriefing";
 import { formatCount } from "../utils/formatCount";
 import styles from "./BriefingPage.module.scss";
@@ -120,7 +121,7 @@ const BriefingBody = ({ data }: { data: BriefingData }) => (
 );
 
 export const BriefingPage = () => {
-    const { data, isLoading, error } = useBriefing();
+    const { data, isLoading, error, retry } = useBriefing();
 
     if (isLoading) {
         return (
@@ -138,9 +139,12 @@ export const BriefingPage = () => {
             <section className={styles.page}>
                 <header className={styles.header}>
                     <h1 className={styles.title}>Schicht</h1>
-                    <p className={styles.error}>
-                        {error ?? "Schicht konnte nicht geladen werden."}
-                    </p>
+                    <RetryMessage
+                        message={
+                            error ?? "Schicht konnte nicht geladen werden."
+                        }
+                        onRetry={retry}
+                    />
                 </header>
             </section>
         );

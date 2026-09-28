@@ -23,6 +23,11 @@ export function login(req: Request, res: Response) {
         UserModel.setPasswordHash(user.id, hashPassword(input.password));
     }
 
+    const previousToken = readCookie(req.headers.cookie, SESSION_COOKIE);
+    if (previousToken) {
+        SessionModel.delete(previousToken);
+    }
+
     const token = SessionModel.create(user.id, input.remember);
     setSessionCookie(res, token, input.remember);
 
@@ -52,4 +57,14 @@ export function getMe(req: Request, res: Response) {
     }
 
     res.json(req.user);
+}
+
+export function logoutAll(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    SessionModel.deleteForUser(req.user.id);
+    clearSessionCookie(res);
+    res.status(204).end();
 }

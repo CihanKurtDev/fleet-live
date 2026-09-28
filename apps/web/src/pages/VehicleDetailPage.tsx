@@ -22,6 +22,7 @@ import { VehicleStatusChip } from "../components/vehicles/VehicleStatusChip";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Modal } from "../components/ui/Modal/Modal";
+import { RetryMessage } from "../components/ui/RetryMessage";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useVehicle } from "../hooks/useVehicle";
@@ -61,8 +62,11 @@ export const VehicleDetailPage = () => {
 
     const vehicleId = Number(id);
     const parsedId = Number.isInteger(vehicleId) ? vehicleId : null;
-    const { vehicle, isLoading, error, notFound } = useVehicle(parsedId);
+    const { vehicle, isLoading, error, retry, notFound } =
+        useVehicle(parsedId);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [isEditingMaster, setIsEditingMaster] = useState(false);
     const [tripVehicleId, setTripVehicleId] = useState(parsedId);
     const [livePath, setLivePath] = useState("");
@@ -72,6 +76,8 @@ export const VehicleDetailPage = () => {
     const [archivePageCount, setArchivePageCount] = useState(1);
     const [archiveTotal, setArchiveTotal] = useState(0);
     const [archiveLoading, setArchiveLoading] = useState(false);
+    const [archiveError, setArchiveError] = useState<string | null>(null);
+    const [archiveRetryKey, setArchiveRetryKey] = useState(0);
     const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
 
@@ -81,6 +87,7 @@ export const VehicleDetailPage = () => {
         setArchiveTrips([]);
         setArchivePage(1);
         setArchiveLimit(10);
+        setArchiveError(null);
         setSelectedTripId(null);
         setSelectedTrip(null);
     }
@@ -89,7 +96,7 @@ export const VehicleDetailPage = () => {
     const archiveIdentityKey =
         parsedId === null
             ? null
-            : `${parsedId}\0${archivePage}\0${archiveLimit}`;
+            : `${parsedId}\0${archivePage}\0${archiveLimit}\0${archiveRetryKey}`;
     const [prevArchiveIdentityKey, setPrevArchiveIdentityKey] =
         useState(archiveIdentityKey);
 
@@ -97,6 +104,7 @@ export const VehicleDetailPage = () => {
         setPrevArchiveIdentityKey(archiveIdentityKey);
         if (archiveIdentityKey !== null) {
             setArchiveLoading(true);
+            setArchiveError(null);
         } else {
             setArchiveLoading(false);
         }
@@ -195,9 +203,11 @@ export const VehicleDetailPage = () => {
             })
             .catch((caught: unknown) => {
                 if (!isAbortError(caught)) {
-                    setArchiveTrips([]);
-                    setArchiveTotal(0);
-                    setSelectedTripId(null);
+                    setArchiveError(
+                        caught instanceof Error
+                            ? caught.message
+                            : "Fahrten konnten nicht geladen werden.",
+                    );
                 }
             })
             .finally(() => {
@@ -207,7 +217,13 @@ export const VehicleDetailPage = () => {
             });
 
         return () => controller.abort();
-    }, [parsedId, archivePage, archiveLimit, vehicleStatus]);
+    }, [
+        parsedId,
+        archivePage,
+        archiveLimit,
+        vehicleStatus,
+        archiveRetryKey,
+    ]);
 
     useEffect(() => {
         if (parsedId === null || selectedTripId === null) {
@@ -232,6 +248,11 @@ export const VehicleDetailPage = () => {
             .catch((caught: unknown) => {
                 if (!isAbortError(caught)) {
                     setSelectedTrip(null);
+                    setArchiveError(
+                        caught instanceof Error
+                            ? caught.message
+                            : "Fahrt konnte nicht geladen werden.",
+                    );
                 }
             });
 
@@ -283,7 +304,7 @@ export const VehicleDetailPage = () => {
             <section className={layout.page}>
                 <DetailBackLink fallback="/vehicles" />
                 <h1 className={styles.title}>Fehler</h1>
-                <p>{error}</p>
+                <RetryMessage message={error} onRetry={retry} />
             </section>
         );
     }
@@ -328,11 +349,27 @@ export const VehicleDetailPage = () => {
     };
 
     const handleDelete = async () => {
-        await deleteVehicles([vehicle.id]);
-        navigate(from);
+        setDeleteError(null);
+        setIsDeleting(true);
+
+        try {
+            await deleteVehicles([vehicle.id]);
+            navigate(from);
+        } catch (caught: unknown) {
+            setDeleteError(
+                caught instanceof Error
+                    ? caught.message
+                    : "Fahrzeug konnte nicht gelöscht werden.",
+            );
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
-    const requestDelete = () => setConfirmDelete(true);
+    const requestDelete = () => {
+        setDeleteError(null);
+        setConfirmDelete(true);
+    };
 
     return (
         <section className={layout.page}>
@@ -476,6 +513,14 @@ export const VehicleDetailPage = () => {
                 {selectedFacts && (
                     <p className={layout.note}>{describeTrip(selectedFacts)}</p>
                 )}
+                {archiveError && (
+                    <RetryMessage
+                        message={archiveError}
+                        onRetry={() =>
+                            setArchiveRetryKey((current) => current + 1)
+                        }
+                    />
+                )}
                 <VehicleTripArchive
                     trips={archiveTrips}
                     selectedTripId={selectedTripId}
@@ -530,15 +575,24 @@ export const VehicleDetailPage = () => {
 
             <ConfirmDialog
                 open={canWrite && confirmDelete}
-                onClose={() => setConfirmDelete(false)}
+                onClose={() => {
+                    setConfirmDelete(false);
+                    setDeleteError(null);
+                }}
                 title="Fahrzeug löschen?"
                 confirmLabel="Löschen"
+                isBusy={isDeleting}
                 onConfirm={handleDelete}
             >
                 <p>
                     „{vehicle.license_plate}“ wirklich löschen? Das
                     kann nicht rückgängig gemacht werden.
                 </p>
+                {deleteError && (
+                    <p className={styles.error} role="alert">
+                        {deleteError}
+                    </p>
+                )}
             </ConfirmDialog>
         </section>
     );

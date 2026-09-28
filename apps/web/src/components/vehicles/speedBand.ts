@@ -5,7 +5,7 @@ import type { SpeedBand, SpeedBandResult } from "@fleet-live/shared";
  * (sonst vermischt sich „Auf Fahrt“-Grün mit Tempo-Grün).
  */
 export const SPEED_BAND_COLORS: Record<SpeedBand, string> = {
-    normal: "#ffffff",
+    normal: "var(--text-h)",
     warning: "#ea580c",
     critical: "#dc2626",
 };

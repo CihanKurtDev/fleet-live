@@ -45,7 +45,8 @@ export async function retryTransient<T>(
     run: () => Promise<T>,
     signal: AbortSignal,
 ): Promise<T> {
-    let attempt = 0;
+    const maxAttempts = 3;
+    let attempt = 1;
 
     while (true) {
         try {
@@ -59,7 +60,14 @@ export async function retryTransient<T>(
                 throw error;
             }
 
-            const delay = Math.min(2000, 400 * 2 ** Math.min(attempt, 3));
+            if (attempt >= maxAttempts) {
+                throw error;
+            }
+
+            const delay = Math.min(
+                2000,
+                400 * 2 ** Math.min(attempt - 1, 3),
+            );
             attempt += 1;
             await sleep(delay, signal);
         }

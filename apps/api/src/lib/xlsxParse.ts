@@ -2,6 +2,11 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { BadRequestError } from "./errors";
 import type { CsvTable } from "./csvParse";
 
+const XLSX_COMPRESSED_MAX_BYTES = 8 * 1024 * 1024;
+const XLSX_UNCOMPRESSED_MAX_BYTES = 64 * 1024 * 1024;
+const XLSX_ENTRY_MAX_BYTES = 16 * 1024 * 1024;
+const XLSX_ENTRY_MAX = 128;
+
 const OLE_XLS = Buffer.from([0xd0, 0xcf, 0x11, 0xe0]);
 
 function zipPath(
@@ -261,10 +266,10 @@ function decodeBase64(value: string): Buffer {
     return Buffer.from(payload, "base64");
 }
 
-export function parseXlsxBuffer(buffer: Buffer): CsvTable {
-    if (buffer.length >= 4 && buffer.subarray(0, 4).equals(OLE_XLS)) {
+function unzipWorkbook(buffer: Buffer): Record<string, Uint8Array> {
+    if (buffer.length > XLSX_COMPRESSED_MAX_BYTES) {
         throw new BadRequestError(
-            "Alte .xls-Dateien werden nicht gelesen. Bitte als .xlsx speichern.",
+            "Die Excel-Datei darf höchstens 8 MB groß sein.",
         );
     }
 
@@ -276,6 +281,29 @@ export function parseXlsxBuffer(buffer: Buffer): CsvTable {
         throw new BadRequestError("Die Excel-Datei konnte nicht gelesen werden.");
     }
 
+    const entries = Object.values(files);
+    if (
+        entries.length > XLSX_ENTRY_MAX ||
+        entries.some((entry) => entry.byteLength > XLSX_ENTRY_MAX_BYTES) ||
+        entries.reduce((sum, entry) => sum + entry.byteLength, 0) >
+            XLSX_UNCOMPRESSED_MAX_BYTES
+    ) {
+        throw new BadRequestError(
+            "Die Excel-Datei ist entpackt zu groß oder enthält zu viele Dateien.",
+        );
+    }
+
+    return files;
+}
+
+export function parseXlsxBuffer(buffer: Buffer): CsvTable {
+    if (buffer.length >= 4 && buffer.subarray(0, 4).equals(OLE_XLS)) {
+        throw new BadRequestError(
+            "Alte .xls-Dateien werden nicht gelesen. Bitte als .xlsx speichern.",
+        );
+    }
+
+    const files = unzipWorkbook(buffer);
     const workbook = parseXlsxFiles(files);
     if (workbook.length === 0) {
         throw new BadRequestError(
@@ -322,14 +350,7 @@ export function parseXlsxWorkbook(buffer: Buffer): NamedImportTable[] {
         );
     }
 
-    let files: Record<string, Uint8Array>;
-
-    try {
-        files = unzipSync(new Uint8Array(buffer));
-    } catch {
-        throw new BadRequestError("Die Excel-Datei konnte nicht gelesen werden.");
-    }
-
+    const files = unzipWorkbook(buffer);
     const workbook = parseXlsxFiles(files);
     if (workbook.length === 0) {
         throw new BadRequestError(

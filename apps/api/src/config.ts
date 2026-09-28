@@ -52,6 +52,11 @@ const environmentSchema = z.object({
     LOG_LEVEL: z
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
         .default("info"),
+
+    ALLOW_DEMO_ACCOUNTS: z
+        .enum(["true", "false"])
+        .default("false")
+        .transform((value) => value === "true"),
 });
 
 const parsed = environmentSchema.safeParse(process.env);
@@ -69,6 +74,13 @@ if (!parsed.success) {
 
 const env = parsed.data;
 
+if (env.NODE_ENV === "production" && env.CORS_ORIGIN === "*") {
+    console.error(
+        "Invalid environment configuration:\n  CORS_ORIGIN: In production ist eine explizite Origin erforderlich.",
+    );
+    process.exit(1);
+}
+
 export const config = {
     nodeEnv: env.NODE_ENV,
     isProduction: env.NODE_ENV === "production",
@@ -84,6 +96,7 @@ export const config = {
     telemetryKeepPerVehicle: env.TELEMETRY_KEEP_PER_VEHICLE,
     tripRetentionDays: env.TRIP_RETENTION_DAYS,
     logLevel: env.LOG_LEVEL,
+    allowDemoAccounts: env.ALLOW_DEMO_ACCOUNTS,
 } as const;
 
 export type Config = typeof config;

@@ -66,6 +66,17 @@ export function startTelemetryTicker(ms: number) {
             for (const companyId of notifyCompanies) {
                 broadcast("vehicles-changed", { at: Date.now() }, companyId);
             }
+
+            if (patches.length > 0) {
+                logger.debug(
+                    {
+                        focusedVehicles: focusIds.length,
+                        patches: patches.length,
+                        changedCompanies: notifyCompanies.size,
+                    },
+                    "telemetry tick completed",
+                );
+            }
         } catch (error) {
             logger.error({ err: error }, "telemetry tick failed");
         }

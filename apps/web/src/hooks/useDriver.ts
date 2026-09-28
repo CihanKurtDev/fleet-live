@@ -4,15 +4,18 @@ import { ApiError, isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import { getDriver } from "../api/drivers";
 import { useVehicles } from "../context/vehiclesContext";
+import { useRetryTrigger } from "./useRetryTrigger";
 
 export const useDriver = (id: number | null) => {
     const { listEpoch } = useVehicles();
+    const { retryKey, retry } = useRetryTrigger();
     const [driver, setDriver] = useState<DriverDetail | null>(null);
     const [isLoading, setIsLoading] = useState(id !== null);
     const [error, setError] = useState<string | null>(null);
     const [notFound, setNotFound] = useState(false);
 
-    const requestKey = id === null ? "null" : `${id}\0${listEpoch}`;
+    const requestKey =
+        id === null ? "null" : `${id}\0${listEpoch}\0${retryKey}`;
     const [fetchKey, setFetchKey] = useState(requestKey);
 
     if (requestKey !== fetchKey) {
@@ -68,7 +71,7 @@ export const useDriver = (id: number | null) => {
             });
 
         return () => controller.abort();
-    }, [id, listEpoch]);
+    }, [id, listEpoch, retryKey]);
 
     const matchesId = driver !== null && id !== null && driver.id === id;
 
@@ -78,6 +81,7 @@ export const useDriver = (id: number | null) => {
             id !== null && !notFound && (isLoading || !matchesId),
         ),
         error,
+        retry,
         notFound,
     };
 };

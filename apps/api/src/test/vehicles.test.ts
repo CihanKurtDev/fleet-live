@@ -396,8 +396,9 @@ describe("GET /api/vehicles/positions", () => {
         const response = await api.get("/api/vehicles/positions");
 
         assert.equal(response.status, 200);
+        assert.equal(response.body.mode, "positions");
         assert.deepEqual(response.body.data, []);
-        assert.equal(response.body.meta.truncated, false);
+        assert.equal(response.body.meta.total, 0);
     });
 
     it("omits vehicles without telemetry and keeps the slim shape", async () => {
@@ -464,6 +465,18 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(driving.status, 200);
         assert.equal(driving.body.data.length, 1);
         assert.equal(driving.body.data[0].license_plate, "K-BB 1");
+
+        const outsideViewport = await api
+            .get("/api/vehicles/positions")
+            .query({
+                bbox: "6.8,50.8,7.2,51.1",
+                search: "M-BB 1",
+            });
+
+        assert.equal(outsideViewport.status, 200);
+        assert.equal(outsideViewport.body.mode, "positions");
+        assert.equal(outsideViewport.body.meta.total, 1);
+        assert.equal(outsideViewport.body.data[0].license_plate, "M-BB 1");
     });
 
     it("filters positions without a current driver", async () => {
@@ -588,7 +601,7 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(rejected.status, 400);
     });
 
-    it("returns truncated with empty data past FLEET_POSITIONS_MAX", async () => {
+    it("aggregates all matches into non-empty density cells past the marker limit", async () => {
         const insertVehicle = db.prepare(
             `
                 INSERT INTO vehicles (
@@ -621,8 +634,38 @@ describe("GET /api/vehicles/positions", () => {
         const response = await api.get("/api/vehicles/positions");
 
         assert.equal(response.status, 200);
-        assert.deepEqual(response.body.data, []);
-        assert.equal(response.body.meta.truncated, true);
+        assert.equal(response.body.mode, "density");
+        assert.equal(response.body.meta.total, overLimit);
+        assert.ok(response.body.data.length > 0);
+        assert.ok(response.body.data.length <= 32 * 20);
+        assert.equal(
+            response.body.data.reduce(
+                (sum: number, cell: { total: number }) => sum + cell.total,
+                0,
+            ),
+            overLimit,
+        );
+        assert.equal(
+            response.body.data.reduce(
+                (
+                    sum: number,
+                    cell: { counts: Record<string, number> },
+                ) =>
+                    sum +
+                    Object.values(cell.counts).reduce(
+                        (cellSum, count) => cellSum + count,
+                        0,
+                    ),
+                0,
+            ),
+            overLimit,
+        );
+        assert.equal(
+            response.body.data.every(
+                (cell: { total: number }) => cell.total > 0,
+            ),
+            true,
+        );
     });
 });
 

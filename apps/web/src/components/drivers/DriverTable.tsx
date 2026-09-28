@@ -3,6 +3,7 @@ import type { Driver } from "@fleet-live/shared";
 import { Table } from "../ui/Table/Table";
 import { TableToolbar } from "../ui/Table/TableToolbar";
 import { TablePagination } from "../ui/Table/TablePagination";
+import { RetryMessage } from "../ui/RetryMessage";
 import { useServerTable } from "../../hooks/useServerTable";
 import { useDriverList } from "../../hooks/useDriverList";
 import { useDriverListQuery } from "../../hooks/useDriverListQuery";
@@ -58,9 +59,7 @@ export const DriverTable = ({
             />
 
             {error && (
-                <p className={styles.error} role="alert">
-                    {error}
-                </p>
+                <RetryMessage message={error} onRetry={listResult.retry} />
             )}
 
             {isLoading && (

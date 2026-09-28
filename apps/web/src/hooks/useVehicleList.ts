@@ -16,6 +16,7 @@ import {
 } from "../api/telemetryFocus";
 import { useVehicles } from "../context/vehiclesContext";
 import { applyVehicleOverrides } from "../utils/applyVehicleOverrides";
+import { useRetryTrigger } from "./useRetryTrigger";
 
 const vehicleListRequestKey = (query: VehicleListQuery, listEpoch: number) =>
     [
@@ -30,6 +31,7 @@ const vehicleListRequestKey = (query: VehicleListQuery, listEpoch: number) =>
 
 export const useVehicleList = (query: VehicleListQuery) => {
     const { listEpoch, vehicleOverrides } = useVehicles();
+    const { retryKey, retry } = useRetryTrigger();
     const { search, filter, sort, dir, page, limit } = query;
     const listQuery: VehicleListQuery = {
         search,
@@ -47,7 +49,7 @@ export const useVehicleList = (query: VehicleListQuery) => {
     const [isFetching, setIsFetching] = useState(!cached);
     const [error, setError] = useState<string | null>(null);
 
-    const requestKey = vehicleListRequestKey(listQuery, listEpoch);
+    const requestKey = `${vehicleListRequestKey(listQuery, listEpoch)}\0${retryKey}`;
     const [fetchKey, setFetchKey] = useState(requestKey);
 
     if (requestKey !== fetchKey) {
@@ -103,7 +105,7 @@ export const useVehicleList = (query: VehicleListQuery) => {
             });
 
         return () => controller.abort();
-    }, [search, filter, sort, dir, page, limit, listEpoch]);
+    }, [search, filter, sort, dir, page, limit, listEpoch, retryKey]);
 
     useEffect(() => {
         let cancelled = false;
@@ -198,6 +200,7 @@ export const useVehicleList = (query: VehicleListQuery) => {
         isLoading: response === null && isFetching,
         isFetching,
         error,
+        retry,
         pageCount: response?.meta.pageCount ?? 1,
         total: response?.meta.total ?? 0,
     };

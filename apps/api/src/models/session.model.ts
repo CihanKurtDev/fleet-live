@@ -16,6 +16,7 @@ const SELECT_USER_BY_TOKEN = `
 `;
 
 const DELETE_BY_TOKEN = `DELETE FROM sessions WHERE token = ?`;
+const DELETE_BY_USER = `DELETE FROM sessions WHERE user_id = ?`;
 
 const DELETE_EXPIRED = `
     DELETE FROM sessions
@@ -42,5 +43,9 @@ export const SessionModel = {
 
     delete(token: string) {
         stmt(DELETE_BY_TOKEN).run(token);
+    },
+
+    deleteForUser(userId: number) {
+        stmt(DELETE_BY_USER).run(userId);
     },
 };

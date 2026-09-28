@@ -4,16 +4,19 @@ import { ApiError, isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import { getBriefing } from "../api/briefing";
 import { useVehicles } from "../context/vehiclesContext";
+import { useRetryTrigger } from "./useRetryTrigger";
 
 export const useBriefing = () => {
     const { listEpoch } = useVehicles();
+    const { retryKey, retry } = useRetryTrigger();
     const [response, setResponse] = useState<BriefingResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [fetchKey, setFetchKey] = useState(listEpoch);
+    const requestKey = `${listEpoch}\0${retryKey}`;
+    const [fetchKey, setFetchKey] = useState(requestKey);
 
-    if (listEpoch !== fetchKey) {
-        setFetchKey(listEpoch);
+    if (requestKey !== fetchKey) {
+        setFetchKey(requestKey);
         setIsFetching(true);
         setError(null);
     }
@@ -47,12 +50,13 @@ export const useBriefing = () => {
             });
 
         return () => controller.abort();
-    }, [listEpoch]);
+    }, [listEpoch, retryKey]);
 
     return {
         data: response?.data ?? null,
         isLoading: response === null && isFetching,
         isFetching,
         error,
+        retry,
     };
 };

@@ -2,6 +2,7 @@ import "./env";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+    formatAlertDuration,
     formatAlertEvent,
     speedBand,
     SPEED_CRITICAL_OVER_LIMIT_KMH,
@@ -134,5 +135,15 @@ describe("formatAlertEvent", () => {
             }),
             "Tankstand 12 %",
         );
+    });
+});
+
+describe("formatAlertDuration", () => {
+    it("formats seconds, minutes, hours and days readably", () => {
+        assert.equal(formatAlertDuration(9), "9 s");
+        assert.equal(formatAlertDuration(480), "8 Min.");
+        assert.equal(formatAlertDuration(7_200), "2 Std.");
+        assert.equal(formatAlertDuration(86_400), "1 Tag");
+        assert.equal(formatAlertDuration(518_400), "6 Tage");
     });
 });

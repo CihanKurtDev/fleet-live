@@ -3,6 +3,7 @@ import { parseStreamFocus } from "@fleet-live/shared";
 import { BadRequestError } from "../lib/errors";
 import { sessionCompany } from "../lib/http";
 import { VehicleModel } from "../models/vehicle.model";
+import { logger } from "../logger";
 import {
     replay,
     setConnectionFocus,
@@ -22,6 +23,10 @@ export function streamEvents(req: Request, res: Response) {
     res.write("retry: 3000\n\n");
 
     const connectionId = subscribe(res, companyId);
+    logger.info(
+        { companyId, connectionId },
+        "sse connection opened",
+    );
     res.write(
         `event: connected\ndata: ${JSON.stringify({ connection_id: connectionId })}\n\n`,
     );
@@ -41,6 +46,10 @@ export function streamEvents(req: Request, res: Response) {
     const onClose = () => {
         clearInterval(heartbeat);
         unsubscribe(res);
+        logger.info(
+            { companyId, connectionId },
+            "sse connection closed",
+        );
     };
 
     req.on("close", onClose);
@@ -61,5 +70,9 @@ export function setStreamFocus(req: Request, res: Response) {
         throw new BadRequestError("Unbekannte Verbindung.");
     }
 
+    logger.debug(
+        { companyId, connectionId: connection_id, requested: ids.length, focused: count },
+        "sse focus updated",
+    );
     res.json({ ok: true, count });
 }

@@ -1,20 +1,17 @@
 import { createBrowserRouter } from 'react-router';
 import App from './App';
 import { RequireAuth } from './components/RequireAuth';
-import { BriefingPage } from './pages/BriefingPage';
-import { VehiclesPage } from './pages/VehiclesPage';
-import { VehicleDetailPage } from './pages/VehicleDetailPage';
-import { ImportPage } from './pages/ImportPage';
-import { FleetPage } from './pages/FleetPage';
-import { AlertsPage } from './pages/AlertsPage';
-import { DriversPage } from './pages/DriversPage';
-import { DriverDetailPage } from './pages/DriverDetailPage';
 import { LoginPage } from './pages/LoginPage';
+import {
+    NotFoundPage,
+    RouteErrorPage,
+} from './pages/RouteStatusPage';
 
 export const router = createBrowserRouter([
     {
         path: '/',
         Component: App,
+        ErrorBoundary: RouteErrorPage,
         children: [
             {
                 path: 'login',
@@ -25,37 +22,67 @@ export const router = createBrowserRouter([
                 children: [
                     {
                         index: true,
-                        Component: BriefingPage,
+                        lazy: async () => ({
+                            Component: (await import('./pages/BriefingPage'))
+                                .BriefingPage,
+                        }),
                     },
                     {
                         path: 'vehicles',
-                        Component: VehiclesPage,
+                        lazy: async () => ({
+                            Component: (await import('./pages/VehiclesPage'))
+                                .VehiclesPage,
+                        }),
                     },
                     {
                         path: 'vehicles/import',
-                        Component: ImportPage,
+                        lazy: async () => ({
+                            Component: (await import('./pages/ImportPage'))
+                                .ImportPage,
+                        }),
                     },
                     {
                         path: 'vehicles/:id',
-                        Component: VehicleDetailPage,
+                        lazy: async () => ({
+                            Component: (
+                                await import('./pages/VehicleDetailPage')
+                            ).VehicleDetailPage,
+                        }),
                     },
                     {
                         path: 'fleet',
-                        Component: FleetPage,
+                        lazy: async () => ({
+                            Component: (await import('./pages/FleetPage'))
+                                .FleetPage,
+                        }),
                     },
                     {
                         path: 'alerts',
-                        Component: AlertsPage,
+                        lazy: async () => ({
+                            Component: (await import('./pages/AlertsPage'))
+                                .AlertsPage,
+                        }),
                     },
                     {
                         path: 'drivers',
-                        Component: DriversPage,
+                        lazy: async () => ({
+                            Component: (await import('./pages/DriversPage'))
+                                .DriversPage,
+                        }),
                     },
                     {
                         path: 'drivers/:id',
-                        Component: DriverDetailPage,
+                        lazy: async () => ({
+                            Component: (
+                                await import('./pages/DriverDetailPage')
+                            ).DriverDetailPage,
+                        }),
                     },
                 ],
+            },
+            {
+                path: '*',
+                Component: NotFoundPage,
             },
         ],
     },

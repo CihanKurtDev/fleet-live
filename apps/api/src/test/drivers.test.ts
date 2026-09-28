@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
-import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { insertAlert, loginAs } from "./helpers";
