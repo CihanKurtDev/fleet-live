@@ -11,6 +11,7 @@ import {
 import { ImportModel } from "../models/import.model";
 import { BadRequestError, NotFoundError } from "../lib/errors";
 import { notifyVehiclesChanged, sessionCompany } from "../lib/http";
+import { logger } from "../logger";
 
 function sessionUserId(req: Request): number {
     const userId = req.user?.id;
@@ -42,6 +43,19 @@ export function previewImport(req: Request, res: Response): void {
             );
         }
 
+        logger.info(
+            {
+                companyId,
+                userId,
+                source: input.xlsx ? "xlsx" : "csv",
+                inputBytes: Buffer.byteLength(input.xlsx ?? input.csv ?? ""),
+                rows: preview.total_rows,
+                sheets: preview.sheets.length,
+                warnings: preview.counts.warnings,
+                errors: preview.counts.errors,
+            },
+            "import preview created",
+        );
         res.json({ data: preview });
     } catch (error) {
         asBadRequest(error);
@@ -119,6 +133,15 @@ export function commitImport(req: Request, res: Response): void {
             notifyVehiclesChanged(companyId);
         }
 
+        logger.info(
+            {
+                companyId,
+                userId,
+                previewId: input.preview_id,
+                ...result,
+            },
+            "import committed",
+        );
         res.json({ data: result });
     } catch (error) {
         if (error instanceof NotFoundError) {

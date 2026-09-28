@@ -9,6 +9,8 @@ import type {
 } from "@fleet-live/shared";
 
 const PREVIEW_TTL_MS = 30 * 60 * 1000;
+const PREVIEWS_PER_USER_MAX = 3;
+const PREVIEWS_TOTAL_MAX = 100;
 
 export type StoredImportPreview = {
     companyId: number;
@@ -41,6 +43,30 @@ export function saveImportPreview(
     },
 ): string {
     purgeExpired();
+
+    const owned = [...store.entries()]
+        .filter(
+            ([, stored]) =>
+                stored.companyId === preview.companyId &&
+                stored.userId === preview.userId,
+        )
+        .sort((left, right) => left[1].createdAt - right[1].createdAt);
+    while (owned.length >= PREVIEWS_PER_USER_MAX) {
+        const oldest = owned.shift();
+        if (oldest) {
+            store.delete(oldest[0]);
+        }
+    }
+
+    if (store.size >= PREVIEWS_TOTAL_MAX) {
+        const oldest = [...store.entries()].sort(
+            (left, right) => left[1].createdAt - right[1].createdAt,
+        )[0];
+        if (oldest) {
+            store.delete(oldest[0]);
+        }
+    }
+
     const previewId = randomUUID();
     store.set(previewId, {
         ...preview,

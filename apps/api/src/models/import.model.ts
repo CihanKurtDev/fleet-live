@@ -163,21 +163,6 @@ function findVehicleIdByPlate(
     return row?.id;
 }
 
-function findVehicleIdByVin(
-    companyId: number,
-    vin: string,
-): number | undefined {
-    const row = stmt(
-        `
-        SELECT id FROM vehicles
-        WHERE company_id = ? AND vin = ?
-        LIMIT 1
-        `,
-    ).get(companyId, vin) as { id: number } | undefined;
-
-    return row?.id;
-}
-
 function findDriverId(
     companyId: number,
     name: string,
@@ -192,50 +177,8 @@ function findDriverId(
     return row?.id;
 }
 
-function findDrivingCurrentForDriver(
-    companyId: number,
-    driverId: number,
-): { id: number; license_plate: string } | undefined {
-    return stmt(
-        `
-        SELECT id, license_plate
-        FROM vehicles
-        WHERE company_id = ?
-          AND current_driver_id = ?
-          AND status = 'DRIVING'
-        LIMIT 1
-        `,
-    ).get(companyId, driverId) as
-        | { id: number; license_plate: string }
-        | undefined;
-}
-
 function driverExists(companyId: number, name: string): boolean {
     return findDriverId(companyId, name) !== undefined;
-}
-
-function eligibilityExists(
-    companyId: number,
-    driverName: string,
-    licensePlate: string,
-): boolean {
-    const row = stmt(
-        `
-        SELECT 1 AS ok
-        FROM driver_vehicles dv
-        INNER JOIN drivers d ON d.id = dv.driver_id
-        INNER JOIN vehicles v ON v.id = dv.vehicle_id
-        WHERE d.company_id = ?
-          AND v.company_id = ?
-          AND d.name = ?
-          AND v.license_plate = ?
-        LIMIT 1
-        `,
-    ).get(companyId, companyId, driverName, licensePlate) as
-        | { ok: number }
-        | undefined;
-
-    return row !== undefined;
 }
 
 function parseFuelLevel(raw: string | undefined): number | null {
@@ -378,7 +321,7 @@ function mapTableRows(
 
     for (const [column, target] of Object.entries(columnMapping)) {
         const index = table.columns.indexOf(column);
-        if (index >= 0 && target !== "ignore") {
+        if (index >= 0 && target && target !== "ignore") {
             targetToIndex.set(target, index);
         }
     }

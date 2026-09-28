@@ -1,14 +1,16 @@
 import "./env";
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import request from "supertest";
 import type { ImportPreviewRow } from "@fleet-live/shared";
-import { app } from "../app";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ImportModel } from "../models/import.model";
 import { resetImportPreviewStoreForTests } from "../lib/importPreviewStore";
-import { buildXlsx, buildXlsxWorkbook } from "../lib/xlsxParse";
+import {
+    buildXlsx,
+    buildXlsxWorkbook,
+    parseXlsxWorkbook,
+} from "../lib/xlsxParse";
 import { importActionKey } from "@fleet-live/shared";
 import { loginAs } from "./helpers";
 
@@ -203,6 +205,13 @@ B-DUP 1;60
             .expect(400);
 
         assert.match(response.body.error, /\.xlsx/i);
+    });
+
+    it("rejects oversized compressed workbooks before unzip", () => {
+        assert.throws(
+            () => parseXlsxWorkbook(Buffer.alloc(8 * 1024 * 1024 + 1)),
+            /höchstens 8 MB/,
+        );
     });
 
     it("classifies named worksheets as vehicles, drivers, eligibility and current", async () => {
@@ -499,15 +508,17 @@ B-TXN 2;50
         );
         assert.ok(currentRow);
         assert.equal(currentRow.default_action, "skip");
+        const onTripIssue = currentRow.issues.find(
+            (issue: { code: string }) => issue.code === "DRIVER_ON_TRIP",
+        );
+        assert.ok(onTripIssue);
         assert.ok(
             currentRow.issues.some(
                 (issue: { code: string }) => issue.code === "DRIVER_ON_TRIP",
             ),
         );
         assert.match(
-            currentRow.issues.find(
-                (issue: { code: string }) => issue.code === "DRIVER_ON_TRIP",
-            ).message,
+            onTripIssue.message,
             /Nora Weber ist noch unterwegs auf K-TRIP 1/,
         );
 
@@ -621,6 +632,8 @@ B-TXN 2;50
         const eligibilityRow = rows.find(
             (row: { sheet_kind: string }) => row.sheet_kind === "eligibility",
         );
+        assert.ok(vehicleRow);
+        assert.ok(eligibilityRow);
 
         const failed = await agent
             .post("/api/import/commit")
