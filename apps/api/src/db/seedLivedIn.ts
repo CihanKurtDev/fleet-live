@@ -11,6 +11,7 @@ import {
 import { upsertDevAccounts } from "./devAccounts";
 import {
     assignDepotSitesFromTelemetry,
+    assignHomeSites,
     parkIdleAtDepots,
     replaceCompanyDepots,
 } from "./companyDepots";
@@ -138,6 +139,54 @@ function plateAt(index: number) {
     return `${prefix}-${a}${b} ${String(index).padStart(4, "0")}`;
 }
 
+/** 17 Zeichen, ohne I/O/Q, eindeutig pro Firma. */
+function vinAt(companyId: number, index: number) {
+    return `WVWZZZ${companyId}JZXW${String(index).padStart(6, "0")}`;
+}
+
+const YARD_TYPES = [
+    "TRUCK",
+    "TRUCK",
+    "TRUCK",
+    "VAN",
+    "VAN",
+    "CAR",
+    "TRAILER",
+] as const;
+
+function yardType(rng: Rng) {
+    return YARD_TYPES[pickInt(rng, 0, YARD_TYPES.length - 1)] ?? "TRUCK";
+}
+
+function huDueOn(rng: Rng): string | null {
+    if (rng() < 0.08) {
+        return null;
+    }
+
+    const day = String(pickInt(rng, 1, 28)).padStart(2, "0");
+    const roll = rng();
+
+    if (roll < 0.1) {
+        return `2026-${String(pickInt(rng, 1, 8)).padStart(2, "0")}-${day}`;
+    }
+
+    if (roll < 0.25) {
+        return `2026-${String(pickInt(rng, 10, 12)).padStart(2, "0")}-${day}`;
+    }
+
+    const year = rng() < 0.5 ? 2027 : 2028;
+    return `${year}-${String(pickInt(rng, 1, 12)).padStart(2, "0")}-${day}`;
+}
+
+function costCenterAt(rng: Rng, companyId: number): string | null {
+    if (rng() < 0.08) {
+        return null;
+    }
+
+    const suffix = [10, 20, 30, 40, 50][pickInt(rng, 0, 4)] ?? 10;
+    return `KST-${companyId}${suffix}`;
+}
+
 function stampInMonth(month: string, rng: Rng, dayMax = 27) {
     const day = String(pickInt(rng, 1, dayMax)).padStart(2, "0");
     const hour = String(pickInt(rng, 5, 21)).padStart(2, "0");
@@ -182,6 +231,7 @@ type SeededVehicle = {
     fuel: number;
     lat: number;
     lng: number;
+    skipHome: boolean;
 };
 
 export function seedLivedIn(database: DatabaseSync) {
@@ -194,9 +244,18 @@ export function seedLivedIn(database: DatabaseSync) {
     `);
     const insertVehicle = database.prepare(`
         INSERT INTO vehicles (
-            license_plate, driver_name, current_driver_id, fuel_level, status, company_id
+            license_plate,
+            driver_name,
+            current_driver_id,
+            fuel_level,
+            status,
+            vin,
+            vehicle_type,
+            hu_due_on,
+            cost_center,
+            company_id
         )
-        VALUES (?, NULL, NULL, ?, ?, ?)
+        VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertAssignment = database.prepare(`
         INSERT INTO driver_vehicles (driver_id, vehicle_id)
@@ -282,8 +341,13 @@ export function seedLivedIn(database: DatabaseSync) {
                         plateAt(plateIndex),
                         fuel,
                         status,
+                        vinAt(companyId, plateIndex),
+                        yardType(rng),
+                        huDueOn(rng),
+                        costCenterAt(rng, companyId),
                         companyId,
                     );
+                    const skipHome = rng() < 0.12;
                     plateIndex += 1;
                     const row: SeededVehicle = {
                         id: Number(result.lastInsertRowid),
@@ -293,6 +357,7 @@ export function seedLivedIn(database: DatabaseSync) {
                         fuel,
                         lat,
                         lng,
+                        skipHome,
                     };
                     owned.push(row);
                     vehicles.push(row);
@@ -332,6 +397,7 @@ export function seedLivedIn(database: DatabaseSync) {
         addCompany(3, VEHICLES_OTHER);
         replaceCompanyDepots(database);
         parkIdleAtDepots(database, vehicles);
+        assignHomeSites(database, vehicles);
         assignDepotSitesFromTelemetry(database);
 
         const mainVehicles = vehicles.filter((row) => row.companyId === COMPANY_MAIN);

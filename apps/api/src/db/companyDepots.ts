@@ -151,3 +151,45 @@ export function assignDepotSitesFromTelemetry(database: DatabaseSync): void {
         setSite.run(siteId, row.id);
     }
 }
+
+/**
+ * Stammstandort der Firma. Die meisten Fahrzeuge gehören zum Hof,
+ * auch wenn sie gerade unterwegs sind. Ein kleiner Rest bleibt ohne.
+ */
+export function assignHomeSites(
+    database: DatabaseSync,
+    vehicles: Array<{ id: number; companyId: number; skipHome?: boolean }>,
+): void {
+    const findSite = database.prepare(
+        `
+        SELECT id, name
+        FROM sites
+        WHERE company_id = ? AND name = ?
+        `,
+    );
+    const setHome = database.prepare(
+        `
+        UPDATE vehicles
+        SET home_site_id = ?, depot = ?
+        WHERE id = ?
+        `,
+    );
+
+    for (const depot of COMPANY_DEPOTS) {
+        const site = findSite.get(depot.companyId, depot.name) as
+            | { id: number; name: string }
+            | undefined;
+
+        if (!site) {
+            continue;
+        }
+
+        for (const vehicle of vehicles) {
+            if (vehicle.companyId !== depot.companyId || vehicle.skipHome) {
+                continue;
+            }
+
+            setHome.run(site.id, site.name, vehicle.id);
+        }
+    }
+}
