@@ -1,4 +1,5 @@
 import {
+    ALERT_TYPES,
     formatAlertEvent,
     type Alert,
     type AlertFilterId,
@@ -17,11 +18,11 @@ export const alertFilters: Array<
     { id: "resolved", displayText: "Erledigt" },
 ];
 
-export const alertTypeFilters: Array<TableFilter<Alert> & { id: AlertType }> = [
-    { id: "SPEEDING", displayText: ALERT_TYPE_LABELS.SPEEDING },
-    { id: "LOW_FUEL", displayText: ALERT_TYPE_LABELS.LOW_FUEL },
-    { id: "OFFLINE", displayText: ALERT_TYPE_LABELS.OFFLINE },
-];
+export const alertTypeFilters: Array<TableFilter<Alert> & { id: AlertType }> =
+    ALERT_TYPES.map((id) => ({
+        id,
+        displayText: ALERT_TYPE_LABELS[id],
+    }));
 
 export const alertColumns: TableColumn<Alert>[] = [
     {

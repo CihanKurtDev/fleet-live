@@ -75,6 +75,8 @@ export type Vehicle = {
     vehicle_type: VehicleType | null;
     hu_due_on: string | null;
     depot: string | null;
+    /** Depot, dem das Fahrzeug zugeordnet ist. `depot` ist dessen Name. */
+    home_site_id: number | null;
     cost_center: string | null;
     latitude: number | null;
     longitude: number | null;
@@ -109,6 +111,7 @@ export type VehicleInput = {
     vehicle_type?: VehicleType | null;
     hu_due_on?: string | null;
     depot?: string | null;
+    home_site_id?: number | null;
     cost_center?: string | null;
 };
 
@@ -122,6 +125,7 @@ const VEHICLE_INPUT_KEYS = [
     "vehicle_type",
     "hu_due_on",
     "depot",
+    "home_site_id",
     "cost_center",
 ] as const;
 
@@ -294,6 +298,15 @@ export const vehicleInputSchema = z.object({
     vehicle_type: vehicleTypeSchema.optional(),
     hu_due_on: huDueOnSchema.optional(),
     depot: depotSchema.optional(),
+    home_site_id: z
+        .union([
+            z.null(),
+            z
+                .number({ error: "Stammstandort ist ungültig." })
+                .int("Stammstandort ist ungültig.")
+                .positive("Stammstandort ist ungültig."),
+        ])
+        .optional(),
     cost_center: costCenterSchema.optional(),
 });
 

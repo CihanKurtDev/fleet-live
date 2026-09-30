@@ -2,6 +2,7 @@ import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
+import { SiteModel } from "../models/site.model";
 import { broadcast, getFocusUnion } from "./hub";
 import type { TelemetryPatch } from "@fleet-live/shared";
 
@@ -55,6 +56,7 @@ export function startTelemetryTicker(ms: number) {
             const notifyCompanies = new Set<number>([
                 ...SpeedingEventModel.applyPatches(patches),
                 ...ExceptionEventModel.applyPatches(patches),
+                ...SiteModel.applyPatches(patches),
             ]);
 
             for (const companyId of ExceptionEventModel.applySilence()) {

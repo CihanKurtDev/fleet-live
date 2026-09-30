@@ -66,6 +66,13 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
             tone: "warning",
             to: "/vehicles?filter=low_fuel",
         },
+        {
+            key: "in_depot",
+            label: "Im Depot",
+            hint: "Hof",
+            tone: "neutral",
+            to: "/vehicles?filter=in_depot",
+        },
     ];
 
     return (

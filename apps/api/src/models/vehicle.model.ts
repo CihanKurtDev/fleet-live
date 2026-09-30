@@ -22,6 +22,7 @@ import {
     isAlertType,
 } from "@fleet-live/shared";
 import { DriverModel } from "./driver.model";
+import { SiteModel } from "./site.model";
 import { SpeedingEventModel } from "./speedingEvent.model";
 import { ExceptionEventModel } from "./exceptionEvent.model";
 import { config } from "../config";
@@ -40,6 +41,7 @@ export type VehicleCreateInput = Pick<VehicleInput, "license_plate"> &
             | "vehicle_type"
             | "hu_due_on"
             | "depot"
+            | "home_site_id"
             | "cost_center"
         >
     > & {
@@ -71,6 +73,7 @@ const FILTER_SQL: Record<VehicleFilterId, string> = {
     driving: "v.status = 'DRIVING'",
     idle: "v.status = 'IDLE'",
     offline: "v.status = 'OFFLINE'",
+    in_depot: "v.depot_site_id IS NOT NULL",
 };
 
 const SPEEDING_OPEN_SQL = `EXISTS (
@@ -103,6 +106,7 @@ const SELECT_ONE = `
         v.vehicle_type,
         v.hu_due_on,
         v.depot,
+        v.home_site_id,
         v.cost_center,
         t.latitude,
         t.longitude,
@@ -143,7 +147,6 @@ const UPDATE_VEHICLE = `
         vin = ?,
         vehicle_type = ?,
         hu_due_on = ?,
-        depot = ?,
         cost_center = ?
     WHERE id = ? AND company_id = ?
 `;
@@ -181,7 +184,8 @@ const FACET_SQL = `
         COALESCE(SUM(current_driver_id IS NULL), 0) AS unassigned,
         COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
         COALESCE(SUM(status = 'IDLE'), 0) AS idle,
-        COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
+        COALESCE(SUM(status = 'OFFLINE'), 0) AS offline,
+        COALESCE(SUM(depot_site_id IS NOT NULL), 0) AS in_depot
     FROM vehicles v
     WHERE v.company_id = ?
       AND ${LIST_SEARCH_SQL}
@@ -219,6 +223,7 @@ type FacetRow = {
     driving: number;
     idle: number;
     offline: number;
+    in_depot: number;
 };
 
 function toLikePattern(search: string): string {
@@ -303,6 +308,7 @@ export class VehicleModel {
                 v.vehicle_type,
                 v.hu_due_on,
                 v.depot,
+                v.home_site_id,
                 v.cost_center,
                 t.latitude,
                 t.longitude,
@@ -361,6 +367,7 @@ export class VehicleModel {
                     driving: Number(counts.driving),
                     idle: Number(counts.idle),
                     offline: Number(counts.offline),
+                    in_depot: Number(counts.in_depot),
                 },
             },
         };
@@ -692,13 +699,15 @@ export class VehicleModel {
                 input.vin ?? null,
                 input.vehicle_type ?? null,
                 input.hu_due_on ?? null,
-                input.depot ?? null,
+                null,
                 input.cost_center ?? null,
                 companyId,
             ),
         );
 
         const id = Number(result.lastInsertRowid);
+        SiteModel.syncHome(id, companyId, input);
+
         const driverName = input.driver_name?.trim();
 
         if (driverName) {
@@ -748,7 +757,6 @@ export class VehicleModel {
                 input.vin ?? null,
                 input.vehicle_type ?? null,
                 input.hu_due_on ?? null,
-                input.depot ?? null,
                 input.cost_center ?? null,
                 id,
                 companyId,
@@ -758,6 +766,9 @@ export class VehicleModel {
         if (result.changes === 0) {
             return undefined;
         }
+
+        SiteModel.syncHome(id, companyId, input);
+
         return this.getById(id, companyId);
     }
 
@@ -789,7 +800,6 @@ export class VehicleModel {
                 input.hu_due_on !== undefined
                     ? input.hu_due_on
                     : current.hu_due_on,
-                input.depot !== undefined ? input.depot : current.depot,
                 input.cost_center !== undefined
                     ? input.cost_center
                     : current.cost_center,
@@ -801,6 +811,9 @@ export class VehicleModel {
         if (result.changes === 0) {
             return undefined;
         }
+
+        SiteModel.syncHome(id, companyId, input);
+
         return this.getById(id, companyId);
     }
 
@@ -813,6 +826,7 @@ export class VehicleModel {
         SpeedingEventModel.resetForTests();
         ExceptionEventModel.resetForTests();
         db.exec("DELETE FROM vehicles");
+        db.exec("DELETE FROM sites");
         db.exec("DELETE FROM drivers");
         db.exec("DELETE FROM trip_month_km");
         db.exec(

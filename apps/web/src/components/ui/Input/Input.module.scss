@@ -54,3 +54,18 @@
 .fullWidth {
     width: 100%;
 }
+
+.range {
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    accent-color: var(--accent);
+
+    &:focus {
+        box-shadow: none;
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+}

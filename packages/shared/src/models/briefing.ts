@@ -37,6 +37,8 @@ export type BriefingCounts = {
     driving: number;
     idle: number;
     low_fuel: number;
+    /** Letzte Position liegt in einem Depot-Radius der Firma. */
+    in_depot: number;
 };
 
 export type BriefingData = {

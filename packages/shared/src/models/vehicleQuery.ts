@@ -21,6 +21,7 @@ export const VEHICLE_FILTERS = [
     "driving",
     "idle",
     "offline",
+    "in_depot",
 ] as const;
 
 export const VEHICLE_PAGE_LIMITS = [10, 25, 50, 100] as const;
@@ -78,6 +79,7 @@ export type VehicleListCounts = {
     driving: number;
     idle: number;
     offline: number;
+    in_depot: number;
 };
 
 export type VehicleListMeta = {

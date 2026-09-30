@@ -1,16 +1,18 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import {
     COST_CENTER_MAX,
-    DEPOT_MAX,
     LICENSE_PLATE_MAX,
     VEHICLE_TYPES,
     VEHICLE_TYPE_LABELS,
     VIN_LENGTH,
     validateVehicleInput,
+    type Site,
     type VehicleFieldErrors,
     type VehicleInput,
     type VehicleType,
 } from "@fleet-live/shared";
+import { isAbortError } from "../../api/client";
+import { listSites } from "../../api/sites";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import { NEW_VEHICLE_STATUS } from "./vehicleStatus";
@@ -28,7 +30,7 @@ interface FormValues {
     vin: string;
     vehicle_type: VehicleType | "";
     hu_due_on: string;
-    depot: string;
+    home_site_id: string;
     cost_center: string;
 }
 
@@ -38,7 +40,7 @@ const EMPTY_VALUES: FormValues = {
     vin: "",
     vehicle_type: "",
     hu_due_on: "",
-    depot: "",
+    home_site_id: "",
     cost_center: "",
 };
 
@@ -50,7 +52,11 @@ const toValues = (input?: VehicleInput): FormValues =>
               vin: input.vin ?? "",
               vehicle_type: input.vehicle_type ?? "",
               hu_due_on: input.hu_due_on ?? "",
-              depot: input.depot ?? "",
+              home_site_id:
+                  input.home_site_id === null ||
+                  input.home_site_id === undefined
+                      ? ""
+                      : String(input.home_site_id),
               cost_center: input.cost_center ?? "",
           }
         : EMPTY_VALUES;
@@ -90,6 +96,27 @@ export const VehicleForm = ({
         useState<VehicleFieldErrors>({});
     const [wasSubmitted, setWasSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [sites, setSites] = useState<Site[]>([]);
+    const [sitesError, setSitesError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const controller = new AbortController();
+
+        listSites(controller.signal)
+            .then((response) => {
+                setSites(response.data);
+                setSitesError(null);
+            })
+            .catch((caught: unknown) => {
+                if (isAbortError(caught)) {
+                    return;
+                }
+
+                setSitesError("Depots konnten nicht geladen werden.");
+            });
+
+        return () => controller.abort();
+    }, []);
 
     const isEditing = initialValue !== undefined;
 
@@ -108,7 +135,8 @@ export const VehicleForm = ({
         vehicle_type:
             values.vehicle_type === "" ? null : values.vehicle_type,
         hu_due_on: values.hu_due_on.trim() === "" ? null : values.hu_due_on,
-        depot: values.depot.trim() === "" ? null : values.depot,
+        home_site_id:
+            values.home_site_id === "" ? null : Number(values.home_site_id),
         cost_center:
             values.cost_center.trim() === "" ? null : values.cost_center,
     });
@@ -120,7 +148,7 @@ export const VehicleForm = ({
                   vin: form.vin,
                   vehicle_type: form.vehicle_type,
                   hu_due_on: form.hu_due_on,
-                  depot: form.depot,
+                  home_site_id: form.home_site_id,
                   cost_center: form.cost_center,
               }
             : form;
@@ -290,23 +318,32 @@ export const VehicleForm = ({
             </div>
 
             <div className={styles.field}>
-                <label htmlFor={`${fieldId}-depot`}>Standort</label>
-                <Input
+                <label htmlFor={`${fieldId}-depot`}>Stammstandort</label>
+                <select
                     id={`${fieldId}-depot`}
-                    type="text"
-                    size="md"
-                    fullWidth
-                    maxLength={DEPOT_MAX}
-                    value={values.depot}
+                    className={styles.select}
+                    value={values.home_site_id}
                     disabled={readOnly}
                     onChange={(event) =>
-                        setField("depot", event.target.value)
+                        setField("home_site_id", event.target.value)
                     }
-                    aria-invalid={errorFor("depot") !== undefined}
-                />
-                {errorFor("depot") && (
+                    aria-invalid={errorFor("home_site_id") !== undefined}
+                >
+                    <option value="">Kein Stammstandort</option>
+                    {sites.map((site) => (
+                        <option key={site.id} value={site.id}>
+                            {site.name}
+                        </option>
+                    ))}
+                </select>
+                {errorFor("home_site_id") && (
                     <p className={styles.error} role="alert">
-                        {errorFor("depot")}
+                        {errorFor("home_site_id")}
+                    </p>
+                )}
+                {sitesError && (
+                    <p className={styles.error} role="alert">
+                        {sitesError}
                     </p>
                 )}
             </div>

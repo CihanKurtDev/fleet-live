@@ -42,6 +42,11 @@ export const useFleetPageQuery = () => {
     }, [driversKey]);
     const bboxRaw = searchParams.get("bbox");
     const bbox = useMemo(() => readBBox(bboxRaw), [bboxRaw]);
+    const depotRaw = searchParams.get("depot");
+    const depotId =
+        depotRaw !== null && /^[1-9]\d*$/.test(depotRaw)
+            ? Number(depotRaw)
+            : undefined;
     const [searchDraft, setSearchDraft] = useState(search);
     const [prevSearch, setPrevSearch] = useState(search);
     if (search !== prevSearch) {
@@ -50,12 +55,17 @@ export const useFleetPageQuery = () => {
     }
     const debouncedSearch = useDebouncedValue(searchDraft);
     const writeQuery = useCallback(
-        (next: FleetPositionsQuery) => {
-            setSearchParams(serializeFleetPositionsQuery(next), {
-                replace: true,
-            });
+        (next: FleetPositionsQuery, nextDepot?: number | null) => {
+            const params = serializeFleetPositionsQuery(next);
+            const depot = nextDepot === undefined ? depotId : nextDepot;
+
+            if (depot) {
+                params.set("depot", String(depot));
+            }
+
+            setSearchParams(params, { replace: true });
         },
-        [setSearchParams],
+        [depotId, setSearchParams],
     );
 
     useEffect(() => {
@@ -111,16 +121,33 @@ export const useFleetPageQuery = () => {
         [bbox, drivers, filter, search, writeQuery],
     );
 
+    const setDepot = useCallback(
+        (id: number | null) => {
+            writeQuery(
+                {
+                    bbox: bbox ?? undefined,
+                    filter,
+                    search: search || undefined,
+                    drivers: drivers.length > 0 ? drivers : undefined,
+                },
+                id,
+            );
+        },
+        [bbox, drivers, filter, search, writeQuery],
+    );
+
     return {
         bbox,
         filter,
         search,
         drivers,
+        depotId,
         searchDraft,
         setSearchDraft,
         setFilter,
         setDrivers,
         setBBox,
+        setDepot,
         searchParams,
     };
 };

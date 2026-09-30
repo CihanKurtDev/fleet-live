@@ -5,6 +5,10 @@ import {
     dropMaintenanceTriggers,
 } from "./migrate";
 import { upsertDevAccounts } from "./devAccounts";
+import {
+    assignDepotSitesFromTelemetry,
+    replaceCompanyDepots,
+} from "./companyDepots";
 
 const largeMode = process.argv.includes("--large");
 
@@ -305,6 +309,8 @@ function seedLarge() {
         for (const [vehicleId, telemetryId] of lastTelemetryId) {
             updateLast.run(telemetryId, vehicleId);
         }
+        replaceCompanyDepots(db);
+        assignDepotSitesFromTelemetry(db);
         updateAlerts.run();
         db.exec("COMMIT");
     } catch (error) {

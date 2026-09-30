@@ -7,6 +7,7 @@ export type CompanyImportLookup = {
     eligibility: Set<string>;
     drivingByDriverId: Map<number, { id: number; license_plate: string }>;
     vehicleCurrentDriverId: Map<number, number | null>;
+    depotNameToId: Map<string, number>;
 };
 
 export function loadCompanyImportLookup(
@@ -82,6 +83,19 @@ export function loadCompanyImportLookup(
         );
     }
 
+    const depotNameToId = new Map<string, number>();
+    const depots = stmt(
+        `
+        SELECT id, name
+        FROM sites
+        WHERE company_id = ? AND kind = 'depot'
+        `,
+    ).all(companyId) as Array<{ id: number; name: string }>;
+
+    for (const row of depots) {
+        depotNameToId.set(row.name.toLowerCase(), row.id);
+    }
+
     return {
         plateToId,
         vinToId,
@@ -89,5 +103,6 @@ export function loadCompanyImportLookup(
         eligibility,
         drivingByDriverId,
         vehicleCurrentDriverId,
+        depotNameToId,
     };
 }

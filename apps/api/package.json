@@ -9,7 +9,7 @@
     "db:seed:large": "tsx src/db/seed.ts --large",
     "lint": "eslint src scripts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test --test-concurrency=1 src/test/vehicles.test.ts src/test/auth.test.ts src/test/alerts.test.ts src/test/briefing.test.ts src/test/speedBand.test.ts src/test/drivers.test.ts src/test/speedingEvents.test.ts src/test/exceptionEvents.test.ts src/test/migrate-assignment.test.ts src/test/streamParse.test.ts src/test/import.test.ts src/test/importRowOutcome.test.ts",
+    "test": "tsx --test --test-concurrency=1 src/test/vehicles.test.ts src/test/auth.test.ts src/test/alerts.test.ts src/test/briefing.test.ts src/test/speedBand.test.ts src/test/drivers.test.ts src/test/speedingEvents.test.ts src/test/exceptionEvents.test.ts src/test/geofence.test.ts src/test/sites.test.ts src/test/migrate-assignment.test.ts src/test/streamParse.test.ts src/test/import.test.ts src/test/importRowOutcome.test.ts",
     "bench": "tsx scripts/bench.ts"
   },
   "keywords": [],

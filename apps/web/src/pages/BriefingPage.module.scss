@@ -32,7 +32,7 @@
 .kpis {
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 10px;
 }
 
@@ -104,6 +104,10 @@ a.kpi:hover {
 }
 
 @media (max-width: 900px) {
+    .kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
     .title {
         font-size: 24px;
     }

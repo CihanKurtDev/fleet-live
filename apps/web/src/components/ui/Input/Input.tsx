@@ -16,9 +16,10 @@ export function Input({
     type = "text",
     ...props
 }: InputProps) {
+    const isRange = type === "range";
     const classes = [
         styles.input,
-        styles[size],
+        isRange ? styles.range : styles[size],
         fullWidth && styles.fullWidth,
         className,
     ]

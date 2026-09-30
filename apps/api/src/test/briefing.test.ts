@@ -118,6 +118,7 @@ describe("GET /api/briefing", () => {
         assert.equal(response.body.data.counts.idle, 1);
         assert.equal(response.body.data.counts.offline, 1);
         assert.equal(response.body.data.counts.low_fuel, 1);
+        assert.equal(response.body.data.counts.in_depot, 0);
     });
 
     it("aggregates history months for this company only", async () => {
