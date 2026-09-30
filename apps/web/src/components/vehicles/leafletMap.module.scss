@@ -240,6 +240,38 @@
     }
 }
 
+.placing :global(.leaflet-container) {
+    cursor: crosshair;
+}
+
+:global(.leaflet-tooltip).depotLabel {
+    padding: 1px 6px;
+    border: 0;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    box-shadow: none;
+    color: var(--text-h);
+    font-weight: 650;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+:global(.leaflet-tooltip).depotLabel::before {
+    display: none;
+}
+
+.depotHandle {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #5b7c99;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: none;
+    cursor: grab;
+}
+
 .legend {
     position: absolute;
     top: 12px;

@@ -9,6 +9,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 import { useLatestRef } from "../../hooks/useLatestRef";
+import type { DepotDraft } from "./depotDraft";
 import { createThemedMap, prefersDark } from "./leafletMap";
 import { MapStatusLegend } from "./MapStatusLegend";
 import {
@@ -65,6 +66,14 @@ const densityTooltip = (cell: FleetDensityCell) =>
         )
         .join(" · ")}`;
 
+export type MapDepot = {
+    id: number;
+    name: string;
+    latitude: number;
+    longitude: number;
+    radius_m: number;
+};
+
 type FleetMapProps = {
     vehicles: FleetPosition[];
     densityCells: FleetDensityCell[];
@@ -72,8 +81,22 @@ type FleetMapProps = {
     initialBbox?: GeoBBox | null;
     focusKey?: string | null;
     focusPosition?: FleetPosition | null;
+    depots?: MapDepot[];
+    draft?: DepotDraft | null;
+    selectedDepotId?: number | null;
+    focusDepot?: { id: number; nonce: number } | null;
+    placing?: boolean;
+    canEditDepots?: boolean;
+    lockDepotSelection?: boolean;
     onBoundsChange: (bbox: GeoBBox) => void;
     onSelect: (id: number) => void;
+    onPlaceDepot?: (latitude: number, longitude: number) => void;
+    onMoveDepot?: (
+        id: number | "new",
+        latitude: number,
+        longitude: number,
+    ) => void;
+    onSelectDepot?: (id: number) => void;
 };
 
 export const FleetMap = ({
@@ -83,8 +106,18 @@ export const FleetMap = ({
     initialBbox = null,
     focusKey = null,
     focusPosition = null,
+    depots = [],
+    draft = null,
+    selectedDepotId = null,
+    focusDepot = null,
+    placing = false,
+    canEditDepots = false,
+    lockDepotSelection = false,
     onBoundsChange,
     onSelect,
+    onPlaceDepot,
+    onMoveDepot,
+    onSelectDepot,
 }: FleetMapProps) => {
     const vehiclesByStatus = (
         mode === "density" ? densityCells : vehicles
@@ -112,6 +145,12 @@ export const FleetMap = ({
     const initialBboxRef = useRef(initialBbox);
     const onBoundsChangeRef = useLatestRef(onBoundsChange);
     const onSelectRef = useLatestRef(onSelect);
+    const onPlaceDepotRef = useLatestRef(onPlaceDepot);
+    const onMoveDepotRef = useLatestRef(onMoveDepot);
+    const onSelectDepotRef = useLatestRef(onSelectDepot);
+    const ignoreMapClickRef = useRef(false);
+    const depotLayerRef = useRef<L.LayerGroup | null>(null);
+    const lastDepotFocusRef = useRef("");
     const listedVehicles = vehicles.slice(0, 100);
 
     useEffect(() => {
@@ -227,7 +266,11 @@ export const FleetMap = ({
                     direction: "top",
                     offset: [0, -10],
                 });
-                marker.on("click", () => onSelectRef.current(vehicle.id));
+                marker.on("click", (event) => {
+                    L.DomEvent.stopPropagation(event);
+                    ignoreMapClickRef.current = true;
+                    onSelectRef.current(vehicle.id);
+                });
                 marker.addTo(map);
                 markers.set(vehicle.id, {
                     marker,
@@ -324,16 +367,180 @@ export const FleetMap = ({
         );
     }, [focusKey, focusPosition]);
 
+    useEffect(() => {
+        const map = mapRef.current;
+
+        if (!map) {
+            return;
+        }
+
+        const onClick = (event: L.LeafletMouseEvent) => {
+            if (ignoreMapClickRef.current) {
+                ignoreMapClickRef.current = false;
+                return;
+            }
+
+            onPlaceDepotRef.current?.(event.latlng.lat, event.latlng.lng);
+        };
+
+        if (!placing) {
+            return;
+        }
+
+        map.on("click", onClick);
+        return () => {
+            map.off("click", onClick);
+        };
+    }, [placing, onPlaceDepotRef]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+
+        if (!map) {
+            return;
+        }
+
+        depotLayerRef.current?.remove();
+        const group = L.layerGroup().addTo(map);
+        depotLayerRef.current = group;
+
+        const drawHandle = (
+            id: number | "new",
+            latitude: number,
+            longitude: number,
+            circle: L.Circle,
+        ) => {
+            const handle = L.marker([latitude, longitude], {
+                draggable: true,
+                icon: L.divIcon({
+                    className: styles.depotHandle,
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7],
+                }),
+                zIndexOffset: 800,
+            });
+            handle.on("drag", () => {
+                circle.setLatLng(handle.getLatLng());
+            });
+            handle.on("dragend", () => {
+                const at = handle.getLatLng();
+                onMoveDepotRef.current?.(id, at.lat, at.lng);
+            });
+            handle.addTo(group);
+        };
+
+        for (const depot of depots) {
+            const shown =
+                draft?.id === depot.id
+                    ? draft
+                    : depot;
+            const circle = L.circle([shown.latitude, shown.longitude], {
+                radius: shown.radius_m,
+                color: "#5b7c99",
+                weight: selectedDepotId === depot.id ? 3 : 1.5,
+                fillColor: "#5b7c99",
+                fillOpacity: 0.14,
+            });
+            circle.bindTooltip(depot.name, {
+                permanent: true,
+                direction: "center",
+                className: styles.depotLabel,
+            });
+            circle.on("click", (event) => {
+                L.DomEvent.stopPropagation(event);
+                ignoreMapClickRef.current = true;
+                if (lockDepotSelection) {
+                    return;
+                }
+                onSelectDepotRef.current?.(depot.id);
+            });
+            circle.addTo(group);
+
+            if (canEditDepots && draft?.id === depot.id) {
+                drawHandle(depot.id, shown.latitude, shown.longitude, circle);
+            }
+        }
+
+        if (draft?.id === "new") {
+            const circle = L.circle([draft.latitude, draft.longitude], {
+                radius: draft.radius_m,
+                color: "#5b7c99",
+                weight: 2,
+                dashArray: "6 6",
+                fillColor: "#5b7c99",
+                fillOpacity: 0.12,
+            });
+            if (draft.name.trim()) {
+                circle.bindTooltip(draft.name.trim(), {
+                    permanent: true,
+                    direction: "center",
+                    className: styles.depotLabel,
+                });
+            }
+            circle.addTo(group);
+            if (canEditDepots) {
+                drawHandle("new", draft.latitude, draft.longitude, circle);
+            }
+        }
+
+        return () => {
+            group.remove();
+            if (depotLayerRef.current === group) {
+                depotLayerRef.current = null;
+            }
+        };
+    }, [
+        depots,
+        draft,
+        selectedDepotId,
+        canEditDepots,
+        lockDepotSelection,
+        onMoveDepotRef,
+        onSelectDepotRef,
+    ]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+
+        if (!map || !focusDepot) {
+            return;
+        }
+
+        const depot = depots.find((item) => item.id === focusDepot.id);
+
+        if (!depot) {
+            return;
+        }
+
+        const key = `${focusDepot.id}:${focusDepot.nonce}`;
+
+        if (lastDepotFocusRef.current === key) {
+            return;
+        }
+
+        lastDepotFocusRef.current = key;
+        map.fitBounds(
+            L.latLng(depot.latitude, depot.longitude).toBounds(
+                depot.radius_m * 2.4,
+            ),
+            { padding: [48, 48], maxZoom: 16 },
+        );
+    }, [depots, focusDepot]);
+
     return (
-        <div className={`${styles.wrap} ${styles.wrapFill}`}>
+        <div
+            className={`${styles.wrap} ${styles.wrapFill}${
+                placing ? ` ${styles.placing}` : ""
+            }`}
+        >
             <div
                 ref={containerRef}
                 className={`${styles.map} ${styles.mapFill}`}
                 role="img"
                 aria-label={
                     mode === "density"
-                        ? "Flottenkarte mit aggregierten Dichtezellen. Ein Kreis vergrößert den Ausschnitt."
-                        : "Flottenkarte mit letzten Positionen. Ein Marker öffnet das Fahrzeug."
+                        ? "Flottenkarte mit Depots und aggregierten Dichtezellen. Ein Dichtekreis vergrößert den Ausschnitt."
+                        : "Flottenkarte mit Depots und letzten Positionen. Ein Fahrzeugmarker öffnet das Fahrzeug."
                 }
             />
             {mode === "positions" && vehicles.length > 0 && (

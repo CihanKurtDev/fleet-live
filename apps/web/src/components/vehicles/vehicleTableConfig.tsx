@@ -26,6 +26,7 @@ export const vehicleFilters: Array<
     { id: "driving", displayText: "Auf Fahrt" },
     { id: "idle", displayText: "Standby" },
     { id: "offline", displayText: "Kein Signal" },
+    { id: "in_depot", displayText: "Im Depot" },
 ];
 
 function warningTypes(row: Vehicle): AlertType[] {
@@ -66,7 +67,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     },
     {
         key: "depot",
-        displayText: "Standort",
+        displayText: "Stammstandort",
         sortable: true,
         render: (value) => value ?? "—",
     },

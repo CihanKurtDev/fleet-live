@@ -2,7 +2,7 @@ import { VEHICLE_TYPE_LABELS } from "@fleet-live/shared";
 import { decodePolyline, speedBand } from "@fleet-live/shared";
 import type { Trip, TripListItem, VehicleInput } from "@fleet-live/shared";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
@@ -458,8 +458,16 @@ export const VehicleDetailPage = () => {
                         <dd>{formatIsoDate(vehicle.hu_due_on)}</dd>
                     </div>
                     <div>
-                        <dt>Standort</dt>
-                        <dd>{vehicle.depot ?? "—"}</dd>
+                        <dt>Stammstandort</dt>
+                        <dd>
+                            {vehicle.home_site_id && vehicle.depot ? (
+                                <Link to={`/fleet?depot=${vehicle.home_site_id}`}>
+                                    {vehicle.depot}
+                                </Link>
+                            ) : (
+                                "—"
+                            )}
+                        </dd>
                     </div>
                     <div>
                         <dt>Kostenstelle</dt>
@@ -469,7 +477,7 @@ export const VehicleDetailPage = () => {
             </section>
 
             <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Standort</h2>
+                <h2 className={layout.panelTitle}>Position</h2>
 
                 {position ? (
                     <div className={styles.positionBody}>
@@ -563,7 +571,7 @@ export const VehicleDetailPage = () => {
                         vin: vehicle.vin,
                         vehicle_type: vehicle.vehicle_type,
                         hu_due_on: vehicle.hu_due_on,
-                        depot: vehicle.depot,
+                        home_site_id: vehicle.home_site_id,
                         cost_center: vehicle.cost_center,
                     }}
                     isFuelMeasured={vehicle.status === "DRIVING"}
