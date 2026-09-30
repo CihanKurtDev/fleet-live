@@ -2,7 +2,7 @@
 
 fleet-live — fleet management app (TypeScript monorepo). Vehicles, telemetry, and a React UI; live updates over SSE.
 
-Phases 1–10 are in place (including yard Stammdaten: VIN, type, HU, depot, cost center; driver phone and rename; import columns). **Next:** Phase 11 (map at fleet scale). Do not start invite, multi-company membership, or CI/CD. Status detail: `.cursor/rules/architecture.mdc`. Engineering plan: `.cursor/ROADMAP.md` (local, gitignored — not on GitHub). The public README has a dispatcher-facing roadmap (what users notice), not phase numbers.
+Phases 1–12 are in place (including depot circles on the fleet map, Stammstandort, and the Im Depot filter; driving through a depot is not an inbox warning). **Next:** Phase 13 (HU, licence, UVV reminders). Do not start invite, multi-company membership, or CI/CD. Status detail: `.cursor/rules/architecture.mdc`. Engineering plan: `.cursor/ROADMAP.md` (local, gitignored — not on GitHub). The public README has a dispatcher-facing roadmap (what users notice), not phase numbers.
 
 ## General
 

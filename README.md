@@ -89,10 +89,10 @@ Was die App heute kann, und was als Nächstes kommt.
 * Letzte Spaltenzuordnung bleibt pro Firma gespeichert, jeder Import steht im Log
 * Hof-Stammdaten am Fahrzeug: VIN, Typ, HU-Fälligkeit, Depot, Kostenstelle
 * Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
+* Depots als benannte Kreise auf der Flottenkarte, Stammstandort am Fahrzeug, Filter „Im Depot“
 
 ## Als Nächstes
 
-* Depot-Geofences
 * Erinnerungen zu HU, Führerschein, UVV
 * CSV-Export
 
