@@ -18,6 +18,7 @@ import driverRoutes from "./routes/driver.routes";
 import briefingRoutes from "./routes/briefing.routes";
 import authRoutes from "./routes/auth.routes";
 import importRoutes from "./routes/import.routes";
+import siteRoutes from "./routes/site.routes";
 import { setStreamFocus, streamEvents } from "./controllers/stream.controller";
 import { getSim, updateSim } from "./controllers/sim.controller";
 
@@ -113,6 +114,7 @@ export function createApp() {
     app.use("/api/alerts", requireAuth, alertRoutes);
     app.use("/api/drivers", requireAuth, driverRoutes);
     app.use("/api/import", requireAuth, importRoutes);
+    app.use("/api/sites", requireAuth, siteRoutes);
 
     app.use(notFound);
     app.use(errorHandler);

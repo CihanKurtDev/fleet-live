@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 16;
+const SCHEMA_VERSION = 18;
 
 type TableColumn = {
     name: string;
@@ -946,6 +946,56 @@ function migrateToV16(database: DatabaseSync) {
     ensureYardMasterData(database);
 }
 
+function ensureDepotSites(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS sites (
+            id INTEGER PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('depot')),
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            radius_m REAL NOT NULL CHECK (radius_m > 0),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_sites_company
+            ON sites(company_id, kind);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_company_name
+            ON sites(company_id, name);
+    `);
+
+    const names = columnNames(database, "vehicles");
+
+    if (names.size > 0 && !names.has("depot_site_id")) {
+        database.exec(
+            "ALTER TABLE vehicles ADD COLUMN depot_site_id INTEGER",
+        );
+    }
+
+    if (names.size > 0 && !names.has("home_site_id")) {
+        database.exec(
+            "ALTER TABLE vehicles ADD COLUMN home_site_id INTEGER",
+        );
+    }
+
+    database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_vehicles_depot_site
+            ON vehicles(depot_site_id)
+            WHERE depot_site_id IS NOT NULL
+    `);
+}
+
+function migrateToV17(database: DatabaseSync) {
+    ensureDepotSites(database);
+}
+
+function migrateToV18(_database: DatabaseSync) {
+    // v17 hat `sites` angelegt; `ensureDepotSites` läuft am Ende von migrate().
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -1016,6 +1066,14 @@ export function migrate(database: DatabaseSync) {
         migrateToV16(database);
     }
 
+    if (currentVersion < 17) {
+        migrateToV17(database);
+    }
+
+    if (currentVersion < 18) {
+        migrateToV18(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -1030,6 +1088,7 @@ export function migrate(database: DatabaseSync) {
     ensureOpenAlertsPerType(database);
     ensureImportTables(database);
     ensureYardMasterData(database);
+    ensureDepotSites(database);
     applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {

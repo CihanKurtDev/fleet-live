@@ -21,6 +21,10 @@ type LowFuelCountRow = {
     low_fuel_count: number;
 };
 
+type InDepotCountRow = {
+    in_depot_count: number;
+};
+
 type RosterRow = {
     active_drivers: number;
     active_vehicles: number;
@@ -183,12 +187,22 @@ export class BriefingModel {
             `,
         ).get(companyId, LOW_FUEL_THRESHOLD_PERCENT) as LowFuelCountRow;
 
+        const inDepot = stmt(
+            `
+            SELECT COUNT(*) AS in_depot_count
+            FROM vehicles
+            WHERE company_id = ?
+              AND depot_site_id IS NOT NULL
+            `,
+        ).get(companyId) as InDepotCountRow;
+
         const counts: BriefingCounts = {
             open: Number(open.open_count),
             offline: Number(status.offline),
             driving: Number(status.driving),
             idle: Number(status.idle),
             low_fuel: Number(lowFuel.low_fuel_count),
+            in_depot: Number(inDepot.in_depot_count),
         };
 
         return {

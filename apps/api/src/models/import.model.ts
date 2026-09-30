@@ -628,6 +628,15 @@ function buildVehiclePreviewRows(
                 message: `Standort darf höchstens ${DEPOT_MAX} Zeichen haben.`,
             });
             defaultAction = "skip";
+        } else if (
+            row.depot &&
+            !lookup.depotNameToId.has(row.depot.toLowerCase())
+        ) {
+            issues.push({
+                level: "warning",
+                code: "UNKNOWN_DEPOT",
+                message: `Standort „${row.depot}“ ist kein Depot dieser Firma. Das Fahrzeug wird ohne Stammstandort angelegt.`,
+            });
         }
 
         if (row.cost_center_too_long) {
@@ -1486,6 +1495,7 @@ export class ImportModel {
 
         try {
             withTransaction(() => {
+                const lookup = loadCompanyImportLookup(companyId);
                 const plateIds = new Map<string, number>();
 
                 const rememberPlate = (plate: string, id: number) => {
@@ -1575,6 +1585,11 @@ export class ImportModel {
 
                             const fuelLevel = row.fuel_level ?? 100;
                             const status = row.status ?? "IDLE";
+                            const homeSiteId = row.depot
+                                ? lookup.depotNameToId.get(
+                                      row.depot.toLowerCase(),
+                                  )
+                                : undefined;
                             const yardFields = {
                                 ...(row.vin ? { vin: row.vin } : {}),
                                 ...(row.vehicle_type
@@ -1583,7 +1598,9 @@ export class ImportModel {
                                 ...(row.hu_due_on
                                     ? { hu_due_on: row.hu_due_on }
                                     : {}),
-                                ...(row.depot ? { depot: row.depot } : {}),
+                                ...(homeSiteId !== undefined
+                                    ? { home_site_id: homeSiteId }
+                                    : {}),
                                 ...(row.cost_center
                                     ? { cost_center: row.cost_center }
                                     : {}),

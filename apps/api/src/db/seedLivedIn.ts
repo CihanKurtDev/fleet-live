@@ -9,6 +9,11 @@ import {
     dropMaintenanceTriggers,
 } from "./migrate";
 import { upsertDevAccounts } from "./devAccounts";
+import {
+    assignDepotSitesFromTelemetry,
+    parkIdleAtDepots,
+    replaceCompanyDepots,
+} from "./companyDepots";
 
 const COMPANY_MAIN = 1;
 const VEHICLES_MAIN = 180;
@@ -325,6 +330,9 @@ export function seedLivedIn(database: DatabaseSync) {
         addCompany(COMPANY_MAIN, VEHICLES_MAIN);
         addCompany(2, VEHICLES_OTHER);
         addCompany(3, VEHICLES_OTHER);
+        replaceCompanyDepots(database);
+        parkIdleAtDepots(database, vehicles);
+        assignDepotSitesFromTelemetry(database);
 
         const mainVehicles = vehicles.filter((row) => row.companyId === COMPANY_MAIN);
         const mainByDriver = new Map<number, SeededVehicle[]>();

@@ -53,6 +53,7 @@ function readInput(body: unknown): Partial<VehicleInput> {
         vehicle_type,
         hu_due_on,
         depot,
+        home_site_id,
         cost_center,
     } = (body ?? {}) as Partial<VehicleInput> & Record<string, unknown>;
 
@@ -82,6 +83,9 @@ function readInput(body: unknown): Partial<VehicleInput> {
     }
     if (depot !== undefined) {
         input.depot = emptyToNull(depot);
+    }
+    if (home_site_id !== undefined) {
+        input.home_site_id = home_site_id;
     }
     if (cost_center !== undefined) {
         input.cost_center = emptyToNull(cost_center);
@@ -263,6 +267,7 @@ export function createVehicle(req: Request, res: Response) {
         vehicle_type: input.vehicle_type,
         hu_due_on: input.hu_due_on,
         depot: input.depot,
+        home_site_id: input.home_site_id,
         cost_center: input.cost_center,
         company_id: sessionCompany(req),
     });

@@ -94,6 +94,12 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;KST-10
         assert.equal(rows[0].vin, "WVWZZZ1JZXW000011");
         assert.equal(rows[0].vehicle_type, "TRUCK");
         assert.equal(rows[0].depot, "Hof Nord");
+        assert.equal(
+            rows[0].issues.some(
+                (issue: { code: string }) => issue.code === "UNKNOWN_DEPOT",
+            ),
+            true,
+        );
         assert.equal(rows[0].hu_due_on, "2027-06-15");
         assert.equal(rows[0].cost_center, "KST-10");
 
@@ -109,9 +115,46 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;KST-10
             .query({ search: "B-YARD 1" });
         assert.equal(listed.body.data[0].vin, "WVWZZZ1JZXW000011");
         assert.equal(listed.body.data[0].vehicle_type, "TRUCK");
-        assert.equal(listed.body.data[0].depot, "Hof Nord");
+        assert.equal(listed.body.data[0].depot, null);
+        assert.equal(listed.body.data[0].home_site_id, null);
         assert.equal(listed.body.data[0].hu_due_on, "2027-06-15");
         assert.equal(listed.body.data[0].cost_center, "KST-10");
+    });
+
+    it("sets the home depot when Standort matches a site name", async () => {
+        const { agent } = await loginAs(1);
+        const site = await agent.post("/api/sites").send({
+            name: "Hof Nord",
+            latitude: 50.9,
+            longitude: 6.9,
+        });
+        assert.equal(site.status, 201);
+
+        const csv = `Kennzeichen;Standort
+B-YARD 2;Hof Nord
+`;
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv })
+            .expect(200);
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        assert.equal(
+            rows[0].issues.some(
+                (issue: { code: string }) => issue.code === "UNKNOWN_DEPOT",
+            ),
+            false,
+        );
+
+        await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        const listed = await agent
+            .get("/api/vehicles")
+            .query({ search: "B-YARD 2" });
+        assert.equal(listed.body.data[0].depot, "Hof Nord");
+        assert.equal(listed.body.data[0].home_site_id, site.body.id);
     });
 
     it("flags duplicate plates in the same file as errors", async () => {
