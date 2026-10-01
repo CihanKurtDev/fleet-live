@@ -1,7 +1,12 @@
 import { createBrowserRouter } from 'react-router';
 import App from './App';
 import { RequireAuth } from './components/RequireAuth';
+import { AcceptInvitePage } from './pages/AcceptInvitePage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import {
     NotFoundPage,
     RouteErrorPage,
@@ -16,6 +21,26 @@ export const router = createBrowserRouter([
             {
                 path: 'login',
                 Component: LoginPage,
+            },
+            {
+                path: 'registrieren',
+                Component: RegisterPage,
+            },
+            {
+                path: 'passwort-vergessen',
+                Component: ForgotPasswordPage,
+            },
+            {
+                path: 'passwort-zuruecksetzen',
+                Component: ResetPasswordPage,
+            },
+            {
+                path: 'email-bestaetigen',
+                Component: VerifyEmailPage,
+            },
+            {
+                path: 'einladung',
+                Component: AcceptInvitePage,
             },
             {
                 Component: RequireAuth,
@@ -68,6 +93,13 @@ export const router = createBrowserRouter([
                         lazy: async () => ({
                             Component: (await import('./pages/DriversPage'))
                                 .DriversPage,
+                        }),
+                    },
+                    {
+                        path: 'konto',
+                        lazy: async () => ({
+                            Component: (await import('./pages/AccountPage'))
+                                .AccountPage,
                         }),
                     },
                     {

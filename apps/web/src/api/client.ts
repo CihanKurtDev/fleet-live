@@ -1,18 +1,22 @@
-import type { VehicleFieldErrors } from "@fleet-live/shared";
-
 export class ApiError extends Error {
     readonly status: number;
-    readonly fields?: VehicleFieldErrors;
+    readonly code?: string;
+    readonly fields?: Record<string, string>;
+    readonly details?: Record<string, unknown>;
 
     constructor(
         message: string,
         status: number,
-        fields?: VehicleFieldErrors,
+        fields?: Record<string, string>,
+        code?: string,
+        details?: Record<string, unknown>,
     ) {
         super(message);
         this.name = "ApiError";
         this.status = status;
+        this.code = code;
         this.fields = fields;
+        this.details = details;
     }
 }
 
@@ -23,8 +27,11 @@ interface RequestOptions {
     timeoutMs?: number;
 }
 
-/** Falsches Login-Passwort ist auch 401 — Session nicht als abgelaufen behandeln. */
-const isLoginAttempt = (path: string) => path === "/api/auth/login";
+/** Falsches Passwort oder ein zweiter Faktor ist auch 401, ohne dass die Session endet. */
+const isLoginAttempt = (path: string) =>
+    path === "/api/auth/login" ||
+    path === "/api/auth/totp" ||
+    path === "/api/auth/password";
 
 type UnauthorizedHandler = () => void;
 
@@ -85,7 +92,12 @@ export async function request<T>(
     });
 
     const payload = (await parseBody(response)) as
-        | { error?: string; fields?: VehicleFieldErrors }
+        | {
+              error?: string;
+              code?: string;
+              fields?: Record<string, string>;
+              details?: Record<string, unknown>;
+          }
         | T
         | undefined;
 
@@ -95,13 +107,20 @@ export async function request<T>(
         }
 
         const errorPayload = payload as
-            | { error?: string; fields?: VehicleFieldErrors }
+            | {
+                  error?: string;
+                  code?: string;
+                  fields?: Record<string, string>;
+                  details?: Record<string, unknown>;
+              }
             | undefined;
 
         throw new ApiError(
             errorPayload?.error ?? `Request failed with ${response.status}.`,
             response.status,
             errorPayload?.fields,
+            errorPayload?.code,
+            errorPayload?.details,
         );
     }
 

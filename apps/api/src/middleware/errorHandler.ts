@@ -26,6 +26,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
             error: error.message,
             code: error.code,
             ...(error.fields ? { fields: error.fields } : {}),
+            ...(error.details ? { details: error.details } : {}),
             ...(config.isProduction ? {} : { stack: error.stack }),
         });
         return;

@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { BriefingCounts, BriefingData } from "@fleet-live/shared";
+import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
 import { RetryMessage } from "../components/ui/RetryMessage";
@@ -122,6 +123,7 @@ const BriefingBody = ({ data }: { data: BriefingData }) => (
                 {briefingDateLabel()} · {briefingNeed(data.counts.open)}
             </p>
         </header>
+        <ImportPrompt />
         <Kpis counts={data.counts} />
         <BriefingCharts history={data.history} />
     </>

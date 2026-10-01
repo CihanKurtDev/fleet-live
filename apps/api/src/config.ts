@@ -57,6 +57,15 @@ const environmentSchema = z.object({
         .enum(["true", "false"])
         .default("false")
         .transform((value) => value === "true"),
+
+    SMTP_URL: z.string().default(""),
+    MAIL_FROM: z.string().min(1).default("fleet-live <noreply@localhost>"),
+    WEB_ORIGIN: z.string().min(1).default("http://localhost:5173"),
+    TOTP_ENCRYPTION_KEY: z.string().optional(),
+    GOOGLE_CLIENT_ID: z.string().default(""),
+    GOOGLE_CLIENT_SECRET: z.string().default(""),
+    MICROSOFT_CLIENT_ID: z.string().default(""),
+    MICROSOFT_CLIENT_SECRET: z.string().default(""),
 });
 
 const parsed = environmentSchema.safeParse(process.env);
@@ -81,6 +90,13 @@ if (env.NODE_ENV === "production" && env.CORS_ORIGIN === "*") {
     process.exit(1);
 }
 
+if (env.NODE_ENV === "production" && !env.TOTP_ENCRYPTION_KEY) {
+    console.error(
+        "Invalid environment configuration:\n  TOTP_ENCRYPTION_KEY: In Produktion erforderlich.",
+    );
+    process.exit(1);
+}
+
 export const config = {
     nodeEnv: env.NODE_ENV,
     isProduction: env.NODE_ENV === "production",
@@ -97,6 +113,16 @@ export const config = {
     tripRetentionDays: env.TRIP_RETENTION_DAYS,
     logLevel: env.LOG_LEVEL,
     allowDemoAccounts: env.ALLOW_DEMO_ACCOUNTS,
+    smtpUrl: env.SMTP_URL,
+    mailFrom: env.MAIL_FROM,
+    webOrigin: env.WEB_ORIGIN.replace(/\/$/, ""),
+    totpEncryptionKey:
+        env.TOTP_ENCRYPTION_KEY ??
+        (env.NODE_ENV === "production" ? "" : "development-totp-key"),
+    googleClientId: env.GOOGLE_CLIENT_ID,
+    googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    microsoftClientId: env.MICROSOFT_CLIENT_ID,
+    microsoftClientSecret: env.MICROSOFT_CLIENT_SECRET,
 } as const;
 
 export type Config = typeof config;

@@ -7,7 +7,7 @@ import { db } from "../db/database";
 import { UserModel } from "../models/user.model";
 import { VehicleModel } from "../models/vehicle.model";
 
-const TEST_PASSWORD = "secret-pass";
+const TEST_PASSWORD = "secret-password";
 
 /**
  * Legt bei Bedarf einen User an und liefert Session-Agent plus Cookie-Header

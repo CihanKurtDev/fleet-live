@@ -1,6 +1,12 @@
-import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router";
-import { login } from "../api/auth";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
+import QRCode from "qrcode";
+import {
+    isLoginChallenge,
+    type LoginChallenge,
+    type SsoProviders,
+} from "@fleet-live/shared";
+import { confirmTotp, getSsoProviders, login, resendVerification, setupTotp } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Checkbox } from "../components/ui/Checkbox/Checkbox";
@@ -24,31 +30,142 @@ const loginRedirectPath = (location: {
     return "/";
 };
 
+const ssoHint = (value: string | null) => {
+    if (value === "unknown") {
+        return "Für diese E-Mail gibt es noch kein Konto. Registriere zuerst die Firma.";
+    }
+
+    if (value === "unconfigured") {
+        return "Dieser Login ist hier nicht konfiguriert.";
+    }
+
+    if (value === "error") {
+        return "Der Firmen-Login ist fehlgeschlagen.";
+    }
+
+    return null;
+};
+
 export const LoginPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const [searchParams] = useSearchParams();
     const { user, setUser } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [remember, setRemember] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [code, setCode] = useState("");
+    const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
+    const [error, setError] = useState<string | null>(ssoHint(searchParams.get("sso")));
+    const [info, setInfo] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [unverified, setUnverified] = useState(false);
+    const [ssoCompanyId, setSsoCompanyId] = useState<number | null>(null);
+    const [qr, setQr] = useState<string | null>(null);
+    const [providers, setProviders] = useState<SsoProviders>({
+        google: false,
+        microsoft: false,
+    });
+
+    useEffect(() => {
+        let cancelled = false;
+        getSsoProviders()
+            .then((next) => {
+                if (!cancelled) {
+                    setProviders(next);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setProviders({ google: false, microsoft: false });
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (challenge?.step !== "totp_enroll") {
+            return;
+        }
+
+        let cancelled = false;
+        setupTotp(challenge.challenge)
+            .then(async (setup) => {
+                if (cancelled) {
+                    return;
+                }
+
+                setInfo(`Geheimnis: ${setup.secret}`);
+                setQr(
+                    await QRCode.toDataURL(setup.otpauth_url, {
+                        margin: 1,
+                        width: 180,
+                    }),
+                );
+            })
+            .catch((caught: unknown) => {
+                if (cancelled) {
+                    return;
+                }
+
+                setError(
+                    caught instanceof Error
+                        ? caught.message
+                        : "Zwei-Faktor konnte nicht gestartet werden.",
+                );
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [challenge]);
+
+    const finish = (next: { id: number }) => {
+        setUser(next as typeof user);
+        navigate(loginRedirectPath(location), { replace: true });
+    };
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         setError(null);
+        setInfo(null);
         setFieldErrors({});
+        setUnverified(false);
+        setSsoCompanyId(null);
 
         try {
             setIsSubmitting(true);
-            const user = await login({ email, password, remember });
-            setUser(user);
-            navigate(loginRedirectPath(location), { replace: true });
+
+            if (challenge) {
+                const signedIn = await confirmTotp({
+                    challenge: challenge.challenge,
+                    code,
+                });
+                finish(signedIn);
+                return;
+            }
+
+            const result = await login({ email, password, remember });
+
+            if (isLoginChallenge(result)) {
+                setChallenge(result);
+                return;
+            }
+
+            finish(result);
         } catch (caught: unknown) {
             if (caught instanceof ApiError) {
                 setError(caught.message);
                 setFieldErrors(caught.fields ?? {});
+                setUnverified(caught.code === "EMAIL_UNVERIFIED");
+                const companyId = caught.details?.sso_company_id;
+                setSsoCompanyId(
+                    typeof companyId === "number" ? companyId : null,
+                );
                 return;
             }
 
@@ -60,14 +177,28 @@ export const LoginPage = () => {
         }
     };
 
-    const emailError = fieldErrors.email;
-    const passwordError = fieldErrors.password;
-    const formError =
-        error && !emailError && !passwordError ? error : null;
+    const resend = async () => {
+        setError(null);
+        try {
+            const result = await resendVerification(email);
+            setInfo(result.message);
+        } catch (caught: unknown) {
+            setError(
+                caught instanceof Error
+                    ? caught.message
+                    : "Die Mail konnte nicht gesendet werden.",
+            );
+        }
+    };
 
     if (user) {
         return <Navigate to={loginRedirectPath(location)} replace />;
     }
+
+    const emailError = fieldErrors.email;
+    const passwordError = fieldErrors.password;
+    const formError =
+        error && !emailError && !passwordError ? error : null;
 
     return (
         <section className={styles.page}>
@@ -75,79 +206,110 @@ export const LoginPage = () => {
                 <header className={styles.header}>
                     <h1 className={styles.title}>Anmelden</h1>
                     <p className={styles.lead}>
-                        Melde dich mit deinem Konto an.
+                        {challenge?.step === "totp_enroll"
+                            ? "Diese Firma verlangt einen zweiten Faktor. Scanne den QR-Code mit der Authenticator-App und gib den Code ein."
+                            : challenge
+                              ? "Gib den Code aus der Authenticator-App oder einen Wiederherstellungscode ein."
+                              : "Melde dich mit deinem Konto an."}
                     </p>
                 </header>
 
                 <form className={styles.form} onSubmit={handleSubmit}>
-                    <div className={styles.field}>
-                        <label htmlFor="login-email">E-Mail</label>
-                        <Input
-                            id="login-email"
-                            type="email"
-                            size="lg"
-                            fullWidth
-                            autoComplete="username"
-                            autoFocus
-                            required
-                            value={email}
-                            aria-invalid={Boolean(emailError)}
-                            aria-describedby={
-                                emailError ? "login-email-error" : undefined
-                            }
-                            onChange={(event) => setEmail(event.target.value)}
-                        />
-                        {emailError && (
-                            <p
-                                id="login-email-error"
-                                className={styles.error}
-                            >
-                                {emailError}
-                            </p>
-                        )}
-                    </div>
-                    <div className={styles.field}>
-                        <label htmlFor="login-password">Passwort</label>
-                        <Input
-                            id="login-password"
-                            type="password"
-                            size="lg"
-                            fullWidth
-                            autoComplete="current-password"
-                            required
-                            value={password}
-                            aria-invalid={Boolean(passwordError)}
-                            aria-describedby={
-                                passwordError
-                                    ? "login-password-error"
-                                    : undefined
-                            }
-                            onChange={(event) =>
-                                setPassword(event.target.value)
-                            }
-                        />
-                        {passwordError && (
-                            <p
-                                id="login-password-error"
-                                className={styles.error}
-                            >
-                                {passwordError}
-                            </p>
-                        )}
-                    </div>
-                    <label className={styles.remember}>
-                        <Checkbox
-                            checked={remember}
-                            onChange={(event) =>
-                                setRemember(event.target.checked)
-                            }
-                        />
-                        Angemeldet bleiben
-                    </label>
+                    {challenge ? (
+                        <div className={styles.field}>
+                            {challenge.step === "totp_enroll" && qr && (
+                                <img src={qr} alt="QR-Code für die Authenticator-App" />
+                            )}
+                            <label htmlFor="login-code">Code</label>
+                            <Input
+                                id="login-code"
+                                size="lg"
+                                fullWidth
+                                autoComplete="one-time-code"
+                                autoFocus
+                                required
+                                value={code}
+                                onChange={(event) => setCode(event.target.value)}
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            <div className={styles.field}>
+                                <label htmlFor="login-email">E-Mail</label>
+                                <Input
+                                    id="login-email"
+                                    type="email"
+                                    size="lg"
+                                    fullWidth
+                                    autoComplete="username"
+                                    autoFocus
+                                    required
+                                    value={email}
+                                    aria-invalid={Boolean(emailError)}
+                                    aria-describedby={
+                                        emailError ? "login-email-error" : undefined
+                                    }
+                                    onChange={(event) => setEmail(event.target.value)}
+                                />
+                                {emailError && (
+                                    <p id="login-email-error" className={styles.error}>
+                                        {emailError}
+                                    </p>
+                                )}
+                            </div>
+                            <div className={styles.field}>
+                                <label htmlFor="login-password">Passwort</label>
+                                <Input
+                                    id="login-password"
+                                    type="password"
+                                    size="lg"
+                                    fullWidth
+                                    autoComplete="current-password"
+                                    required
+                                    minLength={12}
+                                    maxLength={128}
+                                    value={password}
+                                    aria-invalid={Boolean(passwordError)}
+                                    onChange={(event) =>
+                                        setPassword(event.target.value)
+                                    }
+                                />
+                                {passwordError && (
+                                    <p className={styles.error}>{passwordError}</p>
+                                )}
+                            </div>
+                            <label className={styles.remember}>
+                                <Checkbox
+                                    checked={remember}
+                                    onChange={(event) =>
+                                        setRemember(event.target.checked)
+                                    }
+                                />
+                                Angemeldet bleiben
+                            </label>
+                        </>
+                    )}
                     {formError && (
                         <p className={styles.banner} role="alert">
                             {formError}
                         </p>
+                    )}
+                    {info && <p className={styles.lead}>{info}</p>}
+                    {unverified && (
+                        <Button type="button" variant="ghost" onClick={resend}>
+                            Bestätigungsmail erneut senden
+                        </Button>
+                    )}
+                    {ssoCompanyId && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => {
+                                window.location.href = `/api/auth/sso/company/start?company_id=${ssoCompanyId}`;
+                            }}
+                        >
+                            Mit Firmen-Login anmelden
+                        </Button>
                     )}
                     <Button
                         type="submit"
@@ -158,7 +320,29 @@ export const LoginPage = () => {
                         {isSubmitting ? "Wird angemeldet…" : "Anmelden"}
                     </Button>
                 </form>
-                {import.meta.env.DEV && (
+                {!challenge && (
+                    <>
+                        <p className={styles.links}>
+                            <Link to="/registrieren">Firma registrieren</Link>
+                            <Link to="/passwort-vergessen">Passwort vergessen</Link>
+                        </p>
+                        {(providers.google || providers.microsoft) && (
+                            <p className={styles.links}>
+                                {providers.google && (
+                                    <a href="/api/auth/sso/google/start">
+                                        Mit Google
+                                    </a>
+                                )}
+                                {providers.microsoft && (
+                                    <a href="/api/auth/sso/microsoft/start">
+                                        Mit Microsoft
+                                    </a>
+                                )}
+                            </p>
+                        )}
+                    </>
+                )}
+                {import.meta.env.DEV && !challenge && (
                     <aside className={styles.hint}>
                         <p className={styles.hintTitle}>Demo-Zugang</p>
                         <p>

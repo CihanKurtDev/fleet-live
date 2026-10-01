@@ -64,7 +64,7 @@ Routes und Controller machen HTTP. Models machen SQL. Der Browser fasst die Date
 
 - Telemetrie kommt aus dem Simulator. Kein GPS-Dongle, keine Cloud.
 - SQLite und ein Monolith, weil das für eine lokale Demo reicht.
-- Ein Unternehmen pro Nutzer. Keine öffentliche Registrierung.
+- Eine Person kann in mehreren Firmen sein. Die aktive Firma steht in der Session.
 - Cookie-Session über den Vite-Proxy (same origin). Hier gibt es kein öffentliches Hosting.
 - Große Kartenausschnitte werden auf dem Server zu Dichtezellen. Es kommt keine Stichprobe von Markern.
 
@@ -90,6 +90,10 @@ Was die App heute kann, und was als Nächstes kommt.
 * Hof-Stammdaten am Fahrzeug: VIN, Typ, HU-Fälligkeit, Depot, Kostenstelle
 * Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
 * Depots als benannte Kreise auf der Flottenkarte, Stammstandort am Fahrzeug, Filter „Im Depot“
+* Firma registrieren, E-Mail bestätigen, Passwort zurücksetzen und ändern
+* Dispatcher und Viewer einladen, zwischen eigenen Firmen wechseln
+* Zwei-Faktor (Authenticator-App) und Anmeldung über Google, Microsoft oder einen Firmen-OIDC
+* Leere Firma fragt einmal, ob Stammdaten importiert werden sollen
 
 ## Als Nächstes
 
@@ -118,11 +122,22 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 
 | Methode | Endpoint | Beschreibung |
 | ------- | -------- | ------------ |
-| `POST` | `/api/auth/login` | `{ email, password, remember? }`, setzt `fleet_session` |
+| `POST` | `/api/auth/register` | Firma plus erster Dispatcher. Keine Session, bis die E-Mail bestätigt ist |
+| `POST` | `/api/auth/verify-email` | `{ token }` |
+| `POST` | `/api/auth/resend-verification` | `{ email }`, gleiche Antwort ob das Konto existiert |
+| `POST` | `/api/auth/login` | `{ email, password, remember? }`. Session, oder `{ step, challenge }` für Zwei-Faktor |
+| `POST` | `/api/auth/totp` | `{ challenge, code }` setzt danach die Session |
+| `POST` | `/api/auth/forgot-password` | `{ email }`, gleiche Antwort ob das Konto existiert |
+| `POST` | `/api/auth/reset-password` | `{ token, password }`, beendet alle Sessions |
 | `POST` | `/api/auth/logout` | Löscht die Session |
-| `GET`  | `/api/auth/me` | Aktueller Nutzer (`id`, `name`, `email`, `company_id`, `role`) oder `401` |
+| `GET`  | `/api/auth/me` | Aktueller Nutzer inklusive `company_name`, `memberships` oder `401` |
+| `POST` | `/api/auth/company` | Aktive Firma wechseln |
+| `POST` | `/api/auth/companies` | Weitere Firma anlegen und dorthin wechseln |
+| `POST` | `/api/auth/invites` | Dispatcher lädt `{ email, role }` ein |
+| `GET`  | `/api/auth/sso/providers` | `{ google, microsoft }` — nur `true`, wenn Client-ID und Secret gesetzt sind |
+| `GET`  | `/api/auth/sso/google/start` | Weiterleitung zu Google. Microsoft und `/sso/company/start` analog |
 
-`remember: true` hält das Cookie sieben Tage. Sonst zwölf Stunden, Cookie nur für die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld.
+`remember: true` hält das Cookie sieben Tage. Sonst zwölf Stunden, Cookie nur für die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld. Passwort mindestens 12 und höchstens 128 Zeichen. Ohne `SMTP_URL` schreibt die Entwicklung den Reset-Link ins Server-Log und sagt das in der Antwort; es geht keine Mail raus. Produktion ohne SMTP antwortet `503`. Die Anmeldeseite zeigt Google und Microsoft nur, wenn die jeweiligen Client-Variablen gesetzt sind.
 
 ## Fahrzeuge und Livedaten
 
@@ -202,7 +217,13 @@ Listenstand steht in der URL. Reload behält die Ansicht. Frischer Besuch von `/
 
 | Route           | Beschreibung |
 | --------------- | ------------ |
-| `/login`        | Login |
+| `/login`        | Login, Links zu Registrierung und Passwort vergessen |
+| `/registrieren` | Firma anlegen |
+| `/passwort-vergessen` | Link anfordern |
+| `/passwort-zuruecksetzen` | Neues Passwort |
+| `/email-bestaetigen` | E-Mail-Link |
+| `/einladung` | Einladung annehmen |
+| `/konto` | Passwort, Zwei-Faktor, Einladungen, Firmen-Login |
 | `/`             | Schichtüberblick |
 | `/vehicles`     | Liste, Anlegen |
 | `/vehicles/:id` | Detail, Karte, Zuweisung, Warnungen, Bearbeiten, Löschen |
@@ -295,8 +316,9 @@ Eigene Entität, Name eindeutig pro Firma. Freigabe ist `driver_vehicles` (M:N).
 
 ```text
 companies
-users          → company_id
-sessions       → user_id
+users
+company_memberships → user_id, company_id, role
+sessions       → user_id, company_id
 drivers        → company_id   UNIQUE (company_id, name)
 driver_vehicles → driver_id, vehicle_id
 vehicles       → company_id, current_driver_id   UNIQUE (company_id, license_plate)
@@ -316,11 +338,11 @@ Da:
 * Login, Logout, me
 * scrypt
 * HttpOnly-Cookie
-* Isolation über `company_id` (eine Firma pro Konto)
+* Isolation über die aktive Mitgliedschaft (`company_memberships`, Session-Firma)
 * `dispatcher` schreibt, pausiert die Sim, erledigt Warnungen, weist Fahrer zu. `viewer` liest.
 * SSE und Sim-Pause an diese Firma gebunden
 
-Kein Passwort-Reset, kein Invite, keine öffentliche Registrierung, keine Membership in mehreren Firmen. CORS `*` nur lokal. Produktion ohne gesetzten Origin startet nicht und prüft den Origin bei Schreibzugriffen.
+Registrierung, Passwort-Reset, Einladung, mehrere Firmen pro Person, Zwei-Faktor und OIDC sind da. CORS `*` nur lokal. Produktion ohne gesetzten Origin startet nicht und prüft den Origin bei Schreibzugriffen. Produktion braucht `TOTP_ENCRYPTION_KEY`. SMTP über `SMTP_URL`, Absender `MAIL_FROM`, Links über `WEB_ORIGIN`. Google und Microsoft über die jeweiligen Client-Variablen.
 
 ---
 
@@ -371,8 +393,24 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
 | `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
 | `LOG_LEVEL` | `info` | |
-| `NODE_ENV` | `development` | Rate-Limit nur in Produktion |
+| `NODE_ENV` | `development` | API-Pauschallimit nur in Produktion. Login-Limit auch in der Entwicklung |
 | `ALLOW_DEMO_ACCOUNTS` | `false` | Für Demo-Seed unter `NODE_ENV=production` auf `true` setzen |
+| `SMTP_URL` | leer | Nodemailer-URL, z. B. `smtp://user:pass@localhost:1025`. Ohne Wert: Link nur im Server-Log. Produktion ohne Wert: `503` |
+| `MAIL_FROM` | `fleet-live <noreply@localhost>` | Absender |
+| `WEB_ORIGIN` | `http://localhost:5173` | Origin der UI. Mail-Links und OIDC-Redirects. Vite bindet fest Port 5173 |
+| `TOTP_ENCRYPTION_KEY` | Dev-Schlüssel | In Produktion Pflicht |
+| `GOOGLE_CLIENT_ID` | leer | Zusammen mit `GOOGLE_CLIENT_SECRET`. Sonst kein Google-Button |
+| `GOOGLE_CLIENT_SECRET` | leer | |
+| `MICROSOFT_CLIENT_ID` | leer | Zusammen mit `MICROSOFT_CLIENT_SECRET`. Sonst kein Microsoft-Button |
+| `MICROSOFT_CLIENT_SECRET` | leer | |
+
+Google und Microsoft sind OpenID Connect gegen feste Issuer (`https://accounts.google.com` bzw. `https://login.microsoftonline.com/common/v2.0`). Im IdP als Redirect-URI eintragen:
+
+* `{WEB_ORIGIN}/api/auth/sso/google/callback`
+* `{WEB_ORIGIN}/api/auth/sso/microsoft/callback`
+* Firmen-IdP: `{WEB_ORIGIN}/api/auth/sso/company/callback`
+
+Der Firmen-Issuer auf der Kontoseite ist die URL, unter der `/.well-known/openid-configuration` liegt (Entra: `https://login.microsoftonline.com/<Mandanten-ID>/v2.0`). Das ist nicht dasselbe wie die Google-/Microsoft-Buttons, die über die Umgebungsvariablen laufen.
 
 ---
 
@@ -417,7 +455,7 @@ Controller validieren und mappen HTTP. Models führen SQL aus. Dünn gehalten.
 
 # Grenzen
 
-* Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Passwort-Reset und Invites gibt es nicht.
+* Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Das Login-Limit gilt auch in der Entwicklung, Tests lassen es aus.
 * Abgelaufene Session: `GET /api/auth/me` und spätere `401`. Die UI räumt den Nutzer weg und geht nach `/login`. Falsches Passwort auf `POST /api/auth/login` zählt nicht als Session-Ende.
 * Sim-Pause liegt im Speicher. API-Neustart startet alle Firmen wieder.
 * Frontend-Tests nur für ein paar riskante Abläufe.

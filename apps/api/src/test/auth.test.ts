@@ -19,13 +19,13 @@ describe("POST /api/auth/login", () => {
         UserModel.create({
             name: "Test User",
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
             company_id: 1,
         });
 
         const response = await request(app).post("/api/auth/login").send({
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
         });
 
         assert.equal(response.status, 200);
@@ -42,13 +42,13 @@ describe("POST /api/auth/login", () => {
         UserModel.create({
             name: "Test User",
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
             company_id: 1,
         });
 
         const response = await request(app).post("/api/auth/login").send({
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
             remember: true,
         });
 
@@ -63,13 +63,13 @@ describe("POST /api/auth/login", () => {
         UserModel.create({
             name: "Test User",
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
             company_id: 1,
         });
 
         const response = await request(app).post("/api/auth/login").send({
             email: "test@example.com",
-            password: "wrong",
+            password: "wrong-password",
         });
 
         assert.equal(response.status, 401);
@@ -93,7 +93,7 @@ describe("GET /api/auth/me and logout", () => {
         UserModel.create({
             name: "Test User",
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
             company_id: 1,
         });
 
@@ -104,7 +104,7 @@ describe("GET /api/auth/me and logout", () => {
 
         const login = await agent.post("/api/auth/login").send({
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
         });
         assert.equal(login.status, 200);
 
@@ -123,14 +123,14 @@ describe("GET /api/auth/me and logout", () => {
         UserModel.create({
             name: "Test User",
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
             company_id: 1,
         });
         const first = request.agent(app);
         const second = request.agent(app);
         const credentials = {
             email: "test@example.com",
-            password: "secret-pass",
+            password: "secret-password",
         };
 
         await first.post("/api/auth/login").send(credentials).expect(200);
