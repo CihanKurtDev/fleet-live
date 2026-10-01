@@ -103,21 +103,6 @@
     font-variant-numeric: tabular-nums;
 }
 
-.session {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 32px;
-    font-size: 14px;
-    line-height: 24px;
-    color: var(--text);
-    text-decoration: none;
-}
-
-.session:hover {
-    color: var(--text-h);
-}
-
 @media (max-width: 700px) {
     .header {
         align-items: flex-start;

@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 18;
+const SCHEMA_VERSION = 19;
 
 type TableColumn = {
     name: string;
@@ -27,9 +27,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_company_plate
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_company
     ON vehicles(company_id);
-
-CREATE INDEX IF NOT EXISTS idx_users_company
-    ON users(company_id);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_token
     ON sessions(token);
@@ -266,6 +263,10 @@ function ensureVehiclesCompanyId(database: DatabaseSync) {
 }
 
 function ensureUsersCompanyId(database: DatabaseSync) {
+    if (tableExists(database, "company_memberships")) {
+        return;
+    }
+
     const names = columnNames(database, "users");
 
     if (!names.has("company_id")) {
@@ -402,6 +403,10 @@ function migrateToV6(database: DatabaseSync) {
 }
 
 function ensureUsersRole(database: DatabaseSync) {
+    if (tableExists(database, "company_memberships")) {
+        return;
+    }
+
     const names = columnNames(database, "users");
 
     if (!names.has("role")) {
@@ -996,6 +1001,203 @@ function migrateToV18(_database: DatabaseSync) {
     // v17 hat `sites` angelegt; `ensureDepotSites` läuft am Ende von migrate().
 }
 
+function addColumn(
+    database: DatabaseSync,
+    table: string,
+    column: string,
+    definition: string,
+) {
+    if (!columnNames(database, table).has(column)) {
+        database.exec(
+            `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`,
+        );
+    }
+}
+
+/**
+ * Rolle und Firma hängen an der Mitgliedschaft. Bestehende Nutzer bleiben
+ * bestätigt, damit der Seed-Login ohne Mail weiter funktioniert.
+ */
+function migrateToV19(database: DatabaseSync) {
+    database.exec(`
+        CREATE TABLE IF NOT EXISTS company_memberships (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            company_id INTEGER NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('dispatcher', 'viewer')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id) REFERENCES companies(id),
+            UNIQUE (user_id, company_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS auth_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            purpose TEXT NOT NULL CHECK (purpose IN (
+                'verify_email', 'reset_password', 'invite',
+                'login_challenge', 'totp_setup', 'sso_state'
+            )),
+            token_hash TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used_at TEXT,
+            company_id INTEGER,
+            role TEXT,
+            payload TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            code_hash TEXT NOT NULL,
+            used_at TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS sso_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE (provider, subject)
+        );
+    `);
+
+    addColumn(database, "companies", "import_prompt_dismissed_at", "TEXT");
+    addColumn(
+        database,
+        "companies",
+        "totp_required",
+        "INTEGER NOT NULL DEFAULT 0",
+    );
+    addColumn(database, "companies", "sso_issuer", "TEXT");
+    addColumn(database, "companies", "sso_client_id", "TEXT");
+    addColumn(database, "companies", "sso_client_secret", "TEXT");
+    addColumn(
+        database,
+        "companies",
+        "sso_required",
+        "INTEGER NOT NULL DEFAULT 0",
+    );
+
+    const userColumns = columnNames(database, "users");
+
+    if (userColumns.has("company_id")) {
+        const roleSql = userColumns.has("role")
+            ? "CASE WHEN role IN ('dispatcher', 'viewer') THEN role ELSE 'dispatcher' END"
+            : "'dispatcher'";
+
+        database.exec(`
+            INSERT OR IGNORE INTO company_memberships (user_id, company_id, role)
+            SELECT id, company_id, ${roleSql}
+            FROM users
+            WHERE company_id IS NOT NULL
+        `);
+    }
+
+    if (!columnNames(database, "sessions").has("company_id")) {
+        database.exec("ALTER TABLE sessions ADD COLUMN company_id INTEGER");
+
+        if (userColumns.has("company_id")) {
+            database.exec(`
+                UPDATE sessions
+                SET company_id = (
+                    SELECT company_id FROM users WHERE users.id = sessions.user_id
+                )
+            `);
+        }
+
+        database.exec("DELETE FROM sessions WHERE company_id IS NULL");
+    }
+
+    if (
+        userColumns.has("company_id") ||
+        (userColumns.size > 0 && !userColumns.has("email_verified_at"))
+    ) {
+        const verifiedSql = userColumns.has("email_verified_at")
+            ? "COALESCE(email_verified_at, CURRENT_TIMESTAMP)"
+            : "CURRENT_TIMESTAMP";
+        const totpSecretSql = userColumns.has("totp_secret")
+            ? "totp_secret"
+            : "NULL";
+        const totpEnabledSql = userColumns.has("totp_enabled")
+            ? "COALESCE(totp_enabled, 0)"
+            : "0";
+        const createdSql = userColumns.has("created_at")
+            ? "created_at"
+            : "CURRENT_TIMESTAMP";
+        const sequence = database
+            .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'users'")
+            .get() as { seq: number } | undefined;
+
+        database.exec("PRAGMA foreign_keys = OFF");
+        database.exec("DROP INDEX IF EXISTS idx_users_company");
+        database.exec(`
+            CREATE TABLE users_v19 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT,
+                email_verified_at TEXT,
+                totp_secret TEXT,
+                totp_enabled INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            INSERT INTO users_v19 (
+                id, name, email, password_hash, email_verified_at,
+                totp_secret, totp_enabled, created_at
+            )
+            SELECT
+                id,
+                name,
+                email,
+                password_hash,
+                ${verifiedSql},
+                ${totpSecretSql},
+                ${totpEnabledSql},
+                ${createdSql}
+            FROM users;
+
+            DROP TABLE users;
+            ALTER TABLE users_v19 RENAME TO users;
+        `);
+
+        if (sequence) {
+            database
+                .prepare(
+                    "INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES ('users', ?)",
+                )
+                .run(sequence.seq);
+        }
+
+        database.exec("PRAGMA foreign_keys = ON");
+    }
+
+    ensureAccountIndexes(database);
+}
+
+function ensureAccountIndexes(database: DatabaseSync) {
+    if (!tableExists(database, "company_memberships")) {
+        return;
+    }
+
+    database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_memberships_user
+            ON company_memberships(user_id);
+
+        CREATE INDEX IF NOT EXISTS idx_memberships_company
+            ON company_memberships(company_id);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_name_nocase
+            ON companies(name COLLATE NOCASE);
+    `);
+}
+
 export function migrate(database: DatabaseSync) {
     const row = database.prepare("PRAGMA user_version").get() as
         | { user_version: number }
@@ -1074,6 +1276,13 @@ export function migrate(database: DatabaseSync) {
         migrateToV18(database);
     }
 
+    if (
+        currentVersion < 19 ||
+        columnNames(database, "users").has("company_id")
+    ) {
+        migrateToV19(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -1089,6 +1298,7 @@ export function migrate(database: DatabaseSync) {
     ensureImportTables(database);
     ensureYardMasterData(database);
     ensureDepotSites(database);
+    ensureAccountIndexes(database);
     applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {

@@ -24,54 +24,64 @@ const DEV_USERS: Array<{
     },
 ];
 
+function upsertMembership(
+    database: DatabaseSync,
+    userId: number,
+    companyId: number,
+    role: UserRole,
+) {
+    database
+        .prepare(
+            `
+            INSERT INTO company_memberships (user_id, company_id, role)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, company_id) DO UPDATE SET
+                role = excluded.role
+            `,
+        )
+        .run(userId, companyId, role);
+}
+
 /** Demo-Logins für lokale DBs, die vor dem Viewer-Konto geseedet wurden. */
 export function ensureDevAccounts(database: DatabaseSync) {
     const find = database.prepare("SELECT id FROM users WHERE email = ?");
     const insert = database.prepare(`
-        INSERT INTO users (name, email, password_hash, company_id, role)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO users (name, email, password_hash, email_verified_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     for (const user of DEV_USERS) {
-        if (find.get(user.email)) {
-            continue;
-        }
+        const existing = find.get(user.email) as { id: number } | undefined;
+        const userId = existing
+            ? existing.id
+            : Number(
+                  insert.run(
+                      user.name,
+                      user.email,
+                      hashPassword(DEV_PASSWORD),
+                  ).lastInsertRowid,
+              );
 
-        insert.run(
-            user.name,
-            user.email,
-            hashPassword(DEV_PASSWORD),
-            user.company_id,
-            user.role,
-        );
+        upsertMembership(database, userId, user.company_id, user.role);
     }
 }
 
 export function upsertDevAccounts(database: DatabaseSync) {
     const insertUser = database.prepare(`
-        INSERT INTO users (
-            name,
-            email,
-            password_hash,
-            company_id,
-            role
-        )
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO users (name, email, password_hash, email_verified_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(email) DO UPDATE SET
             name = excluded.name,
             password_hash = excluded.password_hash,
-            company_id = excluded.company_id,
-            role = excluded.role
+            email_verified_at = COALESCE(users.email_verified_at, CURRENT_TIMESTAMP)
     `);
     const passwordHash = hashPassword(DEV_PASSWORD);
 
     for (const user of DEV_USERS) {
-        insertUser.run(
-            user.name,
-            user.email,
-            passwordHash,
-            user.company_id,
-            user.role,
-        );
+        insertUser.run(user.name, user.email, passwordHash);
+        const row = database
+            .prepare("SELECT id FROM users WHERE email = ?")
+            .get(user.email) as { id: number };
+        upsertMembership(database, row.id, user.company_id, user.role);
     }
 }

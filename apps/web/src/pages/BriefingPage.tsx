@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { BriefingCounts, BriefingData } from "@fleet-live/shared";
+import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
 import { RetryMessage } from "../components/ui/RetryMessage";
@@ -159,6 +160,7 @@ export const BriefingPage = () => {
 
     return (
         <section className={styles.page}>
+            <ImportPrompt />
             <BriefingBody data={data} />
         </section>
     );
