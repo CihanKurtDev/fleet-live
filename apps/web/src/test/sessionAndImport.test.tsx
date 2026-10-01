@@ -116,7 +116,7 @@ describe("import prompt", () => {
         renderAuth(<ImportPrompt />, { user: authUser() });
 
         expect(
-            screen.queryByText(/Stammdaten kannst du/),
+            screen.queryByRole("heading", { name: "Noch keine Fahrzeuge" }),
         ).not.toBeInTheDocument();
     });
 
@@ -126,11 +126,11 @@ describe("import prompt", () => {
         vi.mocked(dismissImportPrompt).mockResolvedValue(dismissed);
         const { setUser } = renderAuth(<ImportPrompt />, { user });
 
-        expect(screen.getByRole("link", { name: "Importieren" })).toHaveAttribute(
+        expect(screen.getByRole("link", { name: "Liste importieren" })).toHaveAttribute(
             "href",
             "/vehicles/import",
         );
-        fireEvent.click(screen.getByRole("button", { name: "Später" }));
+        fireEvent.click(screen.getByRole("button", { name: "Schließen" }));
 
         await vi.waitFor(() =>
             expect(setUser).toHaveBeenCalledWith(dismissed),

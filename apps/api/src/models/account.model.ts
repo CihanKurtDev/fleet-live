@@ -96,13 +96,19 @@ export function registerAccount(input: {
 export function verifyEmailToken(token: string): boolean {
     const row = AuthTokenModel.find(token, "verify_email");
 
-    if (!row?.user_id) {
+    if (row?.user_id) {
+        UserModel.markEmailVerified(row.user_id);
+        AuthTokenModel.consume(row.id);
+        return true;
+    }
+
+    const used = AuthTokenModel.findUsed(token, "verify_email");
+
+    if (!used?.user_id) {
         return false;
     }
 
-    UserModel.markEmailVerified(row.user_id);
-    AuthTokenModel.consume(row.id);
-    return true;
+    return Boolean(UserModel.getById(used.user_id)?.email_verified_at);
 }
 
 export function userForResend(email: string): UserRecord | undefined {

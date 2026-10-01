@@ -123,6 +123,7 @@ const BriefingBody = ({ data }: { data: BriefingData }) => (
                 {briefingDateLabel()} · {briefingNeed(data.counts.open)}
             </p>
         </header>
+        <ImportPrompt />
         <Kpis counts={data.counts} />
         <BriefingCharts history={data.history} />
     </>
@@ -160,7 +161,6 @@ export const BriefingPage = () => {
 
     return (
         <section className={styles.page}>
-            <ImportPrompt />
             <BriefingBody data={data} />
         </section>
     );

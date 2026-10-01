@@ -18,14 +18,20 @@ export const ImportPrompt = () => {
 
     return (
         <aside className={styles.banner}>
-            <p>
-                Die Firma hat noch keine Fahrzeuge. Stammdaten kannst du
-                jetzt importieren.
-            </p>
+            <div className={styles.copy}>
+                <h2>Noch keine Fahrzeuge</h2>
+                <p>
+                    Diese Firma ist noch leer. Eine Liste aus CSV oder Excel
+                    kannst du importieren. Einzelne Fahrzeuge legst du unter
+                    Fahrzeuge an.
+                </p>
+            </div>
             <div className={styles.actions}>
-                <Link to="/vehicles/import">Importieren</Link>
+                <Link className={styles.import} to="/vehicles/import">
+                    Liste importieren
+                </Link>
                 <Button type="button" variant="ghost" size="sm" onClick={dismiss}>
-                    Später
+                    Schließen
                 </Button>
             </div>
         </aside>

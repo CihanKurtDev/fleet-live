@@ -21,14 +21,25 @@ export type AuthTokenRow = {
     payload: string | null;
 };
 
-const SELECT_ACTIVE = `
+const SELECT_COLUMNS = `
     SELECT id, user_id, purpose, token_hash, expires_at, used_at,
            company_id, role, payload
     FROM auth_tokens
+`;
+
+const SELECT_ACTIVE = `
+    ${SELECT_COLUMNS}
     WHERE token_hash = ?
       AND purpose = ?
       AND used_at IS NULL
       AND expires_at > datetime('now')
+`;
+
+const SELECT_USED = `
+    ${SELECT_COLUMNS}
+    WHERE token_hash = ?
+      AND purpose = ?
+      AND used_at IS NOT NULL
 `;
 
 export const AuthTokenModel = {
@@ -64,6 +75,12 @@ export const AuthTokenModel = {
 
     find(token: string, purpose: TokenPurpose): AuthTokenRow | undefined {
         return stmt(SELECT_ACTIVE).get(hashToken(token), purpose) as
+            | AuthTokenRow
+            | undefined;
+    },
+
+    findUsed(token: string, purpose: TokenPurpose): AuthTokenRow | undefined {
+        return stmt(SELECT_USED).get(hashToken(token), purpose) as
             | AuthTokenRow
             | undefined;
     },

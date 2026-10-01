@@ -16,26 +16,20 @@ export const VerifyEmailPage = () => {
             return;
         }
 
-        let cancelled = false;
+        const confirmed = "Die E-Mail ist bestätigt. Du kannst dich anmelden.";
         verifyEmail(token)
             .then(() => {
-                if (!cancelled) {
-                    setMessage("Die E-Mail ist bestätigt. Du kannst dich anmelden.");
-                }
+                setMessage(confirmed);
             })
             .catch((caught: unknown) => {
-                if (!cancelled) {
-                    setMessage(
-                        caught instanceof ApiError
-                            ? caught.message
-                            : "Der Link ist ungültig oder abgelaufen.",
-                    );
-                }
+                setMessage((current) =>
+                    current === confirmed
+                        ? current
+                        : caught instanceof ApiError
+                          ? caught.message
+                          : "Der Link ist ungültig oder abgelaufen.",
+                );
             });
-
-        return () => {
-            cancelled = true;
-        };
     }, [token]);
 
     return (

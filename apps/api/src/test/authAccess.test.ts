@@ -50,6 +50,10 @@ describe("registration and email confirmation", () => {
             .post("/api/auth/verify-email")
             .send({ token: tokenFrom(mail.link) });
         assert.equal(verified.status, 204);
+        const again = await request(app)
+            .post("/api/auth/verify-email")
+            .send({ token: tokenFrom(mail.link) });
+        assert.equal(again.status, 204);
 
         const login = await request(app).post("/api/auth/login").send({
             email: "ada@nordlicht.test",
