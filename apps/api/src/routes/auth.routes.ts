@@ -26,6 +26,7 @@ import {
 } from "../controllers/auth.controller";
 import {
     finishSso,
+    discoverCompanySso,
     listSsoProviders,
     startCompanySso,
     startSso,
@@ -65,6 +66,7 @@ router.post("/totp/confirm", confirmTotp);
 router.post("/totp", confirmTotp);
 router.post("/totp/disable", requireAuth, disableTotp);
 router.get("/sso/providers", listSsoProviders);
+router.post("/sso/company/discover", authIpRateLimit, discoverCompanySso);
 router.get("/sso/company/start", startCompanySso);
 router.get("/sso/company/callback", finishSso);
 router.get("/sso/:provider/start", startSso);

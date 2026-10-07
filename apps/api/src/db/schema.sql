@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id INTEGER NOT NULL,
     company_id INTEGER NOT NULL,
     token TEXT NOT NULL UNIQUE,
+    persistent INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TEXT NOT NULL,
 

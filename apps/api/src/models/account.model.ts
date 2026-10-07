@@ -342,7 +342,10 @@ export function publicSecurity(companyId: number) {
         sso_required: row.sso_required === 1,
         sso_issuer: row.sso_issuer,
         sso_client_id: row.sso_client_id,
-        sso_configured: Boolean(row.sso_issuer && row.sso_client_id),
+        sso_configured: Boolean(
+            row.sso_issuer && row.sso_client_id && row.sso_client_secret,
+        ),
+        sso_secret_set: Boolean(row.sso_client_secret),
     };
 }
 
@@ -416,6 +419,21 @@ export function ssoClient(companyId: number): {
 export function pickLoginCompany(userId: number) {
     const rows = listMemberships(userId);
     return rows.find((row) => row.sso_required === 0) ?? rows[0];
+}
+
+export function companyIdForLoginSso(email: string): number | undefined {
+    const user = UserModel.findByEmail(email);
+
+    if (!user?.email_verified_at) {
+        return undefined;
+    }
+
+    const ready = listMemberships(user.id).filter((row) =>
+        ssoClient(row.company_id),
+    );
+    const required = ready.find((row) => row.sso_required === 1);
+
+    return (required ?? ready[0])?.company_id;
 }
 
 export function replaceRecoveryCodes(userId: number, codes: string[]) {

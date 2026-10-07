@@ -30,11 +30,13 @@ vi.mock("../api/auth", () => ({
     verifyEmail: vi.fn(),
     acceptInvite: vi.fn(),
     getSsoProviders: vi.fn(),
+    discoverCompanySso: vi.fn(),
 }));
 
 import {
     acceptInvite,
     confirmTotp,
+    discoverCompanySso,
     forgotPassword,
     getSsoProviders,
     login,
@@ -166,7 +168,7 @@ describe("login page", () => {
         expect(login).toHaveBeenCalledWith({
             email: "cihan@example.com",
             password: "development-only-password",
-            remember: true,
+            remember: false,
         });
         expect(setUser).toHaveBeenCalledWith(signedIn);
     });
@@ -229,29 +231,17 @@ describe("login page", () => {
         expect(resendVerification).toHaveBeenCalledWith("neu@example.com");
     });
 
-    it("offers the company login when the membership requires it", async () => {
-        vi.mocked(login).mockRejectedValue(
-            new ApiError(
-                "Diese Firma verlangt den Firmen-Login.",
-                403,
-                undefined,
-                "SSO_REQUIRED",
-                { sso_company_id: 4 },
-            ),
-        );
+    it("starts the company login from the email", async () => {
+        vi.mocked(discoverCompanySso).mockResolvedValue({ company_id: 4 });
         renderLogin();
 
+        expect(
+            screen.getByRole("button", { name: "Mit Firmen-Login anmelden" }),
+        ).toBeInTheDocument();
         fireEvent.change(screen.getByLabelText("E-Mail"), {
             target: { value: "cihan@example.com" },
         });
-        fireEvent.change(screen.getByLabelText("Passwort"), {
-            target: { value: "development-only-password" },
-        });
-        submit("Anmelden");
 
-        const button = await screen.findByRole("button", {
-            name: "Mit Firmen-Login anmelden",
-        });
         const assigned: string[] = [];
         const realLocation = window.location;
         const locationSpy = vi
@@ -269,12 +259,17 @@ describe("login page", () => {
                         },
                     }) as Location,
             );
-        fireEvent.click(button);
-        locationSpy.mockRestore();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Mit Firmen-Login anmelden" }),
+        );
 
-        expect(assigned).toEqual([
-            "/api/auth/sso/company/start?company_id=4",
-        ]);
+        await vi.waitFor(() => {
+            expect(assigned).toEqual([
+                "/api/auth/sso/company/start?company_id=4",
+            ]);
+        });
+        locationSpy.mockRestore();
+        expect(discoverCompanySso).toHaveBeenCalledWith("cihan@example.com");
     });
 
     it("asks for a second factor before opening the session", async () => {

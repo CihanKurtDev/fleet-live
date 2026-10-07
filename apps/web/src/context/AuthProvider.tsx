@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthUser } from "@fleet-live/shared";
-import { getMe } from "../api/auth";
+import { getMe, logout } from "../api/auth";
 import {
     ApiError,
     isAbortError,
     setUnauthorizedHandler,
 } from "../api/client";
 import { AuthContext } from "./authContext";
+
+const IDLE_MS = 15 * 60 * 1000;
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<AuthUser | null>(null);
@@ -42,6 +44,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return () => controller.abort();
     }, []);
+
+    useEffect(() => {
+        if (!user) {
+            return;
+        }
+
+        let timer = window.setTimeout(() => {
+            void logout().finally(() => setUser(null));
+        }, IDLE_MS);
+
+        const reset = () => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => {
+                void logout().finally(() => setUser(null));
+            }, IDLE_MS);
+        };
+
+        window.addEventListener("pointerdown", reset);
+        window.addEventListener("keydown", reset);
+
+        return () => {
+            window.clearTimeout(timer);
+            window.removeEventListener("pointerdown", reset);
+            window.removeEventListener("keydown", reset);
+        };
+    }, [user]);
 
     const value = useMemo(
         () => ({ user, isReady, setUser }),

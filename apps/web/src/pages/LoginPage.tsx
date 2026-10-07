@@ -6,7 +6,7 @@ import {
     type LoginChallenge,
     type SsoProviders,
 } from "@fleet-live/shared";
-import { confirmTotp, getSsoProviders, login, resendVerification, setupTotp } from "../api/auth";
+import { confirmTotp, discoverCompanySso, getSsoProviders, login, resendVerification, setupTotp } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Checkbox } from "../components/ui/Checkbox/Checkbox";
@@ -53,7 +53,7 @@ export const LoginPage = () => {
     const { user, setUser } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [remember, setRemember] = useState(true);
+    const [remember, setRemember] = useState(false);
     const [code, setCode] = useState("");
     const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
     const [error, setError] = useState<string | null>(ssoHint(searchParams.get("sso")));
@@ -61,7 +61,6 @@ export const LoginPage = () => {
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unverified, setUnverified] = useState(false);
-    const [ssoCompanyId, setSsoCompanyId] = useState<number | null>(null);
     const [qr, setQr] = useState<string | null>(null);
     const [providers, setProviders] = useState<SsoProviders>({
         google: false,
@@ -135,7 +134,6 @@ export const LoginPage = () => {
         setInfo(null);
         setFieldErrors({});
         setUnverified(false);
-        setSsoCompanyId(null);
 
         try {
             setIsSubmitting(true);
@@ -162,10 +160,6 @@ export const LoginPage = () => {
                 setError(caught.message);
                 setFieldErrors(caught.fields ?? {});
                 setUnverified(caught.code === "EMAIL_UNVERIFIED");
-                const companyId = caught.details?.sso_company_id;
-                setSsoCompanyId(
-                    typeof companyId === "number" ? companyId : null,
-                );
                 return;
             }
 
@@ -174,6 +168,27 @@ export const LoginPage = () => {
             }
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const startCompanyLogin = async () => {
+        setError(null);
+        setFieldErrors({});
+
+        if (!email.trim()) {
+            setFieldErrors({ email: "Trag zuerst die E-Mail ein." });
+            return;
+        }
+
+        try {
+            const found = await discoverCompanySso(email);
+            window.location.href = `/api/auth/sso/company/start?company_id=${found.company_id}`;
+        } catch (caught: unknown) {
+            setError(
+                caught instanceof ApiError
+                    ? caught.message
+                    : "Der Firmen-Login konnte nicht gestartet werden.",
+            );
         }
     };
 
@@ -285,7 +300,7 @@ export const LoginPage = () => {
                                         setRemember(event.target.checked)
                                     }
                                 />
-                                Angemeldet bleiben
+                                Angemeldet bleiben (7 Tage)
                             </label>
                         </>
                     )}
@@ -300,17 +315,6 @@ export const LoginPage = () => {
                             Bestätigungsmail erneut senden
                         </Button>
                     )}
-                    {ssoCompanyId && (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => {
-                                window.location.href = `/api/auth/sso/company/start?company_id=${ssoCompanyId}`;
-                            }}
-                        >
-                            Mit Firmen-Login anmelden
-                        </Button>
-                    )}
                     <Button
                         type="submit"
                         fullWidth
@@ -318,6 +322,15 @@ export const LoginPage = () => {
                         disabled={isSubmitting}
                     >
                         {isSubmitting ? "Wird angemeldet…" : "Anmelden"}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        fullWidth
+                        size="lg"
+                        onClick={startCompanyLogin}
+                    >
+                        Mit Firmen-Login anmelden
                     </Button>
                 </form>
                 {!challenge && (

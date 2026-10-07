@@ -58,6 +58,7 @@ const security = {
     sso_issuer: null,
     sso_client_id: null,
     sso_configured: false,
+    sso_secret_set: false,
 };
 
 const memberRow = async (email: string) => {
@@ -271,6 +272,9 @@ describe("account page", () => {
             ...security,
             totp_required: true,
             sso_issuer: "https://idp.example",
+            sso_client_id: "client-id",
+            sso_secret_set: true,
+            sso_configured: true,
         });
         renderAuth(<AccountPage />, { user: authUser(), route: "/konto" });
 
@@ -282,17 +286,28 @@ describe("account page", () => {
         fireEvent.change(screen.getByLabelText("OIDC-Issuer"), {
             target: { value: "https://idp.example" },
         });
+        fireEvent.change(screen.getByLabelText("Client-ID"), {
+            target: { value: "client-id" },
+        });
+        fireEvent.change(screen.getByLabelText("Client-Geheimnis"), {
+            target: { value: "secret-value" },
+        });
         submit("Einstellungen speichern");
 
         expect(
-            await screen.findByText("Firmeneinstellungen gespeichert."),
-        ).toBeInTheDocument();
+            await screen.findByRole("status"),
+        ).toHaveTextContent("Das Client-Geheimnis bleibt hinterlegt");
+        expect(screen.getByLabelText("OIDC-Issuer")).toHaveValue(
+            "https://idp.example",
+        );
+        expect(screen.getByLabelText("Client-ID")).toHaveValue("client-id");
+        expect(screen.getByLabelText("Client-Geheimnis")).toHaveValue("");
         expect(updateSecurity).toHaveBeenCalledWith({
             totp_required: true,
             sso_required: false,
             sso_issuer: "https://idp.example",
-            sso_client_id: null,
-            sso_client_secret: undefined,
+            sso_client_id: "client-id",
+            sso_client_secret: "secret-value",
         });
     });
 

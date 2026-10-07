@@ -33,6 +33,12 @@ export const getMe = (signal?: AbortSignal) =>
 export const getSsoProviders = (signal?: AbortSignal) =>
     request<SsoProviders>("/api/auth/sso/providers", { signal });
 
+export const discoverCompanySso = (email: string) =>
+    request<{ company_id: number }>("/api/auth/sso/company/discover", {
+        method: "POST",
+        body: { email },
+    });
+
 export const registerAccount = (input: {
     company_name: string;
     name: string;
@@ -130,6 +136,7 @@ export type CompanySecurity = {
     sso_issuer: string | null;
     sso_client_id: string | null;
     sso_configured: boolean;
+    sso_secret_set: boolean;
 };
 
 export const getSecurity = () =>

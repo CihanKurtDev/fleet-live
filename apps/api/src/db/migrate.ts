@@ -1001,6 +1001,10 @@ function migrateToV18(_database: DatabaseSync) {
     // v17 hat `sites` angelegt; `ensureDepotSites` läuft am Ende von migrate().
 }
 
+function ensureSessionPersistent(database: DatabaseSync) {
+    addColumn(database, "sessions", "persistent", "INTEGER NOT NULL DEFAULT 0");
+}
+
 function addColumn(
     database: DatabaseSync,
     table: string,
@@ -1299,6 +1303,7 @@ export function migrate(database: DatabaseSync) {
     ensureYardMasterData(database);
     ensureDepotSites(database);
     ensureAccountIndexes(database);
+    ensureSessionPersistent(database);
     applyMaintenanceTriggers(database);
 
     if (currentVersion < SCHEMA_VERSION) {

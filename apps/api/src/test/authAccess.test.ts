@@ -331,6 +331,18 @@ describe("totp and sso", () => {
                 sso_required: true,
             })
             .expect(200);
+        const saved = await agent.get("/api/auth/security");
+        assert.equal(saved.status, 200);
+        assert.equal(saved.body.sso_issuer, "https://login.example.com");
+        assert.equal(saved.body.sso_client_id, "client");
+        assert.equal(saved.body.sso_secret_set, true);
+        assert.equal(saved.body.sso_client_secret, undefined);
+
+        const discovered = await request(app)
+            .post("/api/auth/sso/company/discover")
+            .send({ email: "dispatcher-1@example.com" });
+        assert.equal(discovered.status, 200);
+        assert.equal(discovered.body.company_id, 1);
 
         const blocked = await request(app).post("/api/auth/login").send({
             email: "dispatcher-1@example.com",

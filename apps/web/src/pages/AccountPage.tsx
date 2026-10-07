@@ -41,6 +41,7 @@ export const AccountPage = () => {
     const [issuer, setIssuer] = useState("");
     const [clientId, setClientId] = useState("");
     const [clientSecret, setClientSecret] = useState("");
+    const [securityNote, setSecurityNote] = useState<string | null>(null);
 
     useEffect(() => {
         if (user?.role !== "dispatcher") {
@@ -157,6 +158,9 @@ export const AccountPage = () => {
             return;
         }
 
+        setError(null);
+        setSecurityNote(null);
+
         try {
             const next = await updateSecurity({
                 totp_required: security.totp_required,
@@ -166,8 +170,14 @@ export const AccountPage = () => {
                 sso_client_secret: clientSecret || undefined,
             });
             setSecurity(next);
+            setIssuer(next.sso_issuer ?? "");
+            setClientId(next.sso_client_id ?? "");
             setClientSecret("");
-            setInfo("Firmeneinstellungen gespeichert.");
+            setSecurityNote(
+                next.sso_secret_set
+                    ? "Gespeichert. Das Client-Geheimnis bleibt hinterlegt und wird nicht wieder angezeigt."
+                    : "Gespeichert.",
+            );
         } catch (caught: unknown) {
             showError(caught, "Einstellungen konnten nicht gespeichert werden.");
         }
@@ -472,6 +482,17 @@ export const AccountPage = () => {
                                     />
                                 </div>
                                 <Button type="submit">Einstellungen speichern</Button>
+                                {security.sso_secret_set && !clientSecret && (
+                                    <p className={styles.help}>
+                                        Ein Client-Geheimnis ist gespeichert.
+                                        Nur ausfüllen, wenn du es ersetzen willst.
+                                    </p>
+                                )}
+                                {securityNote && (
+                                    <p className={styles.notice} role="status">
+                                        {securityNote}
+                                    </p>
+                                )}
                             </form>
                             </section>
                         )}

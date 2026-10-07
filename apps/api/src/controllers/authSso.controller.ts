@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
+import { parseEmailInput } from "@fleet-live/shared";
 import { config } from "../config";
+import { ValidationError } from "../lib/errors";
 import {
     clearCookieHeader,
     namedCookieHeader,
@@ -19,6 +21,7 @@ import {
     findSsoUser,
     linkSsoIdentity,
     pickLoginCompany,
+    companyIdForLoginSso,
     ssoClient,
 } from "../models/account.model";
 import { membershipRow } from "../models/authView";
@@ -112,6 +115,19 @@ export async function startSso(req: Request, res: Response) {
     }
 
     await startProvider(res, provider, null);
+}
+
+export function discoverCompanySso(req: Request, res: Response) {
+    const { email } = parseEmailInput(req.body);
+    const companyId = companyIdForLoginSso(email);
+
+    if (!companyId) {
+        throw new ValidationError(
+            "Für diese E-Mail ist kein Firmen-Login hinterlegt.",
+        );
+    }
+
+    res.json({ company_id: companyId });
 }
 
 export async function startCompanySso(req: Request, res: Response) {
