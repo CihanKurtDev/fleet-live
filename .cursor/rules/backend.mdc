@@ -10,7 +10,8 @@ alwaysApply: false
 app.ts + routes → Controllers → Models → SQLite
 ```
 
-- `app.ts` and `routes/` only wire HTTP to controllers (stream and sim live in `app.ts`, vehicles, alerts, drivers, briefing, and sites in `routes/`). Vehicle writes, `PATCH /api/sim`, `PATCH /api/alerts/:id`, driver assignment writes, and depot writes use `requireDispatcher` after `requireAuth`.
+- `app.ts` and `routes/` only wire HTTP to controllers (stream and sim live in `app.ts`, vehicles, alerts, drivers, briefing, sites, and auth in `routes/`).
+- Auth: register does not set a session until the e-mail is confirmed. Password reset and login rate limits apply outside tests. `company_memberships` holds role and company; the session stores the active company. Invites, TOTP and OIDC live under `/api/auth`. A company keeps at least one dispatcher. Empty companies ask once about `/vehicles/import` (`import_prompt`). Vehicle writes, `PATCH /api/sim`, `PATCH /api/alerts/:id`, driver assignment writes, and depot writes use `requireDispatcher` after `requireAuth`.
 - Controllers validate, map HTTP, call models, set status codes. No SQL.
 - Models own SQL via `db/statements.ts` / `db/database.ts`. No `req`/`res`.
 

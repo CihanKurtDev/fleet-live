@@ -3,33 +3,110 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS companies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    import_prompt_dismissed_at TEXT,
+    totp_required INTEGER NOT NULL DEFAULT 0,
+    sso_issuer TEXT,
+    sso_client_id TEXT,
+    sso_client_secret TEXT,
+    sso_required INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_name_nocase
+    ON companies(name COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    company_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'dispatcher'
-        CHECK (role IN ('dispatcher', 'viewer')),
+    password_hash TEXT,
+    email_verified_at TEXT,
+    totp_secret TEXT,
+    totp_enabled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS company_memberships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    company_id INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('dispatcher', 'viewer')),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
     FOREIGN KEY (company_id)
-        REFERENCES companies(id)
+        REFERENCES companies(id),
+
+    UNIQUE (user_id, company_id)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
+    company_id INTEGER NOT NULL,
     token TEXT NOT NULL UNIQUE,
+    persistent INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TEXT NOT NULL,
 
     FOREIGN KEY (user_id)
         REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+);
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    purpose TEXT NOT NULL CHECK (purpose IN (
+        'verify_email',
+        'reset_password',
+        'invite',
+        'login_challenge',
+        'totp_setup',
+        'sso_state'
+    )),
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    company_id INTEGER,
+    role TEXT,
+    payload TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
         ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code_hash TEXT NOT NULL,
+    used_at TEXT,
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS sso_identities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    provider TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    UNIQUE (provider, subject)
 );
 
 CREATE TABLE IF NOT EXISTS drivers (

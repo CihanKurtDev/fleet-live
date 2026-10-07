@@ -6,6 +6,46 @@
     padding: 32px 16px;
 }
 
+.accountPage {
+    flex: 1;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 24px 24px 40px;
+    text-align: left;
+}
+
+.stack {
+    width: 100%;
+    max-width: 720px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.accountHeader {
+    margin: 0;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.section .form {
+    gap: 12px;
+}
+
+.section .form > button {
+    align-self: flex-start;
+}
+
 .card {
     box-sizing: border-box;
     width: 100%;
@@ -79,6 +119,143 @@
     font-size: 13px;
     color: var(--text-h);
     cursor: pointer;
+}
+
+.notice {
+    margin: 0;
+    padding: 10px 12px;
+
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text-h);
+}
+
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 16px 0 0;
+    font-size: 13px;
+
+    a {
+        color: var(--accent);
+        text-decoration: none;
+
+        &:hover {
+            color: var(--text-h);
+        }
+    }
+}
+
+.sectionTitle {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 650;
+    letter-spacing: -0.2px;
+    color: var(--text-h);
+}
+
+.members {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.member {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+}
+
+.memberName {
+    flex: 1 1 140px;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--text-h);
+}
+
+.member .roleSelect {
+    width: auto;
+    min-width: 140px;
+    flex: 0 0 auto;
+}
+
+.help {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text);
+    overflow-wrap: break-word;
+}
+
+.help code {
+    font-size: 12px;
+    overflow-wrap: break-word;
+}
+
+.roleSelect {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text-h);
+    font: inherit;
+    font-size: 14px;
+}
+
+@media (max-width: 700px) {
+    .page {
+        padding: 16px 12px 24px;
+    }
+
+    .accountPage {
+        padding: 16px 12px 32px;
+    }
+
+    .section {
+        padding: 16px;
+    }
+
+    .section .form > button[type="submit"] {
+        align-self: stretch;
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .member {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .memberName {
+        grid-column: 1 / -1;
+    }
+
+    .member .roleSelect {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .member button {
+        min-height: 44px;
+    }
 }
 
 .hint {

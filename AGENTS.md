@@ -2,7 +2,7 @@
 
 fleet-live — fleet management app (TypeScript monorepo). Vehicles, telemetry, and a React UI; live updates over SSE.
 
-Phases 1–12 are in place (including depot circles on the fleet map, Stammstandort, and the Im Depot filter; driving through a depot is not an inbox warning). **Next:** Phase 13 (HU, licence, UVV reminders). Do not start invite, multi-company membership, or CI/CD. Status detail: `.cursor/rules/architecture.mdc`. Engineering plan: `.cursor/ROADMAP.md` (local, gitignored — not on GitHub). The public README has a dispatcher-facing roadmap (what users notice), not phase numbers.
+Phases 1–12 are in place (including depot circles on the fleet map, Stammstandort, and the Im Depot filter; driving through a depot is not an inbox warning). Company registration, e-mail confirmation, password reset, invites, several companies per person, TOTP and OIDC are in place. **Next:** Phase 13 (HU, licence, UVV reminders). Do not start CI/CD. Status detail: `.cursor/rules/architecture.mdc`. Engineering plan: `.cursor/ROADMAP.md` (local, gitignored — not on GitHub). The public README has a dispatcher-facing roadmap (what users notice), not phase numbers.
 
 ## General
 
@@ -17,7 +17,7 @@ Phases 1–12 are in place (including depot circles on the fleet map, Stammstand
 
 - Code is what exists. If README and code disagree, code wins. README describes the running system and user-visible upcoming work, not the engineering backlog.
 - `apps/docs/table.md` is the table-component spec, not a backlog. Do not add client-side vehicle-list sorting because `sortRows.ts` exists.
-- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts` with optional `type`). SPEEDING and OFFLINE rows are live events (8 s over the current sim road-class limit; no report for 15 s after a company pause, or status `OFFLINE`). LOW_FUEL is a current vehicle reading/filter plus seeded alert history, not a ticker event. That is not OSM and not a general rule engine. Home `/` is the company shift briefing (`GET /api/briefing`). Next engineering item is Phase 11 (map at fleet scale).
+- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts` with optional `type`). SPEEDING and OFFLINE rows are live events (8 s over the current sim road-class limit; no report for 15 s after a company pause, or status `OFFLINE`). LOW_FUEL is a current vehicle reading/filter plus seeded alert history, not a ticker event. That is not OSM and not a general rule engine. Home `/` is the company shift briefing (`GET /api/briefing`). Next engineering item is Phase 13 (HU, licence, UVV reminders).
 
 ## Workflow
 

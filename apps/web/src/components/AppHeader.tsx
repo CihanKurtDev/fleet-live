@@ -64,7 +64,7 @@ export const AppHeader = ({
             </div>
             <div className={styles.end}>
                 {user && user.role === "dispatcher" && <SimToggle />}
-                <SessionMenu className={styles.session} />
+                <SessionMenu />
             </div>
         </header>
     );

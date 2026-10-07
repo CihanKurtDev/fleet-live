@@ -28,14 +28,14 @@ const fieldErrorsFromApi = (
 
     if (error.status === 409) {
         return (
-            error.fields ?? {
+            (error.fields as VehicleFieldErrors | undefined) ?? {
                 license_plate: "Kennzeichen ist bereits vergeben.",
             }
         );
     }
 
     if (error.status === 400 && error.fields) {
-        return error.fields;
+        return error.fields as VehicleFieldErrors;
     }
 
     throw error;

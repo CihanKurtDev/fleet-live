@@ -4,6 +4,7 @@ export class AppError extends Error {
     readonly status: number;
     readonly code: string;
     readonly fields?: FieldErrors;
+    readonly details?: Record<string, unknown>;
     readonly isOperational = true;
 
     constructor(
@@ -11,12 +12,14 @@ export class AppError extends Error {
         code: string,
         message: string,
         fields?: FieldErrors,
+        details?: Record<string, unknown>,
     ) {
         super(message);
         this.name = "AppError";
         this.status = status;
         this.code = code;
         this.fields = fields;
+        this.details = details;
     }
 }
 
@@ -47,6 +50,12 @@ export class ForbiddenError extends AppError {
 export class NotFoundError extends AppError {
     constructor(message = "Fahrzeug nicht gefunden.") {
         super(404, "NOT_FOUND", message);
+    }
+}
+
+export class ServiceUnavailableError extends AppError {
+    constructor(message: string, code = "SERVICE_UNAVAILABLE") {
+        super(503, code, message);
     }
 }
 
