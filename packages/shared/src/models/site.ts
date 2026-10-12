@@ -14,6 +14,8 @@ export type Site = {
     latitude: number;
     longitude: number;
     radius_m: number;
+    /** Höchstens ein Depot pro Firma. Leere Import-Spalte startet hier. */
+    is_default: boolean;
     /** Fahrzeuge mit diesem Stammstandort. */
     home_count: number;
     /** Fahrzeuge, deren letzte Position in diesem Kreis liegt. */
@@ -29,7 +31,9 @@ export type SiteInput = {
     radius_m?: number;
 };
 
-export type SitePatch = Partial<SiteInput>;
+export type SitePatch = Partial<SiteInput> & {
+    is_default?: boolean;
+};
 
 export type SiteListResponse = {
     data: Site[];
@@ -64,10 +68,14 @@ export const siteInputSchema = z.object({
     radius_m: radiusSchema.optional(),
 });
 
-export const sitePatchSchema = siteInputSchema.partial().refine(
-    (value) => Object.keys(value).length > 0,
-    { message: "Keine Änderung angegeben." },
-);
+export const sitePatchSchema = siteInputSchema
+    .partial()
+    .extend({
+        is_default: z.boolean().optional(),
+    })
+    .refine((value) => Object.keys(value).length > 0, {
+        message: "Keine Änderung angegeben.",
+    });
 
 export function parseSiteInput(input: unknown): SiteInput {
     return siteInputSchema.parse(input);

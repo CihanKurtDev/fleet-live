@@ -15,20 +15,19 @@ import {
 } from "../api/telemetryFocus";
 import { listVehiclePositions } from "../api/vehicles";
 import { useVehicles } from "../context/vehiclesContext";
+import { isInsideBBox } from "../components/vehicles/clusterFleet";
 import { applyVehicleOverrides } from "../utils/applyVehicleOverrides";
 import { useRetryTrigger } from "./useRetryTrigger";
 
 type FleetPositionsQueryInput = {
     bbox: GeoBBox | null;
     filter?: VehicleFilterId;
-    search: string;
     drivers: string[];
 };
 
 export const useFleetPositions = ({
     bbox,
     filter,
-    search,
     drivers,
 }: FleetPositionsQueryInput) => {
     const { listEpoch, vehicleOverrides } = useVehicles();
@@ -37,45 +36,37 @@ export const useFleetPositions = ({
     const [densityCells, setDensityCells] = useState<FleetDensityCell[]>([]);
     const [mode, setMode] = useState<"positions" | "density">("positions");
     const [total, setTotal] = useState(0);
+    const [matched, setMatched] = useState(0);
+    const [withoutPosition, setWithoutPosition] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
     const [hasLoaded, setHasLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const driversKey = drivers.join("\0");
-    const bboxKey = bbox
-        ? `${bbox.west},${bbox.south},${bbox.east},${bbox.north}`
-        : "";
-    const requestKey = bbox
-        ? [bboxKey, filter ?? "", search, driversKey, listEpoch, retryKey].join(
-              "\0",
-          )
-        : null;
+    // Bestand einmal laden. Der Ausschnitt filtert lokal, damit die
+    // Zähler beim Schwenken nicht springen.
+    const requestKey = [
+        filter ?? "",
+        driversKey,
+        listEpoch,
+        retryKey,
+    ].join("\0");
     const [fetchKey, setFetchKey] = useState(requestKey);
 
     if (requestKey !== fetchKey) {
         setFetchKey(requestKey);
-        if (requestKey !== null) {
-            setIsLoading(true);
-            setError(null);
-        } else {
-            setIsLoading(false);
-        }
+        setIsLoading(true);
+        setError(null);
     }
 
     useEffect(() => {
-        if (!bbox) {
-            return;
-        }
-
         const controller = new AbortController();
 
         retryTransient(
             () =>
                 listVehiclePositions(
                     {
-                        bbox,
                         filter,
-                        search,
                         drivers,
                     },
                     controller.signal,
@@ -85,6 +76,8 @@ export const useFleetPositions = ({
             .then((response) => {
                 setMode(response.mode);
                 setTotal(response.meta.total);
+                setMatched(response.meta.matched);
+                setWithoutPosition(response.meta.without_position);
                 if (response.mode === "positions") {
                     setSnapshot(response.data);
                     setDensityCells([]);
@@ -113,7 +106,7 @@ export const useFleetPositions = ({
             });
 
         return () => controller.abort();
-    }, [bbox, drivers, filter, listEpoch, search, retryKey]);
+    }, [drivers, filter, listEpoch, retryKey]);
 
     const vehicles = useMemo(
         () => applyVehicleOverrides(snapshot, vehicleOverrides),
@@ -121,7 +114,15 @@ export const useFleetPositions = ({
     );
 
     const drivingFocusKey = vehicles
-        .filter((vehicle) => vehicle.status === "DRIVING")
+        .filter(
+            (vehicle) =>
+                vehicle.status === "DRIVING" &&
+                vehicle.has_position &&
+                vehicle.latitude !== null &&
+                vehicle.longitude !== null &&
+                (bbox === null ||
+                    isInsideBBox(vehicle.latitude, vehicle.longitude, bbox)),
+        )
         .map((vehicle) => vehicle.id)
         .slice(0, STREAM_FOCUS_MAX_IDS)
         .join(",");
@@ -146,6 +147,8 @@ export const useFleetPositions = ({
         densityCells,
         mode,
         total,
+        matched,
+        withoutPosition,
         isLoading,
         hasLoaded,
         error,

@@ -49,6 +49,14 @@ const environmentSchema = z.object({
      */
     TRIP_RETENTION_DAYS: z.coerce.number().int().min(0).max(3650).default(90),
 
+    /** Startpunkt, wenn die Firma kein Depot hat. Default: Köln. */
+    IMPORT_FALLBACK_LATITUDE: z.coerce.number().min(-90).max(90).default(50.9375),
+    IMPORT_FALLBACK_LONGITUDE: z.coerce
+        .number()
+        .min(-180)
+        .max(180)
+        .default(6.9603),
+
     LOG_LEVEL: z
         .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
         .default("info"),
@@ -111,6 +119,8 @@ export const config = {
     telemetryBatchSize: env.TELEMETRY_BATCH_SIZE,
     telemetryKeepPerVehicle: env.TELEMETRY_KEEP_PER_VEHICLE,
     tripRetentionDays: env.TRIP_RETENTION_DAYS,
+    importFallbackLatitude: env.IMPORT_FALLBACK_LATITUDE,
+    importFallbackLongitude: env.IMPORT_FALLBACK_LONGITUDE,
     logLevel: env.LOG_LEVEL,
     allowDemoAccounts: env.ALLOW_DEMO_ACCOUNTS,
     smtpUrl: env.SMTP_URL,

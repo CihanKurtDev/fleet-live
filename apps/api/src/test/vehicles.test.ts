@@ -160,6 +160,8 @@ describe("GET /api/vehicles", () => {
 
         const positions = await api.get("/api/vehicles/positions");
         assert.equal(positions.status, 200);
+        assert.equal(positions.body.meta.matched, 1);
+        assert.equal(positions.body.meta.without_position, 1);
         assert.equal(
             positions.body.data.some((row: { id: number }) => row.id === other.id),
             false,
@@ -386,7 +388,7 @@ describe("GET /api/vehicles/positions", () => {
         ).run(vehicleId, lat, lng, speed);
     }
 
-    it("returns an empty list when nobody has a position", async () => {
+    it("returns vehicles without a position instead of dropping them", async () => {
         VehicleModel.create({
             license_plate: "K-NO 1",
             driver_name: "Ohne Fix",
@@ -397,11 +399,16 @@ describe("GET /api/vehicles/positions", () => {
 
         assert.equal(response.status, 200);
         assert.equal(response.body.mode, "positions");
-        assert.deepEqual(response.body.data, []);
-        assert.equal(response.body.meta.total, 0);
+        assert.equal(response.body.data.length, 1);
+        assert.equal(response.body.data[0].license_plate, "K-NO 1");
+        assert.equal(response.body.data[0].has_position, false);
+        assert.equal(response.body.data[0].latitude, null);
+        assert.equal(response.body.data[0].longitude, null);
+        assert.equal(response.body.meta.total, 1);
+        assert.equal(response.body.meta.without_position, 1);
     });
 
-    it("omits vehicles without telemetry and keeps the slim shape", async () => {
+    it("includes vehicles without telemetry and keeps the slim shape", async () => {
         const withFix = VehicleModel.create({
             license_plate: "K-POS 1",
             driver_name: "Mit Fix",
@@ -417,15 +424,34 @@ describe("GET /api/vehicles/positions", () => {
         const response = await api.get("/api/vehicles/positions");
 
         assert.equal(response.status, 200);
-        assert.equal(response.body.data.length, 1);
-        assert.equal(response.body.data[0].license_plate, "K-POS 1");
-        assert.equal(response.body.data[0].driver_name, "Mit Fix");
-        assert.equal(response.body.data[0].latitude, 50.9375);
-        assert.equal(response.body.data[0].longitude, 6.9603);
-        assert.equal(response.body.data[0].speed, 12);
-        assert.equal(response.body.data[0].fuel_level, undefined);
-        assert.equal(response.body.data[0].active_alerts, undefined);
-        assert.equal(response.body.data[0].created_at, undefined);
+        assert.equal(response.body.data.length, 2);
+        const withRow = response.body.data.find(
+            (row: { license_plate: string }) => row.license_plate === "K-POS 1",
+        );
+        const withoutRow = response.body.data.find(
+            (row: { license_plate: string }) => row.license_plate === "K-POS 2",
+        );
+        assert.equal(withRow.has_position, true);
+        assert.equal(withRow.driver_name, "Mit Fix");
+        assert.equal(withRow.latitude, 50.9375);
+        assert.equal(withRow.longitude, 6.9603);
+        assert.equal(withRow.speed, 12);
+        assert.equal(withRow.fuel_level, undefined);
+        assert.equal(withRow.active_alerts, undefined);
+        assert.equal(withRow.created_at, undefined);
+        assert.equal(withoutRow.has_position, false);
+        assert.equal(withoutRow.latitude, null);
+        assert.equal(response.body.meta.without_position, 1);
+        assert.equal(response.body.meta.matched, 2);
+
+        const inView = await api.get("/api/vehicles/positions").query({
+            bbox: "6.9,50.9,7.0,51.0",
+        });
+        assert.equal(inView.body.data.length, 1);
+        assert.equal(inView.body.data[0].license_plate, "K-POS 1");
+        assert.equal(inView.body.meta.without_position, 1);
+        assert.equal(inView.body.meta.matched, 2);
+        assert.equal(inView.body.meta.total, 1);
     });
 
     it("filters by bbox and by driving", async () => {
@@ -466,17 +492,21 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(driving.body.data.length, 1);
         assert.equal(driving.body.data[0].license_plate, "K-BB 1");
 
-        const outsideViewport = await api
+        const withSearch = await api
             .get("/api/vehicles/positions")
             .query({
                 bbox: "6.8,50.8,7.2,51.1",
                 search: "M-BB 1",
             });
 
-        assert.equal(outsideViewport.status, 200);
-        assert.equal(outsideViewport.body.mode, "positions");
-        assert.equal(outsideViewport.body.meta.total, 1);
-        assert.equal(outsideViewport.body.data[0].license_plate, "M-BB 1");
+        assert.equal(withSearch.status, 200);
+        assert.equal(withSearch.body.mode, "positions");
+        assert.deepEqual(
+            withSearch.body.data.map(
+                (row: { license_plate: string }) => row.license_plate,
+            ),
+            ["K-BB 1", "K-BB 2"],
+        );
     });
 
     it("filters positions without a current driver", async () => {
@@ -519,7 +549,7 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(filter.status, 400);
     });
 
-    it("filters by driver or plate search", async () => {
+    it("keeps the fleet when search names one driver or plate", async () => {
         const clara = VehicleModel.create({
             license_plate: "K-CL 1",
             driver_name: "Clara Conrad",
@@ -538,16 +568,19 @@ describe("GET /api/vehicles/positions", () => {
             .query({ search: "clara" });
 
         assert.equal(byDriver.status, 200);
-        assert.equal(byDriver.body.data.length, 1);
-        assert.equal(byDriver.body.data[0].driver_name, "Clara Conrad");
+        assert.deepEqual(
+            byDriver.body.data.map(
+                (row: { license_plate: string }) => row.license_plate,
+            ),
+            ["K-CL 1", "K-MX 1"],
+        );
 
         const byPlate = await api
             .get("/api/vehicles/positions")
             .query({ search: "K-MX" });
 
         assert.equal(byPlate.status, 200);
-        assert.equal(byPlate.body.data.length, 1);
-        assert.equal(byPlate.body.data[0].license_plate, "K-MX 1");
+        assert.equal(byPlate.body.data.length, 2);
     });
 
     it("filters by one or more driver names", async () => {
@@ -601,6 +634,47 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(rejected.status, 400);
     });
 
+    it("returns individual points above 2000 and only density past the marker limit", async () => {
+        assert.equal(FLEET_POSITIONS_MAX, 5000);
+        const insertVehicle = db.prepare(
+            `
+                INSERT INTO vehicles (
+                    license_plate,
+                    driver_name,
+                    fuel_level,
+                    status,
+                    company_id
+                )
+                VALUES (?, NULL, 80, 'IDLE', 1)
+            `,
+        );
+        const insertTelemetry = db.prepare(
+            `
+                INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
+                VALUES (?, 50.9, 6.9, 0)
+            `,
+        );
+        const count = 2_001;
+
+        db.exec("BEGIN");
+        for (let index = 0; index < count; index += 1) {
+            const result = insertVehicle.run(
+                `K-U ${String(index).padStart(4, "0")}`,
+            );
+            insertTelemetry.run(Number(result.lastInsertRowid));
+        }
+        db.exec("COMMIT");
+
+        const response = await api.get("/api/vehicles/positions");
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.mode, "positions");
+        assert.equal(response.body.data.length, count);
+        assert.equal(response.body.meta.total, count);
+        assert.equal(response.body.meta.matched, count);
+        assert.equal(response.body.data[0].has_position, true);
+    });
+
     it("aggregates all matches into non-empty density cells past the marker limit", async () => {
         const insertVehicle = db.prepare(
             `
@@ -636,6 +710,7 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(response.status, 200);
         assert.equal(response.body.mode, "density");
         assert.equal(response.body.meta.total, overLimit);
+        assert.equal(response.body.meta.matched, overLimit);
         assert.ok(response.body.data.length > 0);
         assert.ok(response.body.data.length <= 32 * 20);
         assert.equal(

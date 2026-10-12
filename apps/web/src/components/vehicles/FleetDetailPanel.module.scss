@@ -1,0 +1,64 @@
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    height: 100%;
+    padding: 16px;
+    text-align: left;
+}
+
+.head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.plate {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.2;
+}
+
+.close {
+    flex-shrink: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+        color: var(--text-h);
+    }
+}
+
+.facts {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+
+    div {
+        display: grid;
+        gap: 2px;
+    }
+
+    dt {
+        color: var(--text);
+        font-size: 12px;
+    }
+
+    dd {
+        margin: 0;
+        color: var(--text-h);
+        font-size: 14px;
+    }
+}
+
+.more {
+    color: var(--accent);
+    font-size: 14px;
+}

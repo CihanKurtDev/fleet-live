@@ -50,6 +50,12 @@ export const VehiclesProvider = ({
     const [vehicleOverrides, setVehicleOverrides] = useState<
         Record<number, Partial<Vehicle>>
     >({});
+    const [streamConnection, setStreamConnection] = useState<
+        "connecting" | "live" | "disconnected"
+    >("connecting");
+    const [lastTelemetryAt, setLastTelemetryAt] = useState<string | null>(
+        null,
+    );
     const pathDeltaListeners = useRef(new Set<TripPathDeltaHandler>());
 
     const subscribeTripPath = useCallback(
@@ -71,6 +77,18 @@ export const VehiclesProvider = ({
         if (patches.length === 0) {
             return;
         }
+
+        setLastTelemetryAt((current) => {
+            let next = current;
+
+            for (const patch of patches) {
+                if (next === null || patch.recorded_at > next) {
+                    next = patch.recorded_at;
+                }
+            }
+
+            return next;
+        });
 
         setVehicleOverrides((current) => {
             const next = { ...current };
@@ -118,6 +136,7 @@ export const VehiclesProvider = ({
     useVehicleStream({
         onTelemetry: applyTelemetry,
         onVehiclesChanged: refetchLists,
+        onConnection: setStreamConnection,
     });
 
     const createVehicle = useCallback(
@@ -169,6 +188,8 @@ export const VehiclesProvider = ({
         () => ({
             listEpoch,
             vehicleOverrides,
+            streamConnection,
+            lastTelemetryAt,
             refetchLists,
             createVehicle,
             updateVehicle,
@@ -178,6 +199,8 @@ export const VehiclesProvider = ({
         [
             listEpoch,
             vehicleOverrides,
+            streamConnection,
+            lastTelemetryAt,
             refetchLists,
             createVehicle,
             updateVehicle,

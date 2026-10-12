@@ -40,6 +40,7 @@ describe("depots", () => {
             longitude: 6.9603,
         });
         assert.equal(created.status, 201);
+        assert.equal(created.body.is_default, true);
         assert.equal(created.body.radius_m, 800);
         assert.equal(created.body.home_count, 0);
 

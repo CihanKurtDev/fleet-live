@@ -51,9 +51,11 @@ const COLUMN_TARGET_LABELS: Record<ImportColumnTarget, string> = {
     vin: "VIN",
     vehicle_type: "Fahrzeugtyp",
     hu_due_on: "HU fällig",
-    depot: "Standort",
+    depot: "Depot",
     cost_center: "Kostenstelle",
     phone: "Telefon",
+    latitude: "Breitengrad",
+    longitude: "Längengrad",
     ignore: "Ignorieren",
 };
 

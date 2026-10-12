@@ -37,7 +37,7 @@ export const MapStatusLegend = ({
         <span className={styles.legendHint}>
             {density
                 ? "Kreise öffnen einen kleineren Ausschnitt"
-                : "Marker öffnen das Fahrzeug"}
+                : "Gruppen zoomen heran, Marker öffnen das Fahrzeug"}
         </span>
     </aside>
 );

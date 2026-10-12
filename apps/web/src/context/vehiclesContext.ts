@@ -11,9 +11,14 @@ export type TripPathDeltaHandler = (
     reset: boolean,
 ) => void;
 
+export type StreamConnection = "connecting" | "live" | "disconnected";
+
 export interface VehiclesContextValue {
     listEpoch: number;
     vehicleOverrides: Record<number, Partial<Vehicle>>;
+    streamConnection: StreamConnection;
+    /** Jüngster `recorded_at` aus dem Telemetrie-Stream. */
+    lastTelemetryAt: string | null;
     refetchLists: () => void;
 
     createVehicle: (

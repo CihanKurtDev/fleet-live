@@ -20,6 +20,9 @@ const SELECT_DRIVING_BY_IDS = `
     SELECT
         v.id,
         v.company_id,
+        -- Nur ohne gespeicherten Punkt (Altbestand vor Import/Backfill).
+        -- Liegt der Punkt am Depot, wählt pickRoute die nächste Strecke:
+        -- München bleibt auf München–Nürnberg, nicht auf Köln.
         COALESCE(t.latitude, 50.9375) AS latitude,
         COALESCE(t.longitude, 6.9603) AS longitude,
         t.speed,
@@ -72,6 +75,16 @@ const SELECT_HISTORY = `
     ORDER BY recorded_at DESC, id DESC
     LIMIT ?
 `;
+
+/** Eine Zeile pro Fahrzeug, nicht ein Statement pro Fahrzeug. */
+export const TELEMETRY_INSERT_CHUNK = 200;
+
+export type InitialTelemetryPoint = {
+    vehicleId: number;
+    latitude: number;
+    longitude: number;
+    speed: number;
+};
 
 let batchCursor = 0;
 
@@ -236,6 +249,43 @@ export class TelemetryModel {
             recorded_at: recordedAt,
             fuel_level: row.fuel_level,
         };
+    }
+
+    /**
+     * Mehrere Erstpunkte in einem INSERT pro Chunk.
+     * Der Trigger setzt `last_telemetry_id` zeilenweise.
+     */
+    static insertInitialBatch(points: InitialTelemetryPoint[]): void {
+        if (points.length === 0) {
+            return;
+        }
+
+        const recordedAt = nowSqlite();
+
+        for (
+            let offset = 0;
+            offset < points.length;
+            offset += TELEMETRY_INSERT_CHUNK
+        ) {
+            const chunk = points.slice(offset, offset + TELEMETRY_INSERT_CHUNK);
+            const placeholders = chunk.map(() => "(?, ?, ?, ?, ?)").join(", ");
+            const params = chunk.flatMap((point) => [
+                point.vehicleId,
+                point.latitude,
+                point.longitude,
+                point.speed,
+                recordedAt,
+            ]);
+
+            db.prepare(
+                `
+                INSERT INTO telemetry (
+                    vehicle_id, latitude, longitude, speed, recorded_at
+                )
+                VALUES ${placeholders}
+                `,
+            ).run(...params);
+        }
     }
 
     static listForVehicle(vehicleId: number, limit: number): TelemetryPoint[] {

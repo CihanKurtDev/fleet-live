@@ -88,6 +88,7 @@ Was die App heute kann, und was als Nächstes kommt.
 * Fahrzeuge, Fahrer, Freigaben und aktuelle Besatzung aus CSV oder Excel (`/vehicles/import`)
 * Letzte Spaltenzuordnung bleibt pro Firma gespeichert, jeder Import steht im Log
 * Hof-Stammdaten am Fahrzeug: VIN, Typ, HU-Fälligkeit, Depot, Kostenstelle
+* Import-Spalte Depot (auch Standort) setzt den Stammstandort und eine Startposition am Hof, mit kleinem Versatz. Ohne Angabe gilt das Standarddepot, ohne Depot eine Fallback-Koordinate. Lat/Lng in der Datei sind ein Sonderfall und haben Vorrang. Ein zweiter Import verschiebt vorhandene Positionen nicht.
 * Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
 * Depots als benannte Kreise auf der Flottenkarte, Stammstandort am Fahrzeug, Filter „Im Depot“
 * Firma registrieren, E-Mail bestätigen, Passwort zurücksetzen und ändern
@@ -144,7 +145,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | Methode  | Endpoint                         | Beschreibung |
 | -------- | -------------------------------- | ------------ |
 | `GET`    | `/api/vehicles`                  | Liste (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
-| `GET`    | `/api/vehicles/positions`        | Letzte Positionen für die Karte (`bbox`, `search`, `filter`, `drivers`) |
+| `GET`    | `/api/vehicles/positions`        | Letzte Positionen für die Karte (`bbox`, `filter`, `drivers`). `search` wird angenommen und blendet nichts aus |
 | `GET`    | `/api/vehicles/drivers`          | Fahrersuche (`search`, `page`; `names` lädt eine Auswahl nach) |
 | `GET`    | `/api/vehicles/:id`              | Ein Fahrzeug. `404` wenn weg oder andere Firma |
 | `GET`    | `/api/vehicles/:id/telemetry`    | Letzte Punkte (`limit` 10, 25, 50, 100, Standard 50) |
@@ -179,7 +180,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 
 `GET /api/briefing` gibt Statuszähler (`driving`, `idle`, `offline`), Inbox `open`, `low_fuel` und monatliche `history` für die Diagramme. `viewer` darf lesen.
 
-`GET /api/vehicles/positions` ist entweder `positions` oder `density`, plus `meta.total`. `bbox=west,south,east,north` optional. `search` trifft Kennzeichen und Fahrer in der ganzen Firma. `drivers` filtert nur die Ansicht. Bis `FLEET_POSITIONS_MAX` (2000) kommen Einzelpositionen. Darüber höchstens 32 mal 20 Zellen mit Statuszählern.
+`GET /api/vehicles/positions` ist entweder `positions` oder `density`, plus `meta.total`, `meta.matched` und `meta.without_position`. `matched` zählt die Filtertreffer der Firma ohne Kartenausschnitt, inklusive Fahrzeuge ohne Position. Jede Zeile hat `has_position`. Ohne Telemetrie sind Koordinaten null; `without_position` ignoriert den Kartenausschnitt. `bbox=west,south,east,north` optional und gilt nur für Zeilen mit Position. `search` schränkt die Zeilen nicht ein. Kennzeichen und aktueller Fahrer werden in dem geladenen Bestand gesucht. `drivers` filtert die Ansicht. Bis `FLEET_POSITIONS_MAX` (5000) kommen Einzelpositionen. Die Karte lädt diesen Bestand einmal und clustert im Ausschnitt. Darüber höchstens 32 mal 20 Dichtezellen.
 
 Query-Parameter stehen in `@fleet-live/shared`. Kaputte Sortierung oder Limits: `400`. Seitengröße 10, erlaubt 10, 25, 50, 100. Kennzeichen max. 32 Zeichen, Fahrername max. 80. Beides eindeutig pro Firma.
 
@@ -248,7 +249,7 @@ Anlegen, bearbeiten, löschen. Status als Badge. Tank während der Fahrt nur les
 
 ## Flottenkarte
 
-`/fleet` lädt Positionen der eigenen Firma im sichtbaren Ausschnitt. Der Fahrer-Picker ist ein Filter, kein Muss. Status-Chips und Kennzeichensuche gelten für diesen Ausschnitt. Über 2000 Treffer werden Dichtekreise. Klick zoomt, bis Marker gehen. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (max. 150 im Fokus). Spuren gibt es hier nicht, die liegen auf der Detailseite.
+`/fleet` lädt die Positionen der eigenen Firma einmal (bis 5000 Einzelpunkte) und clustert sie im Ausschnitt. Schwenken lädt nicht neu. Die Leiste zeigt, wie viele Fahrzeuge im Ausschnitt liegen, wie viele der Filter trifft und wie viele keine Position haben. Der Fahrer-Picker ist ein Filter, kein Muss. Über 5000 Treffer mit Position werden Dichtekreise. Ein Klick auf eine Gruppe zoomt heran; übereinanderliegende Fahrzeuge öffnen eine Liste. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (max. 150 im Fokus, bevorzugt im Ausschnitt). Spuren gibt es hier nicht, die liegen auf der Detailseite.
 
 Tabellenkomponente: [apps/docs/table.md](apps/docs/table.md).
 

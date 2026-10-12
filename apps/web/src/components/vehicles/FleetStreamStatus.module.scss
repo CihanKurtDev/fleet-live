@@ -1,0 +1,19 @@
+.live,
+.notice {
+    margin: 0;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.live {
+    color: #15803d;
+}
+
+.notice {
+    color: var(--text-h);
+}
+
+.age {
+    margin-left: 8px;
+    color: var(--text);
+}

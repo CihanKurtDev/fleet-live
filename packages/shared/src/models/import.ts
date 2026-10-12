@@ -14,6 +14,8 @@ export const IMPORT_COLUMN_TARGETS = [
     "depot",
     "cost_center",
     "phone",
+    "latitude",
+    "longitude",
     "ignore",
 ] as const;
 
@@ -66,6 +68,9 @@ export type ImportPreviewRow = {
     depot: string | null;
     cost_center: string | null;
     phone: string | null;
+    /** Sonderfall, nicht in der Vorlage. Beide gesetzt, sonst fehlen sie. */
+    latitude?: number | null;
+    longitude?: number | null;
     default_action: ImportRowAction;
     issues: ImportRowIssue[];
 };

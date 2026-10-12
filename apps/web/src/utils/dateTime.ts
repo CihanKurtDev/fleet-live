@@ -64,7 +64,13 @@ export const formatRelativeTimestamp = (value: string | null): string => {
         return formatTimestamp(value);
     }
 
-    const minutes = Math.floor(diffMs / 60_000);
+    const seconds = Math.floor(diffMs / 1000);
+
+    if (seconds < 60) {
+        return seconds === 1 ? "vor 1 s" : `vor ${seconds} s`;
+    }
+
+    const minutes = Math.floor(seconds / 60);
 
     if (minutes < 60) {
         return minutes === 1 ? "vor 1 Min." : `vor ${minutes} Min.`;

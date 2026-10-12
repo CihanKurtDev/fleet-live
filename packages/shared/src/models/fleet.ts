@@ -4,8 +4,11 @@ import type { VehicleStatus } from "./vehicle";
 import { VEHICLE_FILTERS, type VehicleFilterId } from "./vehicleQuery";
 import { emptyToUndefined, firstQueryString } from "./queryPreprocess";
 
-/** Hartes Limit, damit ein Welt-Ausschnitt bei großem Seed nicht 50 000 Marker liefert. */
-export const FLEET_POSITIONS_MAX = 2_000;
+/**
+ * Darüber liefert die Positions-API Dichtezellen statt Einzelpunkten.
+ * Darunter kommen alle Treffer; die Karte clustert sie lokal.
+ */
+export const FLEET_POSITIONS_MAX = 5_000;
 
 /** Maximale Anzahl per Query ausgewählter Fahrer. */
 export const FLEET_DRIVERS_MAX = 50;
@@ -26,10 +29,15 @@ export type FleetPosition = {
     license_plate: string;
     driver_name: string | null;
     status: VehicleStatus;
-    latitude: number;
-    longitude: number;
-    speed: number;
-    recorded_at: string;
+    /**
+     * False, wenn noch kein Telemetriepunkt existiert.
+     * `latitude` / `longitude` / `speed` / `recorded_at` sind dann null.
+     */
+    has_position: boolean;
+    latitude: number | null;
+    longitude: number | null;
+    speed: number | null;
+    recorded_at: string | null;
 };
 
 export type FleetDensityCell = {
@@ -43,6 +51,7 @@ export type FleetDensityCell = {
 export type FleetPositionsQuery = {
     bbox?: GeoBBox;
     filter?: VehicleFilterId;
+    /** Angenommen, filtert die Positionen nicht. Die Karte sucht im Bestand. */
     search?: string;
     /** Leer/fehlt = alle Fahrer. Sonst nur Fahrzeuge dieser Namen. */
     drivers?: string[];
@@ -84,6 +93,10 @@ export type FleetPositionsResponse =
           data: FleetPosition[];
           meta: {
               total: number;
+              /** Filtertreffer der Firma, ohne Kartenausschnitt, inklusive ohne Position. */
+              matched: number;
+              /** Firma, ohne Kartenausschnitt. */
+              without_position: number;
           };
       }
     | {
@@ -91,6 +104,10 @@ export type FleetPositionsResponse =
           data: FleetDensityCell[];
           meta: {
               total: number;
+              /** Filtertreffer der Firma, ohne Kartenausschnitt, inklusive ohne Position. */
+              matched: number;
+              /** Firma, ohne Kartenausschnitt. */
+              without_position: number;
           };
       };
 

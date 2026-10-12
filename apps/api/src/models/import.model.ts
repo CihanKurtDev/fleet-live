@@ -70,7 +70,15 @@ import { stmt } from "../db/statements";
 import { db, withTransaction } from "../db/database";
 import { pagedQuery } from "../lib/pagination";
 import { TripModel } from "./trip.model";
-import { TelemetryModel } from "./telemetry.model";
+import {
+    TelemetryModel,
+    type InitialTelemetryPoint,
+} from "./telemetry.model";
+import {
+    normalizeDepotKey,
+    resolveStartPosition,
+    speedForStatus,
+} from "../lib/startPosition";
 import { SpeedingEventModel } from "./speedingEvent.model";
 import {
     BadRequestError,
@@ -111,6 +119,12 @@ type ParsedImportRow = {
     depot_too_long: boolean;
     cost_center_too_long: boolean;
     phone_invalid: boolean;
+    latitude: number | null;
+    longitude: number | null;
+    latitude_present: boolean;
+    longitude_present: boolean;
+    latitude_invalid: boolean;
+    longitude_invalid: boolean;
 };
 
 const EMPTY_OPTIONALS = {
@@ -283,6 +297,24 @@ function parseImportPhone(raw: string | undefined): {
     return { value: trimmed };
 }
 
+function parseAxis(
+    raw: string | undefined,
+    min: number,
+    max: number,
+): { present: boolean; value: number | null; invalid: boolean } {
+    if (raw === undefined || raw.trim() === "") {
+        return { present: false, value: null, invalid: false };
+    }
+
+    const value = Number(raw.trim().replace(",", "."));
+
+    if (!Number.isFinite(value) || value < min || value > max) {
+        return { present: true, value: null, invalid: true };
+    }
+
+    return { present: true, value, invalid: false };
+}
+
 function parseStatus(
     raw: string | undefined,
     statusMapping: ImportStatusMapping,
@@ -353,6 +385,8 @@ function mapTableRows(
         const depotParsed = parseOptionalText(read("depot"), DEPOT_MAX);
         const costParsed = parseOptionalText(read("cost_center"), COST_CENTER_MAX);
         const phoneParsed = parseImportPhone(read("phone"));
+        const latitudeParsed = parseAxis(read("latitude"), -90, 90);
+        const longitudeParsed = parseAxis(read("longitude"), -180, 180);
 
         rows.push({
             row_index: rowIndex + 1,
@@ -372,6 +406,12 @@ function mapTableRows(
             depot_too_long: Boolean(depotParsed.tooLong),
             cost_center_too_long: Boolean(costParsed.tooLong),
             phone_invalid: Boolean(phoneParsed.invalid),
+            latitude: latitudeParsed.value,
+            longitude: longitudeParsed.value,
+            latitude_present: latitudeParsed.present,
+            longitude_present: longitudeParsed.present,
+            latitude_invalid: latitudeParsed.invalid,
+            longitude_invalid: longitudeParsed.invalid,
         });
     }
 
@@ -630,13 +670,34 @@ function buildVehiclePreviewRows(
             defaultAction = "skip";
         } else if (
             row.depot &&
-            !lookup.depotNameToId.has(row.depot.toLowerCase())
+            !lookup.depotsByKey.has(normalizeDepotKey(row.depot))
         ) {
+            const startAt = lookup.defaultDepot
+                ? `am Standarddepot „${lookup.defaultDepot.name}“`
+                : "an der konfigurierten Fallback-Koordinate";
             issues.push({
                 level: "warning",
                 code: "UNKNOWN_DEPOT",
-                message: `Standort „${row.depot}“ ist kein Depot dieser Firma. Das Fahrzeug wird ohne Stammstandort angelegt.`,
+                message: `Standort „${row.depot}“ ist kein Depot dieser Firma. Das Fahrzeug wird ohne Stammstandort angelegt und startet ${startAt}.`,
             });
+        }
+
+        if (row.latitude_invalid || row.longitude_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_COORDINATES",
+                message:
+                    "Breitengrad muss zwischen -90 und 90 liegen, Längengrad zwischen -180 und 180.",
+            });
+            defaultAction = "skip";
+        } else if (row.latitude_present !== row.longitude_present) {
+            issues.push({
+                level: "error",
+                code: "INVALID_COORDINATES",
+                message:
+                    "Breiten- und Längengrad müssen gemeinsam gesetzt sein.",
+            });
+            defaultAction = "skip";
         }
 
         if (row.cost_center_too_long) {
@@ -669,6 +730,8 @@ function buildVehiclePreviewRows(
             depot: row.depot,
             cost_center: row.cost_center,
             phone: null,
+            latitude: row.latitude,
+            longitude: row.longitude,
             default_action: defaultAction,
             issues,
         });
@@ -1497,6 +1560,7 @@ export class ImportModel {
             withTransaction(() => {
                 const lookup = loadCompanyImportLookup(companyId);
                 const plateIds = new Map<string, number>();
+                const initialPoints: InitialTelemetryPoint[] = [];
 
                 const rememberPlate = (plate: string, id: number) => {
                     plateIds.set(plate.toLowerCase(), id);
@@ -1585,11 +1649,42 @@ export class ImportModel {
 
                             const fuelLevel = row.fuel_level ?? 100;
                             const status = row.status ?? "IDLE";
-                            const homeSiteId = row.depot
-                                ? lookup.depotNameToId.get(
-                                      row.depot.toLowerCase(),
+                            const namedDepot = row.depot
+                                ? lookup.depotsByKey.get(
+                                      normalizeDepotKey(row.depot),
                                   )
                                 : undefined;
+                            const homeSiteId = namedDepot?.id;
+                            const fileCoordinates =
+                                row.latitude !== null &&
+                                row.latitude !== undefined &&
+                                row.longitude !== null &&
+                                row.longitude !== undefined;
+                            const queueStart = (
+                                vehicleId: number,
+                                hadPosition: boolean,
+                            ) => {
+                                if (hadPosition && !fileCoordinates) {
+                                    return;
+                                }
+
+                                const placement = resolveStartPosition({
+                                    latitude: fileCoordinates
+                                        ? row.latitude
+                                        : null,
+                                    longitude: fileCoordinates
+                                        ? row.longitude
+                                        : null,
+                                    depot: namedDepot,
+                                    defaultDepot: lookup.defaultDepot,
+                                });
+                                initialPoints.push({
+                                    vehicleId,
+                                    latitude: placement.latitude,
+                                    longitude: placement.longitude,
+                                    speed: speedForStatus(status),
+                                });
+                            };
                             const yardFields = {
                                 ...(row.vin ? { vin: row.vin } : {}),
                                 ...(row.vehicle_type
@@ -1644,6 +1739,8 @@ export class ImportModel {
                                     );
                                 }
 
+                                queueStart(created.id, false);
+
                                 if (createdDriver) {
                                     result.created_drivers += 1;
                                 }
@@ -1691,6 +1788,11 @@ export class ImportModel {
                                     previous?.status,
                                     status,
                                     companyId,
+                                );
+                                queueStart(
+                                    vehicleId,
+                                    previous?.latitude != null &&
+                                        previous.longitude != null,
                                 );
 
                                 if (row.driver_name) {
@@ -1774,6 +1876,8 @@ export class ImportModel {
                         }
                     }
                 }
+
+                TelemetryModel.insertInitialBatch(initialPoints);
 
                 insertImportRun({
                     companyId,
