@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink } from "react-router";
 import { logout, switchCompany } from "../api/auth";
 import { Button } from "./ui/Button/Button";
@@ -6,6 +7,7 @@ import styles from "./SessionMenu.module.scss";
 
 export const SessionMenu = () => {
     const { user, isReady, setUser } = useAuth();
+    const [switchError, setSwitchError] = useState<string | null>(null);
 
     if (!isReady) {
         return null;
@@ -33,30 +35,42 @@ export const SessionMenu = () => {
         <div className={styles.menu}>
             <div className={styles.identity}>
                 {user.memberships.length > 1 ? (
-                    <select
-                        className={styles.companySelect}
-                        aria-label="Firma"
-                        value={user.company_id}
-                        onChange={async (event) => {
-                            try {
-                                const next = await switchCompany(
-                                    Number(event.target.value),
-                                );
-                                setUser(next);
-                            } catch {
-                                setUser(user);
-                            }
-                        }}
-                    >
-                        {user.memberships.map((membership) => (
-                            <option
-                                key={membership.company_id}
-                                value={membership.company_id}
-                            >
-                                {membership.company_name}
-                            </option>
-                        ))}
-                    </select>
+                    <div className={styles.companyField}>
+                        <select
+                            className={styles.companySelect}
+                            aria-label="Firma"
+                            value={user.company_id}
+                            onChange={async (event) => {
+                                setSwitchError(null);
+
+                                try {
+                                    const next = await switchCompany(
+                                        Number(event.target.value),
+                                    );
+                                    setUser(next);
+                                } catch {
+                                    setUser(user);
+                                    setSwitchError(
+                                        "Firma konnte nicht gewechselt werden.",
+                                    );
+                                }
+                            }}
+                        >
+                            {user.memberships.map((membership) => (
+                                <option
+                                    key={membership.company_id}
+                                    value={membership.company_id}
+                                >
+                                    {membership.company_name}
+                                </option>
+                            ))}
+                        </select>
+                        {switchError && (
+                            <span className={styles.error} role="alert">
+                                {switchError}
+                            </span>
+                        )}
+                    </div>
                 ) : (
                     <span className={styles.company}>{user.company_name}</span>
                 )}

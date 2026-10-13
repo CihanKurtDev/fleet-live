@@ -113,7 +113,7 @@ export const AccountPage = () => {
             const setup = await setupTotp();
             setOtpauth(setup.otpauth_url);
             setSetupToken(setup.setup_token ?? null);
-            setInfo(`Geheimnis: ${setup.secret}`);
+            setInfo(`Schlüssel für die Authenticator-App: ${setup.secret}`);
         } catch (caught: unknown) {
             showError(caught, "Zwei-Faktor konnte nicht gestartet werden.");
         }
@@ -143,7 +143,7 @@ export const AccountPage = () => {
         try {
             const result = await inviteMember(inviteEmail, inviteRole);
             setInfo(result.delivery === "log"
-                ? "Einladung angelegt. Der Link steht im API-Log."
+                ? "Einladung angelegt. Ein Mailversand ist nicht eingerichtet — der Link steht im Server-Log, nicht im Posteingang."
                 : "Einladung verschickt.");
             setInviteEmail("");
             const listed = await listMembers();

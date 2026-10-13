@@ -98,7 +98,9 @@ export const LoginPage = () => {
                     return;
                 }
 
-                setInfo(`Geheimnis: ${setup.secret}`);
+                setInfo(
+                    `Schlüssel für die Authenticator-App: ${setup.secret}`,
+                );
                 setQr(
                     await QRCode.toDataURL(setup.otpauth_url, {
                         margin: 1,

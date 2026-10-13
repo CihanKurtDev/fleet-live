@@ -67,7 +67,7 @@ export const ForgotPasswordPage = () => {
                             </p>
                         )}
                         <Button type="submit" fullWidth size="lg" disabled={pending}>
-                            Link anfordern
+                            {pending ? "Link wird angefordert…" : "Link anfordern"}
                         </Button>
                     </form>
                 )}

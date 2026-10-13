@@ -81,7 +81,9 @@ export const AcceptInvitePage = () => {
                         </p>
                     )}
                     <Button type="submit" fullWidth size="lg" disabled={pending || !token}>
-                        Einladung annehmen
+                        {pending
+                            ? "Einladung wird angenommen…"
+                            : "Einladung annehmen"}
                     </Button>
                 </form>
                 <p className={styles.links}>

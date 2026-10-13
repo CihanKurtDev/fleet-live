@@ -263,7 +263,9 @@ export const DriverEditForm = ({
                     size="sm"
                     disabled={isSubmitting || !isDirty}
                 >
-                    {submitLabel}
+                    {isSubmitting && submitLabel === "Speichern"
+                        ? "Wird gespeichert…"
+                        : submitLabel}
                 </Button>
             </div>
         </form>

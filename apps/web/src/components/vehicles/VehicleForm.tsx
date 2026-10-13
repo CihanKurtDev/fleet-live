@@ -508,7 +508,11 @@ export const VehicleForm = ({
                         size="sm"
                         disabled={isSubmitting || (isEditing && !isDirty)}
                     >
-                        {submitLabel}
+                        {isSubmitting && submitLabel === "Anlegen"
+                            ? "Wird angelegt…"
+                            : isSubmitting && submitLabel === "Speichern"
+                              ? "Wird gespeichert…"
+                              : submitLabel}
                     </Button>
                 </div>
             )}
