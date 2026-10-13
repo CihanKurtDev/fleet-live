@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
+import { db } from "../db/database";
+import { CompanyModel } from "../models/company.model";
 import { DriverModel } from "../models/driver.model";
+import { DueModel } from "../models/due.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { loginAs } from "./helpers";
@@ -124,5 +127,119 @@ describe("GET /api/due", () => {
         assert.equal(response.status, 200);
         assert.equal(response.body.meta.total, 1);
         assert.equal(response.body.data[0].label, "K-FIND 1");
+    });
+
+    it("skips inactive vehicles and drivers in the list and the briefing", async () => {
+        const parked = VehicleModel.create({
+            license_plate: "K-AUS 1",
+            company_id: 1,
+            hu_due_on: "2020-01-01",
+        });
+        db.prepare("UPDATE vehicles SET active = 0 WHERE id = ?").run(parked.id);
+        VehicleModel.create({
+            license_plate: "K-AN 1",
+            company_id: 1,
+            hu_due_on: "2020-01-01",
+        });
+        const away = DriverModel.create(1, "Inaktiv Fahrer");
+        db.prepare("UPDATE drivers SET active = 0 WHERE id = ?").run(away.id);
+        DriverModel.create(1, "Aktiv Fahrer");
+
+        const overdue = await api.get("/api/due?state=overdue");
+        const briefing = await api.get("/api/briefing");
+        const labels = (overdue.body.data as Array<{ label: string }>).map(
+            (row) => row.label,
+        );
+
+        assert.equal(overdue.status, 200);
+        assert.equal(labels.includes("K-AN 1"), true);
+        assert.equal(labels.includes("Aktiv Fahrer"), true);
+        assert.equal(labels.includes("K-AUS 1"), false);
+        assert.equal(labels.includes("Inaktiv Fahrer"), false);
+        assert.equal(
+            overdue.body.meta.total,
+            briefing.body.data.due.overdue,
+        );
+    });
+
+    it("counts the HU month end and a later inspection instead of the old day", () => {
+        const month = VehicleModel.create({
+            license_plate: "K-MON 1",
+            company_id: 1,
+            hu_due_on: "2026-10-15",
+        });
+        const inspected = VehicleModel.create({
+            license_plate: "K-UVV 1",
+            company_id: 1,
+            uvv_due_on: "2026-03-01",
+        });
+        db.prepare("UPDATE vehicles SET uvv_checked_on = ? WHERE id = ?").run(
+            "2026-10-15",
+            inspected.id,
+        );
+
+        const rows = DueModel.rowsForCompany(1, "2026-10-13");
+        const hu = rows.find(
+            (row) => row.vehicle_id === month.id && row.kind === "hu",
+        );
+        const uvv = rows.find(
+            (row) => row.vehicle_id === inspected.id && row.kind === "uvv",
+        );
+
+        assert.equal(hu?.state, "soon");
+        assert.equal(hu?.due_on, "2026-10-31");
+        assert.equal(uvv, undefined);
+    });
+
+    it("uses a company lead and can switch the licence check off", () => {
+        CompanyModel.updateDueSettings(1, {
+            due_lead_days: 0,
+            licence_check_months: 0,
+        });
+
+        try {
+            const month = VehicleModel.create({
+                license_plate: "K-LEAD 1",
+                company_id: 1,
+                hu_due_on: "2026-10-15",
+            });
+            DriverModel.create(1, "Ohne Kontrolle");
+
+            const narrowed = DueModel.rowsForCompany(1, "2026-10-13");
+            const hu = narrowed.find(
+                (row) => row.vehicle_id === month.id && row.kind === "hu",
+            );
+
+            assert.equal(hu, undefined);
+            assert.equal(
+                narrowed.some((row) => row.kind === "licence_check"),
+                false,
+            );
+        } finally {
+            CompanyModel.updateDueSettings(1, {
+                due_lead_days: null,
+                licence_check_months: null,
+            });
+        }
+
+        const restored = VehicleModel.create({
+            license_plate: "K-LEAD 2",
+            company_id: 1,
+            hu_due_on: "2026-10-15",
+        });
+        DriverModel.create(1, "Mit Kontrolle");
+        const rows = DueModel.rowsForCompany(1, "2026-10-13");
+
+        assert.equal(
+            rows.find((row) => row.vehicle_id === restored.id && row.kind === "hu")
+                ?.state,
+            "soon",
+        );
+        assert.equal(
+            rows.some(
+                (row) => row.label === "Mit Kontrolle" && row.kind === "licence_check",
+            ),
+            true,
+        );
     });
 });

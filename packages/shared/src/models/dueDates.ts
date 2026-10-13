@@ -135,7 +135,7 @@ export function utcTodayIso(now = new Date()): string {
     return now.toISOString().slice(0, 10);
 }
 
-/** Kalendertag in Europe/Berlin. Die laufende Liste nutzt weiter `utcTodayIso`. */
+/** Kalendertag in Europe/Berlin. `GET /api/due` und die Schichtzähler nutzen dieses Datum. */
 export function berlinTodayIso(now = new Date()): string {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Europe/Berlin",
@@ -224,16 +224,19 @@ export function monthEndIso(yearMonth: string): string {
     return `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
 }
 
+const YEAR_MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
 /**
  * HU gilt bis zum Monatsende. Überfällig ist erst der folgende Tag.
  * `leadDays` zählt bis zu diesem Monatsende.
+ * Ein Wert, der kein `JJJJ-MM` ist, zählt als fehlendes Datum.
  */
 export function classifyHuMonth(
     yearMonth: string | null,
     today: string,
     leadDays: number,
 ): { state: DueCalendarState; due_on: string | null } {
-    if (yearMonth === null || yearMonth === "") {
+    if (yearMonth === null || yearMonth === "" || !YEAR_MONTH.test(yearMonth)) {
         return { state: "missing", due_on: null };
     }
 
@@ -835,7 +838,7 @@ function pushConfigured(
 }
 
 /**
- * Neue Fristenrechnung. Die laufende Liste nutzt weiter `buildDueRows`.
+ * Fristenrechnung für `GET /api/due` und die Schichtzähler.
  * `leadDays` und `licenceCheckMonths` sind die aufgelösten Firmenwerte.
  */
 export function buildConfiguredDueRows(input: {

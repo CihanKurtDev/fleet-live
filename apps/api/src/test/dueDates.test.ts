@@ -300,6 +300,8 @@ describe("due rules", () => {
             "overdue",
         );
         assert.equal(classifyHuMonth(null, TODAY, leadDays).state, "missing");
+        assert.equal(classifyHuMonth("kein-datum", TODAY, leadDays).state, "missing");
+        assert.equal(classifyHuMonth("2026-02-31", TODAY, leadDays).state, "missing");
     });
 
     it("uses the inspection when the manual UVV date is not later", () => {
