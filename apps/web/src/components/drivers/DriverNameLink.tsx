@@ -6,16 +6,19 @@ export const DriverNameLink = ({
     driverId,
     name,
     className,
+    title,
 }: {
     driverId: number;
     name: string;
     className?: string;
+    title?: string;
 }) => {
     const location = useLocation();
 
     return (
         <Link
             className={className ?? styles.link}
+            title={title}
             to={`/drivers/${driverId}`}
             state={{
                 from: `${location.pathname}${location.search}`,

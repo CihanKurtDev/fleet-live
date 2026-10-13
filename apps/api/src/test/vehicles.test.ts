@@ -895,6 +895,7 @@ describe("vehicle mutations", () => {
             vin: "WVWZZZ1JZXW000001",
             vehicle_type: "TRUCK",
             hu_due_on: "15.06.2027",
+            uvv_due_on: "01.09.2026",
             depot: "Hof Nord",
             cost_center: "KST-100",
         });
@@ -902,7 +903,36 @@ describe("vehicle mutations", () => {
         assert.equal(created.status, 201);
         assert.equal(created.body.vin, "WVWZZZ1JZXW000001");
         assert.equal(created.body.vehicle_type, "TRUCK");
-        assert.equal(created.body.hu_due_on, "2027-06-15");
+        assert.equal(created.body.hu_due_on, "2027-06");
+        assert.equal(created.body.uvv_due_on, "2026-09-01");
+        assert.equal(created.body.uvv_checked_on, null);
+        assert.equal(created.body.active, true);
+
+        const month = await api.post("/api/vehicles").send({
+            license_plate: "K-YARD 3",
+            fuel_level: 40,
+            status: "IDLE",
+            hu_due_on: "2026-10",
+            uvv_checked_on: "2026-04-15",
+            uvv_due_on: "2027-03-01",
+        });
+
+        assert.equal(month.status, 201);
+        assert.equal(month.body.hu_due_on, "2026-10");
+        assert.equal(month.body.uvv_checked_on, "2026-04-15");
+
+        const clearedDue = await api.put(`/api/vehicles/${month.body.id}`).send({
+            license_plate: "K-YARD 3",
+            fuel_level: 40,
+            status: "IDLE",
+            hu_due_on: "2026-10",
+            uvv_due_on: null,
+        });
+
+        assert.equal(clearedDue.status, 200);
+        assert.equal(clearedDue.body.uvv_due_on, null);
+        assert.equal(clearedDue.body.uvv_checked_on, "2026-04-15");
+        assert.equal(clearedDue.body.hu_due_on, "2026-10");
         assert.equal(created.body.depot, "Hof Nord");
         assert.equal(created.body.cost_center, "KST-100");
 

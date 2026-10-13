@@ -8,6 +8,7 @@ import { useServerTable } from "../../hooks/useServerTable";
 import { useDriverList } from "../../hooks/useDriverList";
 import { useDriverListQuery } from "../../hooks/useDriverListQuery";
 import { driverColumns } from "./driverTableConfig";
+import band from "../../styles/pageBand.module.scss";
 import styles from "./DriverTable.module.scss";
 
 interface DriverTableProps {
@@ -44,19 +45,23 @@ export const DriverTable = ({
         <section
             className={sectionClassName(styles.driverTable, styles.isFetching)}
         >
-            <h1 className={styles.title}>Fahrer</h1>
-            <p className={styles.lead}>
-                Offene Warnungen sind Tempo-Überschreitungen in der Inbox;
-                Verstöße die Historie.
-            </p>
+            <header className={`${band.band} ${band.bleed}`}>
+                <div>
+                    <h1 className={styles.title}>Fahrer</h1>
+                    <p className={styles.lead}>
+                        Offene Warnungen sind Tempo-Überschreitungen in der
+                        Inbox; Verstöße die Historie.
+                    </p>
+                </div>
 
-            <TableToolbar
-                search={tableState.search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Fahrer suchen..."
-                addNewLabel="Fahrer anlegen"
-                onAddNew={onAddDriver}
-            />
+                <TableToolbar
+                    search={tableState.search}
+                    onSearchChange={setSearch}
+                    searchPlaceholder="Fahrer suchen..."
+                    addNewLabel="Fahrer anlegen"
+                    onAddNew={onAddDriver}
+                />
+            </header>
 
             {error && (
                 <RetryMessage message={error} onRetry={listResult.retry} />

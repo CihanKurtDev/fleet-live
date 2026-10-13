@@ -39,6 +39,7 @@ import { useVehicles } from "../context/vehiclesContext";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { importRunColumns } from "../components/vehicles/importRunConfig";
 import layout from "../styles/detailLayout.module.scss";
+import band from "../styles/pageBand.module.scss";
 import styles from "./ImportPage.module.scss";
 
 type WizardStep = "upload" | "mapping" | "preview" | "result";
@@ -51,9 +52,13 @@ const COLUMN_TARGET_LABELS: Record<ImportColumnTarget, string> = {
     vin: "VIN",
     vehicle_type: "Fahrzeugtyp",
     hu_due_on: "HU fällig",
+    uvv_checked_on: "UVV zuletzt geprüft",
+    uvv_due_on: "UVV fällig",
     depot: "Depot",
     cost_center: "Kostenstelle",
     phone: "Telefon",
+    licence_expires_on: "Führerschein gültig bis",
+    licence_checked_on: "Führerschein kontrolliert am",
     latitude: "Breitengrad",
     longitude: "Längengrad",
     ignore: "Ignorieren",
@@ -519,9 +524,8 @@ export const ImportPage = () => {
 
     return (
         <section className={`${layout.page} ${styles.page}`}>
-            <DetailBackLink fallback="/vehicles" />
-
-            <header>
+            <header className={`${band.band} ${band.bleedDetail}`}>
+                <DetailBackLink fallback="/vehicles" />
                 <h1 className={styles.title}>Bestand importieren</h1>
                 <p className={styles.lead}>
                     Stammdaten und Zuweisungen aus CSV oder Excel laden. Die

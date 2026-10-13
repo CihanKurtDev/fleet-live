@@ -1,11 +1,15 @@
 import {
     LOW_FUEL_THRESHOLD_PERCENT,
     briefingMonthKeys,
+    dueCounts,
+    resolveDueSettings,
     type BriefingCounts,
     type BriefingHistoryMonth,
     type BriefingResponse,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
+import { CompanyModel } from "./company.model";
+import { DueModel } from "./due.model";
 
 type StatusCountRow = {
     driving: number;
@@ -155,6 +159,9 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
     });
 };
 
+const dueForCompany = (companyId: number) =>
+    dueCounts(DueModel.rowsForCompany(companyId));
+
 export class BriefingModel {
     static forCompany(companyId: number): BriefingResponse {
         const status = stmt(
@@ -209,6 +216,10 @@ export class BriefingModel {
             data: {
                 counts,
                 history: listHistory(companyId),
+                due: dueForCompany(companyId),
+                due_lead_days: resolveDueSettings(
+                    CompanyModel.dueSettings(companyId),
+                ).lead_days,
             },
         };
     }

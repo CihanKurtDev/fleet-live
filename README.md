@@ -87,10 +87,13 @@ Was die App heute kann, und was als Nächstes kommt.
 * Fahrtarchiv am Fahrzeug: alte Fahrten durchblättern, abgeschlossene Strecke auf der Karte
 * Fahrzeuge, Fahrer, Freigaben und aktuelle Besatzung aus CSV oder Excel (`/vehicles/import`)
 * Letzte Spaltenzuordnung bleibt pro Firma gespeichert, jeder Import steht im Log
-* Hof-Stammdaten am Fahrzeug: VIN, Typ, HU-Fälligkeit, Depot, Kostenstelle
+* Hof-Stammdaten am Fahrzeug: VIN, Typ, HU- und UVV-Fälligkeit, Depot, Kostenstelle
+* Fristen: HU, UVV, Führerschein-Ablauf und Führerscheinkontrolle. Die Startseite zählt überfällig, in 30 Tagen und leere Felder. Die Liste unter Fristen zeigt dieselben Zeilen. Eine fehlende Kontrolle ist überfällig. Keine neuen Inbox-Typen.
 * Import-Spalte Depot (auch Standort) setzt den Stammstandort und eine Startposition am Hof, mit kleinem Versatz. Ohne Angabe gilt das Standarddepot, ohne Depot eine Fallback-Koordinate. Lat/Lng in der Datei sind ein Sonderfall und haben Vorrang. Ein zweiter Import verschiebt vorhandene Positionen nicht.
 * Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
 * Depots als benannte Kreise auf der Flottenkarte, Stammstandort am Fahrzeug, Filter „Im Depot“
+* CSV der Firma: Fahrzeuge, Warnungen und Fahrten. Nur der Dispatcher. Die Datei nimmt den ganzen Bestand, nicht die aktuelle Seite
+* Monat auf der Schicht als CSV: Kilometer, in dem Monat angelegte Warnungen (offen und erledigt) und Verbrauch. 25 Liter je 100 km aus der gefahrenen Strecke. Der Tankzeiger bleibt die Messung
 * Firma registrieren, E-Mail bestätigen, Passwort zurücksetzen und ändern
 * Dispatcher und Viewer einladen, zwischen eigenen Firmen wechseln
 * Zwei-Faktor (Authenticator-App) und Anmeldung über Google, Microsoft oder einen Firmen-OIDC
@@ -98,8 +101,7 @@ Was die App heute kann, und was als Nächstes kommt.
 
 ## Als Nächstes
 
-* Erinnerungen zu HU, Führerschein, UVV
-* CSV-Export
+* Läuft die Anmeldung mitten in der Sitzung ab, geht es zurück zur Anmeldung
 
 ---
 
@@ -164,9 +166,9 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }`, nur `dispatcher` |
 | `GET`    | `/api/briefing`                  | Snapshot für die Startseite |
 | `GET`    | `/api/drivers`                   | Fahrer (`search`, `page`, `limit`, optional `vehicle_id`). Sortierung: offene Warnungen |
-| `POST`   | `/api/drivers`                   | `{ name, phone? }`, `dispatcher` |
+| `POST`   | `/api/drivers`                   | `{ name, phone?, licence_expires_on?, licence_checked_on? }`, `dispatcher` |
 | `GET`    | `/api/drivers/:id`               | Fahrer, Freigaben, aktuelles Fahrzeug. `404` wenn weg oder andere Firma |
-| `PATCH`  | `/api/drivers/:id`               | `{ name?, phone? }`, `dispatcher` |
+| `PATCH`  | `/api/drivers/:id`               | `{ name?, phone?, licence_expires_on?, licence_checked_on? }`, `dispatcher` |
 | `POST`   | `/api/drivers/:id/vehicles`      | `{ vehicle_id }`, Freigabe, `dispatcher` |
 | `DELETE` | `/api/drivers/:id/vehicles/:vehicleId` | Freigabe weg, `dispatcher` |
 | `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` oder `{ vehicle_id: null }`, `dispatcher` |
@@ -178,7 +180,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 
 `GET /api/drivers` listet Fahrer der Session-Firma. `counts` und `open_warnings` zählen nur SPEEDING (über den Snapshot `alerts.driver_id`). `vehicle_plate` nur wenn genau ein freigegebenes Fahrzeug. `current_vehicle_plate` ist das Fahrzeug mit `current_driver_id`. Mit `vehicle_id` kommen die Fahrer, die für dieses Fahrzeug frei sind. `GET /api/drivers/:id` hängt `vehicles` (`is_current`) und `current_vehicle` an.
 
-`GET /api/briefing` gibt Statuszähler (`driving`, `idle`, `offline`), Inbox `open`, `low_fuel` und monatliche `history` für die Diagramme. `viewer` darf lesen.
+`GET /api/briefing` gibt Statuszähler (`driving`, `idle`, `offline`), Inbox `open`, `low_fuel`, `in_depot`, monatliche `history` und `due` als Zähler (überfällig, in 30 Tagen, fehlende Felder). `GET /api/due` gibt dieselben Fristen seitenweise (`state`, optional `kind`, `search`). `viewer` darf lesen.
 
 `GET /api/vehicles/positions` ist entweder `positions` oder `density`, plus `meta.total`, `meta.matched` und `meta.without_position`. `matched` zählt die Filtertreffer der Firma ohne Kartenausschnitt, inklusive Fahrzeuge ohne Position. Jede Zeile hat `has_position`. Ohne Telemetrie sind Koordinaten null; `without_position` ignoriert den Kartenausschnitt. `bbox=west,south,east,north` optional und gilt nur für Zeilen mit Position. `search` schränkt die Zeilen nicht ein. Kennzeichen und aktueller Fahrer werden in dem geladenen Bestand gesucht. `drivers` filtert die Ansicht. Bis `FLEET_POSITIONS_MAX` (5000) kommen Einzelpositionen. Die Karte lädt diesen Bestand einmal und clustert im Ausschnitt. Darüber höchstens 32 mal 20 Dichtezellen.
 
@@ -196,13 +198,13 @@ Validierung:
 }
 ```
 
-Fahrzeug-JSON: letzte Telemetrie oder `null`, `speed_limit_kmh`, `active_alerts`, `speeding_open`, `current_driver_id`, `driver_name` (null im Pool), Hof-Felder `vin`, `vehicle_type`, `hu_due_on`, `depot`, `cost_center`. Anlegen und Update nehmen Kennzeichen, Tank, Status und Hof-Felder. Keinen Fahrernamen. Zuweisung läuft über `/api/drivers`.
+Fahrzeug-JSON: letzte Telemetrie oder `null`, `speed_limit_kmh`, `active_alerts`, `speeding_open`, `current_driver_id`, `driver_name` (null im Pool), Hof-Felder `vin`, `vehicle_type`, `hu_due_on`, `uvv_due_on`, `depot`, `cost_center`. Anlegen und Update nehmen Kennzeichen, Tank, Status und Hof-Felder. Keinen Fahrernamen. Zuweisung läuft über `/api/drivers`. Fahrer tragen `licence_expires_on` und `licence_checked_on`.
 
 ---
 
 # Fahrzeugmodell
 
-Was ein Mensch pflegt: Kennzeichen, VIN, Typ, HU-Fälligkeit, Depot, Kostenstelle. Tankstand, wenn das Fahrzeug nicht fährt. Wer fahren darf und wer es gerade hat, hängt an der Fahrer-API, nicht am Fahrzeugformular. `status` kommt vom Fahrzeug (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) und ist kein Formularfeld. `fuel_level` wird während `DRIVING` gemessen, sonst von Hand.
+Was ein Mensch pflegt: Kennzeichen, VIN, Typ, HU- und UVV-Fälligkeit, Depot, Kostenstelle. Am Fahrer: Telefon, Führerschein gültig bis, letzte Kontrolle. Tankstand, wenn das Fahrzeug nicht fährt. Wer fahren darf und wer es gerade hat, hängt an der Fahrer-API, nicht am Fahrzeugformular. `status` kommt vom Fahrzeug (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) und ist kein Formularfeld. `fuel_level` wird während `DRIVING` gemessen, sonst von Hand.
 
 Zusätzlich in der Antwort: Position, Geschwindigkeit, `speed_limit_kmh`, `recorded_at`, `active_alerts`, `speeding_open`, `created_at`.
 
@@ -230,6 +232,7 @@ Listenstand steht in der URL. Reload behält die Ansicht. Frischer Besuch von `/
 | `/vehicles/:id` | Detail, Karte, Zuweisung, Warnungen, Bearbeiten, Löschen |
 | `/fleet`        | Flottenkarte |
 | `/alerts`       | Inbox (offen/erledigt, optional `type`, `vehicle_id` / `driver_id`) |
+| `/fristen`      | Fristen (überfällig, in 30 Tagen, ohne Datum) |
 | `/drivers`      | Fahrerliste |
 | `/drivers/:id`  | Fahrer, Freigaben, aktuelles Fahrzeug, SPEEDING-Historie |
 
@@ -237,7 +240,7 @@ Ohne Session landet man auf `/login`. Danach ist `/` die Startseite.
 
 ## Schichtüberblick
 
-Fünf Zahlen: offene Inbox, Funk-Ausfall, fahrend, bereit, niedriger Tank. Dazu die neuesten offenen Warnungen (Dispatcher kann erledigen), Fahrzeuge mit `OFFLINE`, Fahrer mit den meisten offenen Warnungen. Die Navigation zeigt den Inbox-Zähler. `viewer` liest, `dispatcher` erledigt.
+Oben die Kennzahlen: offene Inbox, Funk-Ausfall, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Inbox-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
 
 ## Fahrzeugliste
 

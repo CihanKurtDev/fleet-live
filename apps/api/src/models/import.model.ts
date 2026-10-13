@@ -110,12 +110,20 @@ type ParsedImportRow = {
     vin: string | null;
     vehicle_type: VehicleType | null;
     hu_due_on: string | null;
+    uvv_checked_on: string | null;
+    uvv_due_on: string | null;
     depot: string | null;
     cost_center: string | null;
     phone: string | null;
+    licence_expires_on: string | null;
+    licence_checked_on: string | null;
     vin_invalid: boolean;
     vehicle_type_invalid: boolean;
     hu_invalid: boolean;
+    uvv_checked_invalid: boolean;
+    uvv_invalid: boolean;
+    licence_expires_invalid: boolean;
+    licence_checked_invalid: boolean;
     depot_too_long: boolean;
     cost_center_too_long: boolean;
     phone_invalid: boolean;
@@ -131,9 +139,13 @@ const EMPTY_OPTIONALS = {
     vin: null,
     vehicle_type: null,
     hu_due_on: null,
+    uvv_checked_on: null,
+    uvv_due_on: null,
     depot: null,
     cost_center: null,
     phone: null,
+    licence_expires_on: null,
+    licence_checked_on: null,
 } as const;
 
 function suggestStatusMapping(values: string[]): ImportStatusMapping {
@@ -264,6 +276,23 @@ function parseImportVehicleType(raw: string | undefined): {
     return { value: parsed, raw: raw.trim() };
 }
 
+function licenceDates(row: {
+    licence_expires_on: string | null;
+    licence_checked_on: string | null;
+}): {
+    licence_expires_on?: string;
+    licence_checked_on?: string;
+} {
+    return {
+        ...(row.licence_expires_on
+            ? { licence_expires_on: row.licence_expires_on }
+            : {}),
+        ...(row.licence_checked_on
+            ? { licence_checked_on: row.licence_checked_on }
+            : {}),
+    };
+}
+
 function parseImportHuDate(raw: string | undefined): {
     value: string | null;
     raw: string | null;
@@ -382,6 +411,10 @@ function mapTableRows(
         const vinParsed = parseImportVin(read("vin"));
         const typeParsed = parseImportVehicleType(read("vehicle_type"));
         const huParsed = parseImportHuDate(read("hu_due_on"));
+        const uvvCheckedParsed = parseImportHuDate(read("uvv_checked_on"));
+        const uvvParsed = parseImportHuDate(read("uvv_due_on"));
+        const licenceExpiresParsed = parseImportHuDate(read("licence_expires_on"));
+        const licenceCheckedParsed = parseImportHuDate(read("licence_checked_on"));
         const depotParsed = parseOptionalText(read("depot"), DEPOT_MAX);
         const costParsed = parseOptionalText(read("cost_center"), COST_CENTER_MAX);
         const phoneParsed = parseImportPhone(read("phone"));
@@ -397,12 +430,20 @@ function mapTableRows(
             vin: vinParsed.value,
             vehicle_type: typeParsed.value,
             hu_due_on: huParsed.value,
+            uvv_checked_on: uvvCheckedParsed.value,
+            uvv_due_on: uvvParsed.value,
             depot: depotParsed.tooLong ? null : depotParsed.value,
             cost_center: costParsed.tooLong ? null : costParsed.value,
             phone: phoneParsed.value,
+            licence_expires_on: licenceExpiresParsed.value,
+            licence_checked_on: licenceCheckedParsed.value,
             vin_invalid: Boolean(vinParsed.invalid),
             vehicle_type_invalid: Boolean(typeParsed.invalid),
             hu_invalid: Boolean(huParsed.invalid),
+            uvv_checked_invalid: Boolean(uvvCheckedParsed.invalid),
+            uvv_invalid: Boolean(uvvParsed.invalid),
+            licence_expires_invalid: Boolean(licenceExpiresParsed.invalid),
+            licence_checked_invalid: Boolean(licenceCheckedParsed.invalid),
             depot_too_long: Boolean(depotParsed.tooLong),
             cost_center_too_long: Boolean(costParsed.tooLong),
             phone_invalid: Boolean(phoneParsed.invalid),
@@ -661,6 +702,25 @@ function buildVehiclePreviewRows(
             defaultAction = "skip";
         }
 
+        if (row.uvv_checked_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_UVV_CHECKED_DATE",
+                message:
+                    "UVV-Prüfung muss JJJJ-MM-TT oder TT.MM.JJJJ sein.",
+            });
+            defaultAction = "skip";
+        }
+
+        if (row.uvv_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_UVV_DATE",
+                message: "UVV-Datum muss JJJJ-MM-TT oder TT.MM.JJJJ sein.",
+            });
+            defaultAction = "skip";
+        }
+
         if (row.depot_too_long) {
             issues.push({
                 level: "error",
@@ -727,9 +787,13 @@ function buildVehiclePreviewRows(
             vin: row.vin,
             vehicle_type: row.vehicle_type,
             hu_due_on: row.hu_due_on,
+            uvv_checked_on: row.uvv_checked_on,
+            uvv_due_on: row.uvv_due_on,
             depot: row.depot,
             cost_center: row.cost_center,
             phone: null,
+            licence_expires_on: null,
+            licence_checked_on: null,
             latitude: row.latitude,
             longitude: row.longitude,
             default_action: defaultAction,
@@ -802,6 +866,26 @@ function buildDriverPreviewRows(
             defaultAction = "skip";
         }
 
+        if (row.licence_expires_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_LICENCE_EXPIRY",
+                message:
+                    "Führerschein-Datum muss JJJJ-MM-TT oder TT.MM.JJJJ sein.",
+            });
+            defaultAction = "skip";
+        }
+
+        if (row.licence_checked_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_LICENCE_CHECK",
+                message:
+                    "Kontrolldatum muss JJJJ-MM-TT oder TT.MM.JJJJ sein.",
+            });
+            defaultAction = "skip";
+        }
+
         return withKind("drivers", {
             row_index: row.row_index,
             license_plate: null,
@@ -810,6 +894,8 @@ function buildDriverPreviewRows(
             driver_name: row.driver_name,
             ...EMPTY_OPTIONALS,
             phone: row.phone,
+            licence_expires_on: row.licence_expires_on,
+            licence_checked_on: row.licence_checked_on,
             default_action: defaultAction,
             issues,
         });
@@ -1622,6 +1708,7 @@ export class ImportModel {
 
                                 DriverModel.update(driverId, companyId, {
                                     phone: row.phone,
+                                    ...licenceDates(row),
                                 });
                                 continue;
                             }
@@ -1634,6 +1721,7 @@ export class ImportModel {
                                 companyId,
                                 row.driver_name,
                                 row.phone,
+                                licenceDates(row),
                             );
                             if (created) {
                                 result.created_drivers += 1;
@@ -1692,6 +1780,12 @@ export class ImportModel {
                                     : {}),
                                 ...(row.hu_due_on
                                     ? { hu_due_on: row.hu_due_on }
+                                    : {}),
+                                ...(row.uvv_due_on
+                                    ? { uvv_due_on: row.uvv_due_on }
+                                    : {}),
+                                ...(row.uvv_checked_on
+                                    ? { uvv_checked_on: row.uvv_checked_on }
                                     : {}),
                                 ...(homeSiteId !== undefined
                                     ? { home_site_id: homeSiteId }

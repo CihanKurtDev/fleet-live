@@ -13,7 +13,14 @@
 
 .header {
     flex-shrink: 0;
-    margin-top: 12px;
+}
+
+.titleRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
 }
 
 .title {
@@ -29,11 +36,19 @@
     color: var(--text);
 }
 
-.kpis {
+.kpis,
+.dueKpis {
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 10px;
+}
+
+.kpis {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.dueKpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .kpi {
@@ -122,6 +137,12 @@ a.kpi:hover {
     }
 }
 
+@media (max-width: 700px) {
+    .page {
+        padding-inline: 12px;
+    }
+}
+
 @media (max-width: 560px) {
     .page {
         gap: 10px;
@@ -129,7 +150,7 @@ a.kpi:hover {
     }
 
     .header {
-        margin-top: 10px;
+        margin-top: 0;
     }
 
     .title {
@@ -147,15 +168,15 @@ a.kpi:hover {
         gap: 8px;
     }
 
+    .kpis > .kpi:first-child {
+        grid-column: 1 / -1;
+        min-height: 82px;
+    }
+
     .kpi {
         min-height: 74px;
         padding: 10px 12px;
         border-radius: 8px;
-    }
-
-    .kpi:first-child {
-        grid-column: 1 / -1;
-        min-height: 82px;
     }
 
     .kpiValue {

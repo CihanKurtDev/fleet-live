@@ -80,6 +80,10 @@ describe("plan gaps: contract and headers", () => {
             request(app).get("/api/briefing"),
             request(app).get("/api/sites"),
             request(app).get("/api/import/runs"),
+            request(app).get("/api/export/vehicles"),
+            request(app).get("/api/export/alerts"),
+            request(app).get("/api/export/trips"),
+            request(app).get("/api/export/period"),
             request(app).post("/api/import/preview").send({ csv: "a" }),
             request(app).get("/api/auth/me"),
             request(app).get("/api/auth/members"),
@@ -213,6 +217,14 @@ describe("plan gaps: roles and tenant", () => {
                     role: "viewer",
                 }),
             () => agent.get("/api/auth/members"),
+            () =>
+                agent.patch("/api/due/settings").send({
+                    due_lead_days: 14,
+                }),
+            () => agent.get("/api/export/vehicles"),
+            () => agent.get("/api/export/alerts"),
+            () => agent.get("/api/export/trips"),
+            () => agent.get("/api/export/period"),
         ];
 
         for (const call of writes) {
@@ -228,6 +240,7 @@ describe("plan gaps: roles and tenant", () => {
             agent.get("/api/drivers"),
             agent.get("/api/sites"),
             agent.get("/api/briefing"),
+            agent.get("/api/due/settings"),
         ]);
         for (const response of reads) {
             assert.equal(response.status, 200);

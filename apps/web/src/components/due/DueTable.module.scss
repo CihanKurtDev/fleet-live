@@ -1,0 +1,329 @@
+.dueTable {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    padding: 0 16px;
+    transition: opacity 120ms ease;
+}
+
+.heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+.title {
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 22px;
+    font-weight: 650;
+    color: var(--text-h);
+}
+
+.reason {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text);
+}
+
+.lead {
+    flex-shrink: 0;
+    margin: 2px 0 0;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.search {
+    width: 280px;
+    max-width: 100%;
+    flex: none;
+}
+
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px 20px;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.filters .chipField {
+    gap: 6px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.chipHit {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    margin: 0;
+    padding: 0 0 0 12px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 2px var(--focus-ring);
+    }
+}
+
+.chipHitEnd {
+    padding: 0 12px 0 0;
+}
+
+.chipInput {
+    width: 3.25rem;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text-h);
+    font: inherit;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    cursor: text;
+    box-shadow: inset 0 0 0 1px var(--border);
+
+    &:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--focus-ring);
+    }
+
+    &:disabled {
+        opacity: 0.72;
+    }
+}
+
+.chipInputInvalid {
+    box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+.mobileRow {
+    display: none;
+    width: 100%;
+    min-width: 0;
+}
+
+.mobileSelect {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-h);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.mobileField {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+}
+
+.mobileInput {
+    width: 3rem;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-h);
+    font: inherit;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+
+    &:focus {
+        outline: none;
+    }
+}
+
+.mobileField:focus-within {
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.bound {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.settingGroup {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.settingHint,
+.settingResult {
+    width: 0;
+    min-width: 100%;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.settingHint {
+    color: var(--text);
+}
+
+.settingResult {
+    min-height: 1.4em;
+    font-weight: 650;
+    color: var(--text-h);
+}
+
+.settingResult:empty {
+    min-height: 0;
+}
+
+.settingError {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 12px;
+    color: var(--danger);
+}
+
+.isFetching {
+    opacity: 0.72;
+}
+
+.status {
+    flex-shrink: 0;
+    margin: 8px 0 0;
+    color: var(--text);
+    font-size: 13px;
+}
+
+@media (max-width: 700px) {
+    .heading {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .search {
+        width: 100%;
+    }
+
+    .filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .mobileRow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .dueTable {
+        padding: 0 12px 20px;
+    }
+
+    .title {
+        font-size: 20px;
+    }
+
+    .mobileCards {
+        flex: none;
+        overflow: visible;
+
+        :global(table) {
+            display: block;
+        }
+
+        :global(thead) {
+            display: none;
+        }
+
+        :global(tbody) {
+            display: grid;
+            gap: 10px;
+        }
+
+        :global(tr) {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 7px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        :global(.tableRowInteractive:hover),
+        :global(.tableRowInteractive:focus-within) {
+            background: var(--surface);
+        }
+
+        :global(td) {
+            display: grid;
+            grid-template-columns: minmax(72px, 0.35fr) minmax(0, 1fr);
+            gap: 10px;
+            align-items: start;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            font-size: 13px;
+        }
+
+        :global(td)::before {
+            content: attr(data-label);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 650;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        :global(td:first-child) {
+            display: block;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+            font-weight: 650;
+        }
+
+        :global(td:first-child)::before {
+            display: none;
+        }
+
+        :global(.empty) {
+            display: block;
+            padding: 24px 12px;
+        }
+    }
+}

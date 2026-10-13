@@ -10,7 +10,7 @@ import type {
     TableColumn,
     TableFilter,
 } from "../../types/table";
-import { formatIsoDate } from "../../utils/dateTime";
+import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
 import { DriverNameLink } from "../drivers/DriverNameLink";
 import { WarningChip } from "../alerts/WarningChip";
 import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
@@ -43,6 +43,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
         key: "license_plate",
         displayText: "Kennzeichen",
+        width: "128px",
         sortable: true,
     },
     {
@@ -54,6 +55,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
                 <DriverNameLink
                     driverId={row.current_driver_id}
                     name={value ?? "—"}
+                    title={value ?? undefined}
                 />
             ) : (
                 "—"
@@ -62,36 +64,58 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
         key: "vehicle_type",
         displayText: "Typ",
+        width: "96px",
         sortable: true,
         render: (value) => (value ? VEHICLE_TYPE_LABELS[value] : "—"),
     },
     {
         key: "depot",
         displayText: "Stammstandort",
+        headerText: "Depot",
         sortable: true,
-        render: (value) => value ?? "—",
+        render: (value) =>
+            value ? (
+                <span className={styles.clip} title={value}>
+                    {value}
+                </span>
+            ) : (
+                "—"
+            ),
     },
     {
         key: "hu_due_on",
         displayText: "HU",
+        width: "76px",
+        sortable: true,
+        render: (value) => formatYearMonth(value),
+    },
+    {
+        key: "uvv_due_on",
+        displayText: "UVV",
+        width: "108px",
         sortable: true,
         render: (value) => formatIsoDate(value),
     },
     {
         key: "status",
         displayText: "Status",
+        width: "118px",
         sortable: true,
         render: (value) => <VehicleStatusChip status={value} />,
     },
     {
         key: "fuel_level",
         displayText: "Tankstand",
+        headerText: "Tank",
+        width: "80px",
         sortable: true,
         render: (value) => `${Math.round(value)}%`,
     },
     {
         key: "speed",
         displayText: "Geschwindigkeit",
+        headerText: "km/h",
+        width: "100px",
         sortable: true,
         render: (value, { row }) => {
             if (value === null) {
@@ -120,6 +144,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
         key: "active_alerts",
         displayText: "Warnungen",
+        width: "116px",
         sortable: true,
         render: (_value, { row }) => {
             const types = warningTypes(row);

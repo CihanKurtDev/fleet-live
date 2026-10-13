@@ -7,6 +7,7 @@ import {
     briefingMonthKeys,
 } from "@fleet-live/shared";
 import { app } from "../app";
+import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { TripModel } from "../models/trip.model";
@@ -188,5 +189,32 @@ describe("GET /api/briefing", () => {
 
         assert.equal(response.status, 200);
         assert.equal(row?.distance_m, 50_000);
+    });
+
+    it("counts this company's deadlines and skips the other tenant", async () => {
+        VehicleModel.create({
+            license_plate: "K-HU 1",
+            company_id: 1,
+            hu_due_on: "2020-01-01",
+            uvv_due_on: "2099-01-01",
+        });
+        VehicleModel.create({
+            license_plate: "K-XX 9",
+            company_id: 2,
+            hu_due_on: "2020-01-01",
+        });
+        DriverModel.create(1, "Nora Frist");
+        DriverModel.create(2, "Fremd Fahrer");
+
+        const response = await api.get("/api/briefing");
+        const due = response.body.data.due;
+
+        assert.equal(response.status, 200);
+        assert.equal(due.items, undefined);
+        assert.equal(due.overdue, 2);
+        assert.equal(due.soon, 0);
+        assert.equal(due.missing.hu, 0);
+        assert.equal(due.missing.uvv, 0);
+        assert.equal(due.missing.licence_expiry, 1);
     });
 });

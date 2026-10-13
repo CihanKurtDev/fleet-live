@@ -2,10 +2,16 @@ import { useId, useState, type FormEvent } from "react";
 import {
     DRIVER_NAME_MAX,
     DRIVER_PHONE_MAX,
+    berlinTodayIso,
+    dueExplanationText,
+    dueRule,
+    explainLicenceCheck,
+    explainLicenceExpiry,
 } from "@fleet-live/shared";
 
 import { ApiError } from "../../api/client";
 import { createDriver } from "../../api/drivers";
+import { useDueSettings } from "../../hooks/useDueSettings";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import styles from "../vehicles/VehicleForm.module.scss";
@@ -51,8 +57,15 @@ export const DriverCreateForm = ({
     onCancel,
 }: DriverCreateFormProps) => {
     const fieldId = useId();
+    const { settings: dueSettings } = useDueSettings();
+    const checkMonths =
+        dueSettings?.check_months ??
+        dueRule("licence_check").interval_months ??
+        6;
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
+    const [licenceExpires, setLicenceExpires] = useState("");
+    const [licenceChecked, setLicenceChecked] = useState("");
     const [errors, setErrors] = useState<{
         name?: string;
         phone?: string;
@@ -75,6 +88,10 @@ export const DriverCreateForm = ({
             const created = await createDriver({
                 name: name.trim(),
                 phone: phone.trim() === "" ? null : phone.trim(),
+                licence_expires_on:
+                    licenceExpires === "" ? null : licenceExpires,
+                licence_checked_on:
+                    licenceChecked === "" ? null : licenceChecked,
             });
             onCreated(created);
         } catch (caught) {
@@ -149,6 +166,65 @@ export const DriverCreateForm = ({
                         {errors.phone}
                     </p>
                 )}
+            </div>
+
+            <div className={styles.field}>
+                <label htmlFor={`${fieldId}-licence-expires`}>
+                    Führerschein gültig bis
+                </label>
+                <Input
+                    id={`${fieldId}-licence-expires`}
+                    type="date"
+                    size="md"
+                    fullWidth
+                    value={licenceExpires}
+                    onChange={(event) => {
+                        setLicenceExpires(event.target.value);
+                        setErrors((current) => ({
+                            ...current,
+                            form: undefined,
+                        }));
+                    }}
+                    aria-describedby={`${fieldId}-licence-expires-reason`}
+                />
+                <p className={styles.hint} id={`${fieldId}-licence-expires-reason`}>
+                    Frühester Klassenablauf, zum Beispiel C/CE.{" "}
+                    {dueExplanationText(
+                        "licence_expiry",
+                        explainLicenceExpiry(licenceExpires || null),
+                    )}
+                </p>
+            </div>
+
+            <div className={styles.field}>
+                <label htmlFor={`${fieldId}-licence-checked`}>
+                    Führerschein kontrolliert am
+                </label>
+                <Input
+                    id={`${fieldId}-licence-checked`}
+                    type="date"
+                    size="md"
+                    fullWidth
+                    value={licenceChecked}
+                    onChange={(event) => {
+                        setLicenceChecked(event.target.value);
+                        setErrors((current) => ({
+                            ...current,
+                            form: undefined,
+                        }));
+                    }}
+                    aria-describedby={`${fieldId}-licence-checked-reason`}
+                />
+                <p className={styles.hint} id={`${fieldId}-licence-checked-reason`}>
+                    {dueExplanationText(
+                        "licence_check",
+                        explainLicenceCheck({
+                            checkedOn: licenceChecked || null,
+                            today: berlinTodayIso(),
+                            intervalMonths: checkMonths,
+                        }),
+                    )}
+                </p>
             </div>
 
             {errors.form && !errors.name && !errors.phone && (

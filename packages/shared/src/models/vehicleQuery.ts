@@ -12,6 +12,7 @@ export const VEHICLE_SORT_KEYS = [
     "vehicle_type",
     "depot",
     "hu_due_on",
+    "uvv_due_on",
 ] as const;
 
 export const VEHICLE_FILTERS = [

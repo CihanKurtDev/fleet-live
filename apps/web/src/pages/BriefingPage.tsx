@@ -1,12 +1,20 @@
 import { Link } from "react-router";
-import type { BriefingCounts, BriefingData } from "@fleet-live/shared";
+import type {
+    BriefingCounts,
+    BriefingData,
+    DueCounts,
+} from "@fleet-live/shared";
 import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
+import { dueSoonLabel } from "../components/due/dueTableConfig";
+import { ExportButton } from "../components/export/ExportButton";
 import { RetryMessage } from "../components/ui/RetryMessage";
+import { useAuth } from "../hooks/useAuth";
 import { useBriefing } from "../hooks/useBriefing";
 import { formatCount } from "../utils/formatCount";
 import styles from "./BriefingPage.module.scss";
+import band from "../styles/pageBand.module.scss";
 
 const briefingDateLabel = (now = new Date()) =>
     new Intl.DateTimeFormat("de-DE", {
@@ -115,27 +123,113 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
     );
 };
 
-const BriefingBody = ({ data }: { data: BriefingData }) => (
+const missingFields = (due: DueCounts) =>
+    due.missing.hu + due.missing.uvv + due.missing.licence_expiry;
+
+const DueKpis = ({
+    due,
+    leadDays,
+}: {
+    due: DueCounts;
+    leadDays: number;
+}) => {
+    const tiles: Array<{
+        key: string;
+        label: string;
+        value: number;
+        hint?: string;
+        tone: "critical" | "warning" | "neutral";
+        to: string;
+    }> = [
+        {
+            key: "overdue",
+            label: "Überfällig",
+            value: due.overdue,
+            tone: "critical",
+            to: "/fristen?state=overdue",
+        },
+        {
+            key: "soon",
+            label: dueSoonLabel(leadDays),
+            value: due.soon,
+            tone: "warning",
+            to: "/fristen?state=soon",
+        },
+        {
+            key: "missing",
+            label: "Datum fehlt",
+            value: missingFields(due),
+            hint: "Felder",
+            tone: "neutral",
+            to: "/fristen?state=missing",
+        },
+    ];
+
+    return (
+        <div className={styles.dueKpis}>
+            {tiles.map((tile) => {
+                const toneClass =
+                    tile.tone === "critical"
+                        ? styles.kpiCritical
+                        : tile.tone === "warning"
+                          ? styles.kpiWarning
+                          : undefined;
+
+                return (
+                    <Link
+                        key={tile.key}
+                        className={
+                            toneClass ? `${styles.kpi} ${toneClass}` : styles.kpi
+                        }
+                        to={tile.to}
+                    >
+                        <span className={styles.kpiLabel}>{tile.label}</span>
+                        <span className={styles.kpiValue}>
+                            {formatCount(tile.value)}
+                        </span>
+                        {tile.hint ? (
+                            <span className={styles.kpiHint}>{tile.hint}</span>
+                        ) : null}
+                    </Link>
+                );
+            })}
+        </div>
+    );
+};
+
+const BriefingBody = ({
+    data,
+    canWrite,
+}: {
+    data: BriefingData;
+    canWrite: boolean;
+}) => (
     <>
-        <header className={styles.header}>
-            <h1 className={styles.title}>Schicht</h1>
+        <header className={`${band.band} ${band.bleed} ${styles.header}`}>
+            <div className={styles.titleRow}>
+                <h1 className={styles.title}>Schicht</h1>
+                {canWrite && <ExportButton kind="period" />}
+            </div>
             <p className={styles.subtitle}>
                 {briefingDateLabel()} · {briefingNeed(data.counts.open)}
             </p>
         </header>
         <ImportPrompt />
         <Kpis counts={data.counts} />
+        <DueKpis due={data.due} leadDays={data.due_lead_days} />
         <BriefingCharts history={data.history} />
     </>
 );
 
 export const BriefingPage = () => {
     const { data, isLoading, error, retry } = useBriefing();
+    const { user } = useAuth();
+    const canWrite = user?.role === "dispatcher";
 
     if (isLoading) {
         return (
             <section className={styles.page}>
-                <header className={styles.header}>
+                <header className={`${band.band} ${band.bleed} ${styles.header}`}>
                     <h1 className={styles.title}>Schicht</h1>
                     <p className={styles.statusLine}>Laden…</p>
                 </header>
@@ -146,7 +240,7 @@ export const BriefingPage = () => {
     if (error || !data) {
         return (
             <section className={styles.page}>
-                <header className={styles.header}>
+                <header className={`${band.band} ${band.bleed} ${styles.header}`}>
                     <h1 className={styles.title}>Schicht</h1>
                     <RetryMessage
                         message={
@@ -161,7 +255,7 @@ export const BriefingPage = () => {
 
     return (
         <section className={styles.page}>
-            <BriefingBody data={data} />
+            <BriefingBody data={data} canWrite={canWrite} />
         </section>
     );
 };

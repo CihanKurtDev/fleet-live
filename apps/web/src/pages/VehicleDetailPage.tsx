@@ -1,4 +1,10 @@
-import { VEHICLE_TYPE_LABELS } from "@fleet-live/shared";
+import {
+    VEHICLE_TYPE_LABELS,
+    berlinTodayIso,
+    dueExplanationText,
+    explainHuMonth,
+    explainUvv,
+} from "@fleet-live/shared";
 import { decodePolyline, speedBand } from "@fleet-live/shared";
 import type { Trip, TripListItem, VehicleInput } from "@fleet-live/shared";
 import { useEffect, useMemo, useState } from "react";
@@ -28,10 +34,12 @@ import { useAuth } from "../hooks/useAuth";
 import { useVehicle } from "../hooks/useVehicle";
 import {
     formatIsoDate,
+    formatYearMonth,
     formatRelativeTimestamp,
     formatTimestamp,
 } from "../utils/dateTime";
 import layout from "../styles/detailLayout.module.scss";
+import band from "../styles/pageBand.module.scss";
 import styles from "./VehicleDetailPage.module.scss";
 
 const formatCoordinate = (value: number | null) =>
@@ -373,9 +381,9 @@ export const VehicleDetailPage = () => {
 
     return (
         <section className={layout.page}>
-            <DetailBackLink fallback="/vehicles" />
-
-            <header className={styles.header}>
+            <header className={`${band.band} ${band.bleedDetail}`}>
+                <DetailBackLink fallback="/vehicles" />
+                <div className={styles.header}>
                 <div className={styles.heading}>
                     <h1 className={styles.title}>
                         {vehicle.license_plate}
@@ -401,6 +409,7 @@ export const VehicleDetailPage = () => {
                         </Button>
                     </div>
                 )}
+                </div>
             </header>
 
             <section className={layout.now}>
@@ -455,7 +464,15 @@ export const VehicleDetailPage = () => {
                     </div>
                     <div>
                         <dt>HU fällig</dt>
-                        <dd>{formatIsoDate(vehicle.hu_due_on)}</dd>
+                        <dd>{formatYearMonth(vehicle.hu_due_on)}</dd>
+                    </div>
+                    <div>
+                        <dt>UVV zuletzt geprüft</dt>
+                        <dd>{formatIsoDate(vehicle.uvv_checked_on)}</dd>
+                    </div>
+                    <div>
+                        <dt>UVV fällig am</dt>
+                        <dd>{formatIsoDate(vehicle.uvv_due_on)}</dd>
                     </div>
                     <div>
                         <dt>Stammstandort</dt>
@@ -474,6 +491,17 @@ export const VehicleDetailPage = () => {
                         <dd>{vehicle.cost_center ?? "—"}</dd>
                     </div>
                 </dl>
+                <p className={layout.note}>
+                    {dueExplanationText("hu", explainHuMonth(vehicle.hu_due_on))}{" "}
+                    {dueExplanationText(
+                        "uvv",
+                        explainUvv({
+                            checkedOn: vehicle.uvv_checked_on,
+                            manualDueOn: vehicle.uvv_due_on,
+                            today: berlinTodayIso(),
+                        }),
+                    )}
+                </p>
             </section>
 
             <section className={layout.panel}>
@@ -571,6 +599,8 @@ export const VehicleDetailPage = () => {
                         vin: vehicle.vin,
                         vehicle_type: vehicle.vehicle_type,
                         hu_due_on: vehicle.hu_due_on,
+                        uvv_checked_on: vehicle.uvv_checked_on,
+                        uvv_due_on: vehicle.uvv_due_on,
                         home_site_id: vehicle.home_site_id,
                         cost_center: vehicle.cost_center,
                     }}

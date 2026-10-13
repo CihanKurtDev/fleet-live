@@ -10,15 +10,23 @@
 
 .title {
     flex-shrink: 0;
-    margin: 12px 0 8px;
+    margin: 0;
     font-size: 22px;
     font-weight: 650;
     color: var(--text-h);
 }
 
+.titleRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+}
+
 .scope {
     flex-shrink: 0;
-    margin: 0 0 8px;
+    margin: 0;
     font-size: 14px;
     color: var(--text);
 }
@@ -41,10 +49,11 @@
 
 .filters {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px 20px;
     flex-shrink: 0;
-    margin-bottom: 8px;
 }
 
 .isFetching {
@@ -77,11 +86,12 @@
     }
 
     .title {
-        margin-top: 10px;
         font-size: 20px;
     }
 
     .filters {
+        flex-direction: column;
+        align-items: stretch;
         gap: 12px;
     }
 

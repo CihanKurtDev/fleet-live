@@ -19,6 +19,12 @@ export type TableColumn<T> = {
         key: K;
         displayText: string;
 
+        /** Kurzer Kopf. displayText bleibt der ausgesprochene Name. */
+        headerText?: string;
+
+        /** Feste Breite. Ohne Angabe teilt sich die Spalte den Rest. */
+        width?: string;
+
         sortable?: boolean;
 
         /**

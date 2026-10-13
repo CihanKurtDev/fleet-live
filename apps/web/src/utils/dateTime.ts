@@ -85,6 +85,20 @@ export const formatRelativeTimestamp = (value: string | null): string => {
     return formatTimestamp(value);
 };
 
+/** HU-Monat `YYYY-MM` als `MM.JJJJ`. Andere Werte bleiben ein Kalenderdatum. */
+export const formatYearMonth = (value: string | null | undefined): string => {
+    if (!value) {
+        return "—";
+    }
+
+    const match = /^(\d{4})-(\d{2})$/.exec(value);
+    if (!match) {
+        return formatIsoDate(value);
+    }
+
+    return `${match[2]}.${match[1]}`;
+};
+
 /** Kalenderdatum `YYYY-MM-DD` ohne Zeitzonen-Verschiebung. */
 export const formatIsoDate = (value: string | null | undefined): string => {
     if (!value) {

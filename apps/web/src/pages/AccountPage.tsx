@@ -21,6 +21,7 @@ import { Checkbox } from "../components/ui/Checkbox/Checkbox";
 import { Input } from "../components/ui/Input/Input";
 import { useAuth } from "../hooks/useAuth";
 import styles from "./LoginPage.module.scss";
+import band from "../styles/pageBand.module.scss";
 
 export const AccountPage = () => {
     const { user, setUser } = useAuth();
@@ -197,13 +198,13 @@ export const AccountPage = () => {
 
     return (
         <section className={styles.accountPage}>
+            <header className={`${band.band} ${styles.accountHeader}`}>
+                <h1 className={styles.title}>Konto</h1>
+                <p className={styles.lead}>
+                    {user.name} · {user.email} · {user.company_name}
+                </p>
+            </header>
             <div className={styles.stack}>
-                <header className={styles.accountHeader}>
-                    <h1 className={styles.title}>Konto</h1>
-                    <p className={styles.lead}>
-                        {user.name} · {user.email} · {user.company_name}
-                    </p>
-                </header>
                 {error && (
                     <p className={styles.banner} role="alert">
                         {error}

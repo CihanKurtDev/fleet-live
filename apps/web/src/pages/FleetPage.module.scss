@@ -102,7 +102,7 @@
 
 .statusBar {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
     flex-shrink: 0;
     padding: 8px 16px;
@@ -110,9 +110,12 @@
 }
 
 .statusChip {
-    display: inline-flex;
+    display: flex;
+    flex: 1 1 0;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
+    min-width: 0;
     padding: 6px 10px;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -137,16 +140,41 @@
     border-color: var(--accent);
     background: var(--accent-bg);
     color: var(--accent);
+
+    .statusOf {
+        color: inherit;
+    }
 }
 
 .statusDot {
     width: 8px;
     height: 8px;
+    flex-shrink: 0;
     border-radius: 50%;
 }
 
+.statusMain {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.statusName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .statusCount {
+    flex-shrink: 0;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.statusOf {
+    margin: 0 1px;
+    color: var(--text);
 }
 
 .noteBar {
@@ -305,5 +333,22 @@
 
     .frameAll {
         min-height: 36px;
+    }
+
+    .statusBar {
+        gap: 6px;
+        padding: 8px 12px;
+    }
+
+    .statusChip {
+        flex-direction: column;
+        justify-content: center;
+        gap: 2px;
+        padding: 6px 4px;
+        font-size: 12px;
+    }
+
+    .statusMain {
+        gap: 4px;
     }
 }

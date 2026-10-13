@@ -14,14 +14,14 @@ import { ConflictError, NotFoundError, isUniqueConstraintError } from "../lib/er
 import { pagedQuery, type SqlParam } from "../lib/pagination";
 
 const INSERT_OR_IGNORE = `
-    INSERT INTO drivers (company_id, name, phone)
-    VALUES (?, ?, ?)
+    INSERT INTO drivers (company_id, name, phone, licence_expires_on, licence_checked_on)
+    VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(company_id, name) DO NOTHING
 `;
 
 const INSERT_DRIVER = `
-    INSERT INTO drivers (company_id, name, phone)
-    VALUES (?, ?, ?)
+    INSERT INTO drivers (company_id, name, phone, licence_expires_on, licence_checked_on)
+    VALUES (?, ?, ?, ?, ?)
 `;
 
 const SELECT_ID = `
@@ -29,15 +29,33 @@ const SELECT_ID = `
 `;
 
 const SELECT_ONE = `
-    SELECT id, name, phone, created_at
+    SELECT id, name, phone, licence_expires_on, licence_checked_on, active, created_at
     FROM drivers
     WHERE id = ? AND company_id = ?
 `;
+
+type DriverCore = {
+    id: number;
+    name: string;
+    phone: string | null;
+    licence_expires_on: string | null;
+    licence_checked_on: string | null;
+    active: number | boolean;
+    created_at: string;
+};
+
+type DriverDateInput = {
+    licence_expires_on?: string | null;
+    licence_checked_on?: string | null;
+};
 
 type DriverRow = {
     id: number;
     name: string;
     phone: string | null;
+    licence_expires_on: string | null;
+    licence_checked_on: string | null;
+    active: number | boolean;
     created_at: string;
     vehicle_count: number;
     vehicle_plate: string | null;
@@ -74,6 +92,9 @@ function toDriver(row: DriverRow): Driver {
         id: row.id,
         name: row.name,
         phone: row.phone,
+        licence_expires_on: row.licence_expires_on,
+        licence_checked_on: row.licence_checked_on,
+        active: Number(row.active) === 1,
         created_at: row.created_at,
         vehicle_count: Number(row.vehicle_count),
         vehicle_plate: row.vehicle_plate,
@@ -88,6 +109,9 @@ const AGG_SELECT = `
     d.id,
     d.name,
     d.phone,
+    d.licence_expires_on,
+    d.licence_checked_on,
+    d.active,
     d.created_at,
     (
         SELECT COUNT(*)
@@ -181,8 +205,19 @@ function mapAssigned(rows: DriverVehicleRow[]): DriverVehicle[] {
 }
 
 export class DriverModel {
-    static upsert(companyId: number, name: string, phone?: string | null): number {
-        stmt(INSERT_OR_IGNORE).run(companyId, name, phone ?? null);
+    static upsert(
+        companyId: number,
+        name: string,
+        phone?: string | null,
+        dates?: DriverDateInput,
+    ): number {
+        stmt(INSERT_OR_IGNORE).run(
+            companyId,
+            name,
+            phone ?? null,
+            dates?.licence_expires_on ?? null,
+            dates?.licence_checked_on ?? null,
+        );
         const row = stmt(SELECT_ID).get(companyId, name) as
             | { id: number }
             | undefined;
@@ -198,9 +233,16 @@ export class DriverModel {
         companyId: number,
         name: string,
         phone?: string | null,
-    ): { id: number; name: string; phone: string | null; created_at: string } {
+        dates?: DriverDateInput,
+    ): DriverCore {
         try {
-            const result = stmt(INSERT_DRIVER).run(companyId, name, phone ?? null);
+            const result = stmt(INSERT_DRIVER).run(
+                companyId,
+                name,
+                phone ?? null,
+                dates?.licence_expires_on ?? null,
+                dates?.licence_checked_on ?? null,
+            );
             const created = this.getById(
                 Number(result.lastInsertRowid),
                 companyId,
@@ -223,20 +265,21 @@ export class DriverModel {
         }
     }
 
-    static getById(
-        id: number,
-        companyId: number,
-    ): { id: number; name: string; phone: string | null; created_at: string } | undefined {
-        return stmt(SELECT_ONE).get(id, companyId) as
-            | { id: number; name: string; phone: string | null; created_at: string }
-            | undefined;
+    static getById(id: number, companyId: number): DriverCore | undefined {
+        const row = stmt(SELECT_ONE).get(id, companyId) as DriverCore | undefined;
+
+        if (!row) {
+            return undefined;
+        }
+
+        return { ...row, active: Number(row.active) === 1 };
     }
 
     static update(
         id: number,
         companyId: number,
-        input: { name?: string; phone?: string | null },
-    ): { id: number; name: string; phone: string | null; created_at: string } {
+        input: { name?: string; phone?: string | null } & DriverDateInput,
+    ): DriverCore {
         const current = this.getById(id, companyId);
         if (!current) {
             throw new NotFoundError("Fahrer nicht gefunden.");
@@ -244,16 +287,24 @@ export class DriverModel {
 
         const name = input.name ?? current.name;
         const phone = input.phone !== undefined ? input.phone : current.phone;
+        const licenceExpires =
+            input.licence_expires_on !== undefined
+                ? input.licence_expires_on
+                : current.licence_expires_on;
+        const licenceChecked =
+            input.licence_checked_on !== undefined
+                ? input.licence_checked_on
+                : current.licence_checked_on;
 
         try {
             withTransaction(() => {
                 stmt(
                     `
                     UPDATE drivers
-                    SET name = ?, phone = ?
+                    SET name = ?, phone = ?, licence_expires_on = ?, licence_checked_on = ?
                     WHERE id = ? AND company_id = ?
                     `,
-                ).run(name, phone, id, companyId);
+                ).run(name, phone, licenceExpires, licenceChecked, id, companyId);
 
                 if (name !== current.name) {
                     stmt(

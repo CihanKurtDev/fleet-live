@@ -52,6 +52,8 @@ function readInput(body: unknown): Partial<VehicleInput> {
         vin,
         vehicle_type,
         hu_due_on,
+        uvv_checked_on,
+        uvv_due_on,
         depot,
         home_site_id,
         cost_center,
@@ -80,6 +82,14 @@ function readInput(body: unknown): Partial<VehicleInput> {
     if (hu_due_on !== undefined) {
         const raw = emptyToNull(hu_due_on);
         input.hu_due_on = raw === null ? null : (parseHuDate(raw) ?? raw);
+    }
+    if (uvv_checked_on !== undefined) {
+        const raw = emptyToNull(uvv_checked_on);
+        input.uvv_checked_on = raw === null ? null : (parseHuDate(raw) ?? raw);
+    }
+    if (uvv_due_on !== undefined) {
+        const raw = emptyToNull(uvv_due_on);
+        input.uvv_due_on = raw === null ? null : (parseHuDate(raw) ?? raw);
     }
     if (depot !== undefined) {
         input.depot = emptyToNull(depot);
@@ -266,6 +276,8 @@ export function createVehicle(req: Request, res: Response) {
         vin: input.vin,
         vehicle_type: input.vehicle_type,
         hu_due_on: input.hu_due_on,
+        uvv_checked_on: input.uvv_checked_on,
+        uvv_due_on: input.uvv_due_on,
         depot: input.depot,
         home_site_id: input.home_site_id,
         cost_center: input.cost_center,

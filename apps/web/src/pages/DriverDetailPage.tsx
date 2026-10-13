@@ -1,3 +1,10 @@
+import {
+    berlinTodayIso,
+    dueExplanationText,
+    dueRule,
+    explainLicenceCheck,
+    explainLicenceExpiry,
+} from "@fleet-live/shared";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
@@ -10,13 +17,17 @@ import { Button } from "../components/ui/Button/Button";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
+import { useDueSettings } from "../hooks/useDueSettings";
 import { useDriver } from "../hooks/useDriver";
+import { formatIsoDate } from "../utils/dateTime";
 import layout from "../styles/detailLayout.module.scss";
+import band from "../styles/pageBand.module.scss";
 import styles from "./DriverDetailPage.module.scss";
 
 export const DriverDetailPage = () => {
     const { id } = useParams();
     const { user } = useAuth();
+    const { settings: dueSettings } = useDueSettings();
     const { refetchLists } = useVehicles();
     const canWrite = user?.role === "dispatcher";
     const driverId = Number(id);
@@ -60,9 +71,9 @@ export const DriverDetailPage = () => {
 
     return (
         <section className={layout.page}>
-            <DetailBackLink fallback="/drivers" />
-
-            <header className={styles.header}>
+            <header className={`${band.band} ${band.bleedDetail}`}>
+                <DetailBackLink fallback="/drivers" />
+                <div className={styles.header}>
                 <div className={styles.identity}>
                     <h1 className={styles.title}>{driver.name}</h1>
                     <div className={styles.statusRow}>
@@ -86,9 +97,42 @@ export const DriverDetailPage = () => {
                         Bearbeiten
                     </Button>
                 )}
+                </div>
             </header>
 
             <DriverAssignmentPanel driver={driver} canWrite={canWrite} />
+
+            <section className={layout.panel}>
+                <h2 className={layout.panelTitle}>Führerschein</h2>
+                <dl className={layout.facts}>
+                    <div>
+                        <dt>Gültig bis</dt>
+                        <dd>{formatIsoDate(driver.licence_expires_on)}</dd>
+                    </div>
+                    <div>
+                        <dt>Kontrolliert am</dt>
+                        <dd>{formatIsoDate(driver.licence_checked_on)}</dd>
+                    </div>
+                </dl>
+                <p className={layout.note}>
+                    Frühester Klassenablauf, zum Beispiel C/CE.{" "}
+                    {dueExplanationText(
+                        "licence_expiry",
+                        explainLicenceExpiry(driver.licence_expires_on),
+                    )}{" "}
+                    {dueExplanationText(
+                        "licence_check",
+                        explainLicenceCheck({
+                            checkedOn: driver.licence_checked_on,
+                            today: berlinTodayIso(),
+                            intervalMonths:
+                                dueSettings?.check_months ??
+                                dueRule("licence_check").interval_months ??
+                                6,
+                        }),
+                    )}
+                </p>
+            </section>
 
             <section className={layout.panel}>
                 <h2 className={layout.panelTitle}>Verstöße</h2>

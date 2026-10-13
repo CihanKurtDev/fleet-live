@@ -11,9 +11,13 @@ export const IMPORT_COLUMN_TARGETS = [
     "vin",
     "vehicle_type",
     "hu_due_on",
+    "uvv_checked_on",
+    "uvv_due_on",
     "depot",
     "cost_center",
     "phone",
+    "licence_expires_on",
+    "licence_checked_on",
     "latitude",
     "longitude",
     "ignore",
@@ -65,9 +69,13 @@ export type ImportPreviewRow = {
     vin: string | null;
     vehicle_type: VehicleType | null;
     hu_due_on: string | null;
+    uvv_checked_on: string | null;
+    uvv_due_on: string | null;
     depot: string | null;
     cost_center: string | null;
     phone: string | null;
+    licence_expires_on: string | null;
+    licence_checked_on: string | null;
     /** Sonderfall, nicht in der Vorlage. Beide gesetzt, sonst fehlen sie. */
     latitude?: number | null;
     longitude?: number | null;

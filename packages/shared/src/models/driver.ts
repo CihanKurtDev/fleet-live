@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ALERT_TYPES } from "./alert";
 import { emptyToUndefined, firstQueryString } from "./queryPreprocess";
-import type { VehicleStatus } from "./vehicle";
+import { isValidIsoDate, type VehicleStatus } from "./vehicle";
 import { DRIVER_NAME_MAX } from "./vehicle";
 import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
 
@@ -18,6 +18,11 @@ export type Driver = {
     id: number;
     name: string;
     phone: string | null;
+    /** Ablauf der Fahrerlaubnis. Leer zählt nicht als überfällig. */
+    licence_expires_on: string | null;
+    /** Letzte Führerscheinkontrolle. Leer ist überfällig. */
+    licence_checked_on: string | null;
+    active: boolean;
     created_at: string;
     vehicle_count: number;
     /** Kennzeichen, wenn genau ein Fahrzeug freigegeben ist. */
@@ -187,18 +192,41 @@ const driverPhoneField = z
     .optional()
     .transform((value) => (value === "" ? null : value));
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function optionalIsoDate(label: string) {
+    return z
+        .union([
+            z.null(),
+            z.literal("").transform(() => null),
+            z
+                .string()
+                .regex(ISO_DATE_PATTERN, `${label} muss JJJJ-MM-TT sein.`)
+                .refine(isValidIsoDate, `${label} ist ungültig.`),
+        ])
+        .optional();
+}
+
 export const driverCreateSchema = z.object({
     name: driverNameField,
     phone: driverPhoneField,
+    licence_expires_on: optionalIsoDate("Führerschein"),
+    licence_checked_on: optionalIsoDate("Kontrolldatum"),
 });
 
 export const driverPatchSchema = z
     .object({
         name: driverNameField.optional(),
         phone: driverPhoneField,
+        licence_expires_on: optionalIsoDate("Führerschein"),
+        licence_checked_on: optionalIsoDate("Kontrolldatum"),
     })
     .refine(
-        (value) => value.name !== undefined || value.phone !== undefined,
+        (value) =>
+            value.name !== undefined ||
+            value.phone !== undefined ||
+            value.licence_expires_on !== undefined ||
+            value.licence_checked_on !== undefined,
         "Mindestens ein Feld ist erforderlich.",
     );
 

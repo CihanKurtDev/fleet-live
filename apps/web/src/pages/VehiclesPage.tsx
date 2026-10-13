@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import type { VehicleInput } from "@fleet-live/shared";
 
 import { VehicleTable } from "../components/vehicles/VehicleTable";
+import { ExportButton } from "../components/export/ExportButton";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
@@ -38,6 +39,14 @@ export const VehiclesPage = () => {
                     canWrite
                         ? () => navigate("/vehicles/import")
                         : undefined
+                }
+                exportActions={
+                    canWrite ? (
+                        <>
+                            <ExportButton kind="vehicles" />
+                            <ExportButton kind="trips" />
+                        </>
+                    ) : undefined
                 }
                 onSelectVehicle={(vehicle) => {
                     rememberVehicle(vehicle);
