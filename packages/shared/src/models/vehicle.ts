@@ -131,6 +131,7 @@ const VEHICLE_INPUT_KEYS = [
     "vin",
     "vehicle_type",
     "hu_due_on",
+    "uvv_checked_on",
     "uvv_due_on",
     "depot",
     "home_site_id",
@@ -333,6 +334,7 @@ export const vehicleInputSchema = z.object({
     vin: vinSchema.optional(),
     vehicle_type: vehicleTypeSchema.optional(),
     hu_due_on: huDueOnSchema.optional(),
+    uvv_checked_on: uvvDueOnSchema.optional(),
     uvv_due_on: uvvDueOnSchema.optional(),
     depot: depotSchema.optional(),
     home_site_id: z
@@ -389,6 +391,7 @@ function normalizeVehicleInput(
         depot: emptyToNull(input.depot),
         cost_center: emptyToNull(input.cost_center),
         hu_due_on: emptyToNull(input.hu_due_on),
+        uvv_checked_on: emptyToNull(input.uvv_checked_on),
         uvv_due_on: emptyToNull(input.uvv_due_on),
         vehicle_type: input.vehicle_type,
     };

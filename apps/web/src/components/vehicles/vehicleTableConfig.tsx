@@ -10,7 +10,7 @@ import type {
     TableColumn,
     TableFilter,
 } from "../../types/table";
-import { formatIsoDate } from "../../utils/dateTime";
+import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
 import { DriverNameLink } from "../drivers/DriverNameLink";
 import { WarningChip } from "../alerts/WarningChip";
 import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
@@ -75,7 +75,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "hu_due_on",
         displayText: "HU",
         sortable: true,
-        render: (value) => formatIsoDate(value),
+        render: (value) => formatYearMonth(value),
     },
     {
         key: "uvv_due_on",

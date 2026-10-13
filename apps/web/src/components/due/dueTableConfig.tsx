@@ -1,12 +1,14 @@
 import {
     DUE_KIND_LABELS,
     DUE_KINDS,
+    dueExplanationText,
     type DueKind,
     type DueListItem,
     type DueListState,
 } from "@fleet-live/shared";
 import type { TableColumn, TableFilter } from "../../types/table";
 import { formatIsoDate } from "../../utils/dateTime";
+import styles from "./DueTable.module.scss";
 
 export const DUE_STATE_LABELS: Record<DueListState, string> = {
     overdue: "Überfällig",
@@ -52,6 +54,15 @@ export const dueColumns: TableColumn<DueListItem>[] = [
         key: "due_on",
         displayText: "Fällig",
         sortable: true,
-        render: (_value, { row }) => dueWhen(row),
+        render: (_value, { row }) => (
+            <span>
+                {dueWhen(row)}
+                {row.explanation && (
+                    <span className={styles.reason}>
+                        {dueExplanationText(row.kind, row.explanation)}
+                    </span>
+                )}
+            </span>
+        ),
     },
 ];

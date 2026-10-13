@@ -83,6 +83,8 @@ export type DueListItem = {
     vehicle_id: number | null;
     driver_id: number | null;
     label: string;
+    /** Wie das Datum zustande kommt. Fehlt bei der alten Listenrechnung. */
+    explanation?: DueExplanation;
 };
 
 export type DueListCounts = {
@@ -792,6 +794,144 @@ export type DueExplanation = {
     last_checked_in_future: boolean;
 };
 
+function germanDueDate(value: string | null): string {
+    if (value === null || value === "") {
+        return "—";
+    }
+
+    const month = /^(\d{4})-(\d{2})$/.exec(value);
+    if (month) {
+        return `${month[2]}.${month[1]}`;
+    }
+
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (day) {
+        return `${day[3]}.${day[2]}.${day[1]}`;
+    }
+
+    return value;
+}
+
+/** Eine Zeile: Prüfart, Herkunft und Fälligkeit. Interne Regeln nennen den Hinweis. */
+export function dueExplanationText(
+    kind: DueKind,
+    explanation: DueExplanation,
+): string {
+    const label = DUE_KIND_LABELS[kind];
+    let body: string;
+
+    if (explanation.due_on === null && kind === "licence_check") {
+        body = "noch nie kontrolliert";
+    } else if (explanation.due_on === null) {
+        body = "Datum fehlt";
+    } else if (explanation.source === "month_end") {
+        body = `fällig am ${germanDueDate(explanation.due_on)}`;
+    } else if (explanation.source === "stored") {
+        body = `eingetragenes Ablaufdatum, fällig am ${germanDueDate(explanation.due_on)}`;
+    } else if (explanation.source === "manual" && explanation.last_on === null) {
+        body = `manuelle Fälligkeit am ${germanDueDate(explanation.due_on)}`;
+    } else if (explanation.source === "manual") {
+        body = `manuelle Fälligkeit am ${germanDueDate(explanation.due_on)} nach der Prüfung vom ${germanDueDate(explanation.last_on)}`;
+    } else {
+        body = `Prüfung vom ${germanDueDate(explanation.last_on)} plus ${explanation.interval_months} Monate, fällig am ${germanDueDate(explanation.due_on)}`;
+    }
+
+    let text = `${label}, ${body}.`;
+
+    if (explanation.last_checked_in_future) {
+        text += " Das Prüfdatum liegt nach heute.";
+    }
+
+    if (explanation.internal_notice) {
+        text += ` ${explanation.internal_notice}.`;
+    }
+
+    return text;
+}
+
+export function explainHuMonth(yearMonth: string | null): DueExplanation {
+    const hu = dueRule("hu");
+    const result = classifyHuMonth(yearMonth, "2000-01-01", hu.lead_days);
+
+    return {
+        last_on: null,
+        interval_months: null,
+        due_on: result.due_on,
+        rule_kind: hu.rule_kind,
+        basis: hu.verified ? hu.basis : null,
+        internal_notice: ruleNotice(hu.rule_kind),
+        source: "month_end",
+        last_checked_in_future: false,
+    };
+}
+
+export function explainUvv(input: {
+    checkedOn: string | null;
+    manualDueOn: string | null;
+    today: string;
+}): DueExplanation {
+    const uvv = dueRule("uvv");
+    const months = uvv.interval_months ?? 12;
+    const result = resolveUvvDue({
+        checkedOn: input.checkedOn,
+        manualDueOn: input.manualDueOn,
+        intervalMonths: months,
+        today: input.today,
+    });
+
+    return {
+        last_on: result.last_on,
+        interval_months: result.source === "manual" ? null : months,
+        due_on: result.due_on,
+        rule_kind: uvv.rule_kind,
+        basis: uvv.verified ? uvv.basis : null,
+        internal_notice: ruleNotice(uvv.rule_kind),
+        source: result.source === "missing" ? "interval" : result.source,
+        last_checked_in_future: result.last_checked_in_future,
+    };
+}
+
+export function explainLicenceExpiry(expiresOn: string | null): DueExplanation {
+    const licence = dueRule("licence_expiry");
+    const dueOn = blankToNull(expiresOn);
+
+    return {
+        last_on: null,
+        interval_months: null,
+        due_on: dueOn,
+        rule_kind: licence.rule_kind,
+        basis: licence.verified ? licence.basis : null,
+        internal_notice: ruleNotice(licence.rule_kind),
+        source: "stored",
+        last_checked_in_future: false,
+    };
+}
+
+export function explainLicenceCheck(input: {
+    checkedOn: string | null;
+    today: string;
+    intervalMonths: number;
+}): DueExplanation {
+    const check = dueRule("licence_check");
+    const result = classifyLicenceInterval({
+        checkedOn: input.checkedOn,
+        today: input.today,
+        intervalMonths: input.intervalMonths,
+        leadDays: check.lead_days,
+    });
+
+    return {
+        last_on: result.last_on,
+        interval_months: input.intervalMonths,
+        due_on: result.due_on,
+        rule_kind: check.rule_kind,
+        basis: check.verified ? check.basis : null,
+        internal_notice: ruleNotice(check.rule_kind),
+        source: "interval",
+        last_checked_in_future: result.last_checked_in_future,
+    };
+}
+
 /** Zeile der neuen Rechnung. `ok` fehlt, inaktive Subjekte fehlen. */
 export type ConfiguredDueRow = {
     kind: DueKind;
@@ -849,11 +989,6 @@ export function buildConfiguredDueRows(input: {
     drivers: ConfiguredDriverDue[];
 }): ConfiguredDueRow[] {
     const rows: ConfiguredDueRow[] = [];
-    const hu = dueRule("hu");
-    const uvv = dueRule("uvv");
-    const licence = dueRule("licence_expiry");
-    const check = dueRule("licence_check");
-    const uvvMonths = uvv.interval_months ?? 12;
 
     for (const vehicle of input.vehicles) {
         if (!isDueActive(vehicle.active)) {
@@ -865,50 +1000,36 @@ export function buildConfiguredDueRows(input: {
             input.today,
             input.leadDays,
         );
+        const huExplanation = explainHuMonth(vehicle.hu_due_on);
         pushConfigured(rows, huResult.state, {
             kind: "hu",
             due_on: huResult.due_on,
             vehicle_id: vehicle.id,
             driver_id: null,
             label: vehicle.license_plate,
-            explanation: {
-                last_on: null,
-                interval_months: null,
-                due_on: huResult.due_on,
-                rule_kind: hu.rule_kind,
-                basis: hu.verified ? hu.basis : null,
-                internal_notice: ruleNotice(hu.rule_kind),
-                source: "month_end",
-                last_checked_in_future: false,
-            },
+            explanation: huExplanation,
         });
 
-        const uvvResult = resolveUvvDue({
+        const uvvExplanation = explainUvv({
             checkedOn: vehicle.uvv_checked_on,
             manualDueOn: vehicle.uvv_due_on,
-            intervalMonths: uvvMonths,
             today: input.today,
         });
         const uvvState =
-            uvvResult.due_on === null
+            uvvExplanation.due_on === null
                 ? "missing"
-                : classifyDueOn(uvvResult.due_on, input.today, input.leadDays);
+                : classifyDueOn(
+                      uvvExplanation.due_on,
+                      input.today,
+                      input.leadDays,
+                  );
         pushConfigured(rows, uvvState, {
             kind: "uvv",
-            due_on: uvvResult.due_on,
+            due_on: uvvExplanation.due_on,
             vehicle_id: vehicle.id,
             driver_id: null,
             label: vehicle.license_plate,
-            explanation: {
-                last_on: uvvResult.last_on,
-                interval_months: uvvResult.source === "manual" ? null : uvvMonths,
-                due_on: uvvResult.due_on,
-                rule_kind: uvv.rule_kind,
-                basis: uvv.verified ? uvv.basis : null,
-                internal_notice: ruleNotice(uvv.rule_kind),
-                source: uvvResult.source === "missing" ? "interval" : uvvResult.source,
-                last_checked_in_future: uvvResult.last_checked_in_future,
-            },
+            explanation: uvvExplanation,
         });
     }
 
@@ -917,30 +1038,26 @@ export function buildConfiguredDueRows(input: {
             continue;
         }
 
-        const expiryOn = blankToNull(driver.licence_expires_on);
+        const expiryExplanation = explainLicenceExpiry(driver.licence_expires_on);
         const expiryState = classifyDueOn(
-            expiryOn,
+            expiryExplanation.due_on,
             input.today,
             input.leadDays,
         );
         pushConfigured(rows, expiryState, {
             kind: "licence_expiry",
-            due_on: expiryOn,
+            due_on: expiryExplanation.due_on,
             vehicle_id: null,
             driver_id: driver.id,
             label: driver.name,
-            explanation: {
-                last_on: null,
-                interval_months: null,
-                due_on: expiryOn,
-                rule_kind: licence.rule_kind,
-                basis: licence.verified ? licence.basis : null,
-                internal_notice: ruleNotice(licence.rule_kind),
-                source: "stored",
-                last_checked_in_future: false,
-            },
+            explanation: expiryExplanation,
         });
 
+        const checkExplanation = explainLicenceCheck({
+            checkedOn: driver.licence_checked_on,
+            today: input.today,
+            intervalMonths: input.licenceCheckMonths,
+        });
         const checkResult = classifyLicenceInterval({
             checkedOn: driver.licence_checked_on,
             today: input.today,
@@ -958,16 +1075,7 @@ export function buildConfiguredDueRows(input: {
             vehicle_id: null,
             driver_id: driver.id,
             label: driver.name,
-            explanation: {
-                last_on: checkResult.last_on,
-                interval_months: input.licenceCheckMonths,
-                due_on: checkResult.due_on,
-                rule_kind: check.rule_kind,
-                basis: check.verified ? check.basis : null,
-                internal_notice: ruleNotice(check.rule_kind),
-                source: "interval",
-                last_checked_in_future: checkResult.last_checked_in_future,
-            },
+            explanation: checkExplanation,
         });
     }
 

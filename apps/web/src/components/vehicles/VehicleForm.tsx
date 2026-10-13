@@ -5,6 +5,10 @@ import {
     VEHICLE_TYPES,
     VEHICLE_TYPE_LABELS,
     VIN_LENGTH,
+    dueExplanationText,
+    explainHuMonth,
+    explainUvv,
+    berlinTodayIso,
     validateVehicleInput,
     type Site,
     type VehicleFieldErrors,
@@ -30,6 +34,7 @@ interface FormValues {
     vin: string;
     vehicle_type: VehicleType | "";
     hu_due_on: string;
+    uvv_checked_on: string;
     uvv_due_on: string;
     home_site_id: string;
     cost_center: string;
@@ -41,9 +46,19 @@ const EMPTY_VALUES: FormValues = {
     vin: "",
     vehicle_type: "",
     hu_due_on: "",
+    uvv_checked_on: "",
     uvv_due_on: "",
     home_site_id: "",
     cost_center: "",
+};
+
+/** Monatseingabe braucht `YYYY-MM`. Ein gespeichertes Tagesdatum wird auf den Monat gekürzt. */
+const huMonthField = (value: string | null | undefined): string => {
+    if (!value) {
+        return "";
+    }
+
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(0, 7) : value;
 };
 
 const toValues = (input?: VehicleInput): FormValues =>
@@ -53,7 +68,8 @@ const toValues = (input?: VehicleInput): FormValues =>
               fuel_level: String(Math.round(input.fuel_level)),
               vin: input.vin ?? "",
               vehicle_type: input.vehicle_type ?? "",
-              hu_due_on: input.hu_due_on ?? "",
+              hu_due_on: huMonthField(input.hu_due_on),
+              uvv_checked_on: input.uvv_checked_on ?? "",
               uvv_due_on: input.uvv_due_on ?? "",
               home_site_id:
                   input.home_site_id === null ||
@@ -138,6 +154,8 @@ export const VehicleForm = ({
         vehicle_type:
             values.vehicle_type === "" ? null : values.vehicle_type,
         hu_due_on: values.hu_due_on.trim() === "" ? null : values.hu_due_on,
+        uvv_checked_on:
+            values.uvv_checked_on.trim() === "" ? null : values.uvv_checked_on,
         uvv_due_on: values.uvv_due_on.trim() === "" ? null : values.uvv_due_on,
         home_site_id:
             values.home_site_id === "" ? null : Number(values.home_site_id),
@@ -152,6 +170,7 @@ export const VehicleForm = ({
                   vin: form.vin,
                   vehicle_type: form.vehicle_type,
                   hu_due_on: form.hu_due_on,
+                  uvv_checked_on: form.uvv_checked_on,
                   uvv_due_on: form.uvv_due_on,
                   home_site_id: form.home_site_id,
                   cost_center: form.cost_center,
@@ -305,7 +324,7 @@ export const VehicleForm = ({
                 <label htmlFor={`${fieldId}-hu`}>HU fällig</label>
                 <Input
                     id={`${fieldId}-hu`}
-                    type="date"
+                    type="month"
                     size="md"
                     fullWidth
                     value={values.hu_due_on}
@@ -314,7 +333,11 @@ export const VehicleForm = ({
                         setField("hu_due_on", event.target.value)
                     }
                     aria-invalid={errorFor("hu_due_on") !== undefined}
+                    aria-describedby={`${fieldId}-hu-reason`}
                 />
+                <p className={styles.hint} id={`${fieldId}-hu-reason`}>
+                    {dueExplanationText("hu", explainHuMonth(values.hu_due_on || null))}
+                </p>
                 {errorFor("hu_due_on") && (
                     <p className={styles.error} role="alert">
                         {errorFor("hu_due_on")}
@@ -323,7 +346,28 @@ export const VehicleForm = ({
             </div>
 
             <div className={styles.field}>
-                <label htmlFor={`${fieldId}-uvv`}>UVV fällig</label>
+                <label htmlFor={`${fieldId}-uvv-checked`}>UVV zuletzt geprüft</label>
+                <Input
+                    id={`${fieldId}-uvv-checked`}
+                    type="date"
+                    size="md"
+                    fullWidth
+                    value={values.uvv_checked_on}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                        setField("uvv_checked_on", event.target.value)
+                    }
+                    aria-invalid={errorFor("uvv_checked_on") !== undefined}
+                />
+                {errorFor("uvv_checked_on") && (
+                    <p className={styles.error} role="alert">
+                        {errorFor("uvv_checked_on")}
+                    </p>
+                )}
+            </div>
+
+            <div className={styles.field}>
+                <label htmlFor={`${fieldId}-uvv`}>UVV fällig am</label>
                 <Input
                     id={`${fieldId}-uvv`}
                     type="date"
@@ -335,7 +379,18 @@ export const VehicleForm = ({
                         setField("uvv_due_on", event.target.value)
                     }
                     aria-invalid={errorFor("uvv_due_on") !== undefined}
+                    aria-describedby={`${fieldId}-uvv-reason`}
                 />
+                <p className={styles.hint} id={`${fieldId}-uvv-reason`}>
+                    {dueExplanationText(
+                        "uvv",
+                        explainUvv({
+                            checkedOn: values.uvv_checked_on || null,
+                            manualDueOn: values.uvv_due_on || null,
+                            today: berlinTodayIso(),
+                        }),
+                    )}
+                </p>
                 {errorFor("uvv_due_on") && (
                     <p className={styles.error} role="alert">
                         {errorFor("uvv_due_on")}

@@ -855,7 +855,9 @@ export class VehicleModel {
                 input.vehicle_type ?? null,
                 storedHuMonth(input.hu_due_on ?? null),
                 input.uvv_due_on ?? null,
-                current.uvv_checked_on,
+                input.uvv_checked_on !== undefined
+                    ? input.uvv_checked_on
+                    : current.uvv_checked_on,
                 input.cost_center ?? null,
                 id,
                 companyId,

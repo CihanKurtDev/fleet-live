@@ -2,6 +2,11 @@ import { useId, useState, type FormEvent } from "react";
 import {
     DRIVER_NAME_MAX,
     DRIVER_PHONE_MAX,
+    berlinTodayIso,
+    dueExplanationText,
+    dueRule,
+    explainLicenceCheck,
+    explainLicenceExpiry,
 } from "@fleet-live/shared";
 
 import { ApiError } from "../../api/client";
@@ -174,7 +179,15 @@ export const DriverCreateForm = ({
                             form: undefined,
                         }));
                     }}
+                    aria-describedby={`${fieldId}-licence-expires-reason`}
                 />
+                <p className={styles.hint} id={`${fieldId}-licence-expires-reason`}>
+                    Frühester Klassenablauf, zum Beispiel C/CE.{" "}
+                    {dueExplanationText(
+                        "licence_expiry",
+                        explainLicenceExpiry(licenceExpires || null),
+                    )}
+                </p>
             </div>
 
             <div className={styles.field}>
@@ -194,7 +207,19 @@ export const DriverCreateForm = ({
                             form: undefined,
                         }));
                     }}
+                    aria-describedby={`${fieldId}-licence-checked-reason`}
                 />
+                <p className={styles.hint} id={`${fieldId}-licence-checked-reason`}>
+                    {dueExplanationText(
+                        "licence_check",
+                        explainLicenceCheck({
+                            checkedOn: licenceChecked || null,
+                            today: berlinTodayIso(),
+                            intervalMonths:
+                                dueRule("licence_check").interval_months ?? 6,
+                        }),
+                    )}
+                </p>
             </div>
 
             {errors.form && !errors.name && !errors.phone && (

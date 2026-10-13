@@ -15,8 +15,12 @@ import {
     classifyLicenceCheck,
     classifyLicenceInterval,
     dueCounts,
+    dueExplanationText,
     dueLeadDaysSchema,
     dueRule,
+    explainHuMonth,
+    explainLicenceCheck,
+    explainUvv,
     licenceCheckMonthsSchema,
     parseDueListQuery,
     queryDueRows,
@@ -501,6 +505,57 @@ describe("due rules", () => {
         assert.equal(
             off.some((row) => row.kind === "licence_check"),
             false,
+        );
+    });
+});
+
+describe("dueExplanationText", () => {
+    it("names the HU month end", () => {
+        assert.equal(
+            dueExplanationText("hu", explainHuMonth("2026-10")),
+            "HU, fällig am 31.10.2026.",
+        );
+    });
+
+    it("uses the check interval when the manual UVV date is not later", () => {
+        assert.equal(
+            dueExplanationText(
+                "uvv",
+                explainUvv({
+                    checkedOn: "2026-03-01",
+                    manualDueOn: "2026-03-01",
+                    today: TODAY,
+                }),
+            ),
+            "UVV, Prüfung vom 01.03.2026 plus 12 Monate, fällig am 01.03.2027.",
+        );
+    });
+
+    it("says a missing licence check was never done and is internal", () => {
+        assert.equal(
+            dueExplanationText(
+                "licence_check",
+                explainLicenceCheck({
+                    checkedOn: null,
+                    today: TODAY,
+                    intervalMonths: dueRule("licence_check").interval_months ?? 6,
+                }),
+            ),
+            "Kontrolle, noch nie kontrolliert. Interne Vorgabe, keine gesetzliche Frist.",
+        );
+    });
+
+    it("flags an inspection date after today", () => {
+        assert.equal(
+            dueExplanationText(
+                "uvv",
+                explainUvv({
+                    checkedOn: "2027-01-01",
+                    manualDueOn: null,
+                    today: TODAY,
+                }),
+            ),
+            "UVV, Prüfung vom 01.01.2027 plus 12 Monate, fällig am 01.01.2028. Das Prüfdatum liegt nach heute.",
         );
     });
 });

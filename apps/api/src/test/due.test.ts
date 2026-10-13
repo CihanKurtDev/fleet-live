@@ -1,5 +1,6 @@
 import "./env";
 import assert from "node:assert/strict";
+import { dueExplanationText } from "@fleet-live/shared";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
@@ -188,6 +189,12 @@ describe("GET /api/due", () => {
 
         assert.equal(hu?.state, "soon");
         assert.equal(hu?.due_on, "2026-10-31");
+        assert.equal(
+            hu?.explanation
+                ? dueExplanationText("hu", hu.explanation)
+                : "",
+            "HU, fällig am 31.10.2026.",
+        );
         assert.equal(uvv, undefined);
     });
 

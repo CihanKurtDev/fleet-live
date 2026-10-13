@@ -76,14 +76,7 @@ export class DueModel {
                 licence_expires_on: driver.licence_expires_on,
                 licence_checked_on: driver.licence_checked_on,
             })),
-        }).map((row) => ({
-            kind: row.kind,
-            state: row.state,
-            due_on: row.due_on,
-            vehicle_id: row.vehicle_id,
-            driver_id: row.driver_id,
-            label: row.label,
-        }));
+        });
     }
 
     static listForCompany(

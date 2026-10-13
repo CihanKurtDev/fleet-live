@@ -1,3 +1,10 @@
+import {
+    berlinTodayIso,
+    dueExplanationText,
+    dueRule,
+    explainLicenceCheck,
+    explainLicenceExpiry,
+} from "@fleet-live/shared";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
@@ -103,6 +110,22 @@ export const DriverDetailPage = () => {
                         <dd>{formatIsoDate(driver.licence_checked_on)}</dd>
                     </div>
                 </dl>
+                <p className={layout.note}>
+                    Frühester Klassenablauf, zum Beispiel C/CE.{" "}
+                    {dueExplanationText(
+                        "licence_expiry",
+                        explainLicenceExpiry(driver.licence_expires_on),
+                    )}{" "}
+                    {dueExplanationText(
+                        "licence_check",
+                        explainLicenceCheck({
+                            checkedOn: driver.licence_checked_on,
+                            today: berlinTodayIso(),
+                            intervalMonths:
+                                dueRule("licence_check").interval_months ?? 6,
+                        }),
+                    )}
+                </p>
             </section>
 
             <section className={layout.panel}>
