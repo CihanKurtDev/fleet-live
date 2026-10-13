@@ -39,6 +39,7 @@ import {
     formatTimestamp,
 } from "../utils/dateTime";
 import layout from "../styles/detailLayout.module.scss";
+import band from "../styles/pageBand.module.scss";
 import styles from "./VehicleDetailPage.module.scss";
 
 const formatCoordinate = (value: number | null) =>
@@ -380,9 +381,9 @@ export const VehicleDetailPage = () => {
 
     return (
         <section className={layout.page}>
-            <DetailBackLink fallback="/vehicles" />
-
-            <header className={styles.header}>
+            <header className={`${band.band} ${band.bleedDetail}`}>
+                <DetailBackLink fallback="/vehicles" />
+                <div className={styles.header}>
                 <div className={styles.heading}>
                     <h1 className={styles.title}>
                         {vehicle.license_plate}
@@ -408,6 +409,7 @@ export const VehicleDetailPage = () => {
                         </Button>
                     </div>
                 )}
+                </div>
             </header>
 
             <section className={layout.now}>

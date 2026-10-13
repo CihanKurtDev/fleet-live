@@ -17,14 +17,17 @@ import { Button } from "../components/ui/Button/Button";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
+import { useDueSettings } from "../hooks/useDueSettings";
 import { useDriver } from "../hooks/useDriver";
 import { formatIsoDate } from "../utils/dateTime";
 import layout from "../styles/detailLayout.module.scss";
+import band from "../styles/pageBand.module.scss";
 import styles from "./DriverDetailPage.module.scss";
 
 export const DriverDetailPage = () => {
     const { id } = useParams();
     const { user } = useAuth();
+    const { settings: dueSettings } = useDueSettings();
     const { refetchLists } = useVehicles();
     const canWrite = user?.role === "dispatcher";
     const driverId = Number(id);
@@ -68,9 +71,9 @@ export const DriverDetailPage = () => {
 
     return (
         <section className={layout.page}>
-            <DetailBackLink fallback="/drivers" />
-
-            <header className={styles.header}>
+            <header className={`${band.band} ${band.bleedDetail}`}>
+                <DetailBackLink fallback="/drivers" />
+                <div className={styles.header}>
                 <div className={styles.identity}>
                     <h1 className={styles.title}>{driver.name}</h1>
                     <div className={styles.statusRow}>
@@ -94,6 +97,7 @@ export const DriverDetailPage = () => {
                         Bearbeiten
                     </Button>
                 )}
+                </div>
             </header>
 
             <DriverAssignmentPanel driver={driver} canWrite={canWrite} />
@@ -122,7 +126,9 @@ export const DriverDetailPage = () => {
                             checkedOn: driver.licence_checked_on,
                             today: berlinTodayIso(),
                             intervalMonths:
-                                dueRule("licence_check").interval_months ?? 6,
+                                dueSettings?.check_months ??
+                                dueRule("licence_check").interval_months ??
+                                6,
                         }),
                     )}
                 </p>

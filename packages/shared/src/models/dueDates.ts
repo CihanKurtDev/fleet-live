@@ -110,6 +110,10 @@ export type DueListMeta = {
     counts: DueListCounts;
     /** Arten für den aktuellen Stand und die Suche. */
     kind_counts: DueKindCounts;
+    /** Aufgelöster Vorlauf, mit dem diese Liste gezählt wurde. */
+    lead_days?: number;
+    /** Aufgelöster Kontrollabstand. `0` heißt, die Kontrolle ist aus. */
+    licence_check_months?: number;
 };
 
 export type DueListResponse = {
@@ -817,12 +821,14 @@ export function dueExplanationText(
     kind: DueKind,
     explanation: DueExplanation,
 ): string {
+    if (kind === "licence_check") {
+        return licenceCheckText(explanation);
+    }
+
     const label = DUE_KIND_LABELS[kind];
     let body: string;
 
-    if (explanation.due_on === null && kind === "licence_check") {
-        body = "noch nie kontrolliert";
-    } else if (explanation.due_on === null) {
+    if (explanation.due_on === null) {
         body = "Datum fehlt";
     } else if (explanation.source === "month_end") {
         body = `fällig am ${germanDueDate(explanation.due_on)}`;
@@ -844,6 +850,33 @@ export function dueExplanationText(
 
     if (explanation.internal_notice) {
         text += ` ${explanation.internal_notice}.`;
+    }
+
+    return text;
+}
+
+function licenceCheckText(explanation: DueExplanation): string {
+    if (explanation.interval_months === 0) {
+        return "Führerscheinkontrolle ist ausgeschaltet.";
+    }
+
+    const notice = explanation.internal_notice
+        ? ` ${explanation.internal_notice}.`
+        : "";
+    const months = explanation.interval_months ?? 6;
+
+    if (explanation.due_on === null) {
+        return `Bisher kein Kontrolldatum. Wiederholung alle ${months} Monate.${notice}`;
+    }
+
+    const due = germanDueDate(explanation.due_on);
+    const when = explanation.last_on
+        ? `Zuletzt am ${germanDueDate(explanation.last_on)}, wieder fällig am ${due}`
+        : `Wieder fällig am ${due}`;
+    let text = `${when}.${notice}`;
+
+    if (explanation.last_checked_in_future) {
+        text += " Das Prüfdatum liegt nach heute.";
     }
 
     return text;

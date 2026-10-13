@@ -541,7 +541,7 @@ describe("dueExplanationText", () => {
                     intervalMonths: dueRule("licence_check").interval_months ?? 6,
                 }),
             ),
-            "Kontrolle, noch nie kontrolliert. Interne Vorgabe, keine gesetzliche Frist.",
+            "Bisher kein Kontrolldatum. Wiederholung alle 6 Monate. Interne Vorgabe, keine gesetzliche Frist.",
         );
     });
 
@@ -556,6 +556,34 @@ describe("dueExplanationText", () => {
                 }),
             ),
             "UVV, Prüfung vom 01.01.2027 plus 12 Monate, fällig am 01.01.2028. Das Prüfdatum liegt nach heute.",
+        );
+    });
+
+    it("names the last check and the next due date", () => {
+        assert.equal(
+            dueExplanationText(
+                "licence_check",
+                explainLicenceCheck({
+                    checkedOn: "2026-03-01",
+                    today: TODAY,
+                    intervalMonths: 6,
+                }),
+            ),
+            "Zuletzt am 01.03.2026, wieder fällig am 01.09.2026. Interne Vorgabe, keine gesetzliche Frist.",
+        );
+    });
+
+    it("says the licence check is off when the interval is zero", () => {
+        assert.equal(
+            dueExplanationText(
+                "licence_check",
+                explainLicenceCheck({
+                    checkedOn: null,
+                    today: TODAY,
+                    intervalMonths: 0,
+                }),
+            ),
+            "Führerscheinkontrolle ist ausgeschaltet.",
         );
     });
 });

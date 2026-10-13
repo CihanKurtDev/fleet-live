@@ -11,7 +11,7 @@
 
 .title {
     flex-shrink: 0;
-    margin: 12px 0 4px;
+    margin: 0;
     font-size: 22px;
     font-weight: 650;
     color: var(--text-h);
@@ -41,7 +41,6 @@
     }
 
     .title {
-        margin-top: 10px;
         font-size: 20px;
     }
 

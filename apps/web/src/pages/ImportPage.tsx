@@ -39,6 +39,7 @@ import { useVehicles } from "../context/vehiclesContext";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { importRunColumns } from "../components/vehicles/importRunConfig";
 import layout from "../styles/detailLayout.module.scss";
+import band from "../styles/pageBand.module.scss";
 import styles from "./ImportPage.module.scss";
 
 type WizardStep = "upload" | "mapping" | "preview" | "result";
@@ -523,9 +524,8 @@ export const ImportPage = () => {
 
     return (
         <section className={`${layout.page} ${styles.page}`}>
-            <DetailBackLink fallback="/vehicles" />
-
-            <header>
+            <header className={`${band.band} ${band.bleedDetail}`}>
+                <DetailBackLink fallback="/vehicles" />
                 <h1 className={styles.title}>Bestand importieren</h1>
                 <p className={styles.lead}>
                     Stammdaten und Zuweisungen aus CSV oder Excel laden. Die

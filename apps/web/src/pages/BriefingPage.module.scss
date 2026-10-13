@@ -13,7 +13,6 @@
 
 .header {
     flex-shrink: 0;
-    margin-top: 12px;
 }
 
 .title {
@@ -130,6 +129,12 @@ a.kpi:hover {
     }
 }
 
+@media (max-width: 700px) {
+    .page {
+        padding-inline: 12px;
+    }
+}
+
 @media (max-width: 560px) {
     .page {
         gap: 10px;
@@ -137,7 +142,7 @@ a.kpi:hover {
     }
 
     .header {
-        margin-top: 10px;
+        margin-top: 0;
     }
 
     .title {

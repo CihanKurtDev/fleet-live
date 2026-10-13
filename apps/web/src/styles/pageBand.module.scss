@@ -1,0 +1,32 @@
+.band {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    padding: 10px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+
+/* Seiten polstern den Inhalt mit 16px. Die Linie läuft bis an den Spaltenrand. */
+.bleed {
+    margin-inline: -16px;
+}
+
+/* Detailseiten polstern oben mit 12px und seitlich mit 16px. */
+.bleedDetail {
+    margin-top: -12px;
+    margin-inline: -16px;
+}
+
+@media (max-width: 700px) {
+    .band {
+        padding: 8px 12px 10px;
+    }
+
+    .bleed {
+        margin-inline: -12px;
+    }
+}

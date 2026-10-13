@@ -10,7 +10,7 @@
     flex: 1;
     width: 100%;
     box-sizing: border-box;
-    padding: 24px 24px 40px;
+    padding: 0 24px 40px;
     text-align: left;
 }
 
@@ -24,7 +24,11 @@
 }
 
 .accountHeader {
-    margin: 0;
+    margin-inline: -24px;
+
+    h1 {
+        margin: 0;
+    }
 }
 
 .section {
@@ -224,7 +228,11 @@
     }
 
     .accountPage {
-        padding: 16px 12px 32px;
+        padding: 0 12px 32px;
+    }
+
+    .accountHeader {
+        margin-inline: -12px;
     }
 
     .section {

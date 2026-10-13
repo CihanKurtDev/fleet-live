@@ -11,6 +11,7 @@ import {
 
 import { ApiError } from "../../api/client";
 import { createDriver } from "../../api/drivers";
+import { useDueSettings } from "../../hooks/useDueSettings";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import styles from "../vehicles/VehicleForm.module.scss";
@@ -56,6 +57,11 @@ export const DriverCreateForm = ({
     onCancel,
 }: DriverCreateFormProps) => {
     const fieldId = useId();
+    const { settings: dueSettings } = useDueSettings();
+    const checkMonths =
+        dueSettings?.check_months ??
+        dueRule("licence_check").interval_months ??
+        6;
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [licenceExpires, setLicenceExpires] = useState("");
@@ -215,8 +221,7 @@ export const DriverCreateForm = ({
                         explainLicenceCheck({
                             checkedOn: licenceChecked || null,
                             today: berlinTodayIso(),
-                            intervalMonths:
-                                dueRule("licence_check").interval_months ?? 6,
+                            intervalMonths: checkMonths,
                         }),
                     )}
                 </p>

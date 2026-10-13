@@ -10,6 +10,7 @@ import { useAlertListQuery } from "../../hooks/useAlertListQuery";
 import { alertFilters, alertTypeFilters } from "./alertTableConfig";
 import { useAlertResolveColumn } from "./useAlertResolveColumn";
 import styles from "./AlertTable.module.scss";
+import band from "../../styles/pageBand.module.scss";
 
 interface AlertTableProps {
     canWrite?: boolean;
@@ -60,6 +61,7 @@ export const AlertTable = ({
     if (notFound) {
         return (
             <section className={styles.alertTable}>
+            <header className={`${band.band} ${band.bleed}`}>
                 <h1 className={styles.title}>Nicht gefunden</h1>
                 <p className={styles.status}>
                     Es gibt kein Fahrzeug oder keinen Fahrer mit dieser Kennung
@@ -75,6 +77,7 @@ export const AlertTable = ({
                 >
                     Alle Warnungen
                 </button>
+            </header>
             </section>
         );
     }
@@ -83,55 +86,57 @@ export const AlertTable = ({
         <section
             className={sectionClassName(styles.alertTable, styles.isFetching)}
         >
-            <h1 className={styles.title}>Warnungen</h1>
+            <header className={`${band.band} ${band.bleed}`}>
+                <h1 className={styles.title}>Warnungen</h1>
 
-            {query.vehicle_id !== undefined && (
-                <p className={styles.scope}>
-                    Nur Warnungen eines Fahrzeugs.{" "}
-                    <button
-                        type="button"
-                        className={styles.scopeButton}
-                        onClick={clearVehicle}
-                    >
-                        Alle Fahrzeuge
-                    </button>
-                </p>
-            )}
+                {query.vehicle_id !== undefined && (
+                    <p className={styles.scope}>
+                        Nur Warnungen eines Fahrzeugs.{" "}
+                        <button
+                            type="button"
+                            className={styles.scopeButton}
+                            onClick={clearVehicle}
+                        >
+                            Alle Fahrzeuge
+                        </button>
+                    </p>
+                )}
 
-            {query.driver_id !== undefined && (
-                <p className={styles.scope}>
-                    Nur Warnungen eines Fahrers.{" "}
-                    <button
-                        type="button"
-                        className={styles.scopeButton}
-                        onClick={clearDriver}
-                    >
-                        Alle Fahrer
-                    </button>
-                </p>
-            )}
+                {query.driver_id !== undefined && (
+                    <p className={styles.scope}>
+                        Nur Warnungen eines Fahrers.{" "}
+                        <button
+                            type="button"
+                            className={styles.scopeButton}
+                            onClick={clearDriver}
+                        >
+                            Alle Fahrer
+                        </button>
+                    </p>
+                )}
 
-            {!isLoading && (
-                <div className={styles.filters}>
-                    <TableFilterBar
-                        filters={filtersWithCounts}
-                        activeFilterId={tableState.filterId}
-                        onFilterChange={setFilter}
-                        allCount={meta?.counts.all}
-                        groupLabel="Status"
-                        ariaLabel="Status"
-                    />
-                    <TableFilterBar
-                        filters={extraFiltersWithCounts}
-                        activeFilterId={query.type ?? null}
-                        onFilterChange={setType}
-                        allCount={meta?.type_counts?.all}
-                        allLabel="Alle Typen"
-                        groupLabel="Ereignisart"
-                        ariaLabel="Ereignisart"
-                    />
-                </div>
-            )}
+                {!isLoading && (
+                    <div className={styles.filters}>
+                        <TableFilterBar
+                            filters={filtersWithCounts}
+                            activeFilterId={tableState.filterId}
+                            onFilterChange={setFilter}
+                            allCount={meta?.counts.all}
+                            groupLabel="Status"
+                            ariaLabel="Status"
+                        />
+                        <TableFilterBar
+                            filters={extraFiltersWithCounts}
+                            activeFilterId={query.type ?? null}
+                            onFilterChange={setType}
+                            allCount={meta?.type_counts?.all}
+                            allLabel="Alle Typen"
+                            groupLabel="Ereignisart"
+                            ariaLabel="Ereignisart"
+                        />
+                    </div>
+                )}
+            </header>
 
             {error && (
                 <RetryMessage message={error} onRetry={listResult.retry} />

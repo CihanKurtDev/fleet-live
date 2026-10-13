@@ -1,9 +1,10 @@
-import type { DueListItem, DueListState } from "@fleet-live/shared";
+import { useMemo } from "react";
+import { DUE_SOON_DAYS, type DueListItem, type DueListState } from "@fleet-live/shared";
 
+import { DueSettingsForm } from "./DueSettingsForm";
+import { Input } from "../ui/Input/Input";
 import { Table } from "../ui/Table/Table";
-import { TableFilterBar } from "../ui/Table/TableFilterBar";
 import { TablePagination } from "../ui/Table/TablePagination";
-import { TableToolbar } from "../ui/Table/TableToolbar";
 import { RetryMessage } from "../ui/RetryMessage";
 import { useServerTable } from "../../hooks/useServerTable";
 import { useDueList } from "../../hooks/useDueList";
@@ -11,9 +12,10 @@ import { useDueListQuery } from "../../hooks/useDueListQuery";
 import {
     dueColumns,
     dueKindFilters,
-    dueStateFilters,
+    dueStateFiltersFor,
 } from "./dueTableConfig";
 import styles from "./DueTable.module.scss";
+import band from "../../styles/pageBand.module.scss";
 
 interface DueTableProps {
     onSelectRow?: (row: DueListItem) => void;
@@ -22,13 +24,16 @@ interface DueTableProps {
 const emptyLabel = (
     state: DueListState,
     narrowed: boolean,
+    leadDays: number,
 ): string => {
     if (narrowed) {
         return "Keine Fristen passen zum Filter.";
     }
 
     if (state === "soon") {
-        return "Nichts wird in den nächsten 30 Tagen fällig.";
+        return leadDays === 0
+            ? "Nichts ist heute fällig."
+            : `Nichts wird in den nächsten ${leadDays} Tagen fällig.`;
     }
 
     if (state === "missing") {
@@ -43,6 +48,11 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
     const listResult = useDueList(listQuery.apiQuery);
     const { query, setKind } = listQuery;
     const { meta } = listResult;
+    const leadDays = meta?.lead_days ?? DUE_SOON_DAYS;
+    const stateFilters = useMemo(
+        () => dueStateFiltersFor(leadDays),
+        [leadDays],
+    );
     const {
         tableState,
         filtersWithCounts,
@@ -63,7 +73,7 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
     } = useServerTable<DueListItem>({
         listQuery,
         listResult,
-        filters: dueStateFilters,
+        filters: stateFilters,
         counts: listResult.meta?.counts,
         extras: {
             filters: dueKindFilters,
@@ -73,37 +83,38 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
 
     return (
         <section className={sectionClassName(styles.dueTable, styles.isFetching)}>
-            <h1 className={styles.title}>Fristen</h1>
-            <p className={styles.lead}>Eine Zeile ist ein Termin.</p>
-
-            <TableToolbar
-                search={tableState.search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Kennzeichen oder Fahrer suchen..."
-                searchAriaLabel="Kennzeichen oder Fahrer suchen"
-            />
-
-            {!isLoading && (
-                <div className={styles.filters}>
-                    <TableFilterBar
-                        filters={filtersWithCounts}
-                        activeFilterId={tableState.filterId}
-                        onFilterChange={setFilter}
-                        showAll={false}
-                        groupLabel="Stand"
-                        ariaLabel="Stand"
-                    />
-                    <TableFilterBar
-                        filters={extraFiltersWithCounts}
-                        activeFilterId={query.kind ?? null}
-                        onFilterChange={setKind}
-                        allCount={meta?.kind_counts.all}
-                        allLabel="Alle"
-                        groupLabel="Art"
-                        ariaLabel="Art"
+            <header className={`${band.band} ${band.bleed}`}>
+                <div className={styles.heading}>
+                    <div>
+                        <h1 className={styles.title}>Fristen</h1>
+                        <p className={styles.lead}>Eine Zeile ist ein Termin.</p>
+                    </div>
+                    <Input
+                        type="search"
+                        size="sm"
+                        className={styles.search}
+                        placeholder="Kennzeichen oder Fahrer suchen..."
+                        aria-label="Kennzeichen oder Fahrer suchen"
+                        value={tableState.search}
+                        onChange={(event) => setSearch(event.target.value)}
                     />
                 </div>
-            )}
+
+                {!isLoading && (
+                    <DueSettingsForm
+                        onSaved={listResult.retry}
+                        standFilters={filtersWithCounts}
+                        activeStand={tableState.filterId}
+                        onStand={setFilter}
+                        kindFilters={extraFiltersWithCounts}
+                        activeKind={query.kind ?? null}
+                        onKind={setKind}
+                        allCount={meta?.kind_counts.all}
+                        leadDays={leadDays}
+                        checkMonths={meta?.licence_check_months ?? 6}
+                    />
+                )}
+            </header>
 
             {error && (
                 <RetryMessage message={error} onRetry={listResult.retry} />
@@ -131,6 +142,7 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
                     emptyLabel(
                         query.state,
                         query.search.length > 0 || query.kind !== undefined,
+                        leadDays,
                     ),
                 )}
                 className={styles.mobileCards}

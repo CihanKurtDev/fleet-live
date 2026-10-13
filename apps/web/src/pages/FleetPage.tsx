@@ -538,6 +538,7 @@ export const FleetPage = () => {
                                         : styles.statusChip
                                 }
                                 aria-pressed={pressed}
+                                aria-label={`${vehicleStatusLabel(status)}, ${formatCount(totals.inView)} im Ausschnitt, ${formatCount(totals.fleet)} gesamt`}
                                 disabled={density}
                                 onClick={() => {
                                     setStatusChip((current) =>
@@ -545,17 +546,22 @@ export const FleetPage = () => {
                                     );
                                 }}
                             >
-                                <span
-                                    className={styles.statusDot}
-                                    style={{
-                                        background:
-                                            VEHICLE_STATUS_COLORS[status],
-                                    }}
-                                />
-                                <span>{vehicleStatusLabel(status)}</span>
+                                <span className={styles.statusMain}>
+                                    <span
+                                        className={styles.statusDot}
+                                        style={{
+                                            background:
+                                                VEHICLE_STATUS_COLORS[status],
+                                        }}
+                                    />
+                                    <span className={styles.statusName}>
+                                        {vehicleStatusLabel(status)}
+                                    </span>
+                                </span>
                                 <span className={styles.statusCount}>
-                                    {formatCount(totals.inView)} im Ausschnitt
-                                    / {formatCount(totals.fleet)} gesamt
+                                    {formatCount(totals.inView)}
+                                    <span className={styles.statusOf}>/</span>
+                                    {formatCount(totals.fleet)}
                                 </span>
                             </button>
                         );

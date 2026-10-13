@@ -11,7 +11,7 @@ The start page `/` fills the viewport under the header (`100svh`). The page does
 
 1. Title and one sentence.
 2. KPI tiles. Small uppercase label, one large number, optional hint. The whole tile is the link when the destination is that number.
-3. Deadline counts are three tiles of the same height: Überfällig, In 30 Tagen, Ohne Datum. Ohne Datum is not red. Each tile opens `/fristen` in that state, and the list total is that number. Names stay on that list.
+3. Deadline counts are three tiles of the same height: Überfällig, In N Tagen (N is the company lead, 30 from the catalog, „Heute“ when the lead is 0), Datum fehlt. Datum fehlt is not red. Each tile opens `/fristen` in that state, and the list total is that number. Names stay on that list. The dispatcher sets the lead and the licence-check interval on `/fristen`; a viewer only reads them.
 4. Charts, filling the rest.
 5. The only table sits behind "Exakte Monatswerte anzeigen".
 

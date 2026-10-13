@@ -121,3 +121,29 @@ export const companyDueSettingsSchema = z.object({
         .union([z.null(), licenceCheckMonthsSchema])
         .optional(),
 });
+
+/** Gespeicherte Firma-Werte plus die Zahlen, mit denen gerechnet wird. */
+export type DueSettings = {
+    due_lead_days: number | null;
+    licence_check_months: number | null;
+    lead_days: number;
+    check_months: number;
+};
+
+/** `null` und ein fehlender Datensatz fallen auf den Katalog zurück. `0` bleibt `0`. */
+export function resolveDueSettings(
+    stored:
+        | {
+              due_lead_days?: number | null;
+              licence_check_months?: number | null;
+          }
+        | undefined,
+): Pick<DueSettings, "lead_days" | "check_months"> {
+    return {
+        lead_days: stored?.due_lead_days ?? dueRule("hu").lead_days,
+        check_months:
+            stored?.licence_check_months ??
+            dueRule("licence_check").interval_months ??
+            6,
+    };
+}

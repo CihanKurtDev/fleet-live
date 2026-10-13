@@ -48,6 +48,8 @@ export type BriefingData = {
     history: BriefingHistoryMonth[];
     /** HU, UVV, Führerschein. Nur Zähler, die Zeilen liegen unter /api/due. */
     due: DueCounts;
+    /** Aufgelöster Vorlauf, mit dem `due.soon` gezählt wurde. */
+    due_lead_days: number;
 };
 
 export type BriefingResponse = {

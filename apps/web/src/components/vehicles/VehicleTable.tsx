@@ -11,6 +11,7 @@ import { useServerTable } from "../../hooks/useServerTable";
 import { useVehicleList } from "../../hooks/useVehicleList";
 import { useVehicleListQuery } from "../../hooks/useVehicleListQuery";
 import { vehicleColumns, vehicleFilters } from "./vehicleTableConfig";
+import band from "../../styles/pageBand.module.scss";
 import styles from "./VehicleTable.module.scss";
 
 interface VehicleTableProps {
@@ -107,39 +108,41 @@ export const VehicleTable = ({
         <section
             className={sectionClassName(styles.vehicleTable, styles.isFetching)}
         >
-            <h1 className={styles.title}>Fahrzeuge</h1>
+            <header className={`${band.band} ${band.bleed}`}>
+                <h1 className={styles.title}>Fahrzeuge</h1>
 
-            <TableToolbar
-                search={tableState.search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Kennzeichen oder Fahrer suchen..."
-                searchAriaLabel="Kennzeichen oder Fahrer suchen"
-                addNewLabel="Fahrzeug anlegen"
-                isEditing={isEditing}
-                onToggleEditMode={
-                    onDeleteVehicles ? toggleEditMode : undefined
-                }
-                selectedCount={selectedIds.length}
-                onDeleteSelected={
-                    onDeleteVehicles
-                        ? () => setPendingDeleteIds(selectedIds)
-                        : undefined
-                }
-                onAddNew={onAddVehicle}
-                onSecondaryAction={onImport}
-                secondaryActionLabel="Importieren"
-            />
-
-            {!isLoading && (
-                <TableFilterBar
-                    filters={filtersWithCounts}
-                    activeFilterId={tableState.filterId}
-                    onFilterChange={setFilter}
-                    allCount={listResult.meta?.counts.all}
-                    groupLabel="Status"
-                    ariaLabel="Status"
+                <TableToolbar
+                    search={tableState.search}
+                    onSearchChange={setSearch}
+                    searchPlaceholder="Kennzeichen oder Fahrer suchen..."
+                    searchAriaLabel="Kennzeichen oder Fahrer suchen"
+                    addNewLabel="Fahrzeug anlegen"
+                    isEditing={isEditing}
+                    onToggleEditMode={
+                        onDeleteVehicles ? toggleEditMode : undefined
+                    }
+                    selectedCount={selectedIds.length}
+                    onDeleteSelected={
+                        onDeleteVehicles
+                            ? () => setPendingDeleteIds(selectedIds)
+                            : undefined
+                    }
+                    onAddNew={onAddVehicle}
+                    onSecondaryAction={onImport}
+                    secondaryActionLabel="Importieren"
                 />
-            )}
+
+                {!isLoading && (
+                    <TableFilterBar
+                        filters={filtersWithCounts}
+                        activeFilterId={tableState.filterId}
+                        onFilterChange={setFilter}
+                        allCount={listResult.meta?.counts.all}
+                        groupLabel="Status"
+                        ariaLabel="Status"
+                    />
+                )}
+            </header>
 
             {error && (
                 <RetryMessage message={error} onRetry={listResult.retry} />

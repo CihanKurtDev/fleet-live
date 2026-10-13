@@ -312,6 +312,7 @@ export {
 export type {
     DueCalculation,
     DueRule,
+    DueSettings,
     DueRuleId,
     DueRuleKind,
     DueRuleScope,
@@ -326,6 +327,7 @@ export {
     dueLeadDaysSchema,
     dueRule,
     licenceCheckMonthsSchema,
+    resolveDueSettings,
     yearMonthSchema,
 } from "./models/dueRules";
 

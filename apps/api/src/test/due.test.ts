@@ -250,3 +250,84 @@ describe("GET /api/due", () => {
         );
     });
 });
+
+describe("GET and PATCH /api/due/settings", () => {
+    it("requires a session", async () => {
+        const response = await request(app).get("/api/due/settings");
+
+        assert.equal(response.status, 401);
+        assert.equal(response.body.code, "UNAUTHORIZED");
+    });
+
+    it("lets a viewer read the catalog and blocks a write", async () => {
+        const viewer = (await loginAs(1, "viewer")).agent;
+        const read = await viewer.get("/api/due/settings");
+
+        assert.equal(read.status, 200);
+        assert.deepEqual(read.body.data, {
+            due_lead_days: null,
+            licence_check_months: null,
+            lead_days: 30,
+            check_months: 6,
+        });
+
+        const denied = await viewer.patch("/api/due/settings").send({
+            due_lead_days: 14,
+        });
+
+        assert.equal(denied.status, 403);
+        assert.equal(denied.body.code, "FORBIDDEN");
+    });
+
+    it("stores a shorter lead and can switch the licence check off", async () => {
+        try {
+            const saved = await api.patch("/api/due/settings").send({
+                due_lead_days: 14,
+                licence_check_months: 0,
+            });
+
+            assert.equal(saved.status, 200);
+            assert.equal(saved.body.data.due_lead_days, 14);
+            assert.equal(saved.body.data.licence_check_months, 0);
+            assert.equal(saved.body.data.lead_days, 14);
+            assert.equal(saved.body.data.check_months, 0);
+
+            const month = VehicleModel.create({
+                license_plate: "K-SET 1",
+                company_id: 1,
+                hu_due_on: "2026-10-15",
+            });
+            DriverModel.create(1, "Kontrolle aus");
+            const rows = DueModel.rowsForCompany(1, "2026-10-13");
+
+            assert.equal(
+                rows.find((row) => row.vehicle_id === month.id && row.kind === "hu"),
+                undefined,
+            );
+            assert.equal(
+                rows.some((row) => row.kind === "licence_check"),
+                false,
+            );
+
+            const list = await api.get("/api/due?state=soon");
+            assert.equal(list.body.meta.lead_days, 14);
+            assert.equal(list.body.meta.licence_check_months, 0);
+
+            const briefing = await api.get("/api/briefing");
+            assert.equal(briefing.body.data.due_lead_days, 14);
+
+            const invalid = await api.patch("/api/due/settings").send({
+                due_lead_days: -1,
+            });
+
+            assert.equal(invalid.status, 400);
+            assert.equal(invalid.body.code, "VALIDATION_ERROR");
+            assert.match(invalid.body.fields.due_lead_days, /nicht negativ/);
+        } finally {
+            CompanyModel.updateDueSettings(1, {
+                due_lead_days: null,
+                licence_check_months: null,
+            });
+        }
+    });
+});

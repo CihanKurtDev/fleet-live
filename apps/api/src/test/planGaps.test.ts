@@ -213,6 +213,10 @@ describe("plan gaps: roles and tenant", () => {
                     role: "viewer",
                 }),
             () => agent.get("/api/auth/members"),
+            () =>
+                agent.patch("/api/due/settings").send({
+                    due_lead_days: 14,
+                }),
         ];
 
         for (const call of writes) {
@@ -228,6 +232,7 @@ describe("plan gaps: roles and tenant", () => {
             agent.get("/api/drivers"),
             agent.get("/api/sites"),
             agent.get("/api/briefing"),
+            agent.get("/api/due/settings"),
         ]);
         for (const response of reads) {
             assert.equal(response.status, 200);

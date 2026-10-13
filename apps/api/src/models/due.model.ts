@@ -1,8 +1,8 @@
 import {
     berlinTodayIso,
     buildConfiguredDueRows,
-    dueRule,
     queryDueRows,
+    resolveDueSettings,
     type DueListItem,
     type DueListQuery,
     type DueListResponse,
@@ -50,12 +50,8 @@ export class DueModel {
     ): DueListItem[] {
         const vehicles = stmt(VEHICLES).all(companyId) as VehicleDueRow[];
         const drivers = stmt(DRIVERS).all(companyId) as DriverDueRow[];
-        const settings = CompanyModel.dueSettings(companyId);
-        const leadDays = settings?.due_lead_days ?? dueRule("hu").lead_days;
-        const checkMonths =
-            settings?.licence_check_months ??
-            dueRule("licence_check").interval_months ??
-            6;
+        const { lead_days: leadDays, check_months: checkMonths } =
+            resolveDueSettings(CompanyModel.dueSettings(companyId));
 
         return buildConfiguredDueRows({
             today,
@@ -83,6 +79,16 @@ export class DueModel {
         companyId: number,
         query: DueListQuery,
     ): DueListResponse {
-        return queryDueRows(this.rowsForCompany(companyId), query);
+        const window = resolveDueSettings(CompanyModel.dueSettings(companyId));
+        const listed = queryDueRows(this.rowsForCompany(companyId), query);
+
+        return {
+            ...listed,
+            meta: {
+                ...listed.meta,
+                lead_days: window.lead_days,
+                licence_check_months: window.check_months,
+            },
+        };
     }
 }

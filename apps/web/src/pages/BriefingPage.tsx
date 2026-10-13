@@ -7,10 +7,12 @@ import type {
 import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
+import { dueSoonLabel } from "../components/due/dueTableConfig";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { useBriefing } from "../hooks/useBriefing";
 import { formatCount } from "../utils/formatCount";
 import styles from "./BriefingPage.module.scss";
+import band from "../styles/pageBand.module.scss";
 
 const briefingDateLabel = (now = new Date()) =>
     new Intl.DateTimeFormat("de-DE", {
@@ -122,7 +124,13 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
 const missingFields = (due: DueCounts) =>
     due.missing.hu + due.missing.uvv + due.missing.licence_expiry;
 
-const DueKpis = ({ due }: { due: DueCounts }) => {
+const DueKpis = ({
+    due,
+    leadDays,
+}: {
+    due: DueCounts;
+    leadDays: number;
+}) => {
     const tiles: Array<{
         key: string;
         label: string;
@@ -140,14 +148,14 @@ const DueKpis = ({ due }: { due: DueCounts }) => {
         },
         {
             key: "soon",
-            label: "In 30 Tagen",
+            label: dueSoonLabel(leadDays),
             value: due.soon,
             tone: "warning",
             to: "/fristen?state=soon",
         },
         {
             key: "missing",
-            label: "Ohne Datum",
+            label: "Datum fehlt",
             value: missingFields(due),
             hint: "Felder",
             tone: "neutral",
@@ -189,7 +197,7 @@ const DueKpis = ({ due }: { due: DueCounts }) => {
 
 const BriefingBody = ({ data }: { data: BriefingData }) => (
     <>
-        <header className={styles.header}>
+        <header className={`${band.band} ${band.bleed} ${styles.header}`}>
             <h1 className={styles.title}>Schicht</h1>
             <p className={styles.subtitle}>
                 {briefingDateLabel()} · {briefingNeed(data.counts.open)}
@@ -197,7 +205,7 @@ const BriefingBody = ({ data }: { data: BriefingData }) => (
         </header>
         <ImportPrompt />
         <Kpis counts={data.counts} />
-        <DueKpis due={data.due} />
+        <DueKpis due={data.due} leadDays={data.due_lead_days} />
         <BriefingCharts history={data.history} />
     </>
 );
@@ -208,7 +216,7 @@ export const BriefingPage = () => {
     if (isLoading) {
         return (
             <section className={styles.page}>
-                <header className={styles.header}>
+                <header className={`${band.band} ${band.bleed} ${styles.header}`}>
                     <h1 className={styles.title}>Schicht</h1>
                     <p className={styles.statusLine}>Laden…</p>
                 </header>
@@ -219,7 +227,7 @@ export const BriefingPage = () => {
     if (error || !data) {
         return (
             <section className={styles.page}>
-                <header className={styles.header}>
+                <header className={`${band.band} ${band.bleed} ${styles.header}`}>
                     <h1 className={styles.title}>Schicht</h1>
                     <RetryMessage
                         message={
