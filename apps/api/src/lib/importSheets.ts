@@ -30,6 +30,15 @@ const VEHICLE_COLUMN_HINTS: Array<{
     { pattern: /\bhu\b|hauptuntersuchung|tuev|tüv/i, target: "hu_due_on" },
     { pattern: /standort|depot|hof|niederlassung|site/i, target: "depot" },
     {
+        pattern: /breitengrad|(^|[^a-zäöü])lat(itude)?($|[^a-z])/i,
+        target: "latitude",
+    },
+    {
+        pattern:
+            /l(ä|ae)ngengrad|(^|[^a-zäöü])(lng|lon|longitude)($|[^a-z])/i,
+        target: "longitude",
+    },
+    {
         pattern: /kostenstelle|cost[_\s-]?center|k[.\s-]?stelle/i,
         target: "cost_center",
     },

@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
     DEPOT_RADIUS_DEFAULT_M,
+    type FleetPosition,
     type Site,
     type VehicleFilterId,
+    type VehicleStatus,
 } from "@fleet-live/shared";
 
 import { ApiError, isAbortError } from "../api/client";
@@ -22,15 +24,57 @@ import {
     isDepotDraftDirty,
     type DepotDraft,
 } from "../components/vehicles/depotDraft";
+import { FleetDetailPanel } from "../components/vehicles/FleetDetailPanel";
 import { FleetDriverPicker } from "../components/vehicles/FleetDriverPicker";
 import { FleetMap } from "../components/vehicles/FleetMap";
+import { FleetStreamStatus } from "../components/vehicles/FleetStreamStatus";
+import { isInsideBBox } from "../components/vehicles/clusterFleet";
+import {
+    countDensityStatus,
+    countFleetStatus,
+    filterByStatus,
+    fleetBounds,
+    fleetEmptyMessage,
+    plateHits,
+    unionBBoxes,
+} from "../components/vehicles/fleetOverview";
 import { vehicleFilters } from "../components/vehicles/vehicleTableConfig";
+import {
+    MAP_STATUS_LEGEND,
+    VEHICLE_STATUS_COLORS,
+    vehicleStatusLabel,
+} from "../components/vehicles/vehicleStatus";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useFleetPageQuery } from "../hooks/useFleetPageQuery";
 import { useFleetPositions } from "../hooks/useFleetPositions";
 import { formatCount } from "../utils/formatCount";
 import styles from "./FleetPage.module.scss";
+
+const fleetServerFilters = vehicleFilters.filter((item) =>
+    item.id === "alerts" ||
+    item.id === "low_fuel" ||
+    item.id === "unassigned" ||
+    item.id === "in_depot",
+);
+
+const statusFromFilter = (
+    filter: VehicleFilterId | undefined,
+): VehicleStatus | null => {
+    if (filter === "driving") {
+        return "DRIVING";
+    }
+
+    if (filter === "idle") {
+        return "IDLE";
+    }
+
+    if (filter === "offline") {
+        return "OFFLINE";
+    }
+
+    return null;
+};
 
 const sortSites = (sites: Site[]) =>
     [...sites].sort(
@@ -41,12 +85,11 @@ const sortSites = (sites: Site[]) =>
 export const FleetPage = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { listEpoch } = useVehicles();
+    const { listEpoch, streamConnection, lastTelemetryAt } = useVehicles();
     const canEdit = user?.role === "dispatcher";
     const {
         bbox,
         filter,
-        search,
         drivers,
         depotId,
         searchDraft,
@@ -62,6 +105,7 @@ export const FleetPage = () => {
         densityCells,
         mode,
         total,
+        withoutPosition,
         isLoading,
         hasLoaded,
         error,
@@ -69,8 +113,7 @@ export const FleetPage = () => {
         snapshotLength,
     } = useFleetPositions({
         bbox,
-        filter,
-        search,
+        filter: statusFromFilter(filter) ? undefined : filter,
         drivers,
     });
     const [sites, setSites] = useState<Site[]>([]);
@@ -83,6 +126,45 @@ export const FleetPage = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<Site | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [showWithoutPosition, setShowWithoutPosition] = useState(false);
+    const [statusChip, setStatusChip] = useState<VehicleStatus | null>(() =>
+        statusFromFilter(filter),
+    );
+    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [focus, setFocus] = useState<{
+        key: string;
+        vehicle: FleetPosition;
+    } | null>(null);
+    const [frameNonce, setFrameNonce] = useState(0);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const searchWrapRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const fromUrl = statusFromFilter(filter);
+
+        if (!fromUrl) {
+            return;
+        }
+
+        setStatusChip(fromUrl);
+        setFilter(undefined);
+    }, [filter, setFilter]);
+
+    useEffect(() => {
+        if (!searchOpen) {
+            return;
+        }
+
+        const onPointerDown = (event: PointerEvent) => {
+            if (!searchWrapRef.current?.contains(event.target as Node)) {
+                setSearchOpen(false);
+            }
+        };
+
+        document.addEventListener("pointerdown", onPointerDown);
+
+        return () => document.removeEventListener("pointerdown", onPointerDown);
+    }, [searchOpen]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -103,16 +185,108 @@ export const FleetPage = () => {
         return () => controller.abort();
     }, [listEpoch, sitesRetryKey]);
 
-    const countLabel = `${formatCount(total)} ${total === 1 ? "Fahrzeug" : "Fahrzeuge"}`;
+    const missingVehicles = useMemo(
+        () => vehicles.filter((vehicle) => !vehicle.has_position),
+        [vehicles],
+    );
     const queryString = searchParams.toString();
-    const focusPosition =
-        search && mode === "positions" && total === 1
-            ? (vehicles[0] ?? null)
-            : null;
+    const selectedVehicle =
+        selectedId === null
+            ? null
+            : (vehicles.find((vehicle) => vehicle.id === selectedId) ?? null);
+    const shownVehicles = useMemo(() => {
+        const filtered =
+            mode === "positions"
+                ? filterByStatus(vehicles, statusChip)
+                : vehicles;
+
+        if (
+            mode !== "positions" ||
+            selectedVehicle === null ||
+            !selectedVehicle.has_position ||
+            selectedVehicle.latitude === null ||
+            selectedVehicle.longitude === null ||
+            filtered.some((vehicle) => vehicle.id === selectedVehicle.id)
+        ) {
+            return filtered;
+        }
+
+        return [...filtered, selectedVehicle];
+    }, [mode, selectedVehicle, statusChip, vehicles]);
+    const statusTotals = useMemo(
+        () =>
+            mode === "density"
+                ? countDensityStatus(densityCells, bbox)
+                : countFleetStatus(vehicles, bbox),
+        [bbox, densityCells, mode, vehicles],
+    );
+    const frameBounds = useMemo(
+        () =>
+            mode === "density"
+                ? unionBBoxes(densityCells.map((cell) => cell.bbox))
+                : fleetBounds(shownVehicles),
+        [densityCells, mode, shownVehicles],
+    );
+    const hits = useMemo(
+        () => (mode === "positions" ? plateHits(vehicles, searchDraft) : []),
+        [mode, searchDraft, vehicles],
+    );
+    const positionedCount = useMemo(
+        () =>
+            vehicles.filter(
+                (vehicle) =>
+                    vehicle.has_position &&
+                    vehicle.latitude !== null &&
+                    vehicle.longitude !== null,
+            ).length,
+        [vehicles],
+    );
+    const inViewCount = useMemo(() => {
+        if (bbox === null) {
+            return null;
+        }
+
+        return vehicles.filter(
+            (vehicle) =>
+                vehicle.has_position &&
+                vehicle.latitude !== null &&
+                vehicle.longitude !== null &&
+                isInsideBBox(vehicle.latitude, vehicle.longitude, bbox),
+        ).length;
+    }, [bbox, vehicles]);
+    const emptyMessage = fleetEmptyMessage({
+        mode,
+        rowCount: mode === "density" ? total : vehicles.length,
+        positionedCount,
+        inViewCount,
+        hasNarrowingFilter: filter !== undefined || drivers.length > 0,
+    });
+    const fleetPath = `/fleet${queryString ? `?${queryString}` : ""}`;
     const draftDirty = draft !== null && isDepotDraftDirty(draft, sites);
+
+    const pickVehicle = (vehicle: FleetPosition) => {
+        setSearchOpen(false);
+        setSelectedId(vehicle.id);
+
+        if (
+            vehicle.has_position &&
+            vehicle.latitude !== null &&
+            vehicle.longitude !== null
+        ) {
+            setFocus({
+                key: `${vehicle.id}:${Date.now()}`,
+                vehicle,
+            });
+        }
+    };
+
+    const rejectDirtyDepot = () => {
+        setSaveError("Speichern oder abbrechen, um ein anderes Depot zu wählen.");
+    };
 
     const selectDepot = (site: Site) => {
         if (draft && isDepotDraftDirty(draft, sites)) {
+            rejectDirtyDepot();
             return;
         }
 
@@ -215,15 +389,67 @@ export const FleetPage = () => {
         <section className={styles.page}>
             <h1 className={styles.title}>Flottenkarte</h1>
             <div className={styles.toolbar}>
-                <Input
-                    type="search"
-                    size="sm"
-                    className={styles.search}
-                    placeholder="Kennzeichen"
-                    aria-label="Kennzeichen"
-                    value={searchDraft}
-                    onChange={(event) => setSearchDraft(event.target.value)}
-                />
+                <div className={styles.searchWrap} ref={searchWrapRef}>
+                    <Input
+                        type="search"
+                        size="sm"
+                        className={styles.search}
+                        placeholder="Kennzeichen oder Fahrer"
+                        aria-label="Kennzeichen oder Fahrer"
+                        aria-expanded={searchOpen && searchDraft.trim().length > 0}
+                        aria-controls="fleet-search-hits"
+                        value={searchDraft}
+                        onChange={(event) => {
+                            setSearchDraft(event.target.value);
+                            setSearchOpen(true);
+                        }}
+                        onFocus={() => setSearchOpen(true)}
+                        onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                                setSearchOpen(false);
+                            }
+
+                            if (event.key === "Enter" && hits[0]) {
+                                event.preventDefault();
+                                pickVehicle(hits[0]);
+                            }
+                        }}
+                    />
+                    {searchOpen && searchDraft.trim().length > 0 && (
+                        <ul
+                            id="fleet-search-hits"
+                            className={styles.hits}
+                            role="listbox"
+                        >
+                            {mode === "density" && (
+                                <li className={styles.hitNote}>
+                                    In der Dichteansicht gibt es keine
+                                    einzelnen Kennzeichen.
+                                </li>
+                            )}
+                            {mode === "positions" && hits.length === 0 && (
+                                <li className={styles.hitNote}>Kein Treffer</li>
+                            )}
+                            {hits.map((hit) => (
+                                <li key={hit.id}>
+                                    <button
+                                        type="button"
+                                        role="option"
+                                        onClick={() => pickVehicle(hit)}
+                                    >
+                                        <span>{hit.license_plate}</span>
+                                        <span>
+                                            {hit.driver_name ?? "Kein Fahrer"}
+                                        </span>
+                                        <span>
+                                            {vehicleStatusLabel(hit.status)}
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
 
                 <FleetDriverPicker
                     selected={drivers}
@@ -231,17 +457,33 @@ export const FleetPage = () => {
                 />
 
                 <TableFilterBar
-                    filters={vehicleFilters}
-                    activeFilterId={filter ?? null}
+                    filters={fleetServerFilters}
+                    activeFilterId={
+                        statusFromFilter(filter) ? null : (filter ?? null)
+                    }
                     onFilterChange={(id) =>
                         setFilter((id as VehicleFilterId | null) ?? undefined)
                     }
                     showAll
                     allLabel="Alle"
-                    ariaLabel="Status"
+                    ariaLabel="Filter"
                 />
 
                 <div className={styles.meta}>
+                    <FleetStreamStatus
+                        connection={streamConnection}
+                        lastTelemetryAt={lastTelemetryAt}
+                    />
+                    <button
+                        type="button"
+                        className={styles.frameAll}
+                        disabled={frameBounds === null}
+                        onClick={() =>
+                            setFrameNonce((current) => current + 1)
+                        }
+                    >
+                        Alle Fahrzeuge anzeigen
+                    </button>
                     {isLoading &&
                         snapshotLength === 0 &&
                         densityCells.length === 0 && (
@@ -249,15 +491,24 @@ export const FleetPage = () => {
                                 Positionen werden geladen…
                             </p>
                         )}
-                    {hasLoaded && !error && (
-                        <p className={styles.count} aria-live="polite">
-                            {countLabel}
-                        </p>
-                    )}
-                    {hasLoaded && !error && mode === "density" && (
-                        <p className={styles.note}>
-                            Dichteansicht: Kreisgröße zeigt die Fahrzeugzahl.
-                            Klicken zum Vergrößern.
+                    {hasLoaded && !error && withoutPosition > 0 && (
+                        <p className={styles.count}>
+                            {mode === "positions" ? (
+                                <button
+                                    type="button"
+                                    className={styles.missingToggle}
+                                    aria-expanded={showWithoutPosition}
+                                    onClick={() =>
+                                        setShowWithoutPosition((open) => !open)
+                                    }
+                                >
+                                    {formatCount(withoutPosition)} ohne Position
+                                </button>
+                            ) : (
+                                <span>
+                                    {formatCount(withoutPosition)} ohne Position
+                                </span>
+                            )}
                         </p>
                     )}
                     {error && (
@@ -265,19 +516,107 @@ export const FleetPage = () => {
                     )}
                 </div>
             </div>
+            {hasLoaded && !error && (
+                <div
+                    className={styles.statusBar}
+                    role="group"
+                    aria-label="Status"
+                >
+                    {MAP_STATUS_LEGEND.map((status) => {
+                        const totals = statusTotals[status];
+                        const pressed =
+                            mode === "positions" && statusChip === status;
+                        const density = mode === "density";
 
+                        return (
+                            <button
+                                key={status}
+                                type="button"
+                                className={
+                                    pressed
+                                        ? `${styles.statusChip} ${styles.statusChipOn}`
+                                        : styles.statusChip
+                                }
+                                aria-pressed={pressed}
+                                disabled={density}
+                                onClick={() => {
+                                    setStatusChip((current) =>
+                                        current === status ? null : status,
+                                    );
+                                }}
+                            >
+                                <span
+                                    className={styles.statusDot}
+                                    style={{
+                                        background:
+                                            VEHICLE_STATUS_COLORS[status],
+                                    }}
+                                />
+                                <span>{vehicleStatusLabel(status)}</span>
+                                <span className={styles.statusCount}>
+                                    {formatCount(totals.inView)} im Ausschnitt
+                                    / {formatCount(totals.fleet)} gesamt
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            {hasLoaded && !error && mode === "density" && (
+                <p className={styles.noteBar}>
+                    Dichteansicht ab 5.000 Fahrzeugen mit Position: die Zahlen
+                    sind Zellensummen. Ein Status blendet darin keine
+                    einzelnen Fahrzeuge aus.
+                </p>
+            )}
+            {showWithoutPosition &&
+                withoutPosition > 0 &&
+                mode === "positions" && (
+                    <ul className={styles.missingList}>
+                        {missingVehicles.map((vehicle) => (
+                            <li key={vehicle.id}>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        navigate(`/vehicles/${vehicle.id}`, {
+                                            state: {
+                                                from: `/fleet${
+                                                    queryString
+                                                        ? `?${queryString}`
+                                                        : ""
+                                                }`,
+                                            },
+                                        })
+                                    }
+                                >
+                                    <span>{vehicle.license_plate}</span>
+                                    <span>
+                                        {vehicle.driver_name ?? "Kein Fahrer"}
+                                    </span>
+                                    <span>
+                                        {vehicleStatusLabel(vehicle.status)}
+                                    </span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+            <div className={styles.stage}>
             <div className={styles.mapArea}>
                 <FleetMap
-                    vehicles={vehicles}
+                    vehicles={shownVehicles}
                     densityCells={densityCells}
                     mode={mode}
                     initialBbox={bbox}
-                    focusKey={
-                        focusPosition
-                            ? `${search}\0${focusPosition.id}`
+                    focusKey={focus?.key ?? null}
+                    focusPosition={focus?.vehicle ?? null}
+                    selectedId={selectedId}
+                    frame={
+                        frameNonce > 0 && frameBounds
+                            ? { nonce: frameNonce, bounds: frameBounds }
                             : null
                     }
-                    focusPosition={focusPosition}
                     depots={sites}
                     draft={draft}
                     selectedDepotId={depotId ?? null}
@@ -290,15 +629,7 @@ export const FleetPage = () => {
                     canEditDepots={canEdit}
                     lockDepotSelection={draftDirty}
                     onBoundsChange={setBBox}
-                    onSelect={(id) =>
-                        navigate(`/vehicles/${id}`, {
-                            state: {
-                                from: `/fleet${
-                                    queryString ? `?${queryString}` : ""
-                                }`,
-                            },
-                        })
-                    }
+                    onSelect={setSelectedId}
                     onPlaceDepot={(latitude, longitude) => {
                         setDraft({
                             id: "new",
@@ -342,6 +673,7 @@ export const FleetPage = () => {
                     onEdit={editDepot}
                     onStartPlace={() => {
                         if (draft && isDepotDraftDirty(draft, sites)) {
+                            rejectDirtyDepot();
                             return;
                         }
 
@@ -360,11 +692,21 @@ export const FleetPage = () => {
                     }}
                     onAskDelete={setDeleteTarget}
                 />
-                {hasLoaded && total === 0 && !error && (
+                {hasLoaded && !error && emptyMessage && (
                     <p className={styles.empty} role="status">
-                        Keine Fahrzeuge mit Position in diesem Ausschnitt.
+                        {emptyMessage}
                     </p>
                 )}
+            </div>
+            {selectedVehicle && (
+                <aside className={styles.detail} aria-label="Fahrzeug">
+                    <FleetDetailPanel
+                        vehicle={selectedVehicle}
+                        from={fleetPath}
+                        onClose={() => setSelectedId(null)}
+                    />
+                </aside>
+            )}
             </div>
             <ConfirmDialog
                 open={deleteTarget !== null}

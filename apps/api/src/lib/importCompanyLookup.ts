@@ -1,4 +1,8 @@
 import { stmt } from "../db/statements";
+import {
+    normalizeDepotKey,
+    type DepotAnchor,
+} from "./startPosition";
 
 export type CompanyImportLookup = {
     plateToId: Map<string, number>;
@@ -7,7 +11,8 @@ export type CompanyImportLookup = {
     eligibility: Set<string>;
     drivingByDriverId: Map<number, { id: number; license_plate: string }>;
     vehicleCurrentDriverId: Map<number, number | null>;
-    depotNameToId: Map<string, number>;
+    depotsByKey: Map<string, DepotAnchor>;
+    defaultDepot: DepotAnchor | null;
 };
 
 export function loadCompanyImportLookup(
@@ -83,17 +88,33 @@ export function loadCompanyImportLookup(
         );
     }
 
-    const depotNameToId = new Map<string, number>();
+    const depotsByKey = new Map<string, DepotAnchor>();
+    let defaultDepot: DepotAnchor | null = null;
     const depots = stmt(
         `
-        SELECT id, name
+        SELECT id, name, latitude, longitude, is_default
         FROM sites
         WHERE company_id = ? AND kind = 'depot'
         `,
-    ).all(companyId) as Array<{ id: number; name: string }>;
+    ).all(companyId) as Array<{
+        id: number;
+        name: string;
+        latitude: number;
+        longitude: number;
+        is_default: number;
+    }>;
 
     for (const row of depots) {
-        depotNameToId.set(row.name.toLowerCase(), row.id);
+        const anchor: DepotAnchor = {
+            id: row.id,
+            name: row.name,
+            latitude: row.latitude,
+            longitude: row.longitude,
+        };
+        depotsByKey.set(normalizeDepotKey(row.name), anchor);
+        if (row.is_default === 1) {
+            defaultDepot = anchor;
+        }
     }
 
     return {
@@ -103,6 +124,7 @@ export function loadCompanyImportLookup(
         eligibility,
         drivingByDriverId,
         vehicleCurrentDriverId,
-        depotNameToId,
+        depotsByKey,
+        defaultDepot,
     };
 }

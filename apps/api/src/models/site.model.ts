@@ -16,10 +16,11 @@ export type DepotSite = {
     latitude: number;
     longitude: number;
     radius_m: number;
+    is_default: number;
 };
 
 const SELECT_DEPOTS = `
-    SELECT id, company_id, name, latitude, longitude, radius_m
+    SELECT id, company_id, name, latitude, longitude, radius_m, is_default
     FROM sites
     WHERE company_id = ?
       AND kind = 'depot'
@@ -27,7 +28,7 @@ const SELECT_DEPOTS = `
 `;
 
 const SELECT_DEPOT = `
-    SELECT id, company_id, name, latitude, longitude, radius_m
+    SELECT id, company_id, name, latitude, longitude, radius_m, is_default
     FROM sites
     WHERE id = ?
       AND company_id = ?
@@ -35,7 +36,7 @@ const SELECT_DEPOT = `
 `;
 
 const SELECT_DEPOT_BY_NAME = `
-    SELECT id, company_id, name, latitude, longitude, radius_m
+    SELECT id, company_id, name, latitude, longitude, radius_m, is_default
     FROM sites
     WHERE company_id = ?
       AND kind = 'depot'
@@ -56,9 +57,9 @@ const SET_VEHICLE_DEPOT = `
 
 const INSERT_SITE = `
     INSERT INTO sites (
-        company_id, name, kind, latitude, longitude, radius_m
+        company_id, name, kind, latitude, longitude, radius_m, is_default
     )
-    VALUES (?, ?, 'depot', ?, ?, ?)
+    VALUES (?, ?, 'depot', ?, ?, ?, ?)
 `;
 
 const SELECT_SITE_COUNTS = `
@@ -282,12 +283,20 @@ export class SiteModel {
 
     static create(companyId: number, input: SiteInput): Site {
         try {
+            const hasDefault = stmt(
+                `
+                SELECT id FROM sites
+                WHERE company_id = ? AND is_default = 1
+                LIMIT 1
+                `,
+            ).get(companyId);
             const result = stmt(INSERT_SITE).run(
                 companyId,
                 input.name,
                 input.latitude,
                 input.longitude,
                 input.radius_m ?? DEPOT_RADIUS_DEFAULT_M,
+                hasDefault ? 0 : 1,
             );
             const id = Number(result.lastInsertRowid);
             this.refreshInside(companyId);
@@ -353,6 +362,32 @@ export class SiteModel {
             WHERE home_site_id = ? AND company_id = ?
             `,
         ).run(name, id, companyId);
+
+        if (input.is_default === true) {
+            stmt(
+                `
+                UPDATE sites
+                SET is_default = 0
+                WHERE company_id = ? AND id != ?
+                `,
+            ).run(companyId, id);
+            stmt(
+                `
+                UPDATE sites
+                SET is_default = 1
+                WHERE id = ? AND company_id = ?
+                `,
+            ).run(id, companyId);
+        } else if (input.is_default === false) {
+            stmt(
+                `
+                UPDATE sites
+                SET is_default = 0
+                WHERE id = ? AND company_id = ?
+                `,
+            ).run(id, companyId);
+        }
+
         this.refreshInside(companyId);
 
         const updated = this.findDepot(companyId, id);
@@ -385,10 +420,27 @@ export class SiteModel {
             WHERE depot_site_id = ?
             `,
         ).run(id);
+        const wasDefault = current.is_default === 1;
         stmt(`DELETE FROM sites WHERE id = ? AND company_id = ?`).run(
             id,
             companyId,
         );
+
+        if (wasDefault) {
+            stmt(
+                `
+                UPDATE sites
+                SET is_default = 1
+                WHERE id = (
+                    SELECT id FROM sites
+                    WHERE company_id = ? AND kind = 'depot'
+                    ORDER BY id
+                    LIMIT 1
+                )
+                `,
+            ).run(companyId);
+        }
+
         this.refreshInside(companyId);
         return true;
     }
@@ -458,6 +510,7 @@ export class SiteModel {
             latitude: site.latitude,
             longitude: site.longitude,
             radius_m: site.radius_m,
+            is_default: site.is_default === 1,
             home_count: counts.home_count,
             in_depot_count: counts.in_depot_count,
             other_home_count: counts.other_home_count,

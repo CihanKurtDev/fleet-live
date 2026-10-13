@@ -24,10 +24,12 @@ const createBasemap = (dark: boolean): TilePair => {
     const labelUrl = dark ? DARK_LABELS : LIGHT_LABELS;
     const base = L.tileLayer(baseUrl, {
         attribution: ATTRIBUTION,
-        maxZoom: 16,
+        maxNativeZoom: 16,
+        maxZoom: 18,
     });
     const labels = L.tileLayer(labelUrl, {
-        maxZoom: 16,
+        maxNativeZoom: 16,
+        maxZoom: 18,
     });
 
     return { base, labels };
@@ -93,6 +95,7 @@ export const createThemedMap = (
     const map = L.map(container, {
         attributionControl: true,
         zoomControl: true,
+        maxZoom: 18,
     });
     let tiles = createBasemap(prefersDark());
     tiles.base.addTo(map);

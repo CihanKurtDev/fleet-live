@@ -2,6 +2,10 @@ import "./env";
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import type { ImportPreviewRow } from "@fleet-live/shared";
+import { db } from "../db/database";
+import { haversineMeters } from "../lib/geo";
+import { TelemetryModel } from "../models/telemetry.model";
+import { resetSimProgress } from "../sim/routes";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ImportModel } from "../models/import.model";
@@ -966,5 +970,159 @@ B-NEW 999;50;Standby
             .patch(`/api/import/preview/${previewId}/actions`)
             .send({ row_actions: {} })
             .expect(404);
+    });
+
+    it("places every imported vehicle and keeps an existing fix on reimport", async () => {
+        const { agent } = await loginAs(1);
+        const munich = await agent.post("/api/sites").send({
+            name: "München Hof",
+            latitude: 48.095,
+            longitude: 11.52,
+        });
+        const cologne = await agent.post("/api/sites").send({
+            name: "Köln Hof",
+            latitude: 50.89,
+            longitude: 6.905,
+        });
+        assert.equal(munich.status, 201);
+        assert.equal(cologne.status, 201);
+
+        const csv = `Kennzeichen;Status;Depot
+M-IMP 1;Unterwegs;München Hof
+K-IMP 1;Unterwegs;Köln Hof
+M-IMP 2;Standby;München Hof
+`;
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv })
+            .expect(200);
+        await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        const positions = await agent.get("/api/vehicles/positions").expect(200);
+        assert.equal(positions.body.mode, "positions");
+        assert.equal(positions.body.data.length, 3);
+        assert.equal(positions.body.meta.total, 3);
+        assert.equal(positions.body.meta.without_position, 0);
+
+        const list = await agent.get("/api/vehicles").expect(200);
+        const briefing = await agent.get("/api/briefing").expect(200);
+        assert.equal(list.body.meta.total, positions.body.data.length);
+        assert.equal(briefing.body.data.counts.driving, list.body.meta.counts.driving);
+        assert.equal(briefing.body.data.counts.driving, 2);
+
+        type Placed = {
+            id: number;
+            license_plate: string;
+            latitude: number;
+            longitude: number;
+            speed: number;
+        };
+        const byPlate = new Map<string, Placed>(
+            (positions.body.data as Placed[]).map((row) => [
+                row.license_plate,
+                row,
+            ]),
+        );
+        const munichDriving = byPlate.get("M-IMP 1");
+        const cologneDriving = byPlate.get("K-IMP 1");
+        const parked = byPlate.get("M-IMP 2");
+        assert.ok(munichDriving && cologneDriving && parked);
+
+        const near = (
+            row: { latitude: number; longitude: number },
+            site: { body: { latitude: number; longitude: number } },
+        ) =>
+            haversineMeters(
+                { lat: row.latitude, lng: row.longitude },
+                { lat: site.body.latitude, lng: site.body.longitude },
+            );
+
+        const munichDistance = near(munichDriving, munich);
+        const cologneDistance = near(cologneDriving, cologne);
+        const parkedDistance = near(parked, munich);
+        assert.ok(munichDistance >= 49 && munichDistance < 301);
+        assert.ok(cologneDistance >= 49 && cologneDistance < 301);
+        assert.ok(parkedDistance >= 49 && parkedDistance < 301);
+        assert.ok(munichDriving.speed > 0);
+        assert.equal(parked.speed, 0);
+
+        const other = await loginAs(2);
+        const foreign = await other.agent
+            .get("/api/vehicles/positions")
+            .query({ search: "M-IMP" })
+            .expect(200);
+        assert.equal(foreign.body.data.length, 0);
+
+        resetSimProgress();
+        TelemetryModel.tickDrivingVehicles([
+            munichDriving.id,
+            cologneDriving.id,
+            parked.id,
+        ]);
+
+        const moved = await agent.get("/api/vehicles/positions").expect(200);
+        const movedByPlate = new Map<string, Placed>(
+            (moved.body.data as Placed[]).map((row) => [
+                row.license_plate,
+                row,
+            ]),
+        );
+        const munichAfter = movedByPlate.get("M-IMP 1");
+        const cologneAfter = movedByPlate.get("K-IMP 1");
+        const parkedAfter = movedByPlate.get("M-IMP 2");
+        assert.ok(munichAfter && cologneAfter && parkedAfter);
+        assert.notEqual(munichAfter.latitude, munichDriving.latitude);
+        assert.ok(munichAfter.latitude < 49);
+        assert.notEqual(cologneAfter.latitude, cologneDriving.latitude);
+        assert.ok(cologneAfter.latitude > 50);
+        assert.equal(parkedAfter.latitude, parked.latitude);
+        assert.equal(parkedAfter.longitude, parked.longitude);
+
+        const again = await agent.post("/api/import/preview").send({ csv }).expect(200);
+        const rows = await fetchPreviewRows(agent, again.body.data.preview_id);
+        const actions: Record<string, "update"> = {};
+        for (const row of rows) {
+            actions[String(row.row_index)] = "update";
+        }
+        await agent
+            .post("/api/import/commit")
+            .send({
+                preview_id: again.body.data.preview_id,
+                row_actions: actions,
+            })
+            .expect(200);
+
+        const kept = await agent.get("/api/vehicles/positions").expect(200);
+        const keptMunich = kept.body.data.find(
+            (row: { license_plate: string }) => row.license_plate === "M-IMP 1",
+        );
+        assert.equal(keptMunich.latitude, munichAfter.latitude);
+        assert.equal(keptMunich.longitude, munichAfter.longitude);
+        const pointCount = db
+            .prepare(
+                `SELECT COUNT(*) AS n FROM telemetry WHERE vehicle_id = ?`,
+            )
+            .get(munichDriving.id) as { n: number };
+        assert.equal(Number(pointCount.n), 2);
+    });
+
+    it("warns per row when the depot name is unknown", async () => {
+        const { agent } = await loginAs(1);
+        const csv = `Kennzeichen;Depot
+B-MISS 1;Gibt es nicht
+`;
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv })
+            .expect(200);
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        const issue = rows[0].issues.find(
+            (entry: { code: string }) => entry.code === "UNKNOWN_DEPOT",
+        );
+        assert.ok(issue);
+        assert.match(issue.message, /Fallback-Koordinate/);
     });
 });

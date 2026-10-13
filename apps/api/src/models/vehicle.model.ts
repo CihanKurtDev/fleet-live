@@ -378,8 +378,6 @@ export class VehicleModel {
         query: FleetPositionsQuery,
         companyId: number,
     ): FleetPositionsResponse {
-        const search = query.search ?? "";
-        const like = toLikePattern(search);
         const selectedDrivers = query.drivers ?? [];
         const filterSql = query.filter
             ? `AND ${FILTER_SQL[query.filter]}`
@@ -397,41 +395,64 @@ export class VehicleModel {
                     )
                 )`
                 : "";
-        // Die Kennzeichensuche ist absichtlich company-weit, damit ein
-        // Fahrzeug außerhalb des aktuellen Kartenausschnitts gefunden wird.
-        const activeBbox = search === "" ? query.bbox : undefined;
+        // `search` schränkt diese Antwort nicht ein. Die Karte sucht im
+        // geladenen Bestand und blendet die übrigen Fahrzeuge nicht aus.
+        const activeBbox = query.bbox;
         const bboxSql = activeBbox
             ? `AND t.latitude BETWEEN ? AND ?
                AND t.longitude BETWEEN ? AND ?`
             : "";
-        const whereSql = `
-            FROM vehicles v
-            INNER JOIN telemetry t ON t.id = v.last_telemetry_id
+        const matchSql = `
             WHERE v.company_id = ?
-              AND ${searchMatchSql("?", "?", "?")}
               ${filterSql}
               ${driverSql}
-              ${bboxSql}
         `;
-        const params = [
+        const matchParams = [
             companyId,
-            search,
-            like,
-            like,
-            like,
-            like,
-            like,
             ...selectedDrivers,
             ...selectedDrivers,
-            ...(activeBbox
-                ? [
-                      activeBbox.south,
-                      activeBbox.north,
-                      activeBbox.west,
-                      activeBbox.east,
-                  ]
-                : []),
         ];
+        const bboxParams = activeBbox
+            ? [
+                  activeBbox.south,
+                  activeBbox.north,
+                  activeBbox.west,
+                  activeBbox.east,
+              ]
+            : [];
+        const positionedFrom = `
+            FROM vehicles v
+            INNER JOIN telemetry t ON t.id = v.last_telemetry_id
+            ${matchSql}
+            ${bboxSql}
+        `;
+        const positionedParams = [...matchParams, ...bboxParams];
+        const withoutPosition = Number(
+            (
+                stmt(
+                    `
+                    SELECT COUNT(*) AS n
+                    FROM vehicles v
+                    ${matchSql}
+                      AND v.last_telemetry_id IS NULL
+                    `,
+                ).get(...matchParams) as { n: number }
+            ).n,
+        );
+        const positionedAll = activeBbox
+            ? Number(
+                  (
+                      stmt(
+                          `
+                          SELECT COUNT(*) AS n
+                          FROM vehicles v
+                          INNER JOIN telemetry t ON t.id = v.last_telemetry_id
+                          ${matchSql}
+                          `,
+                      ).get(...matchParams) as { n: number }
+                  ).n,
+              )
+            : null;
         const extent = stmt(
             `
             SELECT
@@ -440,18 +461,29 @@ export class VehicleModel {
                 MAX(t.latitude) AS max_latitude,
                 MIN(t.longitude) AS min_longitude,
                 MAX(t.longitude) AS max_longitude
-            ${whereSql}
+            ${positionedFrom}
             `,
-        ).get(...params) as {
+        ).get(...positionedParams) as {
             total: number;
             min_latitude: number | null;
             max_latitude: number | null;
             min_longitude: number | null;
             max_longitude: number | null;
         };
-        const total = Number(extent.total);
+        const positionedTotal = Number(extent.total);
+        const matched = (positionedAll ?? positionedTotal) + withoutPosition;
 
-        if (total <= FLEET_POSITIONS_MAX) {
+        if (positionedTotal <= FLEET_POSITIONS_MAX) {
+            type PositionRow = {
+                id: number;
+                license_plate: string;
+                driver_name: string | null;
+                status: FleetPosition["status"];
+                latitude: number | null;
+                longitude: number | null;
+                speed: number | null;
+                recorded_at: string | null;
+            };
             const rows = stmt(
                 `
             SELECT
@@ -463,13 +495,55 @@ export class VehicleModel {
                 t.longitude,
                 t.speed,
                 t.recorded_at
-            ${whereSql}
+            ${positionedFrom}
             ORDER BY v.id ASC
                 `,
-            ).all(...params) as FleetPosition[];
+            ).all(...positionedParams) as PositionRow[];
+            const data: FleetPosition[] = rows.map((row) => ({
+                ...row,
+                has_position: true,
+            }));
 
-            return { mode: "positions", data: rows, meta: { total } };
+            if (!activeBbox && withoutPosition > 0) {
+                const missing = stmt(
+                    `
+                    SELECT v.id, v.license_plate, v.driver_name, v.status
+                    FROM vehicles v
+                    ${matchSql}
+                      AND v.last_telemetry_id IS NULL
+                    ORDER BY v.id ASC
+                    `,
+                ).all(...matchParams) as Array<{
+                    id: number;
+                    license_plate: string;
+                    driver_name: string | null;
+                    status: FleetPosition["status"];
+                }>;
+
+                for (const row of missing) {
+                    data.push({
+                        ...row,
+                        latitude: null,
+                        longitude: null,
+                        speed: null,
+                        recorded_at: null,
+                        has_position: false,
+                    });
+                }
+            }
+
+            return {
+                mode: "positions",
+                data,
+                meta: {
+                    total: data.length,
+                    matched,
+                    without_position: withoutPosition,
+                },
+            };
         }
+
+        const total = positionedTotal;
 
         const columns = 32;
         const rows = 20;
@@ -502,11 +576,11 @@ export class VehicleModel {
                 SUM(CASE WHEN v.status = 'DRIVING' THEN 1 ELSE 0 END) AS driving_count,
                 SUM(CASE WHEN v.status = 'STOPPED' THEN 1 ELSE 0 END) AS stopped_count,
                 SUM(CASE WHEN v.status = 'OFFLINE' THEN 1 ELSE 0 END) AS offline_count
-            ${whereSql}
+            ${positionedFrom}
             GROUP BY cell_x, cell_y
             ORDER BY cell_y, cell_x
             `,
-        ).all(west, cellWidth, south, cellHeight, ...params) as DensityRow[];
+        ).all(west, cellWidth, south, cellHeight, ...positionedParams) as DensityRow[];
         const data: FleetDensityCell[] = densityRows.map((row) => ({
             latitude: Number(row.latitude),
             longitude: Number(row.longitude),
@@ -528,7 +602,11 @@ export class VehicleModel {
             },
         }));
 
-        return { mode: "density", data, meta: { total } };
+        return {
+            mode: "density",
+            data,
+            meta: { total, matched, without_position: withoutPosition },
+        };
     }
 
     static drivers(

@@ -3,6 +3,40 @@ import type { GeoPoint } from "@fleet-live/shared";
 /** Näherung für die Umrechnung von Grad in Meter innerhalb eines Landes. */
 const METERS_PER_DEGREE = 111_320;
 
+/**
+ * Punkt im Abstand `distanceMeters` und Peilung `bearingRad` (0 = Nord).
+ * Eben genug für einen Hof-Versatz von wenigen hundert Metern.
+ */
+export function destinationPoint(
+    origin: GeoPoint,
+    distanceMeters: number,
+    bearingRad: number,
+): GeoPoint {
+    const latRad = (origin.lat * Math.PI) / 180;
+    const north = distanceMeters * Math.cos(bearingRad);
+    const east = distanceMeters * Math.sin(bearingRad);
+
+    return {
+        lat: origin.lat + north / METERS_PER_DEGREE,
+        lng:
+            origin.lng +
+            east / (METERS_PER_DEGREE * Math.max(0.2, Math.cos(latRad))),
+    };
+}
+
+/** Zufälliger Punkt im Ring [minMeters, maxMeters) um `origin`. */
+export function offsetAroundMeters(
+    origin: GeoPoint,
+    minMeters: number,
+    maxMeters: number,
+): GeoPoint {
+    const span = Math.max(0, maxMeters - minMeters);
+    const distance = minMeters + Math.random() * span;
+    const bearing = Math.random() * Math.PI * 2;
+
+    return destinationPoint(origin, distance, bearing);
+}
+
 export function haversineMeters(a: GeoPoint, b: GeoPoint): number {
     const earth = 6_371_000;
     const toRad = (degrees: number) => (degrees * Math.PI) / 180;

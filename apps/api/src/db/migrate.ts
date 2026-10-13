@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 20;
 
 type TableColumn = {
     name: string;
@@ -1019,6 +1019,34 @@ function addColumn(
 }
 
 /**
+ * Ein Standarddepot pro Firma. Bestehende Höfe: das älteste, falls keins markiert ist.
+ */
+function ensureSiteDefault(database: DatabaseSync) {
+    if (!columnNames(database, "sites").has("id")) {
+        return;
+    }
+
+    addColumn(database, "sites", "is_default", "INTEGER NOT NULL DEFAULT 0");
+    database.exec(`
+        UPDATE sites
+        SET is_default = 1
+        WHERE id IN (
+            SELECT MIN(id) FROM sites
+            GROUP BY company_id
+            HAVING SUM(is_default) = 0
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_one_default
+            ON sites(company_id)
+            WHERE is_default = 1;
+    `);
+}
+
+function migrateToV20(database: DatabaseSync) {
+    ensureSiteDefault(database);
+}
+
+/**
  * Rolle und Firma hängen an der Mitgliedschaft. Bestehende Nutzer bleiben
  * bestätigt, damit der Seed-Login ohne Mail weiter funktioniert.
  */
@@ -1287,6 +1315,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV19(database);
     }
 
+    if (currentVersion < 20) {
+        migrateToV20(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -1302,6 +1334,7 @@ export function migrate(database: DatabaseSync) {
     ensureImportTables(database);
     ensureYardMasterData(database);
     ensureDepotSites(database);
+    ensureSiteDefault(database);
     ensureAccountIndexes(database);
     ensureSessionPersistent(database);
     applyMaintenanceTriggers(database);

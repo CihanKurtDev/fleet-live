@@ -28,9 +28,9 @@ export function replaceCompanyDepots(database: DatabaseSync): void {
 
     const insert = database.prepare(`
         INSERT INTO sites (
-            company_id, name, kind, latitude, longitude, radius_m
+            company_id, name, kind, latitude, longitude, radius_m, is_default
         )
-        VALUES (?, ?, 'depot', ?, ?, ?)
+        VALUES (?, ?, 'depot', ?, ?, ?, 1)
     `);
 
     for (const depot of COMPANY_DEPOTS) {

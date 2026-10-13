@@ -9,9 +9,13 @@ import { isAbortError } from "../api/client";
 import { setStreamConnection } from "../api/telemetryFocus";
 import { useLatestRef } from "./useLatestRef";
 
+/** Drei verpasste Heartbeats (Server sendet alle 15 s). */
+const STREAM_STALE_MS = 45_000;
+
 interface UseVehicleStreamHandlers {
     onTelemetry: (patches: TelemetryPatch[]) => void;
     onVehiclesChanged: () => void;
+    onConnection?: (state: "live" | "disconnected") => void;
 }
 
 export const useVehicleStream = (
@@ -22,8 +26,36 @@ export const useVehicleStream = (
     useEffect(() => {
         const source = new EventSource("/api/stream");
         let sessionProbe: AbortController | null = null;
+        let staleTimer: number | undefined;
+
+        const report = (state: "live" | "disconnected") => {
+            handlersRef.current.onConnection?.(state);
+        };
+        const armStale = () => {
+            if (staleTimer !== undefined) {
+                window.clearTimeout(staleTimer);
+            }
+
+            staleTimer = window.setTimeout(() => {
+                report("disconnected");
+            }, STREAM_STALE_MS);
+        };
+        const markLive = () => {
+            report("live");
+            armStale();
+        };
+
+        source.onopen = () => {
+            markLive();
+        };
+
+        source.addEventListener("heartbeat", () => {
+            markLive();
+        });
 
         source.addEventListener("connected", (event) => {
+            markLive();
+
             try {
                 const payload = parseStreamConnected(
                     JSON.parse((event as MessageEvent).data),
@@ -44,6 +76,7 @@ export const useVehicleStream = (
                 );
 
                 if (patches) {
+                    markLive();
                     handlersRef.current.onTelemetry(patches);
                 }
             } catch {
@@ -52,11 +85,14 @@ export const useVehicleStream = (
         });
 
         source.addEventListener("vehicles-changed", () => {
+            markLive();
             handlersRef.current.onVehiclesChanged();
         });
 
         // EventSource liefert bei abgelaufener Session keinen Status — einmal /me prüfen.
         source.onerror = () => {
+            report("disconnected");
+
             if (sessionProbe) {
                 return;
             }
@@ -71,6 +107,10 @@ export const useVehicleStream = (
         };
 
         return () => {
+            if (staleTimer !== undefined) {
+                window.clearTimeout(staleTimer);
+            }
+
             sessionProbe?.abort();
             setStreamConnection(null);
             source.close();

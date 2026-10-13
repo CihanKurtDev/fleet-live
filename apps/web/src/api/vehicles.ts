@@ -31,7 +31,7 @@ export function getVehicle(id: number, signal?: AbortSignal) {
     return request<Vehicle>(`/api/vehicles/${id}`, { signal });
 }
 
-/** Letzte Positionen im Kartenausschnitt — nicht die paginierte Liste. */
+/** Letzte Positionen der Firma. Der Ausschnitt filtert die Karte lokal. */
 export function listVehiclePositions(
     query: FleetPositionsQuery,
     signal?: AbortSignal,

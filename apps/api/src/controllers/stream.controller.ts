@@ -38,7 +38,7 @@ export function streamEvents(req: Request, res: Response) {
     replay(res, Number.isFinite(lastEventId) ? lastEventId : 0);
 
     const heartbeat = setInterval(() => {
-        res.write(":heartbeat\n\n");
+        res.write("event: heartbeat\ndata: {}\n\n");
     }, 15_000);
 
     heartbeat.unref?.();

@@ -45,7 +45,8 @@ export const SIM_ROUTES: SimRoute[] = ROUTE_META.map((meta) => {
     return { ...meta, points };
 });
 
-const NEAR_ROUTE_METERS = 80_000;
+/** Darüber gilt eine gebackene Strecke als erreichbar; sonst die überhaupt nächste. */
+export const NEAR_ROUTE_METERS = 80_000;
 
 type Progress = {
     routeId: string;
@@ -274,6 +275,10 @@ function nextDisplaySpeed(
     return Math.round(Math.min(cap, Math.max(floor, toward + delta)));
 }
 
+/**
+ * Nächste gebackene Strecke innerhalb von 80 km, sonst die überhaupt nächste.
+ * Ein Start am Münchner Depot bleibt auf München–Nürnberg.
+ */
 export function pickRoute(vehicleId: number, pos: LatLng): SimRoute {
     const ranked = SIM_ROUTES.map((route) => ({
         route,
