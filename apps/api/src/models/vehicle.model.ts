@@ -42,6 +42,7 @@ export type VehicleCreateInput = Pick<VehicleInput, "license_plate"> &
             | "vehicle_type"
             | "hu_due_on"
             | "uvv_due_on"
+            | "uvv_checked_on"
             | "depot"
             | "home_site_id"
             | "cost_center"
@@ -139,11 +140,12 @@ const INSERT_VEHICLE = `
         vehicle_type,
         hu_due_on,
         uvv_due_on,
+        uvv_checked_on,
         depot,
         cost_center,
         company_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const UPDATE_VEHICLE = `
@@ -155,6 +157,7 @@ const UPDATE_VEHICLE = `
         vehicle_type = ?,
         hu_due_on = ?,
         uvv_due_on = ?,
+        uvv_checked_on = ?,
         cost_center = ?
     WHERE id = ? AND company_id = ?
 `;
@@ -792,6 +795,7 @@ export class VehicleModel {
                 input.vehicle_type ?? null,
                 storedHuMonth(input.hu_due_on ?? null),
                 input.uvv_due_on ?? null,
+                input.uvv_checked_on ?? null,
                 null,
                 input.cost_center ?? null,
                 companyId,
@@ -851,6 +855,7 @@ export class VehicleModel {
                 input.vehicle_type ?? null,
                 storedHuMonth(input.hu_due_on ?? null),
                 input.uvv_due_on ?? null,
+                current.uvv_checked_on,
                 input.cost_center ?? null,
                 id,
                 companyId,
@@ -897,6 +902,9 @@ export class VehicleModel {
                 input.uvv_due_on !== undefined
                     ? input.uvv_due_on
                     : current.uvv_due_on,
+                input.uvv_checked_on !== undefined
+                    ? input.uvv_checked_on
+                    : current.uvv_checked_on,
                 input.cost_center !== undefined
                     ? input.cost_center
                     : current.cost_center,

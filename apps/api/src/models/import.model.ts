@@ -110,6 +110,7 @@ type ParsedImportRow = {
     vin: string | null;
     vehicle_type: VehicleType | null;
     hu_due_on: string | null;
+    uvv_checked_on: string | null;
     uvv_due_on: string | null;
     depot: string | null;
     cost_center: string | null;
@@ -119,6 +120,7 @@ type ParsedImportRow = {
     vin_invalid: boolean;
     vehicle_type_invalid: boolean;
     hu_invalid: boolean;
+    uvv_checked_invalid: boolean;
     uvv_invalid: boolean;
     licence_expires_invalid: boolean;
     licence_checked_invalid: boolean;
@@ -137,6 +139,7 @@ const EMPTY_OPTIONALS = {
     vin: null,
     vehicle_type: null,
     hu_due_on: null,
+    uvv_checked_on: null,
     uvv_due_on: null,
     depot: null,
     cost_center: null,
@@ -408,6 +411,7 @@ function mapTableRows(
         const vinParsed = parseImportVin(read("vin"));
         const typeParsed = parseImportVehicleType(read("vehicle_type"));
         const huParsed = parseImportHuDate(read("hu_due_on"));
+        const uvvCheckedParsed = parseImportHuDate(read("uvv_checked_on"));
         const uvvParsed = parseImportHuDate(read("uvv_due_on"));
         const licenceExpiresParsed = parseImportHuDate(read("licence_expires_on"));
         const licenceCheckedParsed = parseImportHuDate(read("licence_checked_on"));
@@ -426,6 +430,7 @@ function mapTableRows(
             vin: vinParsed.value,
             vehicle_type: typeParsed.value,
             hu_due_on: huParsed.value,
+            uvv_checked_on: uvvCheckedParsed.value,
             uvv_due_on: uvvParsed.value,
             depot: depotParsed.tooLong ? null : depotParsed.value,
             cost_center: costParsed.tooLong ? null : costParsed.value,
@@ -435,6 +440,7 @@ function mapTableRows(
             vin_invalid: Boolean(vinParsed.invalid),
             vehicle_type_invalid: Boolean(typeParsed.invalid),
             hu_invalid: Boolean(huParsed.invalid),
+            uvv_checked_invalid: Boolean(uvvCheckedParsed.invalid),
             uvv_invalid: Boolean(uvvParsed.invalid),
             licence_expires_invalid: Boolean(licenceExpiresParsed.invalid),
             licence_checked_invalid: Boolean(licenceCheckedParsed.invalid),
@@ -696,6 +702,16 @@ function buildVehiclePreviewRows(
             defaultAction = "skip";
         }
 
+        if (row.uvv_checked_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_UVV_CHECKED_DATE",
+                message:
+                    "UVV-Prüfung muss JJJJ-MM-TT oder TT.MM.JJJJ sein.",
+            });
+            defaultAction = "skip";
+        }
+
         if (row.uvv_invalid) {
             issues.push({
                 level: "error",
@@ -771,6 +787,7 @@ function buildVehiclePreviewRows(
             vin: row.vin,
             vehicle_type: row.vehicle_type,
             hu_due_on: row.hu_due_on,
+            uvv_checked_on: row.uvv_checked_on,
             uvv_due_on: row.uvv_due_on,
             depot: row.depot,
             cost_center: row.cost_center,
@@ -1766,6 +1783,9 @@ export class ImportModel {
                                     : {}),
                                 ...(row.uvv_due_on
                                     ? { uvv_due_on: row.uvv_due_on }
+                                    : {}),
+                                ...(row.uvv_checked_on
+                                    ? { uvv_checked_on: row.uvv_checked_on }
                                     : {}),
                                 ...(homeSiteId !== undefined
                                     ? { home_site_id: homeSiteId }

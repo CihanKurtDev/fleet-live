@@ -11,6 +11,7 @@ export const IMPORT_COLUMN_TARGETS = [
     "vin",
     "vehicle_type",
     "hu_due_on",
+    "uvv_checked_on",
     "uvv_due_on",
     "depot",
     "cost_center",
@@ -68,6 +69,7 @@ export type ImportPreviewRow = {
     vin: string | null;
     vehicle_type: VehicleType | null;
     hu_due_on: string | null;
+    uvv_checked_on: string | null;
     uvv_due_on: string | null;
     depot: string | null;
     cost_center: string | null;

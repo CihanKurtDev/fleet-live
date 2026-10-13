@@ -27,7 +27,11 @@ const VEHICLE_COLUMN_HINTS: Array<{
         pattern: /fahrzeugtyp|fzg[.\s-]?typ|vehicle[_\s-]?type/i,
         target: "vehicle_type",
     },
-    { pattern: /\buvv\b|unterweisung/i, target: "uvv_due_on" },
+    {
+        pattern: /uvv[\s_-]*(fällig|faellig|due)/i,
+        target: "uvv_due_on",
+    },
+    { pattern: /\buvv\b/i, target: "uvv_checked_on" },
     { pattern: /\bhu\b|hauptuntersuchung|tuev|tüv/i, target: "hu_due_on" },
     { pattern: /standort|depot|hof|niederlassung|site/i, target: "depot" },
     {

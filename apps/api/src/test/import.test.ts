@@ -105,7 +105,12 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;01.11.2026;KST-10
             true,
         );
         assert.equal(rows[0].hu_due_on, "2027-06-15");
-        assert.equal(rows[0].uvv_due_on, "2026-11-01");
+        assert.equal(
+            preview.body.data.suggested_mapping.UVV,
+            "uvv_checked_on",
+        );
+        assert.equal(rows[0].uvv_checked_on, "2026-11-01");
+        assert.equal(rows[0].uvv_due_on, null);
         assert.equal(rows[0].cost_center, "KST-10");
 
         const committed = await agent
@@ -123,10 +128,42 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;01.11.2026;KST-10
         assert.equal(listed.body.data[0].depot, null);
         assert.equal(listed.body.data[0].home_site_id, null);
         assert.equal(listed.body.data[0].hu_due_on, "2027-06");
-        assert.equal(listed.body.data[0].uvv_due_on, "2026-11-01");
-        assert.equal(listed.body.data[0].uvv_checked_on, null);
+        assert.equal(listed.body.data[0].uvv_due_on, null);
+        assert.equal(listed.body.data[0].uvv_checked_on, "2026-11-01");
         assert.equal(listed.body.data[0].active, true);
         assert.equal(listed.body.data[0].cost_center, "KST-10");
+    });
+
+    it("leaves Unterweisung unmapped and stores the manual UVV date separately", async () => {
+        const { agent } = await loginAs(1);
+        const csv = `Kennzeichen;UVV;UVV fällig;Unterweisung
+B-UVV 1;15.10.2025;01.03.2027;01.01.2026
+`;
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv })
+            .expect(200);
+
+        assert.equal(preview.body.data.suggested_mapping.UVV, "uvv_checked_on");
+        assert.equal(
+            preview.body.data.suggested_mapping["UVV fällig"],
+            "uvv_due_on",
+        );
+        assert.equal(preview.body.data.suggested_mapping.Unterweisung, "ignore");
+
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        assert.equal(rows[0].uvv_checked_on, "2025-10-15");
+        assert.equal(rows[0].uvv_due_on, "2027-03-01");
+
+        await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        const listed = await agent.get("/api/vehicles").query({ search: "B-UVV 1" });
+        assert.equal(listed.body.data[0].uvv_checked_on, "2025-10-15");
+        assert.equal(listed.body.data[0].uvv_due_on, "2027-03-01");
     });
 
     it("commits driver licence dates", async () => {

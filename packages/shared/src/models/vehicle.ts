@@ -115,6 +115,7 @@ export type VehicleInput = {
     vin?: string | null;
     vehicle_type?: VehicleType | null;
     hu_due_on?: string | null;
+    uvv_checked_on?: string | null;
     uvv_due_on?: string | null;
     depot?: string | null;
     home_site_id?: number | null;

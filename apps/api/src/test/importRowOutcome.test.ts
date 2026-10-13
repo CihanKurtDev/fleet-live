@@ -24,6 +24,7 @@ function row(
         vin: null,
         vehicle_type: null,
         hu_due_on: null,
+        uvv_checked_on: null,
         uvv_due_on: null,
         depot: null,
         cost_center: null,

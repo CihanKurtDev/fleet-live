@@ -51,6 +51,7 @@ const COLUMN_TARGET_LABELS: Record<ImportColumnTarget, string> = {
     vin: "VIN",
     vehicle_type: "Fahrzeugtyp",
     hu_due_on: "HU fällig",
+    uvv_checked_on: "UVV zuletzt geprüft",
     uvv_due_on: "UVV fällig",
     depot: "Depot",
     cost_center: "Kostenstelle",
