@@ -245,6 +245,83 @@ export type {
     BriefingResponse,
 } from "./models/briefing";
 
+export type {
+    ConfiguredDriverDue,
+    ConfiguredDueRow,
+    ConfiguredVehicleDue,
+    DriverDueInput,
+    DueAttention,
+    DueCalendarState,
+    DueCounts,
+    DueDateSource,
+    DueExplanation,
+    DueKind,
+    DueKindCounts,
+    DueListCounts,
+    DueListItem,
+    DueListMeta,
+    DueListQuery,
+    DueListResponse,
+    DueListState,
+    DueMissingCounts,
+    DueReminder,
+    DueSortKey,
+    DueSummary,
+    UvvDueSource,
+    VehicleDueInput,
+} from "./models/dueDates";
+
+export {
+    DUE_KIND_LABELS,
+    DUE_KINDS,
+    DUE_LIST_STATES,
+    DUE_SOON_DAYS,
+    DUE_SORT_KEYS,
+    LICENCE_CHECK_MONTHS,
+    addIsoDays,
+    addIsoMonths,
+    berlinTodayIso,
+    buildConfiguredDueRows,
+    buildDueReminders,
+    buildDueRows,
+    classifyCalendarDate,
+    classifyDueOn,
+    classifyHuMonth,
+    classifyLicenceCheck,
+    classifyLicenceInterval,
+    dueCounts,
+    dueListQuerySchema,
+    isDueActive,
+    isDueKind,
+    isDueListState,
+    isDueSortKey,
+    monthEndIso,
+    parseDueListQuery,
+    queryDueRows,
+    resolveUvvDue,
+    serializeDueListQuery,
+    utcTodayIso,
+} from "./models/dueDates";
+
+export type {
+    DueCalculation,
+    DueRule,
+    DueRuleId,
+    DueRuleKind,
+    DueRuleScope,
+    DueWhenEmpty,
+} from "./models/dueRules";
+
+export {
+    DUE_RULES,
+    DUE_RULE_IDS,
+    INTERNAL_DUE_NOTICE,
+    dueLeadDaysSchema,
+    dueRule,
+    licenceCheckMonthsSchema,
+    yearMonthSchema,
+} from "./models/dueRules";
+
 export {
     BRIEFING_HISTORY_MONTHS,
     briefingMonthKeys,
