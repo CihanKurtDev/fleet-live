@@ -253,17 +253,37 @@ export function resolveUvvDue(input: {
     checkedOn: string | null;
     manualDueOn: string | null;
     intervalMonths: number;
-}): { due_on: string | null; source: UvvDueSource; last_on: string | null } {
+    today: string;
+}): {
+    due_on: string | null;
+    source: UvvDueSource;
+    last_on: string | null;
+    /** Prüfdatum liegt nach heute. Die Fälligkeit wird trotzdem normal gerechnet. */
+    last_checked_in_future: boolean;
+} {
     const checked = blankToNull(input.checkedOn);
     const manual = blankToNull(input.manualDueOn);
+    const resolved = resolveUvvDueDate(checked, manual, input.intervalMonths);
 
+    return {
+        ...resolved,
+        last_checked_in_future:
+            resolved.last_on !== null && resolved.last_on > input.today,
+    };
+}
+
+function resolveUvvDueDate(
+    checked: string | null,
+    manual: string | null,
+    intervalMonths: number,
+): { due_on: string | null; source: UvvDueSource; last_on: string | null } {
     if (checked !== null && manual !== null && manual > checked) {
         return { due_on: manual, source: "manual", last_on: checked };
     }
 
     if (checked !== null) {
         return {
-            due_on: addIsoMonths(checked, input.intervalMonths),
+            due_on: addIsoMonths(checked, intervalMonths),
             source: "interval",
             last_on: checked,
         };
@@ -290,8 +310,11 @@ export function classifyLicenceInterval(input: {
     state: DueCalendarState;
     due_on: string | null;
     last_on: string | null;
+    /** Kontrolldatum liegt nach heute. Die Fälligkeit wird trotzdem normal gerechnet. */
+    last_checked_in_future: boolean;
 } {
     const checked = blankToNull(input.checkedOn);
+    const lastCheckedInFuture = checked !== null && checked > input.today;
 
     if (input.intervalMonths === 0) {
         return {
@@ -299,6 +322,7 @@ export function classifyLicenceInterval(input: {
             state: "ok",
             due_on: null,
             last_on: checked,
+            last_checked_in_future: lastCheckedInFuture,
         };
     }
 
@@ -308,6 +332,7 @@ export function classifyLicenceInterval(input: {
             state: "overdue",
             due_on: null,
             last_on: null,
+            last_checked_in_future: false,
         };
     }
 
@@ -319,6 +344,7 @@ export function classifyLicenceInterval(input: {
         state: state === "missing" ? "ok" : state,
         due_on: dueOn,
         last_on: checked,
+        last_checked_in_future: lastCheckedInFuture,
     };
 }
 
@@ -759,6 +785,8 @@ export type DueExplanation = {
     basis: string | null;
     internal_notice: string | null;
     source: DueDateSource;
+    /** Letztes Prüf- oder Kontrolldatum liegt nach heute. */
+    last_checked_in_future: boolean;
 };
 
 /** Zeile der neuen Rechnung. `ok` fehlt, inaktive Subjekte fehlen. */
@@ -848,6 +876,7 @@ export function buildConfiguredDueRows(input: {
                 basis: hu.verified ? hu.basis : null,
                 internal_notice: ruleNotice(hu.rule_kind),
                 source: "month_end",
+                last_checked_in_future: false,
             },
         });
 
@@ -855,6 +884,7 @@ export function buildConfiguredDueRows(input: {
             checkedOn: vehicle.uvv_checked_on,
             manualDueOn: vehicle.uvv_due_on,
             intervalMonths: uvvMonths,
+            today: input.today,
         });
         const uvvState =
             uvvResult.due_on === null
@@ -874,6 +904,7 @@ export function buildConfiguredDueRows(input: {
                 basis: uvv.verified ? uvv.basis : null,
                 internal_notice: ruleNotice(uvv.rule_kind),
                 source: uvvResult.source === "missing" ? "interval" : uvvResult.source,
+                last_checked_in_future: uvvResult.last_checked_in_future,
             },
         });
     }
@@ -903,6 +934,7 @@ export function buildConfiguredDueRows(input: {
                 basis: licence.verified ? licence.basis : null,
                 internal_notice: ruleNotice(licence.rule_kind),
                 source: "stored",
+                last_checked_in_future: false,
             },
         });
 
@@ -931,6 +963,7 @@ export function buildConfiguredDueRows(input: {
                 basis: check.verified ? check.basis : null,
                 internal_notice: ruleNotice(check.rule_kind),
                 source: "interval",
+                last_checked_in_future: checkResult.last_checked_in_future,
             },
         });
     }

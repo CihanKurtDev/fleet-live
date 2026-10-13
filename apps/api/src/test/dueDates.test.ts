@@ -10,10 +10,13 @@ import {
     buildDueReminders,
     buildDueRows,
     classifyCalendarDate,
+    classifyDueOn,
     classifyHuMonth,
     classifyLicenceCheck,
+    classifyLicenceInterval,
     dueCounts,
     dueLeadDaysSchema,
+    dueRule,
     licenceCheckMonthsSchema,
     parseDueListQuery,
     queryDueRows,
@@ -241,6 +244,10 @@ describe("queryDueRows", () => {
 });
 
 describe("due rules", () => {
+    const leadDays = dueRule("hu").lead_days;
+    const uvvMonths = dueRule("uvv").interval_months ?? Number.NaN;
+    const checkMonths = dueRule("licence_check").interval_months ?? Number.NaN;
+
     it("keeps four rules and hides the legal basis until it is verified", () => {
         assert.deepEqual(
             DUE_RULES.map((rule) => rule.id),
@@ -248,6 +255,19 @@ describe("due rules", () => {
         );
         assert.equal(
             DUE_RULES.every((rule) => rule.verified === false && rule.basis.length > 0),
+            true,
+        );
+    });
+
+    it("pins the catalog the calculations read", () => {
+        assert.equal(dueRule("hu").calculation, "month_end");
+        assert.equal(dueRule("uvv").interval_months, 12);
+        assert.equal(dueRule("uvv").calculation, "last_plus_months");
+        assert.equal(dueRule("licence_check").interval_months, 6);
+        assert.equal(dueRule("licence_check").rule_kind, "internal");
+        assert.equal(dueRule("licence_check").when_empty, "overdue");
+        assert.equal(
+            DUE_RULES.every((rule) => rule.lead_days === 30),
             true,
         );
     });
@@ -264,48 +284,127 @@ describe("due rules", () => {
     });
 
     it("treats HU as due at month end, including a leap-year February", () => {
-        assert.deepEqual(classifyHuMonth("2026-10", "2026-10-13", 30), {
+        assert.deepEqual(classifyHuMonth("2026-10", "2026-10-13", leadDays), {
             state: "soon",
             due_on: "2026-10-31",
         });
-        assert.equal(classifyHuMonth("2026-10", "2026-10-31", 30).state, "soon");
+        assert.equal(classifyHuMonth("2026-10", "2026-10-31", leadDays).state, "soon");
         assert.equal(
-            classifyHuMonth("2026-10", "2026-11-01", 30).state,
+            classifyHuMonth("2026-10", "2026-11-01", leadDays).state,
             "overdue",
         );
-        assert.equal(classifyHuMonth("2024-02", "2024-02-29", 30).state, "soon");
+        assert.equal(classifyHuMonth("2024-02", "2024-02-29", leadDays).state, "soon");
         assert.equal(
-            classifyHuMonth("2024-02", "2024-03-01", 30).state,
+            classifyHuMonth("2024-02", "2024-03-01", leadDays).state,
             "overdue",
         );
-        assert.equal(classifyHuMonth(null, TODAY, 30).state, "missing");
+        assert.equal(classifyHuMonth(null, TODAY, leadDays).state, "missing");
     });
 
-    it("ignores a manual UVV date that is not after the inspection", () => {
+    it("uses the inspection when the manual UVV date is not later", () => {
         assert.deepEqual(
             resolveUvvDue({
-                checkedOn: "2026-10-15",
+                checkedOn: "2026-03-01",
                 manualDueOn: "2026-03-01",
-                intervalMonths: 12,
+                intervalMonths: uvvMonths,
+                today: TODAY,
             }),
             {
-                due_on: "2027-10-15",
+                due_on: "2027-03-01",
                 source: "interval",
-                last_on: "2026-10-15",
+                last_on: "2026-03-01",
+                last_checked_in_future: false,
             },
         );
-        assert.equal(
+        assert.deepEqual(
             resolveUvvDue({
-                checkedOn: "2026-10-15",
-                manualDueOn: "2027-12-01",
-                intervalMonths: 12,
-            }).due_on,
-            "2027-12-01",
+                checkedOn: "2026-03-01",
+                manualDueOn: "2026-06-01",
+                intervalMonths: uvvMonths,
+                today: TODAY,
+            }),
+            {
+                due_on: "2026-06-01",
+                source: "manual",
+                last_on: "2026-03-01",
+                last_checked_in_future: false,
+            },
         );
-        assert.equal(addIsoMonths("2026-01-31", 12), "2027-01-31");
-        assert.equal(addIsoMonths("2024-08-31", 12), "2025-08-31");
-        assert.equal(addIsoMonths("2025-08-31", 6), "2026-02-28");
-        assert.equal(addIsoMonths("2024-02-29", 6), "2024-08-29");
+        assert.deepEqual(
+            resolveUvvDue({
+                checkedOn: "2026-09-15",
+                manualDueOn: "2026-03-01",
+                intervalMonths: uvvMonths,
+                today: TODAY,
+            }),
+            {
+                due_on: "2027-09-15",
+                source: "interval",
+                last_on: "2026-09-15",
+                last_checked_in_future: false,
+            },
+        );
+    });
+
+    it("clamps a calendar month to its last day", () => {
+        assert.equal(addIsoMonths("2026-01-31", uvvMonths), "2027-01-31");
+        assert.equal(addIsoMonths("2024-08-31", uvvMonths), "2025-08-31");
+        assert.equal(addIsoMonths("2025-08-31", checkMonths), "2026-02-28");
+        assert.equal(addIsoMonths("2024-02-29", checkMonths), "2024-08-29");
+    });
+
+    it("calculates a future inspection normally and marks it", () => {
+        const uvv = resolveUvvDue({
+            checkedOn: "2027-01-15",
+            manualDueOn: null,
+            intervalMonths: uvvMonths,
+            today: TODAY,
+        });
+
+        assert.equal(uvv.last_checked_in_future, true);
+        assert.equal(uvv.source, "interval");
+        assert.equal(uvv.due_on, "2028-01-15");
+        assert.equal(classifyDueOn(uvv.due_on, TODAY, leadDays), "ok");
+
+        const check = classifyLicenceInterval({
+            checkedOn: "2027-01-15",
+            today: TODAY,
+            intervalMonths: checkMonths,
+            leadDays,
+        });
+
+        assert.equal(check.included, true);
+        assert.equal(check.last_checked_in_future, true);
+        assert.equal(check.state, "ok");
+        assert.equal(check.due_on, "2027-07-15");
+
+        const rows = buildConfiguredDueRows({
+            today: TODAY,
+            leadDays,
+            licenceCheckMonths: checkMonths,
+            vehicles: [
+                {
+                    id: 1,
+                    license_plate: "ZUKUNFT",
+                    hu_due_on: "2026-10",
+                    uvv_checked_on: "2027-01-15",
+                    uvv_due_on: null,
+                },
+            ],
+            drivers: [
+                {
+                    id: 1,
+                    name: "Zukunft",
+                    licence_expires_on: "2027-06-01",
+                    licence_checked_on: "2027-01-15",
+                },
+            ],
+        });
+
+        assert.equal(
+            rows.some((row) => row.kind === "uvv" || row.kind === "licence_check"),
+            false,
+        );
     });
 
     it("rejects a month outside 01–12", () => {
@@ -328,8 +427,8 @@ describe("due rules", () => {
     it("drops inactive subjects and an interval that is switched off", () => {
         const rows = buildConfiguredDueRows({
             today: TODAY,
-            leadDays: 30,
-            licenceCheckMonths: 6,
+            leadDays,
+            licenceCheckMonths: checkMonths,
             vehicles: [
                 {
                     id: 1,
@@ -384,7 +483,7 @@ describe("due rules", () => {
 
         const off = buildConfiguredDueRows({
             today: TODAY,
-            leadDays: 30,
+            leadDays,
             licenceCheckMonths: 0,
             vehicles: [],
             drivers: [

@@ -158,6 +158,7 @@ function uvvRow(
         checkedOn,
         manualDueOn,
         intervalMonths: UVV_MONTHS,
+        today: TODAY,
     });
     const state =
         resolved.due_on === null
@@ -184,6 +185,10 @@ function uvvRow(
         herkunft = `Die Prüfung vom ${de(resolved.last_on)} plus ${UVV_MONTHS} Monate gilt. Das manuelle Datum liegt nicht danach und wird nicht genommen.`;
     } else {
         herkunft = `Die Prüfung vom ${de(resolved.last_on)} plus ${UVV_MONTHS} Monate gilt.`;
+    }
+
+    if (resolved.last_checked_in_future) {
+        herkunft += " Das Prüfdatum liegt nach heute. Die Rechnung läuft trotzdem normal.";
     }
 
     return {
@@ -252,10 +257,13 @@ function checkRow(
         };
     }
 
+    const futureNote = result.last_checked_in_future
+        ? " Das Kontrolldatum liegt nach heute. Die Rechnung läuft trotzdem normal."
+        : "";
     const herkunft =
         result.due_on === null
             ? "Keine Kontrolle gespeichert. Das zählt als überfällig."
-            : `Letzte Kontrolle am ${de(result.last_on)} plus ${months} Monate.`;
+            : `Letzte Kontrolle am ${de(result.last_on)} plus ${months} Monate.${futureNote}`;
 
     return {
         pruefung: "Führerscheinkontrolle",
@@ -337,6 +345,12 @@ const rows: DemoRow[] = [
         "2026-10-15",
         "manuell 15.10.2026 und geprüft 15.10.2026",
     ),
+    uvvRow(
+        "2026-03-01",
+        "2026-03-01",
+        "manuell 01.03.2026 und geprüft 01.03.2026",
+    ),
+    uvvRow("2027-01-15", null, "geprüft 15.01.2027"),
     licenceRow("2026-10-20", "Ablauf 20.10.2026"),
     licenceRow("2026-11-12", "Ablauf 12.11.2026"),
     licenceRow("2026-09-01", "Ablauf 01.09.2026"),
@@ -345,6 +359,11 @@ const rows: DemoRow[] = [
     checkRow("2026-07-20", CHECK_MONTHS, `Kontrolle 20.07.2026, Intervall ${CHECK_MONTHS}`),
     checkRow("2025-08-31", CHECK_MONTHS, `Kontrolle 31.08.2025, Intervall ${CHECK_MONTHS}`),
     checkRow(null, CHECK_MONTHS, `leer, Intervall ${CHECK_MONTHS}`),
+    checkRow(
+        "2027-01-15",
+        CHECK_MONTHS,
+        `Kontrolle 15.01.2027, Intervall ${CHECK_MONTHS}`,
+    ),
     checkRow(null, 0, "leer, Intervall 0 (aus)"),
     inactiveVehicle(),
     inactiveDriver(),
