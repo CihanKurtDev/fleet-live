@@ -35,12 +35,16 @@ describe("GET /api/due", () => {
     });
 
     it("lets a viewer read the same rows the briefing counted", async () => {
-        VehicleModel.create({
+        const stored = VehicleModel.create({
             license_plate: "K-HU 1",
             company_id: 1,
             hu_due_on: "2020-01-01",
-            uvv_due_on: null,
+            uvv_due_on: "2099-01-01",
         });
+        assert.equal(stored.hu_due_on, "2020-01");
+        assert.equal(stored.uvv_due_on, "2099-01-01");
+        assert.equal(stored.uvv_checked_on, null);
+        assert.equal(stored.active, true);
         VehicleModel.create({
             license_plate: "K-XX 9",
             company_id: 2,

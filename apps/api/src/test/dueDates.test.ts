@@ -43,6 +43,7 @@ describe("classifyCalendarDate", () => {
             classifyCalendarDate(addIsoDays(TODAY, 31), TODAY),
             "ok",
         );
+        assert.equal(classifyCalendarDate("2026-10", TODAY), "overdue");
     });
 });
 

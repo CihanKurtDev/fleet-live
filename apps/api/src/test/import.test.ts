@@ -122,8 +122,10 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;01.11.2026;KST-10
         assert.equal(listed.body.data[0].vehicle_type, "TRUCK");
         assert.equal(listed.body.data[0].depot, null);
         assert.equal(listed.body.data[0].home_site_id, null);
-        assert.equal(listed.body.data[0].hu_due_on, "2027-06-15");
+        assert.equal(listed.body.data[0].hu_due_on, "2027-06");
         assert.equal(listed.body.data[0].uvv_due_on, "2026-11-01");
+        assert.equal(listed.body.data[0].uvv_checked_on, null);
+        assert.equal(listed.body.data[0].active, true);
         assert.equal(listed.body.data[0].cost_center, "KST-10");
     });
 

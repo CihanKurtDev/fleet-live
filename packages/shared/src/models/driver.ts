@@ -22,6 +22,7 @@ export type Driver = {
     licence_expires_on: string | null;
     /** Letzte Führerscheinkontrolle. Leer ist überfällig. */
     licence_checked_on: string | null;
+    active: boolean;
     created_at: string;
     vehicle_count: number;
     /** Kennzeichen, wenn genau ein Fahrzeug freigegeben ist. */

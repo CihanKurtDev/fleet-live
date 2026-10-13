@@ -113,3 +113,11 @@ export const licenceCheckMonthsSchema = z
     .int("Kontrollintervall in ganzen Monaten angeben.")
     .min(0, "Kontrollintervall darf nicht negativ sein.")
     .max(24, "Kontrollintervall darf höchstens 24 Monate sein.");
+
+/** `null` heißt: den Wert aus dem Katalog nehmen. */
+export const companyDueSettingsSchema = z.object({
+    due_lead_days: z.union([z.null(), dueLeadDaysSchema]).optional(),
+    licence_check_months: z
+        .union([z.null(), licenceCheckMonthsSchema])
+        .optional(),
+});

@@ -311,6 +311,7 @@ describe("POST /api/drivers", () => {
 
         assert.equal(created.status, 201);
         assert.equal(created.body.data.licence_expires_on, "2028-06-15");
+        assert.equal(created.body.data.active, true);
         assert.equal(created.body.data.licence_checked_on, "2026-04-01");
 
         const patched = await api

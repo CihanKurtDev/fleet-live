@@ -29,7 +29,7 @@ const SELECT_ID = `
 `;
 
 const SELECT_ONE = `
-    SELECT id, name, phone, licence_expires_on, licence_checked_on, created_at
+    SELECT id, name, phone, licence_expires_on, licence_checked_on, active, created_at
     FROM drivers
     WHERE id = ? AND company_id = ?
 `;
@@ -40,6 +40,7 @@ type DriverCore = {
     phone: string | null;
     licence_expires_on: string | null;
     licence_checked_on: string | null;
+    active: number | boolean;
     created_at: string;
 };
 
@@ -54,6 +55,7 @@ type DriverRow = {
     phone: string | null;
     licence_expires_on: string | null;
     licence_checked_on: string | null;
+    active: number | boolean;
     created_at: string;
     vehicle_count: number;
     vehicle_plate: string | null;
@@ -92,6 +94,7 @@ function toDriver(row: DriverRow): Driver {
         phone: row.phone,
         licence_expires_on: row.licence_expires_on,
         licence_checked_on: row.licence_checked_on,
+        active: Number(row.active) === 1,
         created_at: row.created_at,
         vehicle_count: Number(row.vehicle_count),
         vehicle_plate: row.vehicle_plate,
@@ -108,6 +111,7 @@ const AGG_SELECT = `
     d.phone,
     d.licence_expires_on,
     d.licence_checked_on,
+    d.active,
     d.created_at,
     (
         SELECT COUNT(*)
@@ -262,7 +266,13 @@ export class DriverModel {
     }
 
     static getById(id: number, companyId: number): DriverCore | undefined {
-        return stmt(SELECT_ONE).get(id, companyId) as DriverCore | undefined;
+        const row = stmt(SELECT_ONE).get(id, companyId) as DriverCore | undefined;
+
+        if (!row) {
+            return undefined;
+        }
+
+        return { ...row, active: Number(row.active) === 1 };
     }
 
     static update(

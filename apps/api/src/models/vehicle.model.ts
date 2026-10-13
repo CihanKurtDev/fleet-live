@@ -20,6 +20,7 @@ import {
     FLEET_POSITIONS_MAX,
     LOW_FUEL_THRESHOLD_PERCENT,
     isAlertType,
+    storedHuMonth,
 } from "@fleet-live/shared";
 import { DriverModel } from "./driver.model";
 import { SiteModel } from "./site.model";
@@ -107,7 +108,9 @@ const SELECT_ONE = `
         v.vin,
         v.vehicle_type,
         v.hu_due_on,
+        v.uvv_checked_on,
         v.uvv_due_on,
+        v.active,
         v.depot,
         v.home_site_id,
         v.cost_center,
@@ -265,9 +268,11 @@ function runUnique(run: () => ReturnType<ReturnType<typeof stmt>["run"]>) {
 }
 
 function toVehicle(row: ListRow): Vehicle {
-    const { total: _total, speeding_open, open_alert_types, ...vehicle } = row;
+    const { total: _total, speeding_open, open_alert_types, active, ...vehicle } =
+        row;
     return {
         ...vehicle,
+        active: Number(active) === 1,
         speeding_open: Boolean(speeding_open),
         open_alert_types: parseOpenAlertTypes(open_alert_types),
         speed_limit_kmh:
@@ -313,7 +318,9 @@ export class VehicleModel {
                 v.vin,
                 v.vehicle_type,
                 v.hu_due_on,
+                v.uvv_checked_on,
                 v.uvv_due_on,
+                v.active,
                 v.depot,
                 v.home_site_id,
                 v.cost_center,
@@ -783,7 +790,7 @@ export class VehicleModel {
                 input.status ?? "IDLE",
                 input.vin ?? null,
                 input.vehicle_type ?? null,
-                input.hu_due_on ?? null,
+                storedHuMonth(input.hu_due_on ?? null),
                 input.uvv_due_on ?? null,
                 null,
                 input.cost_center ?? null,
@@ -842,7 +849,7 @@ export class VehicleModel {
                 input.status,
                 input.vin ?? null,
                 input.vehicle_type ?? null,
-                input.hu_due_on ?? null,
+                storedHuMonth(input.hu_due_on ?? null),
                 input.uvv_due_on ?? null,
                 input.cost_center ?? null,
                 id,
@@ -885,7 +892,7 @@ export class VehicleModel {
                     ? input.vehicle_type
                     : current.vehicle_type,
                 input.hu_due_on !== undefined
-                    ? input.hu_due_on
+                    ? storedHuMonth(input.hu_due_on)
                     : current.hu_due_on,
                 input.uvv_due_on !== undefined
                     ? input.uvv_due_on

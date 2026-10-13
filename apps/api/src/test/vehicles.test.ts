@@ -903,8 +903,10 @@ describe("vehicle mutations", () => {
         assert.equal(created.status, 201);
         assert.equal(created.body.vin, "WVWZZZ1JZXW000001");
         assert.equal(created.body.vehicle_type, "TRUCK");
-        assert.equal(created.body.hu_due_on, "2027-06-15");
+        assert.equal(created.body.hu_due_on, "2027-06");
         assert.equal(created.body.uvv_due_on, "2026-09-01");
+        assert.equal(created.body.uvv_checked_on, null);
+        assert.equal(created.body.active, true);
         assert.equal(created.body.depot, "Hof Nord");
         assert.equal(created.body.cost_center, "KST-100");
 

@@ -56,6 +56,7 @@ export const COST_CENTER_MAX = 32;
 
 const VIN_CHAR_PATTERN = /^[A-HJ-NPR-Z0-9]+$/;
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const YEAR_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const GERMAN_DATE_PATTERN = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
 
 /**
@@ -74,7 +75,10 @@ export type Vehicle = {
     vin: string | null;
     vehicle_type: VehicleType | null;
     hu_due_on: string | null;
+    /** Letzte UVV. Leer, solange nur eine manuelle Fälligkeit gespeichert ist. */
+    uvv_checked_on: string | null;
     uvv_due_on: string | null;
+    active: boolean;
     depot: string | null;
     /** Depot, dem das Fahrzeug zugeordnet ist. `depot` ist dessen Name. */
     home_site_id: number | null;
@@ -146,6 +150,23 @@ export function isVehicleType(value: unknown): value is VehicleType {
         typeof value === "string" &&
         (VEHICLE_TYPES as readonly string[]).includes(value)
     );
+}
+
+/** Speichert die HU als Monat. Ein schon gesetzter Monat bleibt. Ungültiges bleibt stehen. */
+export function storedHuMonth(value: string | null): string | null {
+    if (value === null || value === "") {
+        return null;
+    }
+
+    if (YEAR_MONTH_PATTERN.test(value)) {
+        return value;
+    }
+
+    if (isValidIsoDate(value)) {
+        return value.slice(0, 7);
+    }
+
+    return value;
 }
 
 export function isValidIsoDate(value: string): boolean {
@@ -267,8 +288,11 @@ const huDueOnSchema = z.union([
     z.null(),
     z
         .string()
-        .regex(ISO_DATE_PATTERN, "HU-Datum muss JJJJ-MM-TT sein.")
-        .refine(isValidIsoDate, "HU-Datum ist ungültig."),
+        .refine(
+            (value) =>
+                YEAR_MONTH_PATTERN.test(value) || isValidIsoDate(value),
+            "HU-Datum muss JJJJ-MM sein.",
+        ),
 ]);
 
 const uvvDueOnSchema = z.union([

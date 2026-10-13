@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS companies (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     import_prompt_dismissed_at TEXT,
     totp_required INTEGER NOT NULL DEFAULT 0,
+    due_lead_days INTEGER,
+    licence_check_months INTEGER,
     sso_issuer TEXT,
     sso_client_id TEXT,
     sso_client_secret TEXT,
@@ -114,6 +116,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     company_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     phone TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (company_id)
@@ -138,6 +141,10 @@ CREATE TABLE IF NOT EXISTS vehicles (
             'TRUCK', 'VAN', 'CAR', 'TRAILER', 'OTHER'
         )),
     hu_due_on TEXT,
+    hu_due_on_legacy TEXT,
+    uvv_due_on TEXT,
+    uvv_checked_on TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
     depot TEXT,
     cost_center TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

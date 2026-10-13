@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
+import { isValidIsoDate } from "@fleet-live/shared";
 
-const SCHEMA_VERSION = 20;
+const SCHEMA_VERSION = 21;
 
 type TableColumn = {
     name: string;
@@ -1072,6 +1073,110 @@ function migrateToV20(database: DatabaseSync) {
 }
 
 /**
+ * Fristen-Spalten und HU-Monat. Die Sicherung wird nur gefüllt, solange sie leer ist.
+ * Ein zweiter Lauf findet keine Tagesdaten mehr und ändert nichts.
+ */
+export function ensureDueReminderColumns(database: DatabaseSync) {
+    const vehicles = columnNames(database, "vehicles");
+
+    if (vehicles.size > 0) {
+        if (!vehicles.has("active")) {
+            database.exec(
+                "ALTER TABLE vehicles ADD COLUMN active INTEGER NOT NULL DEFAULT 1",
+            );
+        }
+
+        if (!vehicles.has("uvv_checked_on")) {
+            database.exec(
+                "ALTER TABLE vehicles ADD COLUMN uvv_checked_on TEXT",
+            );
+        }
+
+        if (!vehicles.has("hu_due_on_legacy")) {
+            database.exec(
+                "ALTER TABLE vehicles ADD COLUMN hu_due_on_legacy TEXT",
+            );
+        }
+
+        if (columnNames(database, "vehicles").has("hu_due_on")) {
+            shortenHuToMonth(database);
+        }
+    }
+
+    const drivers = columnNames(database, "drivers");
+
+    if (drivers.size > 0 && !drivers.has("active")) {
+        database.exec(
+            "ALTER TABLE drivers ADD COLUMN active INTEGER NOT NULL DEFAULT 1",
+        );
+    }
+
+    const companies = columnNames(database, "companies");
+
+    if (companies.size === 0) {
+        return;
+    }
+
+    if (!companies.has("due_lead_days")) {
+        database.exec("ALTER TABLE companies ADD COLUMN due_lead_days INTEGER");
+    }
+
+    if (!companies.has("licence_check_months")) {
+        database.exec(
+            "ALTER TABLE companies ADD COLUMN licence_check_months INTEGER",
+        );
+    }
+}
+
+function shortenHuToMonth(database: DatabaseSync) {
+    const rows = database
+        .prepare(
+            `
+            SELECT id, hu_due_on, hu_due_on_legacy
+            FROM vehicles
+            WHERE hu_due_on IS NOT NULL
+            `,
+        )
+        .all() as Array<{
+        id: number;
+        hu_due_on: string;
+        hu_due_on_legacy: string | null;
+    }>;
+    const keepLegacy = database.prepare(
+        `
+        UPDATE vehicles
+        SET hu_due_on_legacy = ?
+        WHERE id = ?
+          AND hu_due_on_legacy IS NULL
+        `,
+    );
+    const writeMonth = database.prepare(
+        `
+        UPDATE vehicles
+        SET hu_due_on = ?
+        WHERE id = ?
+          AND hu_due_on = ?
+        `,
+    );
+
+    for (const row of rows) {
+        if (!isValidIsoDate(row.hu_due_on)) {
+            continue;
+        }
+
+        if (row.hu_due_on_legacy === null || row.hu_due_on_legacy === "") {
+            keepLegacy.run(row.hu_due_on, row.id);
+        }
+
+        writeMonth.run(row.hu_due_on.slice(0, 7), row.id, row.hu_due_on);
+    }
+}
+
+function migrateToV21(database: DatabaseSync) {
+    ensureDueReminderColumns(database);
+}
+
+/**
  * Rolle und Firma hängen an der Mitgliedschaft. Bestehende Nutzer bleiben
  * bestätigt, damit der Seed-Login ohne Mail weiter funktioniert.
  */
@@ -1344,6 +1449,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV20(database);
     }
 
+    if (currentVersion < 21) {
+        migrateToV21(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -1358,6 +1467,7 @@ export function migrate(database: DatabaseSync) {
     ensureOpenAlertsPerType(database);
     ensureImportTables(database);
     ensureYardMasterData(database);
+    ensureDueReminderColumns(database);
     ensureDepotSites(database);
     ensureSiteDefault(database);
     ensureAccountIndexes(database);
