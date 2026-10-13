@@ -302,6 +302,26 @@ describe("POST /api/drivers", () => {
         assert.equal(listed.body.data[0].phone, null);
     });
 
+    it("stores licence dates", async () => {
+        const created = await api.post("/api/drivers").send({
+            name: "Elisa",
+            licence_expires_on: "15.06.2028",
+            licence_checked_on: "2026-04-01",
+        });
+
+        assert.equal(created.status, 201);
+        assert.equal(created.body.data.licence_expires_on, "2028-06-15");
+        assert.equal(created.body.data.licence_checked_on, "2026-04-01");
+
+        const patched = await api
+            .patch(`/api/drivers/${created.body.data.id}`)
+            .send({ licence_checked_on: "2026-09-01" });
+
+        assert.equal(patched.status, 200);
+        assert.equal(patched.body.data.licence_expires_on, "2028-06-15");
+        assert.equal(patched.body.data.licence_checked_on, "2026-09-01");
+    });
+
     it("stores an optional phone number", async () => {
         const created = await api.post("/api/drivers").send({
             name: "Elisa",

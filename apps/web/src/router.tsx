@@ -89,6 +89,13 @@ export const router = createBrowserRouter([
                         }),
                     },
                     {
+                        path: 'fristen',
+                        lazy: async () => ({
+                            Component: (await import('./pages/DuePage'))
+                                .DuePage,
+                        }),
+                    },
+                    {
                         path: 'drivers',
                         lazy: async () => ({
                             Component: (await import('./pages/DriversPage'))

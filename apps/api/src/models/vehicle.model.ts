@@ -40,6 +40,7 @@ export type VehicleCreateInput = Pick<VehicleInput, "license_plate"> &
             | "vin"
             | "vehicle_type"
             | "hu_due_on"
+            | "uvv_due_on"
             | "depot"
             | "home_site_id"
             | "cost_center"
@@ -64,6 +65,7 @@ const SORT_COLUMNS: Record<VehicleSortKey, string> = {
     vehicle_type: "v.vehicle_type",
     depot: "v.depot",
     hu_due_on: "v.hu_due_on",
+    uvv_due_on: "v.uvv_due_on",
 };
 
 const FILTER_SQL: Record<VehicleFilterId, string> = {
@@ -105,6 +107,7 @@ const SELECT_ONE = `
         v.vin,
         v.vehicle_type,
         v.hu_due_on,
+        v.uvv_due_on,
         v.depot,
         v.home_site_id,
         v.cost_center,
@@ -132,11 +135,12 @@ const INSERT_VEHICLE = `
         vin,
         vehicle_type,
         hu_due_on,
+        uvv_due_on,
         depot,
         cost_center,
         company_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const UPDATE_VEHICLE = `
@@ -147,6 +151,7 @@ const UPDATE_VEHICLE = `
         vin = ?,
         vehicle_type = ?,
         hu_due_on = ?,
+        uvv_due_on = ?,
         cost_center = ?
     WHERE id = ? AND company_id = ?
 `;
@@ -292,7 +297,8 @@ export class VehicleModel {
             query.sort === "driver_name" ||
             query.sort === "vehicle_type" ||
             query.sort === "depot" ||
-            query.sort === "hu_due_on"
+            query.sort === "hu_due_on" ||
+            query.sort === "uvv_due_on"
                 ? `${sortColumn} IS NULL, `
                 : "";
 
@@ -307,6 +313,7 @@ export class VehicleModel {
                 v.vin,
                 v.vehicle_type,
                 v.hu_due_on,
+                v.uvv_due_on,
                 v.depot,
                 v.home_site_id,
                 v.cost_center,
@@ -777,6 +784,7 @@ export class VehicleModel {
                 input.vin ?? null,
                 input.vehicle_type ?? null,
                 input.hu_due_on ?? null,
+                input.uvv_due_on ?? null,
                 null,
                 input.cost_center ?? null,
                 companyId,
@@ -835,6 +843,7 @@ export class VehicleModel {
                 input.vin ?? null,
                 input.vehicle_type ?? null,
                 input.hu_due_on ?? null,
+                input.uvv_due_on ?? null,
                 input.cost_center ?? null,
                 id,
                 companyId,
@@ -878,6 +887,9 @@ export class VehicleModel {
                 input.hu_due_on !== undefined
                     ? input.hu_due_on
                     : current.hu_due_on,
+                input.uvv_due_on !== undefined
+                    ? input.uvv_due_on
+                    : current.uvv_due_on,
                 input.cost_center !== undefined
                     ? input.cost_center
                     : current.cost_center,

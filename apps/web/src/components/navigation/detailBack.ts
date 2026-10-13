@@ -23,5 +23,9 @@ export const backLabel = (from: string): string => {
         return "Zurück zu den Warnungen";
     }
 
+    if (from.startsWith("/fristen")) {
+        return "Zurück zu den Fristen";
+    }
+
     return "Zurück zur Übersicht";
 };

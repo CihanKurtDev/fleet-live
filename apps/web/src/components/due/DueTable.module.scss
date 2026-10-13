@@ -1,0 +1,125 @@
+.dueTable {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    padding: 0 16px;
+    transition: opacity 120ms ease;
+}
+
+.title {
+    flex-shrink: 0;
+    margin: 12px 0 4px;
+    font-size: 22px;
+    font-weight: 650;
+    color: var(--text-h);
+}
+
+.lead {
+    flex-shrink: 0;
+    margin: 0 0 4px;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.filters {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+}
+
+.isFetching {
+    opacity: 0.72;
+}
+
+.status {
+    flex-shrink: 0;
+    margin: 8px 0 0;
+    color: var(--text);
+    font-size: 13px;
+}
+
+@media (max-width: 700px) {
+    .dueTable {
+        padding: 0 12px 20px;
+    }
+
+    .title {
+        margin-top: 10px;
+        font-size: 20px;
+    }
+
+    .mobileCards {
+        flex: none;
+        overflow: visible;
+
+        :global(table) {
+            display: block;
+        }
+
+        :global(thead) {
+            display: none;
+        }
+
+        :global(tbody) {
+            display: grid;
+            gap: 10px;
+        }
+
+        :global(tr) {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 7px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        :global(.tableRowInteractive:hover),
+        :global(.tableRowInteractive:focus-within) {
+            background: var(--surface);
+        }
+
+        :global(td) {
+            display: grid;
+            grid-template-columns: minmax(72px, 0.35fr) minmax(0, 1fr);
+            gap: 10px;
+            align-items: start;
+            min-width: 0;
+            padding: 0;
+            border: 0;
+            font-size: 13px;
+        }
+
+        :global(td)::before {
+            content: attr(data-label);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: 650;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        :global(td:first-child) {
+            display: block;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+            font-weight: 650;
+        }
+
+        :global(td:first-child)::before {
+            display: none;
+        }
+
+        :global(.empty) {
+            display: block;
+            padding: 24px 12px;
+        }
+    }
+}

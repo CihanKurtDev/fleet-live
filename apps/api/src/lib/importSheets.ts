@@ -27,6 +27,7 @@ const VEHICLE_COLUMN_HINTS: Array<{
         pattern: /fahrzeugtyp|fzg[.\s-]?typ|vehicle[_\s-]?type/i,
         target: "vehicle_type",
     },
+    { pattern: /\buvv\b|unterweisung/i, target: "uvv_due_on" },
     { pattern: /\bhu\b|hauptuntersuchung|tuev|tüv/i, target: "hu_due_on" },
     { pattern: /standort|depot|hof|niederlassung|site/i, target: "depot" },
     {
@@ -50,6 +51,14 @@ const NAME_COLUMN_HINTS: Array<{
 }> = [
     { pattern: /kennzeichen|license|plate|fahrzeug/i, target: "license_plate" },
     { pattern: /telefon|phone|handy|mobil/i, target: "phone" },
+    {
+        pattern: /kontroll|geprüft|geprueft/i,
+        target: "licence_checked_on",
+    },
+    {
+        pattern: /gültig|gueltig|ablauf|führerschein|fuehrerschein|licence/i,
+        target: "licence_expires_on",
+    },
     { pattern: /fahrer|driver|lenker|name/i, target: "driver_name" },
 ];
 

@@ -1,7 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import {
+    addIsoDays,
+    addIsoMonths,
     briefingMonthKeys,
     SPEED_CRITICAL_OVER_LIMIT_KMH,
+    utcTodayIso,
 } from "@fleet-live/shared";
 import { TripModel } from "../models/trip.model";
 import {
@@ -158,6 +161,24 @@ function yardType(rng: Rng) {
     return YARD_TYPES[pickInt(rng, 0, YARD_TYPES.length - 1)] ?? "TRUCK";
 }
 
+function licenceCheckedOn(rng: Rng, today: string): string | null {
+    const roll = rng();
+
+    if (roll < 0.05) {
+        return null;
+    }
+
+    if (roll < 0.12) {
+        return addIsoDays(addIsoMonths(today, -6), -pickInt(rng, 1, 120));
+    }
+
+    if (roll < 0.22) {
+        return addIsoMonths(addIsoDays(today, pickInt(rng, 0, 30)), -6);
+    }
+
+    return addIsoDays(today, -pickInt(rng, 1, 120));
+}
+
 function huDueOn(rng: Rng): string | null {
     if (rng() < 0.08) {
         return null;
@@ -238,9 +259,15 @@ export function seedLivedIn(database: DatabaseSync) {
     const rng = mulberry32(20260902);
     const months = briefingMonthKeys();
 
+    const today = utcTodayIso();
     const insertDriver = database.prepare(`
-        INSERT INTO drivers (company_id, name)
-        VALUES (?, ?)
+        INSERT INTO drivers (
+            company_id,
+            name,
+            licence_expires_on,
+            licence_checked_on
+        )
+        VALUES (?, ?, ?, ?)
     `);
     const insertVehicle = database.prepare(`
         INSERT INTO vehicles (
@@ -252,10 +279,11 @@ export function seedLivedIn(database: DatabaseSync) {
             vin,
             vehicle_type,
             hu_due_on,
+            uvv_due_on,
             cost_center,
             company_id
         )
-        VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertAssignment = database.prepare(`
         INSERT INTO driver_vehicles (driver_id, vehicle_id)
@@ -322,7 +350,12 @@ export function seedLivedIn(database: DatabaseSync) {
             for (const size of sizes) {
                 const name = driverNameAt(driverIndex);
                 driverIndex += 1;
-                const driver = insertDriver.run(companyId, name);
+                const driver = insertDriver.run(
+                    companyId,
+                    name,
+                    huDueOn(rng),
+                    licenceCheckedOn(rng, today),
+                );
                 const driverId = Number(driver.lastInsertRowid);
 
                 const owned: SeededVehicle[] = [];
@@ -343,6 +376,7 @@ export function seedLivedIn(database: DatabaseSync) {
                         status,
                         vinAt(companyId, plateIndex),
                         yardType(rng),
+                        huDueOn(rng),
                         huDueOn(rng),
                         costCenterAt(rng, companyId),
                         companyId,

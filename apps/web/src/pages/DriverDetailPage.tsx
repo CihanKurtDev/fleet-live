@@ -11,6 +11,7 @@ import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
 import { useDriver } from "../hooks/useDriver";
+import { formatIsoDate } from "../utils/dateTime";
 import layout from "../styles/detailLayout.module.scss";
 import styles from "./DriverDetailPage.module.scss";
 
@@ -89,6 +90,20 @@ export const DriverDetailPage = () => {
             </header>
 
             <DriverAssignmentPanel driver={driver} canWrite={canWrite} />
+
+            <section className={layout.panel}>
+                <h2 className={layout.panelTitle}>Führerschein</h2>
+                <dl className={layout.facts}>
+                    <div>
+                        <dt>Gültig bis</dt>
+                        <dd>{formatIsoDate(driver.licence_expires_on)}</dd>
+                    </div>
+                    <div>
+                        <dt>Kontrolliert am</dt>
+                        <dd>{formatIsoDate(driver.licence_checked_on)}</dd>
+                    </div>
+                </dl>
+            </section>
 
             <section className={layout.panel}>
                 <h2 className={layout.panelTitle}>Verstöße</h2>

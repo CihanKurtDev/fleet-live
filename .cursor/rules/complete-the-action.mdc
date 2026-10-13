@@ -1,0 +1,14 @@
+---
+description: A visible number is finished only when the person can do the job that number describes
+alwaysApply: true
+---
+
+# Finish the action
+
+A count on a page is a job. Before building the count, write that job in one sentence: who looks at it, and what they do next.
+
+That next step is part of the same change. On this app a briefing tile is the link, and the destination lists the same rows the number counted. Offen opens the inbox. Wenig Tank opens the vehicle list with that filter. A tile without that destination is not done. A sort on another list is not that destination when the rows are a different set.
+
+Decide the destination from the job. Who opens the page, what they do in the next few minutes, and which block on an existing page already does that kind of work. Do not offer two implementations and wait. Do not ship the number and describe the missing click afterwards.
+
+Ask only when a fact is missing that the screen cannot answer: a rule, a permission, or what the business counts as one row. The question is that fact, not a menu of pages.

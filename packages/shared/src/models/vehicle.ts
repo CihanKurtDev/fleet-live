@@ -74,6 +74,7 @@ export type Vehicle = {
     vin: string | null;
     vehicle_type: VehicleType | null;
     hu_due_on: string | null;
+    uvv_due_on: string | null;
     depot: string | null;
     /** Depot, dem das Fahrzeug zugeordnet ist. `depot` ist dessen Name. */
     home_site_id: number | null;
@@ -110,6 +111,7 @@ export type VehicleInput = {
     vin?: string | null;
     vehicle_type?: VehicleType | null;
     hu_due_on?: string | null;
+    uvv_due_on?: string | null;
     depot?: string | null;
     home_site_id?: number | null;
     cost_center?: string | null;
@@ -124,6 +126,7 @@ const VEHICLE_INPUT_KEYS = [
     "vin",
     "vehicle_type",
     "hu_due_on",
+    "uvv_due_on",
     "depot",
     "home_site_id",
     "cost_center",
@@ -268,6 +271,14 @@ const huDueOnSchema = z.union([
         .refine(isValidIsoDate, "HU-Datum ist ungültig."),
 ]);
 
+const uvvDueOnSchema = z.union([
+    z.null(),
+    z
+        .string()
+        .regex(ISO_DATE_PATTERN, "UVV-Datum muss JJJJ-MM-TT sein.")
+        .refine(isValidIsoDate, "UVV-Datum ist ungültig."),
+]);
+
 const depotSchema = z.union([
     z.null(),
     z
@@ -297,6 +308,7 @@ export const vehicleInputSchema = z.object({
     vin: vinSchema.optional(),
     vehicle_type: vehicleTypeSchema.optional(),
     hu_due_on: huDueOnSchema.optional(),
+    uvv_due_on: uvvDueOnSchema.optional(),
     depot: depotSchema.optional(),
     home_site_id: z
         .union([
@@ -352,6 +364,7 @@ function normalizeVehicleInput(
         depot: emptyToNull(input.depot),
         cost_center: emptyToNull(input.cost_center),
         hu_due_on: emptyToNull(input.hu_due_on),
+        uvv_due_on: emptyToNull(input.uvv_due_on),
         vehicle_type: input.vehicle_type,
     };
 }

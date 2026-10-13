@@ -78,6 +78,12 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         render: (value) => formatIsoDate(value),
     },
     {
+        key: "uvv_due_on",
+        displayText: "UVV",
+        sortable: true,
+        render: (value) => formatIsoDate(value),
+    },
+    {
         key: "status",
         displayText: "Status",
         sortable: true,

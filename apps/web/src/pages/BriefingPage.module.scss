@@ -29,11 +29,19 @@
     color: var(--text);
 }
 
-.kpis {
+.kpis,
+.dueKpis {
     flex-shrink: 0;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 10px;
+}
+
+.kpis {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.dueKpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .kpi {
@@ -147,15 +155,15 @@ a.kpi:hover {
         gap: 8px;
     }
 
+    .kpis > .kpi:first-child {
+        grid-column: 1 / -1;
+        min-height: 82px;
+    }
+
     .kpi {
         min-height: 74px;
         padding: 10px 12px;
         border-radius: 8px;
-    }
-
-    .kpi:first-child {
-        grid-column: 1 / -1;
-        min-height: 82px;
     }
 
     .kpiValue {

@@ -30,6 +30,7 @@ interface FormValues {
     vin: string;
     vehicle_type: VehicleType | "";
     hu_due_on: string;
+    uvv_due_on: string;
     home_site_id: string;
     cost_center: string;
 }
@@ -40,6 +41,7 @@ const EMPTY_VALUES: FormValues = {
     vin: "",
     vehicle_type: "",
     hu_due_on: "",
+    uvv_due_on: "",
     home_site_id: "",
     cost_center: "",
 };
@@ -52,6 +54,7 @@ const toValues = (input?: VehicleInput): FormValues =>
               vin: input.vin ?? "",
               vehicle_type: input.vehicle_type ?? "",
               hu_due_on: input.hu_due_on ?? "",
+              uvv_due_on: input.uvv_due_on ?? "",
               home_site_id:
                   input.home_site_id === null ||
                   input.home_site_id === undefined
@@ -135,6 +138,7 @@ export const VehicleForm = ({
         vehicle_type:
             values.vehicle_type === "" ? null : values.vehicle_type,
         hu_due_on: values.hu_due_on.trim() === "" ? null : values.hu_due_on,
+        uvv_due_on: values.uvv_due_on.trim() === "" ? null : values.uvv_due_on,
         home_site_id:
             values.home_site_id === "" ? null : Number(values.home_site_id),
         cost_center:
@@ -148,6 +152,7 @@ export const VehicleForm = ({
                   vin: form.vin,
                   vehicle_type: form.vehicle_type,
                   hu_due_on: form.hu_due_on,
+                  uvv_due_on: form.uvv_due_on,
                   home_site_id: form.home_site_id,
                   cost_center: form.cost_center,
               }
@@ -313,6 +318,27 @@ export const VehicleForm = ({
                 {errorFor("hu_due_on") && (
                     <p className={styles.error} role="alert">
                         {errorFor("hu_due_on")}
+                    </p>
+                )}
+            </div>
+
+            <div className={styles.field}>
+                <label htmlFor={`${fieldId}-uvv`}>UVV fällig</label>
+                <Input
+                    id={`${fieldId}-uvv`}
+                    type="date"
+                    size="md"
+                    fullWidth
+                    value={values.uvv_due_on}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                        setField("uvv_due_on", event.target.value)
+                    }
+                    aria-invalid={errorFor("uvv_due_on") !== undefined}
+                />
+                {errorFor("uvv_due_on") && (
+                    <p className={styles.error} role="alert">
+                        {errorFor("uvv_due_on")}
                     </p>
                 )}
             </div>

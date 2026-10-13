@@ -52,6 +52,14 @@ export const AppHeader = ({
                             ) : null}
                         </NavLink>
                         <NavLink
+                            to="/fristen"
+                            className={({ isActive }) =>
+                                isActive ? styles.active : undefined
+                            }
+                        >
+                            Fristen
+                        </NavLink>
+                        <NavLink
                             to="/drivers"
                             className={({ isActive }) =>
                                 isActive ? styles.active : undefined

@@ -5,6 +5,7 @@ import {
     parseDriverListQuery,
     parseDriverPatch,
     parseDriverVehicleAssign,
+    parseHuDate,
 } from "@fleet-live/shared";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
@@ -44,10 +45,37 @@ export function getDriverById(req: Request, res: Response) {
     res.json({ data: driver });
 }
 
+function normalizeDriverDates(body: unknown): unknown {
+    if (!body || typeof body !== "object") {
+        return body;
+    }
+
+    const record = { ...(body as Record<string, unknown>) };
+
+    for (const key of ["licence_expires_on", "licence_checked_on"] as const) {
+        if (!(key in record) || record[key] === null) {
+            continue;
+        }
+
+        if (typeof record[key] !== "string") {
+            continue;
+        }
+
+        const trimmed = record[key].trim();
+        record[key] =
+            trimmed === "" ? null : (parseHuDate(trimmed) ?? trimmed);
+    }
+
+    return record;
+}
+
 export function createDriver(req: Request, res: Response) {
     const companyId = sessionCompany(req);
-    const input = parseDriverCreate(req.body);
-    const driver = DriverModel.create(companyId, input.name, input.phone);
+    const input = parseDriverCreate(normalizeDriverDates(req.body));
+    const driver = DriverModel.create(companyId, input.name, input.phone, {
+        licence_expires_on: input.licence_expires_on,
+        licence_checked_on: input.licence_checked_on,
+    });
 
     notifyVehiclesChanged(companyId);
     res.status(201).location(`/api/drivers/${driver.id}`).json({ data: driver });
@@ -56,7 +84,7 @@ export function createDriver(req: Request, res: Response) {
 export function updateDriver(req: Request, res: Response) {
     const companyId = sessionCompany(req);
     const id = parseId(req.params.id, "Fahrer-ID");
-    const input = parseDriverPatch(req.body);
+    const input = parseDriverPatch(normalizeDriverDates(req.body));
     const updated = DriverModel.update(id, companyId, input);
     const driver = DriverModel.getDetail(updated.id, companyId);
 

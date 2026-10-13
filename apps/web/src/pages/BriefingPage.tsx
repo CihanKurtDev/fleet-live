@@ -1,5 +1,9 @@
 import { Link } from "react-router";
-import type { BriefingCounts, BriefingData } from "@fleet-live/shared";
+import type {
+    BriefingCounts,
+    BriefingData,
+    DueCounts,
+} from "@fleet-live/shared";
 import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
@@ -115,6 +119,74 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
     );
 };
 
+const missingFields = (due: DueCounts) =>
+    due.missing.hu + due.missing.uvv + due.missing.licence_expiry;
+
+const DueKpis = ({ due }: { due: DueCounts }) => {
+    const tiles: Array<{
+        key: string;
+        label: string;
+        value: number;
+        hint?: string;
+        tone: "critical" | "warning" | "neutral";
+        to: string;
+    }> = [
+        {
+            key: "overdue",
+            label: "Überfällig",
+            value: due.overdue,
+            tone: "critical",
+            to: "/fristen?state=overdue",
+        },
+        {
+            key: "soon",
+            label: "In 30 Tagen",
+            value: due.soon,
+            tone: "warning",
+            to: "/fristen?state=soon",
+        },
+        {
+            key: "missing",
+            label: "Ohne Datum",
+            value: missingFields(due),
+            hint: "Felder",
+            tone: "neutral",
+            to: "/fristen?state=missing",
+        },
+    ];
+
+    return (
+        <div className={styles.dueKpis}>
+            {tiles.map((tile) => {
+                const toneClass =
+                    tile.tone === "critical"
+                        ? styles.kpiCritical
+                        : tile.tone === "warning"
+                          ? styles.kpiWarning
+                          : undefined;
+
+                return (
+                    <Link
+                        key={tile.key}
+                        className={
+                            toneClass ? `${styles.kpi} ${toneClass}` : styles.kpi
+                        }
+                        to={tile.to}
+                    >
+                        <span className={styles.kpiLabel}>{tile.label}</span>
+                        <span className={styles.kpiValue}>
+                            {formatCount(tile.value)}
+                        </span>
+                        {tile.hint ? (
+                            <span className={styles.kpiHint}>{tile.hint}</span>
+                        ) : null}
+                    </Link>
+                );
+            })}
+        </div>
+    );
+};
+
 const BriefingBody = ({ data }: { data: BriefingData }) => (
     <>
         <header className={styles.header}>
@@ -125,6 +197,7 @@ const BriefingBody = ({ data }: { data: BriefingData }) => (
         </header>
         <ImportPrompt />
         <Kpis counts={data.counts} />
+        <DueKpis due={data.due} />
         <BriefingCharts history={data.history} />
     </>
 );

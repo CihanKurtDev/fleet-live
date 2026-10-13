@@ -928,6 +928,10 @@ function ensureVehicleYardColumns(database: DatabaseSync) {
         database.exec("ALTER TABLE vehicles ADD COLUMN hu_due_on TEXT");
     }
 
+    if (!names.has("uvv_due_on")) {
+        database.exec("ALTER TABLE vehicles ADD COLUMN uvv_due_on TEXT");
+    }
+
     if (!names.has("depot")) {
         database.exec("ALTER TABLE vehicles ADD COLUMN depot TEXT");
     }
@@ -937,8 +941,29 @@ function ensureVehicleYardColumns(database: DatabaseSync) {
     }
 }
 
+function ensureDriverLicenceColumns(database: DatabaseSync) {
+    const names = columnNames(database, "drivers");
+
+    if (names.size === 0) {
+        return;
+    }
+
+    if (!names.has("licence_expires_on")) {
+        database.exec(
+            "ALTER TABLE drivers ADD COLUMN licence_expires_on TEXT",
+        );
+    }
+
+    if (!names.has("licence_checked_on")) {
+        database.exec(
+            "ALTER TABLE drivers ADD COLUMN licence_checked_on TEXT",
+        );
+    }
+}
+
 function ensureYardMasterData(database: DatabaseSync) {
     ensureDriversPhone(database);
+    ensureDriverLicenceColumns(database);
     ensureVehicleYardColumns(database);
     database.exec(`
         CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_company_vin

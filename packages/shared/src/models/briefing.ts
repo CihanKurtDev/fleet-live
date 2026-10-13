@@ -1,3 +1,5 @@
+import type { DueCounts } from "./dueDates";
+
 /** Months on the Schicht charts, ending at the current UTC month. */
 export const BRIEFING_HISTORY_MONTHS = 9;
 
@@ -44,6 +46,8 @@ export type BriefingCounts = {
 export type BriefingData = {
     counts: BriefingCounts;
     history: BriefingHistoryMonth[];
+    /** HU, UVV, Führerschein. Nur Zähler, die Zeilen liegen unter /api/due. */
+    due: DueCounts;
 };
 
 export type BriefingResponse = {

@@ -33,6 +33,8 @@ export function createDriver(input: DriverCreateInput) {
             id: number;
             name: string;
             phone: string | null;
+            licence_expires_on: string | null;
+            licence_checked_on: string | null;
             created_at: string;
         };
     }>("/api/drivers", {

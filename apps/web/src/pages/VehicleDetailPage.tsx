@@ -458,6 +458,10 @@ export const VehicleDetailPage = () => {
                         <dd>{formatIsoDate(vehicle.hu_due_on)}</dd>
                     </div>
                     <div>
+                        <dt>UVV fällig</dt>
+                        <dd>{formatIsoDate(vehicle.uvv_due_on)}</dd>
+                    </div>
+                    <div>
                         <dt>Stammstandort</dt>
                         <dd>
                             {vehicle.home_site_id && vehicle.depot ? (
@@ -571,6 +575,7 @@ export const VehicleDetailPage = () => {
                         vin: vehicle.vin,
                         vehicle_type: vehicle.vehicle_type,
                         hu_due_on: vehicle.hu_due_on,
+                        uvv_due_on: vehicle.uvv_due_on,
                         home_site_id: vehicle.home_site_id,
                         cost_center: vehicle.cost_center,
                     }}

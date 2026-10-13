@@ -21,7 +21,7 @@ alwaysApply: false
 ## UI split
 
 - `components/ui` stays generic (Table, Button, Modal, Avatar, Checkbox, Input). No vehicle fields there. Use those primitives everywhere (assignment, fleet picker, tables, login, registration, account, forms). Do not add raw `<input type="text|search|checkbox">` or one-off initial circles.
-- Vehicle columns/filters belong in `components/vehicles/` (e.g. `vehicleTableConfig.tsx`). Alert columns/filters belong in `components/alerts/`. Driver columns belong in `components/drivers/`. The shift briefing lives on `/` (`BriefingPage`). Speed colour comes only from `speedBand` / `SPEED_BAND_COLORS`, not status greens.
+- Vehicle columns/filters belong in `components/vehicles/` (e.g. `vehicleTableConfig.tsx`). Alert columns/filters belong in `components/alerts/`. Driver columns belong in `components/drivers/`. Deadline columns belong in `components/due/`. The shift briefing lives on `/` (`BriefingPage`). The deadline list lives on `/fristen` (`DuePage`). Speed colour comes only from `speedBand` / `SPEED_BAND_COLORS`, not status greens.
 - Prefer composition and local state. No new global store; `VehiclesProvider` already coordinates list epoch and telemetry overrides. Write actions (create/edit/delete, sim pause, resolve alerts, driver assignment, depot CRUD) are for `dispatcher`; `viewer` is read-only (including inbox, drivers, speed indicator, depot circles).
 - No frontend unit-test runner. Do not add Jest/Vitest unless explicitly asked.
 
@@ -39,5 +39,5 @@ alwaysApply: false
 ## Domain copy
 
 - Status labels live in `components/vehicles/vehicleStatus.ts`. Do not render the raw enum.
-- Tempo in the list/detail uses `speedBand` from shared and `SPEED_BAND_COLORS` — not `VEHICLE_STATUS_COLORS`. Orange is over `speed_limit_kmh` without an open event; red is `speeding_open`. Inbox `/alerts` is warnings (Ereignis from `formatAlertEvent`, chips for open/resolved and `type`); `/drivers` is SPEEDING history (snapshot driver). Vehicle detail lists open LOW_FUEL / OFFLINE. `/` is the company shift briefing (KPI tiles + charts; deep-links into inbox / lists). The Warnungen nav shows the open inbox count.
+- Tempo in the list/detail uses `speedBand` from shared and `SPEED_BAND_COLORS` — not `VEHICLE_STATUS_COLORS`. Orange is over `speed_limit_kmh` without an open event; red is `speeding_open`. Inbox `/alerts` is warnings (Ereignis from `formatAlertEvent`, chips for open/resolved and `type`); `/drivers` is SPEEDING history (snapshot driver). Vehicle detail lists open LOW_FUEL / OFFLINE. `/` is the company shift briefing: title, KPI tiles, then charts. Deadline counts are three tiles and open `/fristen` in that state (`overdue`, `soon`, `missing`). A long row list is not the first block on that page. Tiles and charts deep-link into vehicles, drivers, inbox, and lists. The Warnungen nav shows the open inbox count. Fristen is in the nav without a badge.
 - Timestamps from the API are naive UTC. Format them via `utils/dateTime.ts`, never print the raw string.

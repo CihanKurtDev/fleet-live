@@ -895,6 +895,7 @@ describe("vehicle mutations", () => {
             vin: "WVWZZZ1JZXW000001",
             vehicle_type: "TRUCK",
             hu_due_on: "15.06.2027",
+            uvv_due_on: "01.09.2026",
             depot: "Hof Nord",
             cost_center: "KST-100",
         });
@@ -903,6 +904,7 @@ describe("vehicle mutations", () => {
         assert.equal(created.body.vin, "WVWZZZ1JZXW000001");
         assert.equal(created.body.vehicle_type, "TRUCK");
         assert.equal(created.body.hu_due_on, "2027-06-15");
+        assert.equal(created.body.uvv_due_on, "2026-09-01");
         assert.equal(created.body.depot, "Hof Nord");
         assert.equal(created.body.cost_center, "KST-100");
 

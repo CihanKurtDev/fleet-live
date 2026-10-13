@@ -80,8 +80,8 @@ describe("POST /api/import/preview", () => {
 
     it("maps optional yard columns and commits them", async () => {
         const { agent } = await loginAs(1);
-        const csv = `Kennzeichen;VIN;Fahrzeugtyp;Standort;HU;Kostenstelle
-B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;KST-10
+        const csv = `Kennzeichen;VIN;Fahrzeugtyp;Standort;HU;UVV;Kostenstelle
+B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;01.11.2026;KST-10
 `;
 
         const preview = await agent
@@ -105,6 +105,7 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;KST-10
             true,
         );
         assert.equal(rows[0].hu_due_on, "2027-06-15");
+        assert.equal(rows[0].uvv_due_on, "2026-11-01");
         assert.equal(rows[0].cost_center, "KST-10");
 
         const committed = await agent
@@ -122,7 +123,43 @@ B-YARD 1;WVWZZZ1JZXW000011;LKW;Hof Nord;15.06.2027;KST-10
         assert.equal(listed.body.data[0].depot, null);
         assert.equal(listed.body.data[0].home_site_id, null);
         assert.equal(listed.body.data[0].hu_due_on, "2027-06-15");
+        assert.equal(listed.body.data[0].uvv_due_on, "2026-11-01");
         assert.equal(listed.body.data[0].cost_center, "KST-10");
+    });
+
+    it("commits driver licence dates", async () => {
+        const { agent } = await loginAs(1);
+        const xlsx = buildXlsxWorkbook([
+            {
+                name: "Fahrer",
+                rows: [
+                    [
+                        "Name",
+                        "Führerschein gültig bis",
+                        "Führerschein kontrolliert am",
+                    ],
+                    ["Nora Weber", "15.06.2028", "01.04.2026"],
+                ],
+            },
+        ]).toString("base64");
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ xlsx })
+            .expect(200);
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+
+        assert.equal(rows[0]?.licence_expires_on, "2028-06-15");
+        assert.equal(rows[0]?.licence_checked_on, "2026-04-01");
+
+        await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        const listed = await agent.get("/api/drivers").query({ search: "Nora" });
+        assert.equal(listed.body.data[0].licence_expires_on, "2028-06-15");
+        assert.equal(listed.body.data[0].licence_checked_on, "2026-04-01");
     });
 
     it("sets the home depot when Standort matches a site name", async () => {
