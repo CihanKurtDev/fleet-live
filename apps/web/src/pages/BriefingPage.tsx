@@ -8,7 +8,9 @@ import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
 import { dueSoonLabel } from "../components/due/dueTableConfig";
+import { ExportButton } from "../components/export/ExportButton";
 import { RetryMessage } from "../components/ui/RetryMessage";
+import { useAuth } from "../hooks/useAuth";
 import { useBriefing } from "../hooks/useBriefing";
 import { formatCount } from "../utils/formatCount";
 import styles from "./BriefingPage.module.scss";
@@ -195,10 +197,19 @@ const DueKpis = ({
     );
 };
 
-const BriefingBody = ({ data }: { data: BriefingData }) => (
+const BriefingBody = ({
+    data,
+    canWrite,
+}: {
+    data: BriefingData;
+    canWrite: boolean;
+}) => (
     <>
         <header className={`${band.band} ${band.bleed} ${styles.header}`}>
-            <h1 className={styles.title}>Schicht</h1>
+            <div className={styles.titleRow}>
+                <h1 className={styles.title}>Schicht</h1>
+                {canWrite && <ExportButton kind="period" />}
+            </div>
             <p className={styles.subtitle}>
                 {briefingDateLabel()} · {briefingNeed(data.counts.open)}
             </p>
@@ -212,6 +223,8 @@ const BriefingBody = ({ data }: { data: BriefingData }) => (
 
 export const BriefingPage = () => {
     const { data, isLoading, error, retry } = useBriefing();
+    const { user } = useAuth();
+    const canWrite = user?.role === "dispatcher";
 
     if (isLoading) {
         return (
@@ -242,7 +255,7 @@ export const BriefingPage = () => {
 
     return (
         <section className={styles.page}>
-            <BriefingBody data={data} />
+            <BriefingBody data={data} canWrite={canWrite} />
         </section>
     );
 };

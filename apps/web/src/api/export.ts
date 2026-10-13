@@ -4,6 +4,7 @@ const FILES = {
     vehicles: "fahrzeuge.csv",
     alerts: "warnungen.csv",
     trips: "fahrten.csv",
+    period: "zeitraum.csv",
 } as const;
 
 export type ExportKind = keyof typeof FILES;

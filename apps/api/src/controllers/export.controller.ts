@@ -6,6 +6,7 @@ const FILES = {
     vehicles: "fahrzeuge.csv",
     alerts: "warnungen.csv",
     trips: "fahrten.csv",
+    period: "zeitraum.csv",
 } as const;
 
 function sendCsv(res: Response, filename: string, body: string) {
@@ -29,4 +30,12 @@ export function exportAlerts(req: Request, res: Response) {
 
 export function exportTrips(req: Request, res: Response) {
     sendCsv(res, FILES.trips, ExportModel.tripsCsv(sessionCompany(req)));
+}
+
+export function exportPeriod(req: Request, res: Response) {
+    sendCsv(
+        res,
+        FILES.period,
+        ExportModel.periodCsv(sessionCompany(req), req.query.month),
+    );
 }

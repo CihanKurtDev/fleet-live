@@ -93,6 +93,7 @@ Was die App heute kann, und was als Nächstes kommt.
 * Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
 * Depots als benannte Kreise auf der Flottenkarte, Stammstandort am Fahrzeug, Filter „Im Depot“
 * CSV der Firma: Fahrzeuge, Warnungen und Fahrten. Nur der Dispatcher. Die Datei nimmt den ganzen Bestand, nicht die aktuelle Seite
+* Monat auf der Schicht als CSV: Kilometer, in dem Monat angelegte Warnungen (offen und erledigt) und Verbrauch. 25 Liter je 100 km aus der gefahrenen Strecke. Der Tankzeiger bleibt die Messung
 * Firma registrieren, E-Mail bestätigen, Passwort zurücksetzen und ändern
 * Dispatcher und Viewer einladen, zwischen eigenen Firmen wechseln
 * Zwei-Faktor (Authenticator-App) und Anmeldung über Google, Microsoft oder einen Firmen-OIDC
@@ -100,7 +101,7 @@ Was die App heute kann, und was als Nächstes kommt.
 
 ## Als Nächstes
 
-* Zeitraum als Datei: Kilometer, offene und erledigte Warnungen, Verbrauch
+* Läuft die Anmeldung mitten in der Sitzung ab, geht es zurück zur Anmeldung
 
 ---
 

@@ -23,7 +23,12 @@ afterEach(() => {
 
 describe("GET /api/export", () => {
     it("requires a session", async () => {
-        for (const path of ["/api/export/vehicles", "/api/export/alerts", "/api/export/trips"]) {
+        for (const path of [
+            "/api/export/vehicles",
+            "/api/export/alerts",
+            "/api/export/trips",
+            "/api/export/period",
+        ]) {
             const response = await request(app).get(path);
             assert.equal(response.status, 401);
             assert.equal(response.body.code, "UNAUTHORIZED");
@@ -33,7 +38,12 @@ describe("GET /api/export", () => {
     it("blocks a viewer", async () => {
         const { agent } = await loginAs(1, "viewer");
 
-        for (const path of ["/api/export/vehicles", "/api/export/alerts", "/api/export/trips"]) {
+        for (const path of [
+            "/api/export/vehicles",
+            "/api/export/alerts",
+            "/api/export/trips",
+            "/api/export/period",
+        ]) {
             const response = await agent.get(path);
             assert.equal(response.status, 403);
             assert.equal(response.body.code, "FORBIDDEN");
@@ -156,6 +166,7 @@ describe("GET /api/export", () => {
             "Strecke km",
             "Höchstgeschwindigkeit",
             "Punkte",
+            "Verbrauch l",
         ]);
         assert.equal(tripTable.rows.length, 1);
         assert.equal(tripTable.rows[0]?.[0], "K-EXP 1");
@@ -163,6 +174,65 @@ describe("GET /api/export", () => {
         assert.equal(tripTable.rows[0]?.[3], "1,5");
         assert.equal(tripTable.rows[0]?.[4], "88");
         assert.equal(tripTable.rows[0]?.[5], "4");
+        assert.equal(tripTable.rows[0]?.[6], "0,4");
+    });
+
+    it("downloads one month and skips the other company", async () => {
+        VehicleModel.create({
+            license_plate: "K-MON 1",
+            company_id: 1,
+            status: "IDLE",
+            fuel_level: 50,
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-MON 2",
+            company_id: 2,
+            status: "IDLE",
+            fuel_level: 50,
+        });
+        TripModel.addClosedDistance(1, "2026-10-02 08:00:00", 10_000);
+        TripModel.addClosedDistance(2, "2026-10-02 08:00:00", 50_000);
+        const mine = VehicleModel.create({
+            license_plate: "K-MON 3",
+            company_id: 1,
+            status: "IDLE",
+            fuel_level: 40,
+        });
+        insertAlert(mine.id, {
+            message: "offen im monat",
+            created_at: "2026-10-13 10:00:00",
+        });
+        insertAlert(mine.id, {
+            type: "LOW_FUEL",
+            message: "erledigt im monat",
+            created_at: "2026-10-13 11:00:00",
+            resolved_at: "2026-10-13 12:00:00",
+        });
+        insertAlert(other.id, {
+            message: "fremd im monat",
+            created_at: "2026-10-13 10:00:00",
+        });
+
+        const response = await api.get("/api/export/period?month=2026-10");
+        assert.equal(response.status, 200);
+        assert.match(
+            response.headers["content-disposition"],
+            /filename="zeitraum\.csv"/,
+        );
+        const table = parseCsv(response.text);
+        assert.deepEqual(table.columns, [
+            "Monat",
+            "Kilometer",
+            "Angelegt und offen",
+            "Angelegt und erledigt",
+            "Verbrauch l",
+        ]);
+        assert.deepEqual(table.rows[0], ["2026-10", "10,0", "1", "1", "2,5"]);
+        assert.equal(response.text.includes("fremd"), false);
+
+        const invalid = await api.get("/api/export/period?month=2026-13");
+        assert.equal(invalid.status, 400);
+        assert.equal(invalid.body.code, "VALIDATION_ERROR");
     });
 });
 

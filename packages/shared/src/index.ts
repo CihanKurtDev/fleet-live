@@ -309,6 +309,12 @@ export {
     utcTodayIso,
 } from "./models/dueDates";
 
+export {
+    FUEL_LITERS_PER_100KM,
+    fuelLitersFromMeters,
+    parsePeriodMonth,
+} from "./models/fuel";
+
 export type {
     DueCalculation,
     DueRule,

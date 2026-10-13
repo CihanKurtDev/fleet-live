@@ -2,7 +2,9 @@ import type { AlertDetails, VehicleStatus, VehicleType } from "@fleet-live/share
 import {
     VEHICLE_TYPE_LABELS,
     formatAlertEvent,
+    fuelLitersFromMeters,
     isVehicleType,
+    parsePeriodMonth,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { toCsv } from "../lib/csv";
@@ -58,6 +60,15 @@ const TRIP_HEADER = [
     "Strecke km",
     "Höchstgeschwindigkeit",
     "Punkte",
+    "Verbrauch l",
+];
+
+const PERIOD_HEADER = [
+    "Monat",
+    "Kilometer",
+    "Angelegt und offen",
+    "Angelegt und erledigt",
+    "Verbrauch l",
 ];
 
 const stamp = new Intl.DateTimeFormat("de-DE", {
@@ -213,7 +224,60 @@ export class ExportModel {
                 formatKm(row.distance_m),
                 row.max_speed === null ? "" : String(Math.round(row.max_speed)),
                 row.point_count === null ? "" : String(row.point_count),
+                formatLiters(fuelLitersFromMeters(row.distance_m ?? 0)),
             ]),
+        ]);
+    }
+
+    /**
+     * Ein Monat der Firma. Kilometer sind geschlossene Fahrten plus noch
+     * offene, die in dem Monat begonnen haben. Warnungen sind die in dem
+     * Monat angelegten, geteilt danach ob sie erledigt sind.
+     */
+    static periodCsv(companyId: number, rawMonth: unknown): string {
+        const month = parsePeriodMonth(rawMonth);
+        const closed = stmt(
+            `
+            SELECT COALESCE(distance_m, 0) AS distance_m
+            FROM trip_month_km
+            WHERE company_id = ? AND month = ?
+            `,
+        ).get(companyId, month) as { distance_m: number } | undefined;
+        const open = stmt(
+            `
+            SELECT COALESCE(SUM(t.distance_m), 0) AS distance_m
+            FROM trips t
+            INNER JOIN vehicles v ON v.id = t.vehicle_id
+            WHERE v.company_id = ?
+              AND t.ended_at IS NULL
+              AND strftime('%Y-%m', t.started_at) = ?
+            `,
+        ).get(companyId, month) as { distance_m: number };
+        const alerts = stmt(
+            `
+            SELECT
+                COALESCE(SUM(a.resolved_at IS NULL), 0) AS open_count,
+                COALESCE(SUM(a.resolved_at IS NOT NULL), 0) AS resolved_count
+            FROM alerts a
+            INNER JOIN vehicles v ON v.id = a.vehicle_id
+            WHERE v.company_id = ?
+              AND strftime('%Y-%m', a.created_at) = ?
+            `,
+        ).get(companyId, month) as {
+            open_count: number;
+            resolved_count: number;
+        };
+        const meters = Number(closed?.distance_m ?? 0) + Number(open.distance_m);
+
+        return toCsv([
+            PERIOD_HEADER,
+            [
+                month,
+                formatKm(meters),
+                String(Number(alerts.open_count)),
+                String(Number(alerts.resolved_count)),
+                formatLiters(fuelLitersFromMeters(meters)),
+            ],
         ]);
     }
 }
@@ -253,11 +317,11 @@ function formatStamp(value: string | null): string {
 }
 
 function formatKm(meters: number | null): string {
-    if (meters === null) {
-        return "";
-    }
+    return formatLiters(meters === null ? 0 : meters / 1000);
+}
 
-    return (meters / 1000).toLocaleString("de-DE", {
+function formatLiters(value: number): string {
+    return value.toLocaleString("de-DE", {
         minimumFractionDigits: 1,
         maximumFractionDigits: 1,
     });
