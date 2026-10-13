@@ -1,0 +1,11 @@
+.wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.error {
+    margin: 0;
+    font-size: 13px;
+    color: var(--danger, #b42318);
+}

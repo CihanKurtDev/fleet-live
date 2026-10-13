@@ -92,6 +92,7 @@ Was die App heute kann, und was als Nächstes kommt.
 * Import-Spalte Depot (auch Standort) setzt den Stammstandort und eine Startposition am Hof, mit kleinem Versatz. Ohne Angabe gilt das Standarddepot, ohne Depot eine Fallback-Koordinate. Lat/Lng in der Datei sind ein Sonderfall und haben Vorrang. Ein zweiter Import verschiebt vorhandene Positionen nicht.
 * Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
 * Depots als benannte Kreise auf der Flottenkarte, Stammstandort am Fahrzeug, Filter „Im Depot“
+* CSV der Firma: Fahrzeuge, Warnungen und Fahrten. Nur der Dispatcher. Die Datei nimmt den ganzen Bestand, nicht die aktuelle Seite
 * Firma registrieren, E-Mail bestätigen, Passwort zurücksetzen und ändern
 * Dispatcher und Viewer einladen, zwischen eigenen Firmen wechseln
 * Zwei-Faktor (Authenticator-App) und Anmeldung über Google, Microsoft oder einen Firmen-OIDC
@@ -99,7 +100,7 @@ Was die App heute kann, und was als Nächstes kommt.
 
 ## Als Nächstes
 
-* CSV-Export
+* Zeitraum als Datei: Kilometer, offene und erledigte Warnungen, Verbrauch
 
 ---
 

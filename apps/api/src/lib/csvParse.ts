@@ -43,6 +43,7 @@ function detectDelimiter(headerLine: string): "," | ";" {
     return semicolons > commas ? ";" : ",";
 }
 
+/** Zeilenumbruch nur außerhalb von Anführungszeichen. Die Quotes bleiben fürs Feld. */
 function splitCsvLines(content: string): string[] {
     const lines: string[] = [];
     let current = "";
@@ -53,8 +54,9 @@ function splitCsvLines(content: string): string[] {
         const next = content[i + 1];
 
         if (char === '"') {
+            current += char;
             if (inQuotes && next === '"') {
-                current += '"';
+                current += next;
                 i += 1;
             } else {
                 inQuotes = !inQuotes;

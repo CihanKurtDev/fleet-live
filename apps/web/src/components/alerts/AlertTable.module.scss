@@ -16,6 +16,14 @@
     color: var(--text-h);
 }
 
+.titleRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+}
+
 .scope {
     flex-shrink: 0;
     margin: 0;

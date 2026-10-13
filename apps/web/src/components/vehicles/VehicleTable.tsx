@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Vehicle } from "@fleet-live/shared";
 
 import { Table } from "../ui/Table/Table";
@@ -18,6 +18,7 @@ interface VehicleTableProps {
     onDeleteVehicles?: (ids: number[]) => Promise<void>;
     onAddVehicle?: () => void;
     onImport?: () => void;
+    exportActions?: ReactNode;
     onSelectVehicle?: (vehicle: Vehicle) => void;
 }
 
@@ -25,6 +26,7 @@ export const VehicleTable = ({
     onDeleteVehicles,
     onAddVehicle,
     onImport,
+    exportActions,
     onSelectVehicle,
 }: VehicleTableProps) => {
     const listQuery = useVehicleListQuery();
@@ -130,6 +132,7 @@ export const VehicleTable = ({
                     onAddNew={onAddVehicle}
                     onSecondaryAction={onImport}
                     secondaryActionLabel="Importieren"
+                    extraActions={exportActions}
                 />
 
                 {!isLoading && (

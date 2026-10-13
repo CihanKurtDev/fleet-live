@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Button } from "../Button/Button";
 import { Input } from "../Input/Input";
 import styles from "./TableToolbar.module.scss";
@@ -17,6 +18,7 @@ interface TableToolbarProps {
     addNewLabel?: string;
     onSecondaryAction?: () => void;
     secondaryActionLabel?: string;
+    extraActions?: ReactNode;
     searchAriaLabel?: string;
 }
 
@@ -32,6 +34,7 @@ export const TableToolbar = ({
     addNewLabel,
     onSecondaryAction,
     secondaryActionLabel,
+    extraActions,
     searchAriaLabel,
 }: TableToolbarProps) => {
     const canDelete =
@@ -64,6 +67,8 @@ export const TableToolbar = ({
                         {secondaryActionLabel ?? "Weitere Aktion"}
                     </Button>
                 )}
+
+                {extraActions}
 
                 {onAddNew && (
                     <Button

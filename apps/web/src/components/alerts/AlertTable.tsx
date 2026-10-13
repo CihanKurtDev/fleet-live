@@ -9,6 +9,7 @@ import { useAlertList } from "../../hooks/useAlertList";
 import { useAlertListQuery } from "../../hooks/useAlertListQuery";
 import { alertFilters, alertTypeFilters } from "./alertTableConfig";
 import { useAlertResolveColumn } from "./useAlertResolveColumn";
+import { ExportButton } from "../export/ExportButton";
 import styles from "./AlertTable.module.scss";
 import band from "../../styles/pageBand.module.scss";
 
@@ -87,7 +88,10 @@ export const AlertTable = ({
             className={sectionClassName(styles.alertTable, styles.isFetching)}
         >
             <header className={`${band.band} ${band.bleed}`}>
-                <h1 className={styles.title}>Warnungen</h1>
+                <div className={styles.titleRow}>
+                    <h1 className={styles.title}>Warnungen</h1>
+                    {canWrite && <ExportButton kind="alerts" />}
+                </div>
 
                 {query.vehicle_id !== undefined && (
                     <p className={styles.scope}>
