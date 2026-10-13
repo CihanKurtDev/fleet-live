@@ -36,6 +36,21 @@ export const Table = <RowType,>({
                 className={styles.table}
                 aria-busy={isLoading}
             >
+                {columns.some((column) => column.width) && (
+                    <colgroup>
+                        {isEditing && <col style={{ width: 36 }} />}
+                        {columns.map((column) => (
+                            <col
+                                key={String(column.key)}
+                                style={
+                                    column.width
+                                        ? { width: column.width }
+                                        : undefined
+                                }
+                            />
+                        ))}
+                    </colgroup>
+                )}
                 {caption && (
                     <caption className={styles.visuallyHidden}>
                         {caption}

@@ -13,3 +13,10 @@
     gap: 4px;
 }
 
+.clip {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+

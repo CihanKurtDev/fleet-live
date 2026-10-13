@@ -24,11 +24,14 @@ export const TableHeader = <RowType,>({
                     ? sortConfig.direction
                     : null;
 
+                const visible = column.headerText ?? column.displayText;
+
                 return (
                     <th
                         key={String(column.key)}
                         scope="col"
                         className={styles.tableHeader}
+                        title={column.headerText ? column.displayText : undefined}
                         aria-sort={
                             direction === "asc"
                                 ? "ascending"
@@ -51,7 +54,7 @@ export const TableHeader = <RowType,>({
                                 onClick={() => onSort(column.key)}
                             >
                                 <span>
-                                    {column.displayText}
+                                    {visible}
                                 </span>
 
                                 <span
@@ -64,7 +67,7 @@ export const TableHeader = <RowType,>({
                                 </span>
                             </button>
                         ) : (
-                            column.displayText
+                            visible
                         )}
                     </th>
                 );

@@ -31,6 +31,7 @@ const useDueListQueryBase = createListQueryHook<
     {
         setFilter: (filterId: string | null) => void;
         setKind: (kindId: string | null) => void;
+        showOverdueChecks: () => void;
     }
 >({
     schema: toListQuerySchema(dueListQuerySchema),
@@ -63,6 +64,15 @@ const useDueListQueryBase = createListQueryHook<
                 { replace: true, resetPage: true },
             );
         },
+        showOverdueChecks: () => {
+            patch(
+                {
+                    state: "overdue",
+                    kind: "licence_check",
+                } as ListQueryPatch<DueListQuery>,
+                { replace: true, resetPage: true },
+            );
+        },
     }),
 });
 
@@ -74,6 +84,7 @@ export const useDueListQuery = () => {
         setSearch,
         setFilter,
         setKind,
+        showOverdueChecks,
         handleSort,
         setPage,
         setLimit,
@@ -86,6 +97,7 @@ export const useDueListQuery = () => {
         setSearch,
         setFilter,
         setKind,
+        showOverdueChecks,
         handleSort,
         setPage,
         setLimit,

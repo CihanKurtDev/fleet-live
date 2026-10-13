@@ -23,10 +23,30 @@ interface DueTableProps {
 
 const emptyLabel = (
     state: DueListState,
-    narrowed: boolean,
+    hasSearch: boolean,
     leadDays: number,
+    kind: string | undefined,
+    checkMonths: number,
 ): string => {
-    if (narrowed) {
+    if (kind === "licence_check" && checkMonths === 0) {
+        return "Führerscheinkontrolle ist aus.";
+    }
+
+    if (kind === "licence_check" && !hasSearch) {
+        if (state === "soon") {
+            return leadDays === 0
+                ? "Heute ist keine Kontrolle fällig."
+                : `In den nächsten ${leadDays} Tagen ist keine Kontrolle fällig.`;
+        }
+
+        if (state === "missing") {
+            return "Eine fehlende Kontrolle steht unter Überfällig.";
+        }
+
+        return "Keine Kontrolle ist überfällig.";
+    }
+
+    if (hasSearch || kind !== undefined) {
         return "Keine Fristen passen zum Filter.";
     }
 
@@ -46,7 +66,7 @@ const emptyLabel = (
 export const DueTable = ({ onSelectRow }: DueTableProps) => {
     const listQuery = useDueListQuery();
     const listResult = useDueList(listQuery.apiQuery);
-    const { query, setKind } = listQuery;
+    const { query, setKind, showOverdueChecks } = listQuery;
     const { meta } = listResult;
     const leadDays = meta?.lead_days ?? DUE_SOON_DAYS;
     const stateFilters = useMemo(
@@ -109,6 +129,7 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
                         kindFilters={extraFiltersWithCounts}
                         activeKind={query.kind ?? null}
                         onKind={setKind}
+                        onShowChecks={showOverdueChecks}
                         allCount={meta?.kind_counts.all}
                         leadDays={leadDays}
                         checkMonths={meta?.licence_check_months ?? 6}
@@ -141,8 +162,10 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
                 emptyContent={emptyContent(
                     emptyLabel(
                         query.state,
-                        query.search.length > 0 || query.kind !== undefined,
+                        query.search.length > 0,
                         leadDays,
+                        query.kind,
+                        meta?.licence_check_months ?? 6,
                     ),
                 )}
                 className={styles.mobileCards}

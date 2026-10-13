@@ -172,6 +172,43 @@
     box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
+.bound {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.settingGroup {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.settingHint,
+.settingResult {
+    width: 0;
+    min-width: 100%;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.settingHint {
+    color: var(--text);
+}
+
+.settingResult {
+    min-height: 1.4em;
+    font-weight: 650;
+    color: var(--text-h);
+}
+
+.settingResult:empty {
+    min-height: 0;
+}
+
 .settingError {
     flex-basis: 100%;
     margin: 0;

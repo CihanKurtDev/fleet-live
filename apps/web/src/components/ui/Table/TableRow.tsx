@@ -102,6 +102,7 @@ const TableRowComponent = <RowType,>({
                     <td
                         key={String(column.key)}
                         className={styles.tableCell}
+                        data-col={String(column.key)}
                         data-label={column.displayText}
                     >
                         {content}

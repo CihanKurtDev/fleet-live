@@ -35,6 +35,34 @@
     font-size: 13px;
 }
 
+@media (min-width: 701px) {
+    .fit {
+        :global(table) {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        :global(th),
+        :global(td) {
+            padding-inline: 10px;
+        }
+
+        :global(td[data-col="driver_name"]),
+        :global(td[data-col="depot"]) {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        :global(td[data-col="driver_name"] a) {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+}
+
 @media (max-width: 700px) {
     .vehicleTable {
         padding: 0 12px 20px;

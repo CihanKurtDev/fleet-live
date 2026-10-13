@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
     dueLeadDaysSchema,
     dueRule,
@@ -28,6 +28,7 @@ interface DueSettingsFormProps {
     kindFilters: FilterChip[];
     activeKind: string | null;
     onKind: (id: string | null) => void;
+    onShowChecks: () => void;
     allCount?: number;
     leadDays: number;
     checkMonths: number;
@@ -43,6 +44,34 @@ type FieldName = "lead" | "months";
 
 const CATALOG_LEAD = dueRule("hu").lead_days;
 const CATALOG_MONTHS = dueRule("licence_check").interval_months ?? 6;
+
+function leadRule(days: number): string {
+    if (days === 0) {
+        return "Nur Termine, die heute fällig sind. Was früher fällig war, bleibt bei Überfällig.";
+    }
+
+    return `Termine, die in den nächsten ${days} Tagen fällig werden. Was schon überfällig ist, bleibt bei Überfällig.`;
+}
+
+function monthsRule(months: number): string {
+    if (months === 0) {
+        return "Führerscheinkontrolle ist aus. Diese Zeilen fehlen in der Liste.";
+    }
+
+    return `Eine Kontrolle wird ${months} Monate nach dem letzten Kontrolldatum fällig.`;
+}
+
+function standName(active: string | null, lead: number): string {
+    if (active === "soon") {
+        return lead === 0 ? "Heute" : `In ${lead} Tagen`;
+    }
+
+    if (active === "missing") {
+        return "Datum fehlt";
+    }
+
+    return "Überfällig";
+}
 
 function parseWhole(raw: string): number | "invalid" {
     const trimmed = raw.trim();
@@ -227,6 +256,7 @@ export const DueSettingsForm = ({
     kindFilters,
     activeKind,
     onKind,
+    onShowChecks,
     allCount,
     leadDays,
     checkMonths,
@@ -241,20 +271,63 @@ export const DueSettingsForm = ({
     });
     const [leadError, setLeadError] = useState<string | null>(null);
     const [monthsError, setMonthsError] = useState<string | null>(null);
-    const [saving, setSaving] = useState(false);
-    const savingRef = useRef(false);
+    const [savingField, setSavingField] = useState<FieldName | null>(null);
+    const [result, setResult] = useState<{
+        field: FieldName;
+        value: number;
+        before: number | null;
+    } | null>(null);
     const chain = useRef<Promise<void>>(Promise.resolve());
+    const leadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const monthsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingLead = useRef<number | null>(null);
+    const pendingMonths = useRef<number | null>(null);
+    const settingsRef = useRef(settings);
+    const draftRef = useRef(draft);
+    const commitLeadRef = useRef<() => void>(() => {});
+    const commitMonthsRef = useRef<() => void>(() => {});
+    settingsRef.current = settings;
+    draftRef.current = draft;
+
+    const soonCount = standFilters.find((item) => item.id === "soon")?.count;
+    const checkCount = kindFilters.find(
+        (item) => item.id === "licence_check",
+    )?.count;
+    const soonCountRef = useRef(soonCount);
+    const checkCountRef = useRef(checkCount);
+    const standRef = useRef(activeStand);
+    soonCountRef.current = soonCount;
+    checkCountRef.current = checkCount;
+    standRef.current = activeStand;
 
     const key = settings ? settingsKey(settings) : "";
     if (settings && draft.key !== key) {
         setDraft({
             key,
-            lead: String(settings.lead_days),
-            months: String(settings.check_months),
+            lead:
+                leadTimer.current !== null || pendingLead.current !== null
+                    ? draft.lead
+                    : String(settings.lead_days),
+            months:
+                monthsTimer.current !== null || pendingMonths.current !== null
+                    ? draft.months
+                    : String(settings.check_months),
         });
         setLeadError(null);
         setMonthsError(null);
     }
+
+    useEffect(() => {
+        return () => {
+            if (leadTimer.current) {
+                clearTimeout(leadTimer.current);
+            }
+
+            if (monthsTimer.current) {
+                clearTimeout(monthsTimer.current);
+            }
+        };
+    }, []);
 
     const ready = settings !== null && draft.key === key;
     const leadValue =
@@ -280,10 +353,11 @@ export const DueSettingsForm = ({
             due_lead_days?: number | null;
             licence_check_months?: number | null;
         },
+        applied: number,
+        before: number | null,
     ) => {
         const run = chain.current.then(async () => {
-            savingRef.current = true;
-            setSaving(true);
+            setSavingField(field);
 
             if (field === "lead") {
                 setLeadError(null);
@@ -293,8 +367,32 @@ export const DueSettingsForm = ({
 
             try {
                 await save(input);
+
+                if (field === "lead") {
+                    if (pendingLead.current === applied) {
+                        pendingLead.current = null;
+                    }
+
+                    onStand("soon");
+                } else {
+                    if (pendingMonths.current === applied) {
+                        pendingMonths.current = null;
+                    }
+
+                    onShowChecks();
+                }
+
+                setResult({ field, value: applied, before });
                 onSaved();
             } catch (caught: unknown) {
+                if (field === "lead" && pendingLead.current === applied) {
+                    pendingLead.current = null;
+                }
+
+                if (field === "months" && pendingMonths.current === applied) {
+                    pendingMonths.current = null;
+                }
+
                 const message =
                     caught instanceof ApiError
                         ? caught.message
@@ -306,8 +404,7 @@ export const DueSettingsForm = ({
                     setMonthsError(message);
                 }
             } finally {
-                savingRef.current = false;
-                setSaving(false);
+                setSavingField((current) => (current === field ? null : current));
             }
         });
 
@@ -318,11 +415,13 @@ export const DueSettingsForm = ({
     };
 
     const commitLead = () => {
-        if (!settings || !ready || savingRef.current) {
+        const current = settingsRef.current;
+
+        if (!current || draftRef.current.lead === "") {
             return;
         }
 
-        const parsed = parseWhole(draft.lead);
+        const parsed = parseWhole(draftRef.current.lead);
 
         if (parsed === "invalid") {
             setLeadError("Ganze Zahl ab 0.");
@@ -338,21 +437,27 @@ export const DueSettingsForm = ({
 
         setLeadError(null);
 
-        if (parsed === settings.lead_days) {
+        if (parsed === (pendingLead.current ?? current.lead_days)) {
             return;
         }
 
-        persist("lead", {
-            due_lead_days: parsed === CATALOG_LEAD ? null : parsed,
-        });
+        pendingLead.current = parsed;
+        persist(
+            "lead",
+            { due_lead_days: parsed === CATALOG_LEAD ? null : parsed },
+            parsed,
+            soonCountRef.current ?? null,
+        );
     };
 
     const commitMonths = () => {
-        if (!settings || !ready || savingRef.current) {
+        const current = settingsRef.current;
+
+        if (!current || draftRef.current.months === "") {
             return;
         }
 
-        const parsed = parseWhole(draft.months);
+        const parsed = parseWhole(draftRef.current.months);
 
         if (parsed === "invalid") {
             setMonthsError("Ganze Zahl ab 0.");
@@ -370,14 +475,114 @@ export const DueSettingsForm = ({
 
         setMonthsError(null);
 
-        if (parsed === settings.check_months) {
+        if (parsed === (pendingMonths.current ?? current.check_months)) {
             return;
         }
 
-        persist("months", {
-            licence_check_months: parsed === CATALOG_MONTHS ? null : parsed,
-        });
+        pendingMonths.current = parsed;
+        persist(
+            "months",
+            {
+                licence_check_months:
+                    parsed === CATALOG_MONTHS ? null : parsed,
+            },
+            parsed,
+            standRef.current === "overdue"
+                ? (checkCountRef.current ?? null)
+                : null,
+        );
     };
+
+    commitLeadRef.current = commitLead;
+    commitMonthsRef.current = commitMonths;
+
+    const schedule = (field: FieldName) => {
+        const timer = field === "lead" ? leadTimer : monthsTimer;
+
+        if (timer.current) {
+            clearTimeout(timer.current);
+        }
+
+        timer.current = setTimeout(() => {
+            timer.current = null;
+
+            if (field === "lead") {
+                commitLeadRef.current();
+            } else {
+                commitMonthsRef.current();
+            }
+        }, 450);
+    };
+
+    const flush = (field: FieldName) => {
+        const timer = field === "lead" ? leadTimer : monthsTimer;
+
+        if (timer.current) {
+            clearTimeout(timer.current);
+            timer.current = null;
+        }
+
+        if (field === "lead") {
+            commitLeadRef.current();
+        } else {
+            commitMonthsRef.current();
+        }
+    };
+
+    const leadDirty =
+        leadNumber !== "invalid" &&
+        settings !== null &&
+        leadNumber !== settings.lead_days;
+    const monthsDirty =
+        monthsNumber !== "invalid" &&
+        settings !== null &&
+        monthsNumber !== settings.check_months;
+    const leadHint =
+        leadNumber === "invalid"
+            ? null
+            : leadRule(leadNumber) +
+              (leadDirty || soonCount === undefined
+                  ? ""
+                  : leadNumber === 0
+                    ? ` ${formatCount(soonCount)} Termine sind heute fällig.`
+                    : ` ${formatCount(soonCount)} Termine fallen in diese ${leadNumber} Tage.`);
+    const monthsHint =
+        monthsNumber === "invalid"
+            ? null
+            : monthsRule(monthsNumber) +
+              (monthsDirty || checkCount === undefined
+                  ? ""
+                  : ` Unter „${standName(activeStand, leadNumber === "invalid" ? leadDays : leadNumber)}“ sind das ${formatCount(checkCount)} Zeilen.`);
+    const leadCaughtUp = settings !== null && leadDays === settings.lead_days;
+    const monthsCaughtUp =
+        settings !== null && checkMonths === settings.check_months;
+    const leadLive =
+        savingField === "lead" || (result?.field === "lead" && !leadCaughtUp)
+            ? "Die Liste wird angepasst…"
+            : result?.field === "lead" &&
+                leadCaughtUp &&
+                !leadDirty &&
+                soonCount !== undefined
+              ? result.before !== null && result.before !== soonCount
+                  ? `Vorher ${formatCount(result.before)} Termine, jetzt ${formatCount(soonCount)}. Die Liste zeigt genau diese.`
+                  : `Weiterhin ${formatCount(soonCount)} Termine. Die Liste zeigt sie.`
+              : "";
+    const monthsLive =
+        savingField === "months" ||
+        (result?.field === "months" && !monthsCaughtUp)
+            ? "Die Liste wird angepasst…"
+            : result?.field === "months" &&
+                monthsCaughtUp &&
+                !monthsDirty &&
+                checkCount !== undefined
+              ? result.value === 0
+                  ? "Kontrolle ist aus. Die Liste zeigt diese Zeilen nicht mehr."
+                  : result.before !== null && result.before !== checkCount
+                    ? `Vorher ${formatCount(result.before)} überfällige Kontrollen, jetzt ${formatCount(checkCount)}. Die Liste zeigt sie.`
+                    : result.before !== null
+                      ? `Weiterhin ${formatCount(checkCount)} überfällige Kontrollen. Die Liste zeigt sie.`
+                      : `Die Liste zeigt ${formatCount(checkCount)} überfällige Kontrollen.`
+              : "";
 
     const leadPhrase = showHeute ? "Heute" : `In ${leadValue} Tagen`;
     const monthsPhrase = checkOff
@@ -385,25 +590,48 @@ export const DueSettingsForm = ({
         : `Kontrolle, ${monthsValue} Monate`;
 
     if (!canWrite) {
+        const viewerSoon = standFilters.find((item) => item.id === "soon")?.count;
+        const viewerChecks = kindFilters.find(
+            (item) => item.id === "licence_check",
+        )?.count;
+
         return (
             <div className={styles.filters}>
-                <TableFilterBar
-                    filters={standFilters}
-                    activeFilterId={activeStand}
-                    onFilterChange={onStand}
-                    showAll={false}
-                    groupLabel="Stand"
-                    ariaLabel="Stand"
-                />
-                <TableFilterBar
-                    filters={kindFilters}
-                    activeFilterId={activeKind}
-                    onFilterChange={onKind}
-                    allCount={allCount}
-                    allLabel="Alle"
-                    groupLabel="Art"
-                    ariaLabel="Art"
-                />
+                <div className={styles.settingGroup}>
+                    <TableFilterBar
+                        filters={standFilters}
+                        activeFilterId={activeStand}
+                        onFilterChange={onStand}
+                        showAll={false}
+                        groupLabel="Stand"
+                        ariaLabel="Stand"
+                    />
+                    <p className={styles.settingHint}>
+                        {leadRule(leadDays)}
+                        {viewerSoon === undefined
+                            ? ""
+                            : leadDays === 0
+                              ? ` ${formatCount(viewerSoon)} Termine sind heute fällig.`
+                              : ` ${formatCount(viewerSoon)} Termine fallen in diese ${leadDays} Tage.`}
+                    </p>
+                </div>
+                <div className={styles.settingGroup}>
+                    <TableFilterBar
+                        filters={kindFilters}
+                        activeFilterId={activeKind}
+                        onFilterChange={onKind}
+                        allCount={allCount}
+                        allLabel="Alle"
+                        groupLabel="Art"
+                        ariaLabel="Art"
+                    />
+                    <p className={styles.settingHint}>
+                        {monthsRule(checkMonths)}
+                        {viewerChecks === undefined
+                            ? ""
+                            : ` Unter „${standName(activeStand, leadDays)}“ sind das ${formatCount(viewerChecks)} Zeilen.`}
+                    </p>
+                </div>
                 {loadError && (
                     <p className={styles.settingError} role="alert">
                         {loadError}
@@ -436,7 +664,7 @@ export const DueSettingsForm = ({
                 autoComplete="off"
                 spellCheck={false}
                 value={value}
-                disabled={!ready || saving}
+                disabled={!ready}
                 aria-label={label}
                 aria-invalid={invalid}
                 aria-describedby={describedBy}
@@ -455,7 +683,7 @@ export const DueSettingsForm = ({
 
     return (
         <div className={styles.filters}>
-            <div className={bar.group}>
+            <div className={`${bar.group} ${styles.bound}`}>
                 <p className={bar.groupLabel}>Stand</p>
                 <MobileChoices
                     label="Stand"
@@ -467,12 +695,15 @@ export const DueSettingsForm = ({
                         leadValue,
                         showHeute ? "Heute" : "Tage",
                         leadError !== null,
-                        leadError ? "due-lead-error" : undefined,
+                        leadError
+                            ? "due-lead-hint due-lead-error"
+                            : "due-lead-hint",
                         (value) => {
                             setDraft((current) => ({ ...current, lead: value }));
                             setLeadError(null);
+                            schedule("lead");
                         },
-                        commitLead,
+                        () => flush("lead"),
                     )}
                 >
                     {standFilters.map((filter) => (
@@ -497,10 +728,12 @@ export const DueSettingsForm = ({
                                 value={leadValue}
                                 inputId="due-lead-days"
                                 inputLabel="Vorlauf in Tagen"
-                                disabled={!ready || saving}
+                                disabled={!ready}
                                 invalid={leadError !== null}
                                 describedBy={
-                                    leadError ? "due-lead-error" : undefined
+                                    leadError
+                                        ? "due-lead-hint due-lead-error"
+                                        : "due-lead-hint"
                                 }
                                 onSelect={() =>
                                     onStand(
@@ -513,8 +746,9 @@ export const DueSettingsForm = ({
                                         lead: value,
                                     }));
                                     setLeadError(null);
+                                    schedule("lead");
                                 }}
-                                onCommit={commitLead}
+                                onCommit={() => flush("lead")}
                             />
                         ) : (
                             <PlainChip
@@ -533,6 +767,14 @@ export const DueSettingsForm = ({
                         ),
                     )}
                 </div>
+                {leadHint && (
+                    <p id="due-lead-hint" className={styles.settingHint}>
+                        {leadHint}
+                    </p>
+                )}
+                <p className={styles.settingResult} role="status">
+                    {leadLive}
+                </p>
                 {leadError && (
                     <p
                         id="due-lead-error"
@@ -544,7 +786,7 @@ export const DueSettingsForm = ({
                 )}
             </div>
 
-            <div className={bar.group}>
+            <div className={`${bar.group} ${styles.bound}`}>
                 <p className={bar.groupLabel}>Art</p>
                 <MobileChoices
                     label="Art"
@@ -556,15 +798,18 @@ export const DueSettingsForm = ({
                         monthsValue,
                         checkOff ? "aus" : "Monate",
                         monthsError !== null,
-                        monthsError ? "due-months-error" : undefined,
+                        monthsError
+                            ? "due-months-hint due-months-error"
+                            : "due-months-hint",
                         (value) => {
                             setDraft((current) => ({
                                 ...current,
                                 months: value,
                             }));
                             setMonthsError(null);
+                            schedule("months");
                         },
-                        commitMonths,
+                        () => flush("months"),
                     )}
                 >
                     <option value="">
@@ -601,10 +846,12 @@ export const DueSettingsForm = ({
                                 value={monthsValue}
                                 inputId="due-check-months"
                                 inputLabel="Kontrollintervall in Monaten"
-                                disabled={!ready || saving}
+                                disabled={!ready}
                                 invalid={monthsError !== null}
                                 describedBy={
-                                    monthsError ? "due-months-error" : undefined
+                                    monthsError
+                                        ? "due-months-hint due-months-error"
+                                        : "due-months-hint"
                                 }
                                 onSelect={() =>
                                     onKind(
@@ -619,8 +866,9 @@ export const DueSettingsForm = ({
                                         months: value,
                                     }));
                                     setMonthsError(null);
+                                    schedule("months");
                                 }}
-                                onCommit={commitMonths}
+                                onCommit={() => flush("months")}
                             />
                         ) : (
                             <PlainChip
@@ -639,6 +887,14 @@ export const DueSettingsForm = ({
                         ),
                     )}
                 </div>
+                {monthsHint && (
+                    <p id="due-months-hint" className={styles.settingHint}>
+                        {monthsHint}
+                    </p>
+                )}
+                <p className={styles.settingResult} role="status">
+                    {monthsLive}
+                </p>
                 {monthsError && (
                     <p
                         id="due-months-error"
