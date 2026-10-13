@@ -1,7 +1,7 @@
 import type { AlertSeverity, AlertType } from "@fleet-live/shared";
 
 export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
-    SPEEDING: "Geschwindigkeit",
+    SPEEDING: "Tempo",
     LOW_FUEL: "Wenig Tank",
     OFFLINE: "Funk",
 };

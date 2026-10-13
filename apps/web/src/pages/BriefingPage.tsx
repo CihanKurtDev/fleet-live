@@ -46,7 +46,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         {
             key: "open",
             label: "Offen",
-            hint: "Inbox",
+            hint: "Warnungen",
             tone: "critical",
             to: "/alerts",
         },
@@ -78,7 +78,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         {
             key: "in_depot",
             label: "Im Depot",
-            hint: "Hof",
+            hint: "im Kreis",
             tone: "neutral",
             to: "/vehicles?filter=in_depot",
         },
@@ -159,7 +159,7 @@ const DueKpis = ({
             key: "missing",
             label: "Datum fehlt",
             value: missingFields(due),
-            hint: "Felder",
+            hint: "HU, UVV, Führerschein",
             tone: "neutral",
             to: "/fristen?state=missing",
         },

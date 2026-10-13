@@ -547,6 +547,9 @@ export function ImportPreviewStep({
                 />
                 Als Firmenprofil merken
             </label>
+            <p className={styles.statusPanelFootnote}>
+                Mit Häkchen wird die Spalten- und Statuszuordnung für den nächsten Import dieser Firma gespeichert.
+            </p>
 
             <div className={styles.previewActions}>
                 <Button variant="secondary" size="sm" onClick={onBack}>

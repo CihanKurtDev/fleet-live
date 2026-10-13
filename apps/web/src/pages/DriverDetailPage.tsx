@@ -48,7 +48,7 @@ export const DriverDetailPage = () => {
         return (
             <section className={layout.page}>
                 <DetailBackLink fallback="/drivers" />
-                <h1 className={styles.title}>Fehler</h1>
+                <h1 className={styles.title}>Fahrer konnte nicht geladen werden.</h1>
                 <RetryMessage message={error} onRetry={retry} />
             </section>
         );
@@ -80,7 +80,7 @@ export const DriverDetailPage = () => {
                         <DriverWarningCell driver={driver} />
                         {driver.open_warnings > 0 ? (
                             <Link className={styles.inboxLink} to={openInboxHref}>
-                                Inbox öffnen
+                                Warnungen öffnen
                             </Link>
                         ) : null}
                     </div>
@@ -158,7 +158,7 @@ export const DriverDetailPage = () => {
                         </dd>
                     </div>
                     <div>
-                        <dt>Geschwindigkeit</dt>
+                        <dt>Tempo</dt>
                         <dd>{driver.counts.SPEEDING}</dd>
                     </div>
                 </dl>

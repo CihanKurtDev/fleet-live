@@ -257,6 +257,11 @@ export const DriverAssignmentPanel = ({
                     </div>
                 )}
             </div>
+            {driver.vehicles.length > 0 && (
+                <p className={layout.note}>
+                    Nur „Aktuell“ erscheint in der Übersicht. „Zugewiesen“ darf das Fahrzeug fahren.
+                </p>
+            )}
             {error && (
                 <p className={styles.error} role="alert">
                     {error}

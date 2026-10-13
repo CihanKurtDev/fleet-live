@@ -49,8 +49,8 @@ export const DriverTable = ({
                 <div>
                     <h1 className={styles.title}>Fahrer</h1>
                     <p className={styles.lead}>
-                        Offene Warnungen sind Tempo-Überschreitungen in der
-                        Inbox; Verstöße die Historie.
+                        Offene Warnungen sind Tempo-Überschreitungen unter
+                        Warnungen; Verstöße die Historie.
                     </p>
                 </div>
 

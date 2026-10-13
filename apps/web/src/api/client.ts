@@ -116,7 +116,7 @@ export async function request<T>(
             | undefined;
 
         throw new ApiError(
-            errorPayload?.error ?? `Request failed with ${response.status}.`,
+            errorPayload?.error ?? `Die Anfrage ist fehlgeschlagen (${response.status}).`,
             response.status,
             errorPayload?.fields,
             errorPayload?.code,

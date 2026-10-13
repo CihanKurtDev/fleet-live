@@ -106,7 +106,7 @@ export const VehicleHintsPanel = ({
                 <h2 className={styles.panelTitle}>Hinweise</h2>
                 {showFunk ? (
                     <Link className={styles.inboxLink} to={inboxHref}>
-                        Zur Inbox
+                        Zu den Warnungen
                     </Link>
                 ) : null}
             </div>
@@ -138,6 +138,11 @@ export const VehicleHintsPanel = ({
                                     variant="secondary"
                                     size="sm"
                                     disabled={resolvingId === liveOfflineAlert.id}
+                                    title={
+                                        liveOfflineAlert.type === "SPEEDING"
+                                            ? "Aus der Liste nehmen. Zustand und Tempo-Farbe bleiben."
+                                            : "Aus der Liste nehmen. Zustand am Fahrzeug bleibt."
+                                    }
                                     onClick={() =>
                                         void handleResolve(liveOfflineAlert.id)
                                     }

@@ -68,6 +68,11 @@ export const useAlertResolveColumn = (canWrite: boolean) => {
                             variant="secondary"
                             size="sm"
                             disabled={resolvingId === row.id}
+                            title={
+                                row.type === "SPEEDING"
+                                    ? "Aus der Liste nehmen. Zustand und Tempo-Farbe bleiben."
+                                    : "Aus der Liste nehmen. Zustand am Fahrzeug bleibt."
+                            }
                             onClick={handleClick}
                         >
                             Erledigen

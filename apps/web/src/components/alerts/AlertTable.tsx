@@ -66,7 +66,7 @@ export const AlertTable = ({
                 <h1 className={styles.title}>Nicht gefunden</h1>
                 <p className={styles.status}>
                     Es gibt kein Fahrzeug oder keinen Fahrer mit dieser Kennung
-                    in Ihrer Firma.
+                    in deiner Firma.
                 </p>
                 <button
                     type="button"

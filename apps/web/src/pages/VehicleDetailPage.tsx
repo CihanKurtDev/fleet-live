@@ -311,7 +311,7 @@ export const VehicleDetailPage = () => {
         return (
             <section className={layout.page}>
                 <DetailBackLink fallback="/vehicles" />
-                <h1 className={styles.title}>Fehler</h1>
+                <h1 className={styles.title}>Fahrzeug konnte nicht geladen werden.</h1>
                 <RetryMessage message={error} onRetry={retry} />
             </section>
         );
