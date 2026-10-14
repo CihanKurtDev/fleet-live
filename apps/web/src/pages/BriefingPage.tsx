@@ -7,7 +7,7 @@ import type {
 import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
-import { dueSoonLabel } from "../components/due/dueTableConfig";
+import { dueSoonLabel } from "../components/due/dueLabels";
 import { ExportButton } from "../components/export/ExportButton";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { useAuth } from "../hooks/useAuth";

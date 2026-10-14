@@ -323,6 +323,14 @@ describe("GET and PATCH /api/due/settings", () => {
             assert.equal(invalid.status, 400);
             assert.equal(invalid.body.code, "VALIDATION_ERROR");
             assert.match(invalid.body.fields.due_lead_days, /nicht negativ/);
+
+            const tooLong = await api.patch("/api/due/settings").send({
+                due_lead_days: 366,
+            });
+
+            assert.equal(tooLong.status, 400);
+            assert.equal(tooLong.body.code, "VALIDATION_ERROR");
+            assert.match(tooLong.body.fields.due_lead_days, /höchstens 365/);
         } finally {
             CompanyModel.updateDueSettings(1, {
                 due_lead_days: null,

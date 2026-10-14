@@ -101,11 +101,12 @@ export const yearMonthSchema = z
     .string()
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Monat als JJJJ-MM angeben.");
 
-/** Vorlauf in Tagen. 0 heißt: nur der Fälligkeitstag selbst ist „bald“. */
+/** Vorlauf in Tagen. 0 heißt: nur der Fälligkeitstag selbst ist „bald“. Höchstens ein Jahr. */
 export const dueLeadDaysSchema = z
     .number()
     .int("Vorlauf in ganzen Tagen angeben.")
-    .min(0, "Vorlauf darf nicht negativ sein.");
+    .min(0, "Vorlauf darf nicht negativ sein.")
+    .max(365, "Vorlauf darf höchstens 365 Tage sein.");
 
 /** 0 schaltet die Führerscheinkontrolle aus. */
 export const licenceCheckMonthsSchema = z

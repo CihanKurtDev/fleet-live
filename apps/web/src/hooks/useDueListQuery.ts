@@ -51,7 +51,6 @@ const useDueListQueryBase = createListQueryHook<
             patch(
                 {
                     state: filterId,
-                    kind: null,
                 } as ListQueryPatch<DueListQuery>,
                 { replace: true, resetPage: true },
             );
