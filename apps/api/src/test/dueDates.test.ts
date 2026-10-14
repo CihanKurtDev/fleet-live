@@ -423,6 +423,8 @@ describe("due rules", () => {
     it("rejects a negative lead", () => {
         assert.equal(dueLeadDaysSchema.safeParse(0).success, true);
         assert.equal(dueLeadDaysSchema.safeParse(-1).success, false);
+        assert.equal(dueLeadDaysSchema.safeParse(365).success, true);
+        assert.equal(dueLeadDaysSchema.safeParse(366).success, false);
     });
 
     it("accepts a licence-check interval from 0 to 24", () => {
