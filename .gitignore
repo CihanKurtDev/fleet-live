@@ -10,5 +10,3 @@ build/
 
 apps/api/data/
 
-# Local planning markdown in .cursor/ (rules stay .mdc)
-.cursor/*.md

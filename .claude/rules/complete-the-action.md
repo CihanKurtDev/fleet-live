@@ -1,6 +1,5 @@
 ---
 description: A visible number is finished only when the person can do the job that number describes
-alwaysApply: true
 ---
 
 # Finish the action

@@ -1,0 +1,4 @@
+# Private planning stays local (like .cursor/*.md). Rules in rules/ stay tracked.
+/*.md
+/archive/
+/settings.local.json

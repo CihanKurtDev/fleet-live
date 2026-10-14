@@ -2,7 +2,7 @@
 
 fleet-live — fleet management app (TypeScript monorepo). Vehicles, telemetry, and a React UI; live updates over SSE.
 
-Phases 1–13 are in place (including depot circles on the fleet map and shift-briefing due counts plus the Fristen list for HU, UVV, and driver licence dates; those deadlines are not inbox alert types). Company registration, e-mail confirmation, password reset, invites, several companies per person, TOTP and OIDC are in place. **Next:** a mid-session 401 returns the UI to `/login`. Do not start CI/CD. Status detail: `.cursor/rules/architecture.mdc`. Engineering plan: `.cursor/ROADMAP.md` (local, gitignored — not on GitHub). The public README has a dispatcher-facing roadmap (what users notice), not phase numbers.
+Phases 1–14 are in place (including depot circles on the fleet map, shift-briefing due counts, the Fristen page for HU, UVV, and driver licence dates grouped by kind, and CSV export; deadlines are not inbox alert types). Company registration, e-mail confirmation, password reset, invites, several companies per person, TOTP and OIDC are in place. **Next:** a mid-session 401 returns the UI to `/login`. Do not start CI/CD. Status detail: `.claude/rules/architecture.md`. Engineering plan: `.claude/ROADMAP.md` (local, gitignored — not on GitHub). The public README has a dispatcher-facing roadmap (what users notice), not phase numbers.
 
 ## General
 
@@ -11,7 +11,7 @@ Phases 1–13 are in place (including depot circles on the fleet map and shift-b
 - Do not modify unrelated files.
 - Preserve the existing architecture unless there is a strong reason to change it.
 - No speculative architecture. Build for current requirements.
-- Git branches never start with `cursor/`. Use `feat/`, `fix/`, or `docs/` (see `.cursor/rules/git.mdc`).
+- Git branches never start with `cursor/` or `claude/`. Use `feat/`, `fix/`, or `docs/` (see `.claude/rules/git-branches.md`).
 
 ## Source of truth
 
@@ -23,12 +23,13 @@ Phases 1–13 are in place (including depot circles on the fleet map and shift-b
 
 For a non-trivial feature: inspect the relevant code, propose an approach, name affected files, implement the smallest coherent change, run tests, report what changed and what remains unverified.
 
-API tests: `apps/api/src/test/` (`node:test` + SuperTest). After API changes run `npm test`. Conventions: `.cursor/rules/testing.mdc`.
+API tests: `apps/api/src/test/` (`node:test` + SuperTest). After API changes run `npm test`. Web tests: `apps/web/src/test/` (Vitest); after web changes run `npm run test:web`. Conventions: `.claude/rules/testing.md`.
 
 ## More context
 
-- Architecture: `.cursor/rules/architecture.mdc`
-- API: `.cursor/rules/backend.mdc`
-- React: `.cursor/rules/frontend.mdc`
-- Shared contract: `.cursor/rules/shared.mdc`
-- Tests: `.cursor/rules/testing.mdc`
+- Architecture: `.claude/rules/architecture.md`
+- API: `.claude/rules/backend.md`
+- React: `.claude/rules/frontend.md`, layout: `.claude/rules/layout.md`
+- Shared contract: `.claude/rules/shared.md`
+- Tests: `.claude/rules/testing.md`
+- Legal statements: `.claude/rules/legal.md`
