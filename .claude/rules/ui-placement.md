@@ -1,6 +1,5 @@
 ---
 description: Fit new UI into the existing screen instead of dropping a new widget on top
-alwaysApply: true
 ---
 
 # Screen fit
