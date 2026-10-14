@@ -4,6 +4,7 @@
     align-items: center;
     justify-content: center;
     padding: 32px 16px;
+    text-align: center;
 }
 
 .accountPage {
@@ -28,6 +29,13 @@
 
     h1 {
         margin: 0;
+    }
+}
+
+@media (min-width: 701px) {
+    .accountHeader {
+        /* pageBand has no horizontal padding from 701px; keep Konto inset. */
+        padding-inline: 24px;
     }
 }
 

@@ -1,0 +1,47 @@
+.wide,
+.full {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 0;
+}
+
+.wide {
+    align-self: center;
+    width: min(100%, var(--layout-wide));
+}
+
+.full {
+    width: 100%;
+}
+
+/* List panels; fleet will reuse this later. Visuals only from 701px. */
+.sheet {
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+@media (min-width: 701px) {
+    .wide {
+        padding: 16px 24px 24px;
+    }
+
+    .sheet {
+        --panel-pad-x: 20px;
+        --panel-pad-y: 16px;
+        --panel-thead-bg: transparent;
+        --panel-last-row-border: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: none;
+    }
+
+    .pageHead.pageHead {
+        background: transparent;
+        border: 0;
+        padding: 0 0 16px;
+    }
+}

@@ -9,3 +9,9 @@ main {
   scrollbar-gutter: stable;
   background: var(--bg);
 }
+
+/* The fleet map fills the window. An empty gutter would shrink it. */
+main:has([data-layout="full"]) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}

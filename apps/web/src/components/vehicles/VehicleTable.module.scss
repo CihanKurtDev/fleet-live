@@ -1,5 +1,5 @@
 .vehicleTable {
-    // #root zentriert global; die Tabelle bleibt aber linksbündig.
+    // Linksbündig, unabhängig von der Shell.
     flex: 1;
     min-height: 0;
     display: flex;
@@ -7,6 +7,14 @@
     text-align: left;
     padding: 0 16px;
     transition: opacity 120ms ease;
+}
+
+@media (min-width: 701px) {
+    .vehicleTable {
+        flex: none;
+        min-height: auto;
+        padding: 0;
+    }
 }
 
 .title {

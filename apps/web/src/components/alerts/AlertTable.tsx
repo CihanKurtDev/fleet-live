@@ -12,6 +12,7 @@ import { useAlertResolveColumn } from "./useAlertResolveColumn";
 import { ExportButton } from "../export/ExportButton";
 import styles from "./AlertTable.module.scss";
 import band from "../../styles/pageBand.module.scss";
+import layout from "../../styles/layout.module.scss";
 
 interface AlertTableProps {
     canWrite?: boolean;
@@ -61,7 +62,7 @@ export const AlertTable = ({
 
     if (notFound) {
         return (
-            <section className={styles.alertTable}>
+            <section className={`${styles.alertTable} ${layout.sheet}`}>
             <header className={`${band.band} ${band.bleed}`}>
                 <h1 className={styles.title}>Nicht gefunden</h1>
                 <p className={styles.status}>
@@ -87,7 +88,9 @@ export const AlertTable = ({
         <section
             className={sectionClassName(styles.alertTable, styles.isFetching)}
         >
-            <header className={`${band.band} ${band.bleed}`}>
+            <header
+                className={`${band.band} ${band.bleed} ${layout.pageHead}`}
+            >
                 <div className={styles.titleRow}>
                     <h1 className={styles.title}>Warnungen</h1>
                     {canWrite && <ExportButton kind="alerts" />}
@@ -118,7 +121,9 @@ export const AlertTable = ({
                         </button>
                     </p>
                 )}
+            </header>
 
+            <div className={layout.sheet}>
                 {!isLoading && (
                     <div className={styles.filters}>
                         <TableFilterBar
@@ -140,55 +145,55 @@ export const AlertTable = ({
                         />
                     </div>
                 )}
-            </header>
 
-            {error && (
-                <RetryMessage message={error} onRetry={listResult.retry} />
-            )}
-
-            {actionError && (
-                <p className={styles.error} role="alert">
-                    {actionError}
-                </p>
-            )}
-
-            {isLoading && (
-                <p className={styles.status} aria-live="polite">
-                    Tabelle wird geladen…
-                </p>
-            )}
-
-            <Table
-                columns={columns}
-                rows={paginatedRows}
-                getRowKey={(alert) => alert.id}
-                onRowClick={onSelectAlert}
-                sortConfig={tableState.sortConfig}
-                onSort={handleSort}
-                caption="Warnungsliste"
-                isLoading={isLoading}
-                skeletonRowCount={Math.min(tableState.limit, 10)}
-                emptyContent={emptyContent(
-                    query.filter === "open" &&
-                        query.type === undefined &&
-                        query.vehicle_id === undefined &&
-                        query.driver_id === undefined
-                        ? "Keine offenen Warnungen."
-                        : "Keine Warnungen passen zum Filter.",
+                {error && (
+                    <RetryMessage message={error} onRetry={listResult.retry} />
                 )}
-                className={styles.mobileCards}
-            />
 
-            {showPagination && (
-                <TablePagination
-                    page={tableState.page}
-                    pageCount={pageCount}
-                    limit={tableState.limit}
-                    total={total}
-                    onPageChange={setPage}
-                    onLimitChange={setLimit}
+                {actionError && (
+                    <p className={styles.error} role="alert">
+                        {actionError}
+                    </p>
+                )}
+
+                {isLoading && (
+                    <p className={styles.status} aria-live="polite">
+                        Tabelle wird geladen…
+                    </p>
+                )}
+
+                <Table
+                    columns={columns}
+                    rows={paginatedRows}
+                    getRowKey={(alert) => alert.id}
+                    onRowClick={onSelectAlert}
+                    sortConfig={tableState.sortConfig}
+                    onSort={handleSort}
+                    caption="Warnungsliste"
+                    isLoading={isLoading}
+                    skeletonRowCount={Math.min(tableState.limit, 10)}
+                    emptyContent={emptyContent(
+                        query.filter === "open" &&
+                            query.type === undefined &&
+                            query.vehicle_id === undefined &&
+                            query.driver_id === undefined
+                            ? "Keine offenen Warnungen."
+                            : "Keine Warnungen passen zum Filter.",
+                    )}
+                    className={styles.mobileCards}
                 />
-            )}
+
+                {showPagination && (
+                    <TablePagination
+                        page={tableState.page}
+                        pageCount={pageCount}
+                        limit={tableState.limit}
+                        total={total}
+                        onPageChange={setPage}
+                        onLimitChange={setLimit}
+                    />
+                )}
+            </div>
         </section>
     );
 };

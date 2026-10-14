@@ -9,6 +9,14 @@
     padding: 0;
 }
 
+@media (min-width: 701px) {
+    .toolbar {
+        padding-inline: var(--panel-pad-x, 0);
+        padding-top: var(--panel-pad-y, 0);
+        margin-bottom: 12px;
+    }
+}
+
 .actions {
     display: flex;
     flex-wrap: wrap;

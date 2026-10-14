@@ -1,5 +1,6 @@
-import { createBrowserRouter } from 'react-router';
+import { createBrowserRouter, Outlet } from 'react-router';
 import App from './App';
+import layout from './styles/layout.module.scss';
 import { RequireAuth } from './components/RequireAuth';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
@@ -11,6 +12,22 @@ import {
     NotFoundPage,
     RouteErrorPage,
 } from './pages/RouteStatusPage';
+
+function WideLayout() {
+    return (
+        <div className={layout.wide}>
+            <Outlet />
+        </div>
+    );
+}
+
+function FullLayout() {
+    return (
+        <div className={layout.full} data-layout="full">
+            <Outlet />
+        </div>
+    );
+}
 
 export const router = createBrowserRouter([
     {
@@ -46,75 +63,96 @@ export const router = createBrowserRouter([
                 Component: RequireAuth,
                 children: [
                     {
-                        index: true,
-                        lazy: async () => ({
-                            Component: (await import('./pages/BriefingPage'))
-                                .BriefingPage,
-                        }),
+                        Component: WideLayout,
+                        children: [
+                            {
+                                index: true,
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/BriefingPage')
+                                    ).BriefingPage,
+                                }),
+                            },
+                            {
+                                path: 'vehicles',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/VehiclesPage')
+                                    ).VehiclesPage,
+                                }),
+                            },
+                            {
+                                path: 'vehicles/import',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/ImportPage')
+                                    ).ImportPage,
+                                }),
+                            },
+                            {
+                                path: 'vehicles/:id',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import(
+                                            './pages/VehicleDetailPage'
+                                        )
+                                    ).VehicleDetailPage,
+                                }),
+                            },
+                            {
+                                path: 'alerts',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/AlertsPage')
+                                    ).AlertsPage,
+                                }),
+                            },
+                            {
+                                path: 'fristen',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/DuePage')
+                                    ).DuePage,
+                                }),
+                            },
+                            {
+                                path: 'drivers',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/DriversPage')
+                                    ).DriversPage,
+                                }),
+                            },
+                            {
+                                path: 'drivers/:id',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import(
+                                            './pages/DriverDetailPage'
+                                        )
+                                    ).DriverDetailPage,
+                                }),
+                            },
+                        ],
                     },
                     {
-                        path: 'vehicles',
-                        lazy: async () => ({
-                            Component: (await import('./pages/VehiclesPage'))
-                                .VehiclesPage,
-                        }),
-                    },
-                    {
-                        path: 'vehicles/import',
-                        lazy: async () => ({
-                            Component: (await import('./pages/ImportPage'))
-                                .ImportPage,
-                        }),
-                    },
-                    {
-                        path: 'vehicles/:id',
-                        lazy: async () => ({
-                            Component: (
-                                await import('./pages/VehicleDetailPage')
-                            ).VehicleDetailPage,
-                        }),
-                    },
-                    {
-                        path: 'fleet',
-                        lazy: async () => ({
-                            Component: (await import('./pages/FleetPage'))
-                                .FleetPage,
-                        }),
-                    },
-                    {
-                        path: 'alerts',
-                        lazy: async () => ({
-                            Component: (await import('./pages/AlertsPage'))
-                                .AlertsPage,
-                        }),
-                    },
-                    {
-                        path: 'fristen',
-                        lazy: async () => ({
-                            Component: (await import('./pages/DuePage'))
-                                .DuePage,
-                        }),
-                    },
-                    {
-                        path: 'drivers',
-                        lazy: async () => ({
-                            Component: (await import('./pages/DriversPage'))
-                                .DriversPage,
-                        }),
+                        Component: FullLayout,
+                        children: [
+                            {
+                                path: 'fleet',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/FleetPage')
+                                    ).FleetPage,
+                                }),
+                            },
+                        ],
                     },
                     {
                         path: 'konto',
                         lazy: async () => ({
                             Component: (await import('./pages/AccountPage'))
                                 .AccountPage,
-                        }),
-                    },
-                    {
-                        path: 'drivers/:id',
-                        lazy: async () => ({
-                            Component: (
-                                await import('./pages/DriverDetailPage')
-                            ).DriverDetailPage,
                         }),
                     },
                 ],

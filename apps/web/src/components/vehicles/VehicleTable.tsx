@@ -12,6 +12,7 @@ import { useVehicleList } from "../../hooks/useVehicleList";
 import { useVehicleListQuery } from "../../hooks/useVehicleListQuery";
 import { vehicleColumns, vehicleFilters } from "./vehicleTableConfig";
 import band from "../../styles/pageBand.module.scss";
+import layout from "../../styles/layout.module.scss";
 import styles from "./VehicleTable.module.scss";
 
 interface VehicleTableProps {
@@ -110,9 +111,13 @@ export const VehicleTable = ({
         <section
             className={sectionClassName(styles.vehicleTable, styles.isFetching)}
         >
-            <header className={`${band.band} ${band.bleed}`}>
+            <header
+                className={`${band.band} ${band.bleed} ${layout.pageHead}`}
+            >
                 <h1 className={styles.title}>Fahrzeuge</h1>
+            </header>
 
+            <div className={layout.sheet}>
                 <TableToolbar
                     search={tableState.search}
                     onSearchChange={setSearch}
@@ -145,83 +150,83 @@ export const VehicleTable = ({
                         ariaLabel="Status"
                     />
                 )}
-            </header>
 
-            {error && (
-                <RetryMessage message={error} onRetry={listResult.retry} />
-            )}
-
-            {isLoading && (
-                <p className={styles.status} aria-live="polite">
-                    Tabelle wird geladen…
-                </p>
-            )}
-
-            <Table
-                columns={vehicleColumns}
-                rows={paginatedRows}
-                getRowKey={(vehicle) => vehicle.id}
-                isEditing={isEditing}
-                selectedRows={selectedIds}
-                onSelectRow={(key) => toggleSelection(Number(key))}
-                onRowClick={onSelectVehicle}
-                sortConfig={tableState.sortConfig}
-                onSort={handleSort}
-                caption="Fahrzeugliste"
-                isLoading={isLoading}
-                skeletonRowCount={Math.min(tableState.limit, 10)}
-                emptyContent={emptyContent(
-                    tableState.search || tableState.filterId
-                        ? "Keine Fahrzeuge passen zu Suche und Filter."
-                        : "Keine Fahrzeuge vorhanden.",
+                {error && (
+                    <RetryMessage message={error} onRetry={listResult.retry} />
                 )}
-                className={`${styles.mobileCards} ${styles.fit}`}
-            />
 
-            {showPagination && (
-                <TablePagination
-                    page={tableState.page}
-                    pageCount={pageCount}
-                    limit={tableState.limit}
-                    total={total}
-                    onPageChange={setPage}
-                    onLimitChange={setLimit}
+                {isLoading && (
+                    <p className={styles.status} aria-live="polite">
+                        Tabelle wird geladen…
+                    </p>
+                )}
+
+                <Table
+                    columns={vehicleColumns}
+                    rows={paginatedRows}
+                    getRowKey={(vehicle) => vehicle.id}
+                    isEditing={isEditing}
+                    selectedRows={selectedIds}
+                    onSelectRow={(key) => toggleSelection(Number(key))}
+                    onRowClick={onSelectVehicle}
+                    sortConfig={tableState.sortConfig}
+                    onSort={handleSort}
+                    caption="Fahrzeugliste"
+                    isLoading={isLoading}
+                    skeletonRowCount={Math.min(tableState.limit, 10)}
+                    emptyContent={emptyContent(
+                        tableState.search || tableState.filterId
+                            ? "Keine Fahrzeuge passen zu Suche und Filter."
+                            : "Keine Fahrzeuge vorhanden.",
+                    )}
+                    className={`${styles.mobileCards} ${styles.fit}`}
                 />
-            )}
 
-            <ConfirmDialog
-                open={pendingDeleteIds !== null}
-                onClose={() => {
-                    setPendingDeleteIds(null);
-                    setDeleteError(null);
-                }}
-                title={
-                    pendingCount === 1
-                        ? "Fahrzeug löschen?"
-                        : `${pendingCount} Fahrzeuge löschen?`
-                }
-                confirmLabel="Löschen"
-                isBusy={isDeleting}
-                onConfirm={confirmDelete}
-            >
-                {pendingCount === 1 ? (
-                    <p>
-                        {pendingVehicle
-                            ? `„${pendingVehicle.license_plate}“ wirklich löschen? Das kann nicht rückgängig gemacht werden.`
-                            : "Dieses Fahrzeug wirklich löschen? Das kann nicht rückgängig gemacht werden."}
-                    </p>
-                ) : (
-                    <p>
-                        Diese {pendingCount} Fahrzeuge wirklich löschen? Das
-                        kann nicht rückgängig gemacht werden.
-                    </p>
+                {showPagination && (
+                    <TablePagination
+                        page={tableState.page}
+                        pageCount={pageCount}
+                        limit={tableState.limit}
+                        total={total}
+                        onPageChange={setPage}
+                        onLimitChange={setLimit}
+                    />
                 )}
-                {deleteError && (
-                    <p className={styles.error} role="alert">
-                        {deleteError}
-                    </p>
-                )}
-            </ConfirmDialog>
+
+                <ConfirmDialog
+                    open={pendingDeleteIds !== null}
+                    onClose={() => {
+                        setPendingDeleteIds(null);
+                        setDeleteError(null);
+                    }}
+                    title={
+                        pendingCount === 1
+                            ? "Fahrzeug löschen?"
+                            : `${pendingCount} Fahrzeuge löschen?`
+                    }
+                    confirmLabel="Löschen"
+                    isBusy={isDeleting}
+                    onConfirm={confirmDelete}
+                >
+                    {pendingCount === 1 ? (
+                        <p>
+                            {pendingVehicle
+                                ? `„${pendingVehicle.license_plate}“ wirklich löschen? Das kann nicht rückgängig gemacht werden.`
+                                : "Dieses Fahrzeug wirklich löschen? Das kann nicht rückgängig gemacht werden."}
+                        </p>
+                    ) : (
+                        <p>
+                            Diese {pendingCount} Fahrzeuge wirklich löschen? Das
+                            kann nicht rückgängig gemacht werden.
+                        </p>
+                    )}
+                    {deleteError && (
+                        <p className={styles.error} role="alert">
+                            {deleteError}
+                        </p>
+                    )}
+                </ConfirmDialog>
+            </div>
         </section>
     );
 };

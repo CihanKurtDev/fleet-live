@@ -16,6 +16,7 @@ import {
 } from "./dueTableConfig";
 import styles from "./DueTable.module.scss";
 import band from "../../styles/pageBand.module.scss";
+import layout from "../../styles/layout.module.scss";
 
 interface DueTableProps {
     onSelectRow?: (row: DueListItem) => void;
@@ -102,8 +103,12 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
     });
 
     return (
-        <section className={sectionClassName(styles.dueTable, styles.isFetching)}>
-            <header className={`${band.band} ${band.bleed}`}>
+        <section
+            className={sectionClassName(styles.dueTable, styles.isFetching)}
+        >
+            <header
+                className={`${band.band} ${band.bleed} ${layout.pageHead}`}
+            >
                 <div className={styles.heading}>
                     <div>
                         <h1 className={styles.title}>Fristen</h1>
@@ -119,7 +124,9 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
                         onChange={(event) => setSearch(event.target.value)}
                     />
                 </div>
+            </header>
 
+            <div className={layout.sheet}>
                 {!isLoading && (
                     <DueSettingsForm
                         onSaved={listResult.retry}
@@ -135,52 +142,52 @@ export const DueTable = ({ onSelectRow }: DueTableProps) => {
                         checkMonths={meta?.licence_check_months ?? 6}
                     />
                 )}
-            </header>
 
-            {error && (
-                <RetryMessage message={error} onRetry={listResult.retry} />
-            )}
-
-            {isLoading && (
-                <p className={styles.status} aria-live="polite">
-                    Tabelle wird geladen…
-                </p>
-            )}
-
-            <Table
-                columns={dueColumns}
-                rows={paginatedRows}
-                getRowKey={(row) =>
-                    `${row.kind}:${row.vehicle_id ?? 0}:${row.driver_id ?? 0}`
-                }
-                onRowClick={onSelectRow}
-                sortConfig={tableState.sortConfig}
-                onSort={handleSort}
-                caption="Fristenliste"
-                isLoading={isLoading}
-                skeletonRowCount={Math.min(tableState.limit, 10)}
-                emptyContent={emptyContent(
-                    emptyLabel(
-                        query.state,
-                        query.search.length > 0,
-                        leadDays,
-                        query.kind,
-                        meta?.licence_check_months ?? 6,
-                    ),
+                {error && (
+                    <RetryMessage message={error} onRetry={listResult.retry} />
                 )}
-                className={styles.mobileCards}
-            />
 
-            {showPagination && (
-                <TablePagination
-                    page={tableState.page}
-                    pageCount={pageCount}
-                    limit={tableState.limit}
-                    total={total}
-                    onPageChange={setPage}
-                    onLimitChange={setLimit}
+                {isLoading && (
+                    <p className={styles.status} aria-live="polite">
+                        Tabelle wird geladen…
+                    </p>
+                )}
+
+                <Table
+                    columns={dueColumns}
+                    rows={paginatedRows}
+                    getRowKey={(row) =>
+                        `${row.kind}:${row.vehicle_id ?? 0}:${row.driver_id ?? 0}`
+                    }
+                    onRowClick={onSelectRow}
+                    sortConfig={tableState.sortConfig}
+                    onSort={handleSort}
+                    caption="Fristenliste"
+                    isLoading={isLoading}
+                    skeletonRowCount={Math.min(tableState.limit, 10)}
+                    emptyContent={emptyContent(
+                        emptyLabel(
+                            query.state,
+                            query.search.length > 0,
+                            leadDays,
+                            query.kind,
+                            meta?.licence_check_months ?? 6,
+                        ),
+                    )}
+                    className={styles.mobileCards}
                 />
-            )}
+
+                {showPagination && (
+                    <TablePagination
+                        page={tableState.page}
+                        pageCount={pageCount}
+                        limit={tableState.limit}
+                        total={total}
+                        onPageChange={setPage}
+                        onLimitChange={setLimit}
+                    />
+                )}
+            </div>
         </section>
     );
 };

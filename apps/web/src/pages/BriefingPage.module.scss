@@ -11,6 +11,13 @@
     text-align: left;
 }
 
+@media (min-width: 701px) {
+    .page {
+        padding-inline: 0;
+        padding-bottom: 0;
+    }
+}
+
 .header {
     flex-shrink: 0;
 }
