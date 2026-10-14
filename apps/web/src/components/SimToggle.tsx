@@ -50,6 +50,11 @@ export const SimToggle = () => {
                 disabled={isBusy}
                 onClick={toggle}
                 aria-pressed={sim.running}
+                title={
+                    sim.running
+                        ? "Pausiert die Simulation dieser Firma. Positionen bleiben stehen. Nach etwa 15 Sekunden ohne Meldung entsteht eine Warnung für Fahrzeuge, die gerade liefen."
+                        : "Startet die Simulation dieser Firma wieder."
+                }
             >
                 {sim.running ? "Simulation pausieren" : "Simulation starten"}
             </Button>

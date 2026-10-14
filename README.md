@@ -81,7 +81,7 @@ Was die App heute kann, und was als Nächstes kommt.
 * Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt
 * Niedriger Tankstand aus der aktuellen Messung, plus geseedete Warnungshistorie
 * Funk-Ausfall, wenn ein Fahrzeug verstummt oder offline gemeldet ist
-* Inbox offen oder erledigt, Filter nach Geschwindigkeit, Tank, Funk
+* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Funk
 * Schichtüberblick auf der Startseite, offene Warnungen in der Navigation
 * Flottenkarte mit Dichtezellen und Kennzeichen-Sprung, Fahrspur am Fahrzeug, Fahrer, Firmen-Login
 * Fahrtarchiv am Fahrzeug: alte Fahrten durchblättern, abgeschlossene Strecke auf der Karte
@@ -231,7 +231,7 @@ Listenstand steht in der URL. Reload behält die Ansicht. Frischer Besuch von `/
 | `/vehicles`     | Liste, Anlegen |
 | `/vehicles/:id` | Detail, Karte, Zuweisung, Warnungen, Bearbeiten, Löschen |
 | `/fleet`        | Flottenkarte |
-| `/alerts`       | Inbox (offen/erledigt, optional `type`, `vehicle_id` / `driver_id`) |
+| `/alerts`       | Warnungen (offen/erledigt, optional `type`, `vehicle_id` / `driver_id`) |
 | `/fristen`      | Fristen (überfällig, in 30 Tagen, ohne Datum) |
 | `/drivers`      | Fahrerliste |
 | `/drivers/:id`  | Fahrer, Freigaben, aktuelles Fahrzeug, SPEEDING-Historie |
@@ -240,7 +240,7 @@ Ohne Session landet man auf `/login`. Danach ist `/` die Startseite.
 
 ## Schichtüberblick
 
-Oben die Kennzahlen: offene Inbox, Funk-Ausfall, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Inbox-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
+Oben die Kennzahlen: offene Warnungen, Funk-Ausfall, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
 
 ## Fahrzeugliste
 
@@ -295,7 +295,7 @@ Kompromisse:
 Drei Schichten, eine Tabelle `alerts`.
 
 * **Indikator.** `speedBand` und `speeding_open`. Orange über `speed_limit_kmh` ohne offenes Event. Rot, solange SPEEDING `ended_at` null hat. Nur bei `DRIVING`. Nach Event-Ende ist die Zelle wieder normal, auch wenn die Inbox-Zeile noch offen ist.
-* **Warnung.** `resolved_at IS NULL`. Inbox `/alerts`. Dispatcher quittiert per `PATCH`. `ended_at` ist nicht dasselbe wie erledigt.
+* **Warnung.** `resolved_at IS NULL`. Warnungen `/alerts`. Dispatcher quittiert per `PATCH`. `ended_at` ist nicht dasselbe wie erledigt.
 * **Verstoßhistorie.** SPEEDING-Zeilen, auch erledigte, gezählt pro Snapshot-Fahrer auf `/drivers`. Tank und Funk bleiben am Fahrzeug. `resolved_at` heißt gesehen, nicht „war nie“.
 
 `alerts` hängt an `vehicle_id`. Zugriff über `alert → vehicle → company`. `driver_id` wird beim Öffnen aus `vehicles.current_driver_id` kopiert und danach nicht mehr angefasst. `active_alerts` ist der offene Zähler am Fahrzeug und im Listenfilter.

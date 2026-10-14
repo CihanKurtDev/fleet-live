@@ -147,7 +147,11 @@ describe("account page", () => {
         fireEvent.click(
             await screen.findByRole("button", { name: "Einrichtung starten" }),
         );
-        expect(await screen.findByText("Geheimnis: SECRET")).toBeInTheDocument();
+        expect(
+            await screen.findByText(
+                "Schlüssel für die Authenticator-App: SECRET",
+            ),
+        ).toBeInTheDocument();
         expect(
             await screen.findByAltText("QR-Code für die Authenticator-App"),
         ).toHaveAttribute("src", "data:image/png;base64,qr");
@@ -219,7 +223,7 @@ describe("account page", () => {
 
         expect(
             await screen.findByText(
-                "Einladung angelegt. Der Link steht im API-Log.",
+                "Einladung angelegt. Ein Mailversand ist nicht eingerichtet — der Link steht im Server-Log, nicht im Posteingang.",
             ),
         ).toBeInTheDocument();
         expect(inviteMember).toHaveBeenCalledWith("neu@example.com", "viewer");

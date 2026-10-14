@@ -242,7 +242,7 @@ export const VehicleAssignmentPanel = ({
                     <h2 className={layout.panelTitle}>Fahrer</h2>
                     {assigned.length > 0 && (
                         <p className={layout.note}>
-                            Nur „Aktuell“ erscheint in der Übersicht.
+                            Nur „Aktuell“ erscheint in der Übersicht. „Freigegeben“ darf fahren und steht nicht als Fahrer am Fahrzeug.
                         </p>
                     )}
                 </div>

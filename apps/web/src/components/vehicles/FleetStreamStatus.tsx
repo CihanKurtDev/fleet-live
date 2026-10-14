@@ -43,7 +43,7 @@ export const FleetStreamStatus = ({
     if (connection === "disconnected") {
         return (
             <p className={styles.notice} role="status">
-                Keine Live-Verbindung
+                Keine Live-Verbindung. Die Karte zeigt den letzten Stand.
             </p>
         );
     }

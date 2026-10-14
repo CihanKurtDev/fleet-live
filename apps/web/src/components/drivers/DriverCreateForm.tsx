@@ -245,7 +245,9 @@ export const DriverCreateForm = ({
                     </Button>
                 )}
                 <Button type="submit" size="sm" disabled={isSubmitting}>
-                    {submitLabel}
+                    {isSubmitting && submitLabel === "Anlegen"
+                        ? "Wird angelegt…"
+                        : submitLabel}
                 </Button>
             </div>
         </form>

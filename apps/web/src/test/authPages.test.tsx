@@ -327,7 +327,11 @@ describe("login page", () => {
         });
         submit("Anmelden");
 
-        expect(await screen.findByText("Geheimnis: SECRET")).toBeInTheDocument();
+        expect(
+            await screen.findByText(
+                "Schlüssel für die Authenticator-App: SECRET",
+            ),
+        ).toBeInTheDocument();
         expect(
             screen.getByAltText("QR-Code für die Authenticator-App"),
         ).toHaveAttribute("src", "data:image/png;base64,qr");

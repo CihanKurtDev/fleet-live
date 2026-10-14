@@ -12,8 +12,8 @@ export const SPEED_BAND_COLORS: Record<SpeedBand, string> = {
 
 export const SPEED_BAND_TITLES: Record<SpeedBand, string> = {
     normal: "Tempo im Rahmen",
-    warning: "Tempo über Streckenlimit",
-    critical: "Geschwindigkeitsereignis",
+    warning: "Über dem Simulationslimit (Stadt oder Autobahn). Warnung noch nicht offen.",
+    critical: "Tempo-Warnung läuft. Erledigen ändert die Farbe nicht.",
 };
 
 export function speedBandTitle(result: SpeedBandResult): string {

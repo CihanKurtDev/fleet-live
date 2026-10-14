@@ -22,7 +22,7 @@ Vorbereitung: `npm run db:seed`, Anwendung starten, Browser auf 1366×768, Dispa
 - Sprechertext: „SSE liefert nur fokussierte Telemetrie. Der dauerhafte Fahrweg liegt kompakt als codierte Polyline in der Fahrt.“
 
 **52–65 s — Warnungen**
-- Warnungs-Inbox öffnen, Typfilter zeigen und eine Warnung erledigen.
+- Warnungen öffnen, Typfilter zeigen und eine Warnung erledigen.
 - Sprechertext: „Geschwindigkeits- und Offline-Ereignisse werden live erkannt; Bearbeitung und Fahrer-Snapshot bleiben nachvollziehbar.“
 
 **65–80 s — Stammdatenimport**
