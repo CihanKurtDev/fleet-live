@@ -22,7 +22,7 @@
 
     p {
         margin: 4px 0 0;
-        max-width: 62ch;
+        max-width: var(--measure);
         font-size: 14px;
         line-height: 1.45;
         color: var(--text);

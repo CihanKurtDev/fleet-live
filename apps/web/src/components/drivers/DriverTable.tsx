@@ -9,6 +9,7 @@ import { useDriverList } from "../../hooks/useDriverList";
 import { useDriverListQuery } from "../../hooks/useDriverListQuery";
 import { driverColumns } from "./driverTableConfig";
 import band from "../../styles/pageBand.module.scss";
+import layout from "../../styles/layout.module.scss";
 import styles from "./DriverTable.module.scss";
 
 interface DriverTableProps {
@@ -45,7 +46,9 @@ export const DriverTable = ({
         <section
             className={sectionClassName(styles.driverTable, styles.isFetching)}
         >
-            <header className={`${band.band} ${band.bleed}`}>
+            <header
+                className={`${band.band} ${band.bleed} ${layout.pageHead}`}
+            >
                 <div>
                     <h1 className={styles.title}>Fahrer</h1>
                     <p className={styles.lead}>
@@ -53,7 +56,9 @@ export const DriverTable = ({
                         Warnungen; Verstöße die Historie.
                     </p>
                 </div>
+            </header>
 
+            <div className={layout.sheet}>
                 <TableToolbar
                     search={tableState.search}
                     onSearchChange={setSearch}
@@ -61,46 +66,46 @@ export const DriverTable = ({
                     addNewLabel="Fahrer anlegen"
                     onAddNew={onAddDriver}
                 />
-            </header>
 
-            {error && (
-                <RetryMessage message={error} onRetry={listResult.retry} />
-            )}
-
-            {isLoading && (
-                <p className={styles.status} aria-live="polite">
-                    Tabelle wird geladen…
-                </p>
-            )}
-
-            <Table
-                columns={driverColumns}
-                rows={paginatedRows}
-                getRowKey={(driver) => driver.id}
-                onRowClick={onSelectDriver}
-                sortConfig={tableState.sortConfig}
-                onSort={handleSort}
-                caption="Fahrerliste"
-                isLoading={isLoading}
-                skeletonRowCount={Math.min(tableState.limit, 10)}
-                emptyContent={emptyContent(
-                    tableState.search
-                        ? "Keine Fahrer passen zur Suche."
-                        : "Keine Fahrer.",
+                {error && (
+                    <RetryMessage message={error} onRetry={listResult.retry} />
                 )}
-                className={styles.mobileCards}
-            />
 
-            {showPagination && (
-                <TablePagination
-                    page={tableState.page}
-                    pageCount={pageCount}
-                    limit={tableState.limit}
-                    total={total}
-                    onPageChange={setPage}
-                    onLimitChange={setLimit}
+                {isLoading && (
+                    <p className={styles.status} aria-live="polite">
+                        Tabelle wird geladen…
+                    </p>
+                )}
+
+                <Table
+                    columns={driverColumns}
+                    rows={paginatedRows}
+                    getRowKey={(driver) => driver.id}
+                    onRowClick={onSelectDriver}
+                    sortConfig={tableState.sortConfig}
+                    onSort={handleSort}
+                    caption="Fahrerliste"
+                    isLoading={isLoading}
+                    skeletonRowCount={Math.min(tableState.limit, 10)}
+                    emptyContent={emptyContent(
+                        tableState.search
+                            ? "Keine Fahrer passen zur Suche."
+                            : "Keine Fahrer.",
+                    )}
+                    className={styles.mobileCards}
                 />
-            )}
+
+                {showPagination && (
+                    <TablePagination
+                        page={tableState.page}
+                        pageCount={pageCount}
+                        limit={tableState.limit}
+                        total={total}
+                        onPageChange={setPage}
+                        onLimitChange={setLimit}
+                    />
+                )}
+            </div>
         </section>
     );
 };

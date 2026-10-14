@@ -14,65 +14,67 @@ export const AppHeader = ({
 
     return (
         <header className={styles.header}>
-            <div className={styles.start}>
-                <Link className={styles.brand} to={user ? "/" : "/login"}>
-                    fleet-live
-                </Link>
-                {user && (
-                    <nav className={styles.nav} aria-label="Hauptnavigation">
-                        <NavLink
-                            to="/vehicles"
-                            className={({ isActive }) =>
-                                isActive ? styles.active : undefined
-                            }
-                        >
-                            Fahrzeuge
-                        </NavLink>
-                        <NavLink
-                            to="/fleet"
-                            aria-label="Flottenkarte"
-                            className={({ isActive }) =>
-                                isActive ? styles.active : undefined
-                            }
-                        >
-                            Karte
-                        </NavLink>
-                        <NavLink
-                            to="/alerts"
-                            className={({ isActive }) =>
-                                isActive ? styles.active : undefined
-                            }
-                        >
-                            Warnungen
-                            {openAlertCount !== undefined &&
-                            openAlertCount > 0 ? (
-                                <span className={styles.badge}>
-                                    {formatCount(openAlertCount)}
-                                </span>
-                            ) : null}
-                        </NavLink>
-                        <NavLink
-                            to="/fristen"
-                            className={({ isActive }) =>
-                                isActive ? styles.active : undefined
-                            }
-                        >
-                            Fristen
-                        </NavLink>
-                        <NavLink
-                            to="/drivers"
-                            className={({ isActive }) =>
-                                isActive ? styles.active : undefined
-                            }
-                        >
-                            Fahrer
-                        </NavLink>
-                    </nav>
-                )}
-            </div>
-            <div className={styles.end}>
-                {user && user.role === "dispatcher" && <SimToggle />}
-                <SessionMenu />
+            <div className={styles.bar}>
+                <div className={styles.start}>
+                    <Link className={styles.brand} to={user ? "/" : "/login"}>
+                        fleet-live
+                    </Link>
+                    {user && (
+                        <nav className={styles.nav} aria-label="Hauptnavigation">
+                            <NavLink
+                                to="/vehicles"
+                                className={({ isActive }) =>
+                                    isActive ? styles.active : undefined
+                                }
+                            >
+                                Fahrzeuge
+                            </NavLink>
+                            <NavLink
+                                to="/fleet"
+                                aria-label="Flottenkarte"
+                                className={({ isActive }) =>
+                                    isActive ? styles.active : undefined
+                                }
+                            >
+                                Karte
+                            </NavLink>
+                            <NavLink
+                                to="/alerts"
+                                className={({ isActive }) =>
+                                    isActive ? styles.active : undefined
+                                }
+                            >
+                                Warnungen
+                                {openAlertCount !== undefined &&
+                                openAlertCount > 0 ? (
+                                    <span className={styles.badge}>
+                                        {formatCount(openAlertCount)}
+                                    </span>
+                                ) : null}
+                            </NavLink>
+                            <NavLink
+                                to="/fristen"
+                                className={({ isActive }) =>
+                                    isActive ? styles.active : undefined
+                                }
+                            >
+                                Fristen
+                            </NavLink>
+                            <NavLink
+                                to="/drivers"
+                                className={({ isActive }) =>
+                                    isActive ? styles.active : undefined
+                                }
+                            >
+                                Fahrer
+                            </NavLink>
+                        </nav>
+                    )}
+                </div>
+                <div className={styles.end}>
+                    {user && user.role === "dispatcher" && <SimToggle />}
+                    <SessionMenu />
+                </div>
             </div>
         </header>
     );

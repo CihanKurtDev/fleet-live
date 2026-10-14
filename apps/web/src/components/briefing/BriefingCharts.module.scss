@@ -170,7 +170,7 @@
 
 .lead {
     flex-shrink: 0;
-    max-width: 62ch;
+    max-width: var(--measure);
     margin-bottom: 8px;
 }
 
@@ -291,5 +291,62 @@
         flex: 0 0 180px;
         height: 180px;
         min-height: 180px;
+    }
+}
+
+/* Desktop: the two chart rows share the height of their grid row on the
+   page. Open, the month table drops below the window; the page scrolls. */
+@media (min-width: 701px) {
+    .section {
+        min-height: 0;
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .chart,
+    .chartCompact {
+        flex: 1 1 0;
+        min-height: 60px;
+    }
+
+    .dataAlternative {
+        align-self: start;
+        margin-top: 0;
+    }
+}
+
+/* Lower windows: explanations cut to one line (full text stays in the DOM). */
+@media (min-width: 701px) and (max-height: 960px) {
+    .card {
+        padding: 8px 14px;
+    }
+
+    .title {
+        margin: 2px 0;
+    }
+
+    .lead,
+    .note {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 1;
+    }
+
+    .lead {
+        margin-bottom: 4px;
+    }
+
+    .note {
+        margin-top: 4px;
+        padding-top: 4px;
+    }
+
+    .dataAlternative {
+        padding: 6px 12px;
+    }
+
+    .dataTableWrap th,
+    .dataTableWrap td {
+        padding-block: 3px;
     }
 }

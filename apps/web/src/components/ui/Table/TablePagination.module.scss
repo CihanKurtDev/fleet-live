@@ -12,6 +12,14 @@
     font-size: 14px;
 }
 
+@media (min-width: 701px) {
+    .pagination {
+        margin-top: 0;
+        padding-inline: var(--panel-pad-x, 0);
+        padding-block: 12px;
+    }
+}
+
 .limit {
     display: flex;
     align-items: center;

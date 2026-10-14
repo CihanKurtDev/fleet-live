@@ -5,6 +5,13 @@
     gap: 6px;
 }
 
+@media (min-width: 701px) {
+    .group {
+        padding-inline: var(--filter-group-pad-x, var(--panel-pad-x, 0));
+        padding-bottom: var(--filter-group-pad-bottom, 12px);
+    }
+}
+
 .groupLabel {
     margin: 0;
     font-size: 11px;

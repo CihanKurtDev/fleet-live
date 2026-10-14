@@ -6,6 +6,28 @@
     overflow: auto;
 }
 
+@media (min-width: 701px) {
+    .tableContainer {
+        flex: none;
+        min-height: auto;
+        overflow: visible;
+    }
+
+    .table th:first-child,
+    .table td:first-child {
+        padding-left: var(--panel-pad-x, 16px);
+    }
+
+    .table th:last-child,
+    .table td:last-child {
+        padding-right: var(--panel-pad-x, 16px);
+    }
+
+    .table tbody tr:last-child .tableCell {
+        border-bottom: var(--panel-last-row-border, 1px solid var(--border));
+    }
+}
+
 .table {
     width: 100%;
     border-collapse: collapse;
@@ -19,7 +41,7 @@
     font-weight: 600;
     color: var(--text-h);
     border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    background: var(--panel-thead-bg, var(--surface));
     white-space: nowrap;
 }
 

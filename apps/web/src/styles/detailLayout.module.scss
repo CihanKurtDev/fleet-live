@@ -9,6 +9,12 @@
     text-align: left;
 }
 
+@media (min-width: 701px) {
+    .page {
+        padding-inline: 0;
+    }
+}
+
 .panel {
     display: flex;
     flex-direction: column;

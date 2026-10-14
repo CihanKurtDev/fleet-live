@@ -24,6 +24,8 @@
   --radius-sm: 4px;
   --radius: 6px;
   --surface-well: var(--code-bg);
+  --layout-wide: 1600px;
+  --measure: 68ch;
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
@@ -63,12 +65,11 @@
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
+  width: 100%;
+  max-width: none;
   min-width: 0;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
+  margin: 0;
+  text-align: left;
   min-height: 100svh;
   height: 100svh;
   display: flex;
