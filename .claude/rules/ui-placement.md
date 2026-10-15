@@ -8,10 +8,10 @@ Before adding anything visible, name the block on that page it extends. Read tha
 
 The start page `/` fills the viewport under the header (`100svh`). The page does not grow to fit a new block. A new row takes its height from the charts.
 
-1. Title and one sentence.
+1. Title and one sentence. For dispatchers the same row holds the compact „Erste Schritte“ checklist (open steps as links); it adds no height on desktop.
 2. KPI tiles. Small uppercase label, one large number, optional hint. The whole tile is the link when the destination is that number.
 3. Deadline counts are three tiles of the same height: Überfällig, In N Tagen (N is the company lead, 30 from the catalog, „Heute“ when the lead is 0), Datum fehlt. Datum fehlt is not red. Each tile opens `/fristen` in that state, and the list total is that number. Names stay on that list. The dispatcher sets the lead and the licence-check interval on `/fristen`; a viewer only reads them.
-4. Charts, filling the rest.
+4. Charts, filling the rest. Chart rows never shrink below their content (`minmax(min-content, 1fr)`); if they would, the page scrolls instead of legends spilling into the next block.
 5. The only table sits behind "Exakte Monatswerte anzeigen".
 
 A count belongs in a tile. A long list belongs on the list page that already sorts that thing, or behind the same disclosure as the month table.
