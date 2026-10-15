@@ -1,7 +1,7 @@
 import { Outlet, ScrollRestoration } from "react-router";
 import { AuthProvider } from "./context/AuthProvider";
 import { VehiclesProvider } from "./context/VehiclesProvider";
-import { AppHeader } from "./components/AppHeader";
+import { AppHeader, HeaderLiveStatus } from "./components/AppHeader";
 import { useAuth } from "./hooks/useAuth";
 import { useBriefing } from "./hooks/useBriefing";
 import "./App.css";
@@ -11,7 +11,10 @@ function AuthedShell() {
 
     return (
         <>
-            <AppHeader openAlertCount={data?.counts.open} />
+            <AppHeader
+                openAlertCount={data?.counts.open}
+                status={<HeaderLiveStatus />}
+            />
             <main>
                 <Outlet />
             </main>
