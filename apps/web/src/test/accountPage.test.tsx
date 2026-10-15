@@ -21,6 +21,7 @@ vi.mock("../api/auth", () => ({
     removeMember: vi.fn(),
     setMemberRole: vi.fn(),
     setupTotp: vi.fn(),
+    switchCompany: vi.fn(),
     updateSecurity: vi.fn(),
 }));
 
@@ -34,6 +35,7 @@ import {
     removeMember,
     setMemberRole,
     setupTotp,
+    switchCompany,
     updateSecurity,
 } from "../api/auth";
 
@@ -65,7 +67,7 @@ const memberRow = async (email: string) => {
     let row: HTMLElement | undefined;
 
     await waitFor(() => {
-        row = [...document.querySelectorAll("li")].find((item) =>
+        row = [...document.querySelectorAll<HTMLElement>("tbody tr")].find((item) =>
             item.textContent?.includes(email),
         );
         expect(row).toBeInstanceOf(HTMLElement);
@@ -96,6 +98,7 @@ describe("account page", () => {
         vi.mocked(removeMember).mockReset();
         vi.mocked(setMemberRole).mockReset();
         vi.mocked(setupTotp).mockReset();
+        vi.mocked(switchCompany).mockReset();
         vi.mocked(updateSecurity).mockReset();
     });
 
@@ -105,7 +108,7 @@ describe("account page", () => {
 
         expect(
             await screen.findByText(
-                "Cihan Kurt · cihan@example.com · Rheinland Logistik",
+                "Cihan Kurt · cihan@example.com · Dispatcher bei Rheinland Logistik",
             ),
         ).toBeInTheDocument();
         fireEvent.change(screen.getByLabelText("Aktuelles Passwort"), {
@@ -141,7 +144,7 @@ describe("account page", () => {
         });
         const { setUser } = renderAuth(<AccountPage />, {
             user,
-            route: "/konto",
+            route: "/konto#zwei-faktor",
         });
 
         fireEvent.click(
@@ -193,7 +196,7 @@ describe("account page", () => {
         vi.mocked(createCompany).mockResolvedValue(next);
         const { setUser } = renderAuth(<AccountPage />, {
             user: authUser(),
-            route: "/konto",
+            route: "/konto#firmen",
         });
 
         fireEvent.change(screen.getByLabelText("Firmenname"), {
@@ -214,7 +217,7 @@ describe("account page", () => {
             delivery: "log",
             message: "Mail versendet.",
         });
-        renderAuth(<AccountPage />, { user: authUser(), route: "/konto" });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#team" });
 
         fireEvent.change(await screen.findByLabelText("E-Mail"), {
             target: { value: "neu@example.com" },
@@ -238,7 +241,7 @@ describe("account page", () => {
                 "LAST_DISPATCHER",
             ),
         );
-        renderAuth(<AccountPage />, { user: authUser(), route: "/konto" });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#team" });
 
         const row = await memberRow("cihan@example.com");
         fireEvent.change(within(row).getByLabelText("Rolle von Cihan Kurt"), {
@@ -255,14 +258,14 @@ describe("account page", () => {
 
     it("removes another member", async () => {
         vi.mocked(removeMember).mockResolvedValue(undefined);
-        renderAuth(<AccountPage />, { user: authUser(), route: "/konto" });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#team" });
 
         const row = await memberRow("viewer@example.com");
         fireEvent.click(within(row).getByRole("button", { name: "Entfernen" }));
 
         await waitFor(() => {
             expect(
-                [...document.querySelectorAll("li")].some((item) =>
+                [...document.querySelectorAll("tbody tr")].some((item) =>
                     item.textContent?.includes("viewer@example.com"),
                 ),
             ).toBe(false);
@@ -280,7 +283,7 @@ describe("account page", () => {
             sso_secret_set: true,
             sso_configured: true,
         });
-        renderAuth(<AccountPage />, { user: authUser(), route: "/konto" });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
 
         fireEvent.click(
             await screen.findByRole("checkbox", {
@@ -318,19 +321,112 @@ describe("account page", () => {
     it("hides company administration from a viewer", async () => {
         renderAuth(<AccountPage />, {
             user: authUser({ role: "viewer" }),
-            route: "/konto",
+            route: "/konto#team",
         });
 
         expect(
             await screen.findByRole("heading", { name: "Konto" }),
         ).toBeInTheDocument();
         expect(
-            screen.queryByRole("heading", { name: "Einladen" }),
+            screen.getByText(
+                "Cihan Kurt · cihan@example.com · Lesezugriff bei Rheinland Logistik",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("heading", { name: "Jemanden einladen" }),
         ).not.toBeInTheDocument();
         expect(
             screen.queryByRole("heading", { name: "Firmen-Login" }),
         ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("link", { name: "Team und Einladungen" }),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByRole("link", { name: "Firmen-Login" }),
+        ).not.toBeInTheDocument();
+        // #team is not open to a viewer: the page falls back to the password.
+        expect(screen.getByLabelText("Aktuelles Passwort")).toBeInTheDocument();
         expect(listMembers).not.toHaveBeenCalled();
         expect(getSecurity).not.toHaveBeenCalled();
+    });
+
+    it("shows only the section picked in the side navigation", async () => {
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto" });
+
+        const nav = await screen.findByRole("navigation", {
+            name: "Kontobereiche",
+        });
+        expect(
+            within(nav).getByRole("link", { name: "Passwort" }),
+        ).toHaveAttribute("aria-current", "page");
+        expect(screen.getByLabelText("Aktuelles Passwort")).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: "Einrichtung starten" }),
+        ).not.toBeInTheDocument();
+
+        fireEvent.click(
+            within(nav).getByRole("link", { name: "Zwei-Faktor · aus" }),
+        );
+        expect(
+            await screen.findByRole("button", { name: "Einrichtung starten" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByLabelText("Aktuelles Passwort"),
+        ).not.toBeInTheDocument();
+        expect(
+            within(nav).getByRole("link", { name: "Zwei-Faktor · aus" }),
+        ).toHaveAttribute("aria-current", "page");
+
+        fireEvent.click(
+            within(nav).getByRole("link", { name: "Team und Einladungen" }),
+        );
+        expect(await screen.findByLabelText("E-Mail")).toBeInTheDocument();
+        expect(await memberRow("viewer@example.com")).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: "Einrichtung starten" }),
+        ).not.toBeInTheDocument();
+
+        fireEvent.click(within(nav).getByRole("link", { name: "Firmen-Login" }));
+        expect(await screen.findByLabelText("OIDC-Issuer")).toBeInTheDocument();
+        expect(screen.queryByLabelText("E-Mail")).not.toBeInTheDocument();
+    });
+
+    it("switches to another company from the company section", async () => {
+        const user = authUser({
+            memberships: [
+                {
+                    company_id: 1,
+                    company_name: "Rheinland Logistik",
+                    role: "dispatcher",
+                },
+                {
+                    company_id: 9,
+                    company_name: "Nord Logistik",
+                    role: "viewer",
+                },
+            ],
+        });
+        const next = authUser({
+            ...user,
+            company_id: 9,
+            company_name: "Nord Logistik",
+            role: "viewer",
+        });
+        vi.mocked(switchCompany).mockResolvedValue(next);
+        const { setUser } = renderAuth(<AccountPage />, {
+            user,
+            route: "/konto#firmen",
+        });
+
+        expect(await screen.findByText("Aktiv")).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Zu Nord Logistik wechseln" }),
+        );
+
+        expect(
+            await screen.findByText("Du arbeitest jetzt in Nord Logistik."),
+        ).toBeInTheDocument();
+        expect(switchCompany).toHaveBeenCalledWith(9);
+        expect(setUser).toHaveBeenCalledWith(next);
     });
 });
