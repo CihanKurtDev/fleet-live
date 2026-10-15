@@ -5,6 +5,16 @@
     min-width: 0;
 }
 
+/* One line per row on desktop, so ten rows and the pagination fit the window. */
+@media (min-width: 701px) {
+    .assignment {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 8px;
+        white-space: nowrap;
+    }
+}
+
 .assignment strong {
     color: var(--text-h);
     font-weight: 650;

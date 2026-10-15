@@ -5,6 +5,10 @@
     max-width: 100%;
 }
 
-.tableWrap {
+/* Two classes beat the desktop `.tableContainer { overflow: visible }` in
+   Table.module.scss, so the trip list scrolls inside its box instead of
+   spilling over the pagination and the next panel. */
+.archive .tableWrap {
     max-height: 22.5rem;
+    overflow: auto;
 }
