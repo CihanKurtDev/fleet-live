@@ -16,3 +16,17 @@
     line-height: 1.25;
     text-align: right;
 }
+
+/* Phone drawer: the button spans the drawer, text starts left. */
+.fullWidth {
+    align-items: stretch;
+
+    .toggle {
+        justify-content: flex-start;
+    }
+
+    .error {
+        max-width: none;
+        text-align: left;
+    }
+}
