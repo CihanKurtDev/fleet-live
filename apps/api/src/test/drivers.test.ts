@@ -230,6 +230,213 @@ describe("GET /api/drivers", () => {
     });
 });
 
+describe("GET /api/drivers board filters", () => {
+    /** Open SPEEDING rows; `ended_at` set so one vehicle may hold several. */
+    function openWarnings(vehicleId: number, count: number, createdAt?: string) {
+        for (let index = 0; index < count; index += 1) {
+            insertAlert(vehicleId, {
+                type: "SPEEDING",
+                ended_at: "2026-01-01 00:00:00",
+                created_at: createdAt,
+            });
+        }
+    }
+
+    it("keeps the list unchanged without the new params", async () => {
+        const anna = VehicleModel.create({
+            license_plate: "K-BF 1",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+        await api.post("/api/drivers").send({ name: "Pool" });
+        openWarnings(anna.id, 2);
+
+        const response = await api.get("/api/drivers");
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.meta.total, 2);
+        assert.deepEqual(
+            response.body.data.map((row: { name: string }) => row.name),
+            ["Anna", "Pool"],
+        );
+    });
+
+    it("filters by a minimum of open SPEEDING warnings and counts the filtered total", async () => {
+        const anna = VehicleModel.create({
+            license_plate: "K-BF 2",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+        const ben = VehicleModel.create({
+            license_plate: "K-BF 3",
+            driver_name: "Ben",
+            company_id: 1,
+        });
+        const clara = VehicleModel.create({
+            license_plate: "K-BF 4",
+            driver_name: "Clara",
+            company_id: 1,
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-BF 9",
+            driver_name: "Fremde",
+            company_id: 2,
+        });
+
+        openWarnings(anna.id, 5, "2026-03-01 08:00:00");
+        insertAlert(anna.id, {
+            type: "SPEEDING",
+            ended_at: "2026-03-02 09:00:00",
+            created_at: "2026-03-02 09:00:00",
+        });
+        openWarnings(ben.id, 4);
+        // Resolved rows and other types do not count.
+        insertAlert(ben.id, {
+            type: "SPEEDING",
+            ended_at: "2026-01-01 00:00:00",
+            resolved_at: "2026-01-02 00:00:00",
+        });
+        insertAlert(ben.id, { type: "LOW_FUEL" });
+        openWarnings(clara.id, 7);
+        openWarnings(other.id, 9);
+
+        const response = await api.get("/api/drivers").query({
+            min_open_warnings: 5,
+            limit: 10,
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.meta.total, 2);
+        assert.deepEqual(
+            response.body.data.map((row: { name: string }) => row.name),
+            ["Clara", "Anna"],
+        );
+        const annaRow = response.body.data.find(
+            (row: { name: string }) => row.name === "Anna",
+        );
+        assert.equal(annaRow.open_warnings, 6);
+        assert.equal(annaRow.last_warning_at, "2026-03-02 09:00:00");
+
+        const searched = await api.get("/api/drivers").query({
+            min_open_warnings: 5,
+            search: "ann",
+        });
+        assert.equal(searched.body.meta.total, 1);
+        assert.equal(searched.body.data[0].name, "Anna");
+
+        const theirs = await (await loginAs(2)).agent
+            .get("/api/drivers")
+            .query({ min_open_warnings: 5 });
+        assert.equal(theirs.status, 200);
+        assert.deepEqual(
+            theirs.body.data.map((row: { name: string }) => row.name),
+            ["Fremde"],
+        );
+    });
+
+    it("reports no last warning without open SPEEDING rows", async () => {
+        const quiet = VehicleModel.create({
+            license_plate: "K-BF 5",
+            driver_name: "Quiet",
+            company_id: 1,
+        });
+        insertAlert(quiet.id, {
+            type: "SPEEDING",
+            ended_at: "2026-01-01 00:00:00",
+            resolved_at: "2026-01-02 00:00:00",
+        });
+
+        const response = await api.get("/api/drivers");
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data[0].last_warning_at, null);
+    });
+
+    it("filters drivers without a current vehicle", async () => {
+        VehicleModel.create({
+            license_plate: "K-BF 6",
+            driver_name: "Driving",
+            company_id: 1,
+        });
+        const eligible = await api.post("/api/drivers").send({ name: "Eligible" });
+        await api.post("/api/drivers").send({ name: "Nobody" });
+        const spare = VehicleModel.create({
+            license_plate: "K-BF 7",
+            company_id: 1,
+        });
+        const assigned = await api
+            .post(`/api/drivers/${eligible.body.data.id}/vehicles`)
+            .send({ vehicle_id: spare.id });
+        assert.equal(assigned.status, 201);
+
+        VehicleModel.create({
+            license_plate: "K-BF 8",
+            company_id: 2,
+        });
+        const otherApi = (await loginAs(2)).agent;
+        await otherApi.post("/api/drivers").send({ name: "Fremd ohne" });
+
+        const response = await api.get("/api/drivers").query({
+            without_vehicle: "true",
+            sort: "name",
+            dir: "asc",
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.meta.total, 2);
+        assert.deepEqual(
+            response.body.data.map(
+                (row: { name: string; vehicle_count: number }) => [
+                    row.name,
+                    row.vehicle_count,
+                ],
+            ),
+            [
+                ["Eligible", 1],
+                ["Nobody", 0],
+            ],
+        );
+        assert.ok(
+            response.body.data.every(
+                (row: { current_vehicle_plate: string | null }) =>
+                    row.current_vehicle_plate === null,
+            ),
+        );
+
+        const theirs = await otherApi
+            .get("/api/drivers")
+            .query({ without_vehicle: "true" });
+        assert.deepEqual(
+            theirs.body.data.map((row: { name: string }) => row.name),
+            ["Fremd ohne"],
+        );
+    });
+
+    it("rejects invalid filter values", async () => {
+        for (const query of [
+            { min_open_warnings: "0" },
+            { min_open_warnings: "abc" },
+            { min_open_warnings: "2.5" },
+            { min_open_warnings: "1001" },
+            { without_vehicle: "yes" },
+            { without_vehicle: "false" },
+        ]) {
+            const response = await api.get("/api/drivers").query(query);
+
+            assert.equal(response.status, 400, JSON.stringify(query));
+            assert.equal(response.body.code, "VALIDATION_ERROR");
+        }
+    });
+
+    it("requires a session for the filters", async () => {
+        const response = await request(app)
+            .get("/api/drivers")
+            .query({ min_open_warnings: 5, without_vehicle: "true" });
+
+        assert.equal(response.status, 401);
+    });
+});
+
 describe("GET /api/drivers/:id", () => {
     it("returns vehicles and SPEEDING counts including resolved rows", async () => {
         const vehicle = VehicleModel.create({

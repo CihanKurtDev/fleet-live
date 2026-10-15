@@ -207,8 +207,10 @@ export {
 
 export {
     DRIVER_INCIDENT_TYPES,
+    DRIVER_MIN_OPEN_WARNINGS_MAX,
     DRIVER_PHONE_MAX,
     DRIVER_SORT_KEYS,
+    DRIVER_TALK_MIN_OPEN_WARNINGS,
     driverCreateSchema,
     driverCurrentVehicleSchema,
     driverListQuerySchema,

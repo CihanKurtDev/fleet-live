@@ -62,6 +62,7 @@ type DriverRow = {
     current_vehicle_plate: string | null;
     current_vehicle_status: VehicleStatus | null;
     open_warnings: number;
+    last_warning_at: string | null;
     speeding: number;
     all_incidents: number;
     total?: number;
@@ -101,6 +102,7 @@ function toDriver(row: DriverRow): Driver {
         current_vehicle_plate: row.current_vehicle_plate,
         current_vehicle_status: row.current_vehicle_status,
         open_warnings: Number(row.open_warnings),
+        last_warning_at: row.last_warning_at ?? null,
         counts: toCounts(row),
     };
 }
@@ -148,6 +150,13 @@ const AGG_SELECT = `
           AND a.type = 'SPEEDING'
           AND a.resolved_at IS NULL
     ) AS open_warnings,
+    (
+        SELECT MAX(a.created_at)
+        FROM alerts a
+        WHERE a.driver_id = d.id
+          AND a.type = 'SPEEDING'
+          AND a.resolved_at IS NULL
+    ) AS last_warning_at,
     (
         SELECT COUNT(*)
         FROM alerts a
@@ -350,6 +359,26 @@ export class DriverModel {
                       AND dv.vehicle_id = ?
                   )`
                 : "";
+        const warningsSql =
+            query.min_open_warnings !== undefined
+                ? `AND (
+                    SELECT COUNT(*)
+                    FROM alerts a
+                    WHERE a.driver_id = d.id
+                      AND a.type = 'SPEEDING'
+                      AND a.resolved_at IS NULL
+                  ) >= ?`
+                : "";
+        const withoutVehicleSql = query.without_vehicle
+            ? `AND NOT EXISTS (
+                SELECT 1 FROM vehicles v
+                WHERE v.current_driver_id = d.id
+              )`
+            : "";
+        const filterSql = `${searchSql}
+              ${vehicleSql}
+              ${warningsSql}
+              ${withoutVehicleSql}`;
         const sortKey = query.sort ?? "open_warnings";
         const sortColumn = SORT_SQL[sortKey];
         const sortDirection = query.sort
@@ -364,8 +393,7 @@ export class DriverModel {
                 COUNT(*) OVER () AS total
             FROM drivers d
             WHERE d.company_id = ?
-              ${searchSql}
-              ${vehicleSql}
+              ${filterSql}
             ORDER BY ${sortColumn} ${sortDirection}, d.id ASC
             LIMIT ? OFFSET ?
         `;
@@ -373,8 +401,7 @@ export class DriverModel {
             SELECT COUNT(*) AS total
             FROM drivers d
             WHERE d.company_id = ?
-              ${searchSql}
-              ${vehicleSql}
+              ${filterSql}
         `;
 
         const params: SqlParam[] = [companyId];
@@ -383,6 +410,9 @@ export class DriverModel {
         }
         if (query.vehicle_id !== undefined) {
             params.push(query.vehicle_id);
+        }
+        if (query.min_open_warnings !== undefined) {
+            params.push(query.min_open_warnings);
         }
 
         return pagedQuery<DriverRow, Driver>({
