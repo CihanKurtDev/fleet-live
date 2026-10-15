@@ -3,7 +3,6 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 16px;
 }
 
 .panelTitle {
@@ -12,6 +11,7 @@
 }
 
 .inboxLink {
+    flex-shrink: 0;
     font-size: 13px;
     color: var(--text);
     text-decoration: underline;
@@ -25,7 +25,7 @@
 .list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -33,28 +33,58 @@
 
 .item {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 0;
-    border-bottom: 0;
+    gap: 10px;
+    min-height: 36px;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--code-bg);
+
+    &[data-tone="danger"] {
+        background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    }
 }
 
 .message {
+    flex: 1 1 auto;
+    min-width: 0;
     margin: 0;
     font-size: 14px;
     color: var(--text-h);
 }
 
+.dueChip {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+
+    border: 1px solid color-mix(in srgb, var(--warning) 50%, var(--border));
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--warning) 13%, var(--surface));
+
+    font-size: 12px;
+    line-height: 1;
+    color: var(--warning);
+    white-space: nowrap;
+}
+
 .error {
-    margin: 0 0 12px;
+    margin: 0;
     font-size: 13px;
-    color: #dc2626;
+    color: var(--danger);
 }
 
 .empty {
     margin: 0;
     color: var(--text);
     font-size: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .dueChip {
+        background: color-mix(in srgb, var(--warning) 22%, var(--surface));
+    }
 }

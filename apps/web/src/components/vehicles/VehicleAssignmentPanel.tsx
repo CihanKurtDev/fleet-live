@@ -27,6 +27,7 @@ import { DriverCreateForm } from "../drivers/DriverCreateForm";
 import { DriverNameLink } from "../drivers/DriverNameLink";
 import layout from "../../styles/detailLayout.module.scss";
 import styles from "../drivers/assignment.module.scss";
+import summary from "./VehicleAssignmentPanel.module.scss";
 
 interface VehicleAssignmentPanelProps {
     vehicle: Vehicle;
@@ -39,6 +40,7 @@ export const VehicleAssignmentPanel = ({
 }: VehicleAssignmentPanelProps) => {
     const { listEpoch } = useVehicles();
     const vehicleOnTrip = vehicle.status === "DRIVING";
+    const [rosterOpen, setRosterOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
     const [editing, setEditing] = useState(false);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -234,121 +236,176 @@ export const VehicleAssignmentPanel = ({
             (driver) => driver.id === vehicle.current_driver_id,
         ) ?? false;
     const selectedCount = selectedIds.length;
+    const eligibleOthers = assigned.filter(
+        (driver) => driver.id !== vehicle.current_driver_id,
+    ).length;
+    const canOpenRoster = canWrite || assigned.length > 0;
 
     return (
-        <section className={layout.panel}>
-            <div className={layout.panelHeader}>
-                <div className={styles.headerCopy}>
-                    <h2 className={layout.panelTitle}>Fahrer</h2>
-                    {assigned.length > 0 && (
-                        <p className={layout.note}>
-                            Nur „Aktuell“ erscheint in der Übersicht. „Freigegeben“ darf fahren und steht nicht als Fahrer am Fahrzeug.
-                        </p>
+        <div className={summary.summary}>
+            <h3 className={summary.label}>Fahrer</h3>
+            <div className={summary.line}>
+                <span className={summary.current}>
+                    {vehicle.current_driver_id !== null &&
+                    vehicle.driver_name ? (
+                        <>
+                            <DriverNameLink
+                                driverId={vehicle.current_driver_id}
+                                name={vehicle.driver_name}
+                            />
+                            <span className={summary.muted}> · aktuell</span>
+                        </>
+                    ) : (
+                        <span className={summary.muted}>
+                            Kein Fahrer · Pool
+                        </span>
                     )}
-                </div>
-                {canWrite && (
-                    <div className={styles.headerActions}>
-                        {editing && selectedCount > 0 && (
-                            <>
-                                <span className={styles.selectionCount}>
-                                    {selectedCount === 1
-                                        ? "1 ausgewählt"
-                                        : `${selectedCount} ausgewählt`}
-                                </span>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={busy}
-                                    onClick={() => setSelectedIds([])}
-                                >
-                                    Auswahl aufheben
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={busy}
-                                    onClick={() =>
-                                        setPendingUnassign(
-                                            assigned.filter((driver) =>
-                                                selectedIds.includes(driver.id),
-                                            ),
-                                        )
-                                    }
-                                >
-                                    {selectedCount === 1
-                                        ? "1 entfernen"
-                                        : `${selectedCount} entfernen`}
-                                </Button>
-                            </>
-                        )}
-                        {assigned.length > 0 && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                    setEditing((current) => !current);
-                                    setSelectedIds([]);
-                                }}
-                            >
-                                {editing ? "Fertig" : "Bearbeiten"}
-                            </Button>
-                        )}
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={openAssignPicker}
-                        >
-                            + Zuweisen
-                        </Button>
-                    </div>
+                </span>
+                {eligibleOthers > 0 && (
+                    <span className={summary.muted}>
+                        +{eligibleOthers} freigegeben
+                    </span>
+                )}
+                {canOpenRoster && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRosterOpen(true)}
+                    >
+                        {canWrite ? "Verwalten" : "Alle anzeigen"}
+                    </Button>
                 )}
             </div>
-            {error && (
+            {error && !rosterOpen && (
                 <p className={styles.error} role="alert">
                     {error}
                 </p>
             )}
-            {vehicleOnTrip && (
-                <p className={layout.note}>
-                    Fahrzeug ist unterwegs — aktueller Fahrer lässt sich erst
-                    nach der Fahrt wechseln oder entfernen.
-                </p>
-            )}
 
-            <AssignmentRoster
-                items={rosterItems}
-                editing={editing}
-                busy={busy}
-                selectedIds={selectedIds}
-                empty="Kein Fahrer. Das Fahrzeug steht im Pool."
-                onToggle={(id) =>
-                    setSelectedIds((current) =>
-                        current.includes(id)
-                            ? current.filter((selected) => selected !== id)
-                            : [...current, id],
-                    )
-                }
-                onSetCurrent={(id) =>
-                    void run(() =>
-                        setDriverCurrentVehicle(id, {
-                            vehicle_id: vehicle.id,
-                        }),
-                    )
-                }
-                onClearCurrent={(id) =>
-                    void run(() =>
-                        setDriverCurrentVehicle(id, {
-                            vehicle_id: null,
-                        }),
-                    )
-                }
-                onRemove={(id) => {
-                    const driver = assigned.find((row) => row.id === id);
-                    if (driver) {
-                        setPendingUnassign([driver]);
-                    }
+            <Modal
+                open={rosterOpen}
+                onClose={() => {
+                    setRosterOpen(false);
+                    setEditing(false);
+                    setSelectedIds([]);
                 }}
-            />
+                title="Fahrer"
+                size="lg"
+            >
+                <div className={summary.roster}>
+                    <div className={layout.panelHeader}>
+                        <div className={styles.headerCopy}>
+                            {assigned.length > 0 && (
+                                <p className={layout.note}>
+                                    Nur „Aktuell“ erscheint in der Übersicht. „Freigegeben“ darf fahren und steht nicht als Fahrer am Fahrzeug.
+                                </p>
+                            )}
+                        </div>
+                        {canWrite && (
+                            <div className={styles.headerActions}>
+                                {editing && selectedCount > 0 && (
+                                    <>
+                                        <span className={styles.selectionCount}>
+                                            {selectedCount === 1
+                                                ? "1 ausgewählt"
+                                                : `${selectedCount} ausgewählt`}
+                                        </span>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={busy}
+                                            onClick={() => setSelectedIds([])}
+                                        >
+                                            Auswahl aufheben
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            disabled={busy}
+                                            onClick={() =>
+                                                setPendingUnassign(
+                                                    assigned.filter((driver) =>
+                                                        selectedIds.includes(driver.id),
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            {selectedCount === 1
+                                                ? "1 entfernen"
+                                                : `${selectedCount} entfernen`}
+                                        </Button>
+                                    </>
+                                )}
+                                {assigned.length > 0 && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setEditing((current) => !current);
+                                            setSelectedIds([]);
+                                        }}
+                                    >
+                                        {editing ? "Fertig" : "Bearbeiten"}
+                                    </Button>
+                                )}
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={openAssignPicker}
+                                >
+                                    + Zuweisen
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                    {error && (
+                        <p className={styles.error} role="alert">
+                            {error}
+                        </p>
+                    )}
+                    {vehicleOnTrip && (
+                        <p className={layout.note}>
+                            Fahrzeug ist unterwegs — aktueller Fahrer lässt sich erst
+                            nach der Fahrt wechseln oder entfernen.
+                        </p>
+                    )}
+
+                    <AssignmentRoster
+                        items={rosterItems}
+                        editing={editing}
+                        busy={busy}
+                        selectedIds={selectedIds}
+                        empty="Kein Fahrer. Das Fahrzeug steht im Pool."
+                        onToggle={(id) =>
+                            setSelectedIds((current) =>
+                                current.includes(id)
+                                    ? current.filter((selected) => selected !== id)
+                                    : [...current, id],
+                            )
+                        }
+                        onSetCurrent={(id) =>
+                            void run(() =>
+                                setDriverCurrentVehicle(id, {
+                                    vehicle_id: vehicle.id,
+                                }),
+                            )
+                        }
+                        onClearCurrent={(id) =>
+                            void run(() =>
+                                setDriverCurrentVehicle(id, {
+                                    vehicle_id: null,
+                                }),
+                            )
+                        }
+                        onRemove={(id) => {
+                            const driver = assigned.find((row) => row.id === id);
+                            if (driver) {
+                                setPendingUnassign([driver]);
+                            }
+                        }}
+                    />
+                </div>
+            </Modal>
 
             <AssignmentPicker
                 open={assignOpen}
@@ -467,6 +524,6 @@ export const VehicleAssignmentPanel = ({
                     }}
                 />
             </Modal>
-        </section>
+        </div>
     );
 };
