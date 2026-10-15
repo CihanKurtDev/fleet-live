@@ -1,25 +1,80 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { isLowFuelLevel, type Alert, type Vehicle } from "@fleet-live/shared";
+import {
+    DUE_KIND_LABELS,
+    berlinTodayIso,
+    classifyDueOn,
+    explainHuMonth,
+    explainUvv,
+    isLowFuelLevel,
+    type Alert,
+    type Vehicle,
+} from "@fleet-live/shared";
 
 import { ApiError, isAbortError } from "../../api/client";
 import { listAlerts, resolveAlert } from "../../api/alerts";
 import { retryTransient } from "../../api/retryTransient";
 import { useVehicles } from "../../context/vehiclesContext";
+import { formatIsoDate } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
+import { WarningChip } from "./WarningChip";
 import styles from "./VehicleHintsPanel.module.scss";
 
 interface VehicleHintsPanelProps {
     vehicle: Vehicle;
     canWrite: boolean;
+    /** Opens the master-data form, where a missing or past date is entered. */
+    onEditMaster?: () => void;
 }
+
+type DueHint = {
+    kind: "hu" | "uvv";
+    state: "overdue" | "missing";
+    due_on: string | null;
+};
 
 const liveOffline = (alerts: Alert[]): Alert | undefined =>
     alerts.find((alert) => alert.type === "OFFLINE" && alert.ended_at === null);
 
+/**
+ * HU and UVV of this vehicle that need a date now: missing or past. "Soon"
+ * depends on the company lead and stays on /fristen.
+ */
+const dueHintsFor = (vehicle: Vehicle): DueHint[] => {
+    const today = berlinTodayIso();
+    const dates = [
+        {
+            kind: "hu" as const,
+            due_on: explainHuMonth(vehicle.hu_due_on).due_on,
+        },
+        {
+            kind: "uvv" as const,
+            due_on: explainUvv({
+                checkedOn: vehicle.uvv_checked_on,
+                manualDueOn: vehicle.uvv_due_on,
+                today,
+            }).due_on,
+        },
+    ];
+
+    return dates.flatMap(({ kind, due_on }) => {
+        const state = classifyDueOn(due_on, today, 0);
+
+        return state === "overdue" || state === "missing"
+            ? [{ kind, state, due_on }]
+            : [];
+    });
+};
+
+const dueHintText = (hint: DueHint): string =>
+    hint.state === "missing"
+        ? `${DUE_KIND_LABELS[hint.kind]}-Datum fehlt`
+        : `${DUE_KIND_LABELS[hint.kind]} war am ${formatIsoDate(hint.due_on)} fällig`;
+
 export const VehicleHintsPanel = ({
     vehicle,
     canWrite,
+    onEditMaster,
 }: VehicleHintsPanelProps) => {
     const { listEpoch, refetchLists } = useVehicles();
     const [liveOfflineAlert, setLiveOfflineAlert] = useState<
@@ -99,6 +154,7 @@ export const VehicleHintsPanel = ({
 
     const showTank = tankLow;
     const showFunk = noSignal || liveOfflineAlert !== undefined;
+    const dueHints = dueHintsFor(vehicle);
 
     return (
         <>
@@ -117,21 +173,13 @@ export const VehicleHintsPanel = ({
                 </p>
             )}
 
-            {!showTank && !showFunk ? (
+            {!showTank && !showFunk && dueHints.length === 0 ? (
                 <p className={styles.empty}>Keine offenen Hinweise.</p>
             ) : (
                 <ul className={styles.list}>
-                    {showTank && (
-                        <li className={styles.item}>
-                            <p className={styles.message}>
-                                Tank bei {Math.round(vehicle.fuel_level)} % —
-                                nach der Fahrt im Stammdaten-Formular
-                                eintragen.
-                            </p>
-                        </li>
-                    )}
                     {showFunk && (
-                        <li className={styles.item}>
+                        <li className={styles.item} data-tone="danger">
+                            <WarningChip type="OFFLINE" />
                             <p className={styles.message}>Kein Signal</p>
                             {canWrite && liveOfflineAlert ? (
                                 <Button
@@ -152,6 +200,40 @@ export const VehicleHintsPanel = ({
                             ) : null}
                         </li>
                     )}
+                    {showTank && (
+                        <li className={styles.item}>
+                            <WarningChip type="LOW_FUEL" />
+                            <p className={styles.message}>
+                                Tank bei {Math.round(vehicle.fuel_level)} % —
+                                nach der Fahrt im Stammdaten-Formular
+                                eintragen.
+                            </p>
+                        </li>
+                    )}
+                    {dueHints.map((hint) => (
+                        <li key={hint.kind} className={styles.item}>
+                            <span className={styles.dueChip}>Frist</span>
+                            <p className={styles.message}>
+                                {dueHintText(hint)}
+                            </p>
+                            {canWrite && onEditMaster ? (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onEditMaster}
+                                >
+                                    Eintragen
+                                </Button>
+                            ) : (
+                                <Link
+                                    className={styles.inboxLink}
+                                    to={`/fristen?state=${hint.state}&kind=${hint.kind}&search=${encodeURIComponent(vehicle.license_plate)}`}
+                                >
+                                    Fristen
+                                </Link>
+                            )}
+                        </li>
+                    ))}
                 </ul>
             )}
         </>

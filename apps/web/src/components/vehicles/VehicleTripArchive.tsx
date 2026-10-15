@@ -17,6 +17,8 @@ interface VehicleTripArchiveProps {
     onPageChange: (page: number) => void;
     onLimitChange: (limit: number) => void;
     isLoading?: boolean;
+    /** Take the parent's remaining height; rows scroll, pagination stays. */
+    fill?: boolean;
 }
 
 export const VehicleTripArchive = ({
@@ -30,25 +32,32 @@ export const VehicleTripArchive = ({
     onPageChange,
     onLimitChange,
     isLoading = false,
+    fill = false,
 }: VehicleTripArchiveProps) => {
     const showPagination = total > 0 && page <= pageCount;
 
     return (
-        <div className={styles.archive}>
-            <Table
-                columns={tripColumns}
-                rows={trips}
-                getRowKey={(row) => row.id}
-                selectedRows={
-                    selectedTripId === null ? [] : [selectedTripId]
-                }
-                onRowClick={(row) => onSelectTrip(row.id)}
-                isLoading={isLoading}
-                skeletonRowCount={Math.min(limit, 10)}
-                emptyContent="Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."
-                caption="Fahrten"
-                className={styles.tableWrap}
-            />
+        <div
+            className={
+                fill ? `${styles.archive} ${styles.fill}` : styles.archive
+            }
+        >
+            <div className={styles.scroll}>
+                <Table
+                    columns={tripColumns}
+                    rows={trips}
+                    getRowKey={(row) => row.id}
+                    selectedRows={
+                        selectedTripId === null ? [] : [selectedTripId]
+                    }
+                    onRowClick={(row) => onSelectTrip(row.id)}
+                    isLoading={isLoading}
+                    skeletonRowCount={Math.min(limit, 10)}
+                    emptyContent="Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."
+                    caption="Fahrten"
+                    className={styles.table}
+                />
+            </div>
 
             {showPagination && (
                 <TablePagination
