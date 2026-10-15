@@ -120,6 +120,45 @@ describe("GET /api/briefing", () => {
         assert.equal(response.body.data.counts.offline, 1);
         assert.equal(response.body.data.counts.low_fuel, 1);
         assert.equal(response.body.data.counts.in_depot, 0);
+        assert.equal(response.body.data.counts.speeding, 1);
+    });
+
+    it("counts running speeding only, per vehicle, for this company", async () => {
+        const running = VehicleModel.create({
+            license_plate: "K-TP 1",
+            driver_name: "Tempo Läuft",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const ended = VehicleModel.create({
+            license_plate: "K-TP 2",
+            driver_name: "Tempo Vorbei",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-TP 3",
+            driver_name: "Tempo Fremd",
+            company_id: 2,
+            status: "DRIVING",
+        });
+
+        // Erledigt, aber noch nicht beendet: zählt (speeding_open).
+        insertAlert(running.id, {
+            type: "SPEEDING",
+            resolved_at: "2026-09-01 10:05:00",
+        });
+        insertAlert(ended.id, {
+            type: "SPEEDING",
+            ended_at: "2026-09-01 10:01:00",
+        });
+        insertAlert(ended.id, { type: "OFFLINE" });
+        insertAlert(other.id, { type: "SPEEDING" });
+
+        const response = await api.get("/api/briefing");
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.counts.speeding, 1);
     });
 
     it("aggregates history months for this company only", async () => {

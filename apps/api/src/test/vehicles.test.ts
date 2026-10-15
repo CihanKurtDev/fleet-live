@@ -27,7 +27,7 @@ import { broadcast, closeAllSseClients } from "../sse/hub";
 import { resetSimControlForTests, setCompanySimRunning } from "../lib/simControl";
 import { sqliteDaysAgo, nowSqlite } from "../lib/sqlTime";
 import { config } from "../config";
-import { loginAs, seedFleet } from "./helpers";
+import { insertAlert, loginAs, seedFleet } from "./helpers";
 
 let api: ReturnType<typeof request.agent>;
 let sessionCookie = "";
@@ -530,6 +530,54 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(response.body.data.length, 1);
         assert.equal(response.body.data[0].license_plate, "K-PL 1");
         assert.equal(response.body.data[0].driver_name, null);
+    });
+
+    it("filters positions and the list to running speeding", async () => {
+        const running = VehicleModel.create({
+            license_plate: "K-SP 1",
+            driver_name: "Sara Tempo",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const ended = VehicleModel.create({
+            license_plate: "K-SP 2",
+            driver_name: "Ole Vorbei",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        putTelemetry(running.id, 50.9375, 6.9603, 120);
+        putTelemetry(ended.id, 50.94, 6.97, 80);
+        insertAlert(running.id, { type: "SPEEDING" });
+        insertAlert(ended.id, {
+            type: "SPEEDING",
+            ended_at: "2026-09-01 10:01:00",
+        });
+
+        const positions = await api
+            .get("/api/vehicles/positions")
+            .query({ filter: "speeding" });
+
+        assert.equal(positions.status, 200);
+        assert.deepEqual(
+            positions.body.data.map(
+                (row: { license_plate: string }) => row.license_plate,
+            ),
+            ["K-SP 1"],
+        );
+        assert.equal(positions.body.meta.matched, 1);
+
+        const list = await api
+            .get("/api/vehicles")
+            .query({ filter: "speeding" });
+
+        assert.equal(list.status, 200);
+        assert.deepEqual(
+            list.body.data.map(
+                (row: { license_plate: string }) => row.license_plate,
+            ),
+            ["K-SP 1"],
+        );
+        assert.equal(list.body.data[0].speeding_open, true);
     });
 
     it("rejects an invalid bbox and an unknown filter", async () => {
