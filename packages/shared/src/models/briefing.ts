@@ -41,6 +41,8 @@ export type BriefingCounts = {
     low_fuel: number;
     /** Letzte Position liegt in einem Depot-Radius der Firma. */
     in_depot: number;
+    /** Fahrzeuge mit laufender Tempoüberschreitung (`speeding_open`). */
+    speeding: number;
 };
 
 export type BriefingData = {

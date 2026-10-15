@@ -23,6 +23,8 @@ export const VEHICLE_FILTERS = [
     "idle",
     "offline",
     "in_depot",
+    /** Laufende Tempoüberschreitung (`speeding_open`). */
+    "speeding",
 ] as const;
 
 export const VEHICLE_PAGE_LIMITS = [10, 25, 50, 100] as const;

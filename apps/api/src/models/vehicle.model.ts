@@ -78,14 +78,15 @@ const FILTER_SQL: Record<VehicleFilterId, string> = {
     idle: "v.status = 'IDLE'",
     offline: "v.status = 'OFFLINE'",
     in_depot: "v.depot_site_id IS NOT NULL",
-};
-
-const SPEEDING_OPEN_SQL = `EXISTS (
+    speeding: `EXISTS (
         SELECT 1 FROM alerts a
         WHERE a.vehicle_id = v.id
           AND a.type = 'SPEEDING'
           AND a.ended_at IS NULL
-    ) AS speeding_open`;
+    )`,
+};
+
+const SPEEDING_OPEN_SQL = `${FILTER_SQL.speeding} AS speeding_open`;
 
 const OPEN_ALERT_TYPES_SQL = `(
         SELECT GROUP_CONCAT(type)

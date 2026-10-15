@@ -113,3 +113,30 @@ export const formatIsoDate = (value: string | null | undefined): string => {
     return `${match[3]}.${match[2]}.${match[1]}`;
 };
 
+
+const clockFormat = new Intl.DateTimeFormat("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+});
+
+const dayMonthFormat = new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+});
+
+/** Kurze Zeitspalte für Ereignislisten: heute `HH:MM`, sonst `TT.MM.`. */
+export const formatEventTime = (value: string | null): string => {
+    if (value === null) {
+        return "—";
+    }
+
+    const date = parseSqliteUtc(value);
+
+    if (!date) {
+        return "—";
+    }
+
+    return isSameDay(date, new Date())
+        ? clockFormat.format(date)
+        : dayMonthFormat.format(date);
+};

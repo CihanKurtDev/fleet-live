@@ -1,0 +1,115 @@
+.strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    text-align: left;
+}
+
+.label {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.list {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 0 2px;
+    overflow-x: auto;
+    list-style: none;
+}
+
+.site {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: var(--accent-bg);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+}
+
+.name {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--text-h);
+}
+
+.counts {
+    font-variant-numeric: tabular-nums;
+}
+
+.empty {
+    flex: 1 1 auto;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.add {
+    flex-shrink: 0;
+    height: 30px;
+    margin-left: auto;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--text-h);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+
+    &[aria-pressed="true"] {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+}
+
+@media (max-width: 700px) {
+    .strip {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 8px 12px;
+    }
+
+    .list {
+        flex-basis: 100%;
+        order: 2;
+    }
+
+    .site,
+    .add {
+        min-height: 44px;
+    }
+}
