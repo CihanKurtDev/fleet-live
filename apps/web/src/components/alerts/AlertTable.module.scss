@@ -32,6 +32,16 @@
     gap: 8px 12px;
 }
 
+/* Rückmeldung nach dem Erledigen; die Zeile ist immer da, damit sie vorgelesen wird. */
+.notice {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--success);
+    font-size: 14px;
+    font-weight: 600;
+}
+
 .scope {
     flex-shrink: 0;
     margin: 0;
@@ -56,12 +66,18 @@
 }
 
 .filters {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px 20px;
     flex-shrink: 0;
+}
+
+/* Die Auswahlleiste liegt darüber; die Filter halten nur die Höhe. */
+.filtersCovered > :not(:first-child) {
+    visibility: hidden;
 }
 
 @media (min-width: 701px) {
@@ -191,8 +207,31 @@
             overflow: visible;
         }
 
+        // Selection checkbox top right, out of the grid flow.
+        :global(tr) {
+            position: relative;
+        }
+
+        :global(td[data-col="select"]) {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            overflow: visible;
+        }
+
+        // Room for the checkbox so a long event text does not run under it.
+        :global(td[data-col="select"]:has(input) ~ td[data-col="message"]) {
+            padding-right: 32px;
+        }
+
+        :global(td[data-col="select"])::before,
         :global(td[data-col="message"])::before,
         :global(td[data-col="resolved_at"])::before {
+            display: none;
+        }
+
+        // A selected card has no Erledigen button, so no empty action row.
+        :global(td[data-col="resolved_at"]:has(> span:empty)) {
             display: none;
         }
 

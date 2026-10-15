@@ -1,5 +1,10 @@
-import type { Alert } from "@fleet-live/shared";
+import { useCallback, useState } from "react";
+import { serializeAlertListQuery, type Alert } from "@fleet-live/shared";
 
+import { resolveAlerts } from "../../api/alerts";
+import { ApiError } from "../../api/client";
+import { useVehicles } from "../../context/vehiclesContext";
+import { formatTimestamp } from "../../utils/dateTime";
 import { Table } from "../ui/Table/Table";
 import { TableFilterBar } from "../ui/Table/TableFilterBar";
 import { TablePagination } from "../ui/Table/TablePagination";
@@ -9,6 +14,10 @@ import { useAlertList } from "../../hooks/useAlertList";
 import { useAlertListQuery } from "../../hooks/useAlertListQuery";
 import { alertFilters, alertTypeFilters } from "./alertTableConfig";
 import { useAlertResolveColumn } from "./useAlertResolveColumn";
+import { useAlertSelection } from "./useAlertSelection";
+import { useStatusNotice } from "./useStatusNotice";
+import { AlertBulkResolveDialog, AlertSelectionBar } from "./AlertBulkResolve";
+import { resolvedNotice } from "./alertLabels";
 import { ExportButton } from "../export/ExportButton";
 import styles from "./AlertTable.module.scss";
 import band from "../../styles/pageBand.module.scss";
@@ -25,7 +34,23 @@ export const AlertTable = ({
 }: AlertTableProps) => {
     const listQuery = useAlertListQuery();
     const listResult = useAlertList(listQuery.query);
-    const { columns, actionError } = useAlertResolveColumn(canWrite);
+    const { refetchLists } = useVehicles();
+    const { notice, show: showNotice } = useStatusNotice();
+    const onSingleResolved = useCallback(
+        () => showNotice(resolvedNotice(1)),
+        [showNotice],
+    );
+    const { columns, actionError } = useAlertResolveColumn(
+        canWrite,
+        onSingleResolved,
+    );
+    const selection = useAlertSelection(
+        listResult.data,
+        serializeAlertListQuery(listQuery.query).toString(),
+    );
+    const [pendingRows, setPendingRows] = useState<Alert[] | null>(null);
+    const [bulkError, setBulkError] = useState<string | null>(null);
+    const [isResolving, setIsResolving] = useState(false);
     const {
         query,
         setType,
@@ -60,6 +85,39 @@ export const AlertTable = ({
         },
     });
 
+    const selectable = canWrite && query.filter !== "resolved";
+    const hasSelection = selectable && selection.count > 0;
+
+    const closeBulkDialog = () => {
+        setPendingRows(null);
+        setBulkError(null);
+    };
+
+    const confirmBulkResolve = async () => {
+        if (!pendingRows) {
+            return;
+        }
+
+        setBulkError(null);
+        setIsResolving(true);
+
+        try {
+            await resolveAlerts(pendingRows.map((row) => row.id));
+            selection.clear();
+            setPendingRows(null);
+            refetchLists();
+            showNotice(resolvedNotice(pendingRows.length));
+        } catch (caught: unknown) {
+            setBulkError(
+                caught instanceof ApiError
+                    ? caught.message
+                    : "Warnungen konnten nicht erledigt werden.",
+            );
+        } finally {
+            setIsResolving(false);
+        }
+    };
+
     if (notFound) {
         return (
             <section className={`${styles.alertTable} ${layout.sheet}`}>
@@ -93,6 +151,15 @@ export const AlertTable = ({
             >
                 <div className={styles.titleRow}>
                     <h1 className={styles.title}>Warnungen</h1>
+                    {canWrite && (
+                        <p
+                            className={styles.notice}
+                            role="status"
+                            aria-live="polite"
+                        >
+                            {notice}
+                        </p>
+                    )}
                     {canWrite && <ExportButton kind="alerts" />}
                 </div>
 
@@ -125,7 +192,22 @@ export const AlertTable = ({
 
             <div className={layout.sheet}>
                 {!isLoading && (
-                    <div className={styles.filters}>
+                    <div
+                        className={
+                            hasSelection
+                                ? `${styles.filters} ${styles.filtersCovered}`
+                                : styles.filters
+                        }
+                    >
+                        {hasSelection && (
+                            <AlertSelectionBar
+                                rows={selection.selectedRows}
+                                onClear={selection.clear}
+                                onResolve={() =>
+                                    setPendingRows(selection.selectedRows)
+                                }
+                            />
+                        )}
                         <TableFilterBar
                             filters={filtersWithCounts}
                             activeFilterId={tableState.filterId}
@@ -166,6 +248,20 @@ export const AlertTable = ({
                     columns={columns}
                     rows={paginatedRows}
                     getRowKey={(alert) => alert.id}
+                    selectable={selectable}
+                    selectedRows={selection.selectedIds}
+                    onSelectRow={(key) => selection.toggle(Number(key))}
+                    isRowSelectable={selection.isSelectable}
+                    getRowSelectLabel={(alert) =>
+                        `Warnung ${alert.license_plate}, ${formatTimestamp(alert.created_at)} auswählen`
+                    }
+                    selectAll={{
+                        checked: selection.allSelected,
+                        indeterminate: selection.someSelected,
+                        disabled: !selection.hasSelectable,
+                        label: "Alle auf dieser Seite",
+                        onChange: selection.toggleAll,
+                    }}
                     onRowClick={onSelectAlert}
                     sortConfig={tableState.sortConfig}
                     onSort={handleSort}
@@ -191,6 +287,16 @@ export const AlertTable = ({
                         total={total}
                         onPageChange={setPage}
                         onLimitChange={setLimit}
+                    />
+                )}
+
+                {canWrite && (
+                    <AlertBulkResolveDialog
+                        rows={pendingRows}
+                        isBusy={isResolving}
+                        error={bulkError}
+                        onClose={closeBulkDialog}
+                        onConfirm={() => void confirmBulkResolve()}
                     />
                 )}
             </div>

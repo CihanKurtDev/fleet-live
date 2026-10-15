@@ -1,4 +1,5 @@
 import type { TableProps } from "../../../types/table";
+import { Checkbox } from "../Checkbox/Checkbox";
 import { TableHeader } from "./TableHeader";
 import { TableRow } from "./TableRow";
 import styles from "./Table.module.scss";
@@ -10,6 +11,10 @@ export const Table = <RowType,>({
     isEditing = false,
     selectedRows = [],
     onSelectRow,
+    selectable = false,
+    isRowSelectable,
+    getRowSelectLabel,
+    selectAll,
     onRowClick,
     getRowClassName,
     sortConfig = null,
@@ -20,7 +25,8 @@ export const Table = <RowType,>({
     caption,
     className,
 }: TableProps<RowType>) => {
-    const columnCount = isEditing
+    const showSelect = isEditing || selectable;
+    const columnCount = showSelect
         ? columns.length + 1
         : columns.length;
     const interactive = isEditing || Boolean(onRowClick);
@@ -38,7 +44,7 @@ export const Table = <RowType,>({
             >
                 {columns.some((column) => column.width) && (
                     <colgroup>
-                        {isEditing && <col style={{ width: 36 }} />}
+                        {showSelect && <col style={{ width: 36 }} />}
                         {columns.map((column) => (
                             <col
                                 key={String(column.key)}
@@ -58,14 +64,25 @@ export const Table = <RowType,>({
                 )}
                 <thead>
                     <tr>
-                        {isEditing && (
+                        {showSelect && (
                             <th
                                 scope="col"
                                 className={`${styles.tableHeader} ${styles.selectCell}`}
+                                data-col="select"
                             >
-                                <span className={styles.visuallyHidden}>
-                                    Auswahl
-                                </span>
+                                {selectAll ? (
+                                    <Checkbox
+                                        checked={selectAll.checked}
+                                        indeterminate={selectAll.indeterminate}
+                                        disabled={selectAll.disabled}
+                                        onChange={selectAll.onChange}
+                                        aria-label={selectAll.label}
+                                    />
+                                ) : (
+                                    <span className={styles.visuallyHidden}>
+                                        Auswahl
+                                    </span>
+                                )}
                             </th>
                         )}
 
@@ -118,6 +135,11 @@ export const Table = <RowType,>({
                                             rowKey,
                                         )}
                                         isEditing={isEditing}
+                                        showSelect={showSelect}
+                                        canSelect={
+                                            isRowSelectable?.(row) ?? true
+                                        }
+                                        selectLabel={getRowSelectLabel?.(row)}
                                         interactive={interactive}
                                         rowClassName={getRowClassName?.(row)}
                                         onSelect={() => onSelectRow?.(rowKey)}

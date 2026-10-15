@@ -9,6 +9,7 @@ import type {
     SpeedingAlertDetails,
 } from "@fleet-live/shared";
 import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
+import { withTransaction } from "../db/database";
 import { stmt } from "../db/statements";
 import { nowSqlite } from "../lib/sqlTime";
 import { pagedQuery } from "../lib/pagination";
@@ -117,6 +118,25 @@ const RESOLVE = `
     UPDATE alerts
     SET resolved_at = ?
     WHERE id = ?
+      AND resolved_at IS NULL
+      AND vehicle_id IN (
+          SELECT id FROM vehicles WHERE company_id = ?
+      )
+`;
+
+// Die IDs kommen als JSON-Array: ein Statement für jede Listenlänge.
+const COUNT_FOR_COMPANY = `
+    SELECT COUNT(*) AS found
+    FROM alerts a
+    INNER JOIN vehicles v ON v.id = a.vehicle_id
+    WHERE a.id IN (SELECT value FROM json_each(?))
+      AND v.company_id = ?
+`;
+
+const RESOLVE_MANY = `
+    UPDATE alerts
+    SET resolved_at = ?
+    WHERE id IN (SELECT value FROM json_each(?))
       AND resolved_at IS NULL
       AND vehicle_id IN (
           SELECT id FROM vehicles WHERE company_id = ?
@@ -355,6 +375,38 @@ export class AlertModel {
 
         stmt(RESOLVE).run(nowSqlite(), id, companyId);
         return this.getById(id, companyId) ?? current;
+    }
+
+    /**
+     * Erledigt mehrere Warnungen der Firma in einer Transaktion. Fehlt eine
+     * ID in dieser Firma, ändert sich nichts und das Ergebnis ist `undefined`.
+     * Schon erledigte Zeilen bleiben unverändert; zurück kommt die Zahl der
+     * Zeilen, die dieser Aufruf geschlossen hat.
+     */
+    static resolveMany(
+        ids: number[],
+        companyId: number,
+    ): { resolved: number } | undefined {
+        const idsJson = JSON.stringify(ids);
+
+        return withTransaction(() => {
+            const { found } = stmt(COUNT_FOR_COMPANY).get(
+                idsJson,
+                companyId,
+            ) as { found: number };
+
+            if (Number(found) !== ids.length) {
+                return undefined;
+            }
+
+            const result = stmt(RESOLVE_MANY).run(
+                nowSqlite(),
+                idsJson,
+                companyId,
+            );
+
+            return { resolved: Number(result.changes) };
+        });
     }
 
     static findOpenSpeeding(vehicleId: number): {
