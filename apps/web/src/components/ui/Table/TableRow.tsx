@@ -12,6 +12,11 @@ interface TableRowProps<RowType> {
 
     isSelected: boolean;
     isEditing: boolean;
+    /** Checkbox-Spalte sichtbar (Bearbeiten-Modus oder `selectable`). */
+    showSelect?: boolean;
+    /** Diese Zeile hat eine Checkbox. */
+    canSelect?: boolean;
+    selectLabel?: string;
     interactive: boolean;
     rowClassName?: string;
 
@@ -24,6 +29,9 @@ const TableRowComponent = <RowType,>({
     columns,
     isSelected,
     isEditing,
+    showSelect = isEditing,
+    canSelect = true,
+    selectLabel = "Zeile auswählen",
     interactive,
     rowClassName,
     onSelect,
@@ -76,18 +84,25 @@ const TableRowComponent = <RowType,>({
             tabIndex={interactive && !isEditing && onClick ? 0 : undefined}
             aria-selected={isSelected}
         >
-            {isEditing && (
+            {showSelect && (
                 <td
                     className={`${styles.tableCell} ${styles.selectCell}`}
+                    data-col="select"
                     // Der Klick auf die Checkbox darf nicht zusätzlich
                     // über die Zeile ausgewertet werden.
-                    onClick={(event) => event.stopPropagation()}
+                    onClick={
+                        canSelect
+                            ? (event) => event.stopPropagation()
+                            : undefined
+                    }
                 >
-                    <Checkbox
-                        checked={isSelected}
-                        onChange={onSelect}
-                        aria-label="Zeile auswählen"
-                    />
+                    {canSelect && (
+                        <Checkbox
+                            checked={isSelected}
+                            onChange={onSelect}
+                            aria-label={selectLabel}
+                        />
+                    )}
                 </td>
             )}
 

@@ -12,6 +12,8 @@ interface ConfirmDialogProps {
     busyLabel?: string;
     isBusy?: boolean;
     onConfirm: () => void | Promise<void>;
+    /** Löschen bleibt rot; ein harmloser Abschluss nimmt `primary`. */
+    confirmVariant?: "danger" | "primary";
 }
 
 export const ConfirmDialog = ({
@@ -23,6 +25,7 @@ export const ConfirmDialog = ({
     busyLabel = "Wird ausgeführt…",
     isBusy = false,
     onConfirm,
+    confirmVariant = "danger",
 }: ConfirmDialogProps) => (
     <Modal open={open} onClose={onClose} title={title}>
         <div className={styles.confirm}>
@@ -39,7 +42,7 @@ export const ConfirmDialog = ({
                 </Button>
                 <Button
                     type="button"
-                    variant="danger"
+                    variant={confirmVariant}
                     size="sm"
                     disabled={isBusy}
                     onClick={onConfirm}

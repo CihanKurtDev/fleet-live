@@ -375,3 +375,199 @@ describe("PATCH /api/alerts/:id", () => {
         assert.equal(still?.active_alerts, 1);
     });
 });
+
+describe("PATCH /api/alerts (bulk)", () => {
+    function resolvedAt(id: number): string | null {
+        const row = db
+            .prepare("SELECT resolved_at FROM alerts WHERE id = ?")
+            .get(id) as { resolved_at: string | null };
+        return row.resolved_at;
+    }
+
+    it("requires a session", async () => {
+        const response = await request(app)
+            .patch("/api/alerts")
+            .send({ ids: [1], resolved: true });
+
+        assert.equal(response.status, 401);
+        assert.equal(response.body.code, "UNAUTHORIZED");
+    });
+
+    it("resolves several open alerts and decrements active_alerts", async () => {
+        const first = VehicleModel.create({
+            license_plate: "K-BK 1",
+            driver_name: "Bulk Eins",
+            company_id: 1,
+        });
+        const second = VehicleModel.create({
+            license_plate: "K-BK 2",
+            driver_name: "Bulk Zwei",
+            company_id: 1,
+        });
+        const a = insertAlert(first.id, { type: "OFFLINE" });
+        const b = insertAlert(first.id, { type: "LOW_FUEL" });
+        const c = insertAlert(second.id, { type: "SPEEDING" });
+        const untouched = insertAlert(second.id, { type: "LOW_FUEL" });
+
+        const response = await api
+            .patch("/api/alerts")
+            .send({ ids: [a, b, c], resolved: true });
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(response.body, { data: { resolved: 3 } });
+        assert.notEqual(resolvedAt(a), null);
+        assert.notEqual(resolvedAt(b), null);
+        assert.notEqual(resolvedAt(c), null);
+        assert.equal(resolvedAt(untouched), null);
+        assert.equal(VehicleModel.getById(first.id, 1)?.active_alerts, 0);
+        assert.equal(VehicleModel.getById(second.id, 1)?.active_alerts, 1);
+
+        const open = await api.get("/api/alerts");
+        assert.equal(open.body.meta.counts.open, 1);
+        assert.equal(open.body.meta.counts.resolved, 3);
+    });
+
+    it("is idempotent for alerts that are already resolved", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-BK 3",
+            driver_name: "Bulk Drei",
+            company_id: 1,
+        });
+        const done = insertAlert(vehicle.id, {
+            resolved_at: "2026-01-01 00:00:00",
+            ended_at: "2026-01-01 00:00:00",
+        });
+        const open = insertAlert(vehicle.id, { type: "LOW_FUEL" });
+
+        const first = await api
+            .patch("/api/alerts")
+            .send({ ids: [done, open], resolved: true });
+
+        assert.equal(first.status, 200);
+        assert.equal(first.body.data.resolved, 1);
+        assert.equal(resolvedAt(done), "2026-01-01 00:00:00");
+
+        const stamp = resolvedAt(open);
+        const second = await api
+            .patch("/api/alerts")
+            .send({ ids: [done, open], resolved: true });
+
+        assert.equal(second.status, 200);
+        assert.equal(second.body.data.resolved, 0);
+        assert.equal(resolvedAt(open), stamp);
+        assert.equal(VehicleModel.getById(vehicle.id, 1)?.active_alerts, 0);
+    });
+
+    it("returns 404 and changes nothing when one id belongs to another company", async () => {
+        const mine = VehicleModel.create({
+            license_plate: "K-BK 4",
+            driver_name: "Eigene",
+            company_id: 1,
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-OTH 4",
+            driver_name: "Fremde",
+            company_id: 2,
+        });
+        const own = insertAlert(mine.id);
+        const foreign = insertAlert(other.id);
+
+        const response = await api
+            .patch("/api/alerts")
+            .send({ ids: [own, foreign], resolved: true });
+
+        assert.equal(response.status, 404);
+        assert.equal(response.body.code, "NOT_FOUND");
+        assert.equal(resolvedAt(own), null);
+        assert.equal(resolvedAt(foreign), null);
+        assert.equal(VehicleModel.getById(mine.id, 1)?.active_alerts, 1);
+    });
+
+    it("returns 404 and changes nothing for an unknown id", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-BK 5",
+            driver_name: "Unbekannt",
+            company_id: 1,
+        });
+        const own = insertAlert(vehicle.id);
+
+        const response = await api
+            .patch("/api/alerts")
+            .send({ ids: [own, 999_999], resolved: true });
+
+        assert.equal(response.status, 404);
+        assert.equal(resolvedAt(own), null);
+    });
+
+    it("rejects bulk resolve from a viewer", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-BK 6",
+            driver_name: "Viewer",
+            company_id: 1,
+        });
+        const id = insertAlert(vehicle.id);
+
+        const viewer = (await loginAs(1, "viewer")).agent;
+        const response = await viewer
+            .patch("/api/alerts")
+            .send({ ids: [id], resolved: true });
+
+        assert.equal(response.status, 403);
+        assert.equal(response.body.code, "FORBIDDEN");
+        assert.equal(resolvedAt(id), null);
+    });
+
+    it("validates the body", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-BK 7",
+            driver_name: "Validierung",
+            company_id: 1,
+        });
+        const id = insertAlert(vehicle.id);
+        const tooMany = Array.from({ length: 101 }, (_, index) => index + 1);
+        const cases: Array<{ body: unknown; field: string }> = [
+            { body: { ids: [], resolved: true }, field: "ids" },
+            { body: { ids: tooMany, resolved: true }, field: "ids" },
+            { body: { ids: [1.5], resolved: true }, field: "ids.0" },
+            { body: { ids: ["1"], resolved: true }, field: "ids.0" },
+            { body: { ids: [0], resolved: true }, field: "ids.0" },
+            { body: { ids: [id, id], resolved: true }, field: "ids" },
+            { body: { ids: "1", resolved: true }, field: "ids" },
+            { body: { resolved: true }, field: "ids" },
+            { body: { ids: [id], resolved: false }, field: "resolved" },
+        ];
+
+        for (const { body, field } of cases) {
+            const response = await api.patch("/api/alerts").send(body as object);
+
+            assert.equal(response.status, 400, JSON.stringify(body));
+            assert.equal(response.body.code, "VALIDATION_ERROR");
+            assert.equal(typeof response.body.fields[field], "string");
+        }
+
+        assert.equal(resolvedAt(id), null);
+    });
+
+    it("accepts 100 ids", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-BK 8",
+            driver_name: "Hundert",
+            company_id: 1,
+        });
+        // Beendete, aber nicht erledigte Zeilen: nur eine offene pro Typ.
+        const ids = Array.from({ length: 100 }, () =>
+            insertAlert(vehicle.id, {
+                type: "LOW_FUEL",
+                ended_at: "2026-01-01 00:00:00",
+            }),
+        );
+
+        const response = await api
+            .patch("/api/alerts")
+            .send({ ids, resolved: true });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.resolved, 100);
+        assert.equal(VehicleModel.getById(vehicle.id, 1)?.active_alerts, 0);
+    });
+});

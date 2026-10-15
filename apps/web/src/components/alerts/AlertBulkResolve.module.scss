@@ -1,0 +1,83 @@
+/* Liegt über der Filterzeile und nimmt deren Höhe, schiebt also nichts. */
+.bar {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius);
+    background: var(--accent-bg);
+}
+
+@media (min-width: 701px) {
+    .bar {
+        padding-inline: var(--panel-pad-x, 20px);
+        border-width: 0 0 1px;
+        border-radius: var(--radius) var(--radius) 0 0;
+    }
+}
+
+.summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    min-width: 0;
+    margin: 0;
+    font-size: 14px;
+}
+
+.count {
+    color: var(--text-h);
+    font-weight: 650;
+}
+
+.detail {
+    color: var(--text);
+    font-size: 13px;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 12px 0 0;
+    padding: 10px 14px;
+    list-style: none;
+    border-radius: var(--radius);
+    background: var(--code-bg);
+    font-size: 13px;
+}
+
+.item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.plate {
+    color: var(--text-h);
+    font-weight: 650;
+}
+
+.time,
+.more {
+    color: var(--text);
+}
+
+.error.error {
+    margin-top: 12px;
+    color: var(--danger);
+}

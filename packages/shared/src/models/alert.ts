@@ -175,6 +175,19 @@ export type AlertPatch = {
     resolved: true;
 };
 
+/** Höchstens so viele Warnungen schließt ein Sammel-Erledigen auf einmal. */
+export const ALERT_BULK_MAX_IDS = 100;
+
+export type AlertBulkPatch = {
+    ids: number[];
+    resolved: true;
+};
+
+/** `resolved`: Zeilen, die dieser Aufruf von offen auf erledigt gesetzt hat. */
+export type AlertBulkPatchResponse = {
+    data: { resolved: number };
+};
+
 export const alertListQuerySchema = z.object({
     filter: z.preprocess(
         emptyToUndefined,
@@ -247,12 +260,36 @@ export const alertPatchSchema = z.object({
     resolved: z.literal(true, { error: "resolved muss true sein." }),
 });
 
+export const alertBulkPatchSchema = z.object({
+    ids: z
+        .array(
+            z
+                .number({ error: "Warnungs-IDs müssen Zahlen sein." })
+                .int("Warnungs-IDs müssen ganze Zahlen sein.")
+                .positive("Warnungs-IDs müssen größer als 0 sein."),
+            { error: "ids muss eine Liste von Warnungs-IDs sein." },
+        )
+        .min(1, "Keine Warnung ausgewählt.")
+        .max(
+            ALERT_BULK_MAX_IDS,
+            `Höchstens ${ALERT_BULK_MAX_IDS} Warnungen auf einmal.`,
+        )
+        .refine((ids) => new Set(ids).size === ids.length, {
+            error: "Jede Warnung darf nur einmal vorkommen.",
+        }),
+    resolved: z.literal(true, { error: "resolved muss true sein." }),
+});
+
 export function parseAlertListQuery(input: unknown): AlertListQuery {
     return alertListQuerySchema.parse(input);
 }
 
 export function parseAlertPatch(input: unknown): AlertPatch {
     return alertPatchSchema.parse(input);
+}
+
+export function parseAlertBulkPatch(input: unknown): AlertBulkPatch {
+    return alertBulkPatchSchema.parse(input);
 }
 
 export function serializeAlertListQuery(

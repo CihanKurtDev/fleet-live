@@ -10,7 +10,10 @@ import { Button } from "../ui/Button/Button";
 import { alertColumns } from "./alertTableConfig";
 import styles from "./AlertTable.module.scss";
 
-export const useAlertResolveColumn = (canWrite: boolean) => {
+export const useAlertResolveColumn = (
+    canWrite: boolean,
+    onResolved?: () => void,
+) => {
     const { refetchLists } = useVehicles();
     const [resolvingId, setResolvingId] = useState<number | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
@@ -23,6 +26,7 @@ export const useAlertResolveColumn = (canWrite: boolean) => {
             try {
                 await resolveAlert(id);
                 refetchLists();
+                onResolved?.();
             } catch (caught) {
                 setActionError(
                     caught instanceof ApiError
@@ -33,14 +37,14 @@ export const useAlertResolveColumn = (canWrite: boolean) => {
                 setResolvingId(null);
             }
         },
-        [refetchLists],
+        [onResolved, refetchLists],
     );
 
     const actionColumn = useMemo<TableColumn<Alert>>(
         () => ({
             key: "resolved_at",
             displayText: canWrite ? "Aktion" : "Status",
-            render: (value, { row }) => {
+            render: (value, { row, isSelected }) => {
                 if (value) {
                     return (
                         <span className={styles.actionCell}>
@@ -53,6 +57,11 @@ export const useAlertResolveColumn = (canWrite: boolean) => {
                     return (
                         <span className={styles.actionCell}>Offen</span>
                     );
+                }
+
+                // Ausgewählte Zeilen erledigt die Auswahlleiste.
+                if (isSelected) {
+                    return <span className={styles.actionCell} />;
                 }
 
                 const handleClick = (

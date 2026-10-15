@@ -1,5 +1,10 @@
 import type { Request, Response } from "express";
-import { parseAlertListQuery, parseAlertPatch } from "@fleet-live/shared";
+import {
+    parseAlertBulkPatch,
+    parseAlertListQuery,
+    parseAlertPatch,
+    type AlertBulkPatchResponse,
+} from "@fleet-live/shared";
 import { AlertModel } from "../models/alert.model";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
@@ -60,4 +65,22 @@ export function resolveAlert(req: Request, res: Response) {
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
     res.json(alert);
+}
+
+export function resolveAlerts(req: Request, res: Response) {
+    const { ids } = parseAlertBulkPatch(req.body);
+    const companyId = sessionCompany(req);
+    const result = AlertModel.resolveMany(ids, companyId);
+
+    if (!result) {
+        throw new NotFoundError("Mindestens eine Warnung wurde nicht gefunden.");
+    }
+
+    if (result.resolved > 0) {
+        notifyVehiclesChanged(companyId);
+    }
+
+    const body: AlertBulkPatchResponse = { data: result };
+    res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+    res.json(body);
 }
