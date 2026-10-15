@@ -7,6 +7,8 @@ import type {
 import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
+import { FirstSteps } from "../components/briefing/FirstSteps";
+import { PageTips } from "../components/help/PageTips";
 import { dueSoonLabel } from "../components/due/dueLabels";
 import { ExportButton } from "../components/export/ExportButton";
 import { RetryMessage } from "../components/ui/RetryMessage";
@@ -85,7 +87,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
     ];
 
     return (
-        <div className={styles.kpis}>
+        <div className={styles.kpis} data-tip="briefing-kpis">
             {tiles.map((tile) => {
                 const body = (
                     <>
@@ -166,7 +168,7 @@ const DueKpis = ({
     ];
 
     return (
-        <div className={styles.dueKpis}>
+        <div className={styles.dueKpis} data-tip="briefing-due">
             {tiles.map((tile) => {
                 const toneClass =
                     tile.tone === "critical"
@@ -206,18 +208,26 @@ const BriefingBody = ({
 }) => (
     <>
         <header className={`${band.band} ${band.bleed} ${styles.header}`}>
-            <div className={styles.titleRow}>
-                <h1 className={styles.title}>Schicht</h1>
-                {canWrite && <ExportButton kind="period" />}
+            <div className={styles.headGrid}>
+                <h1 className={`${styles.title} ${styles.headTitle}`}>
+                    Schicht
+                </h1>
+                <p className={styles.subtitle}>
+                    {briefingDateLabel()} · {briefingNeed(data.counts.open)}
+                </p>
+                <FirstSteps className={styles.headSteps} />
+                {canWrite && (
+                    <div className={styles.headAction}>
+                        <ExportButton kind="period" />
+                    </div>
+                )}
             </div>
-            <p className={styles.subtitle}>
-                {briefingDateLabel()} · {briefingNeed(data.counts.open)}
-            </p>
         </header>
         <ImportPrompt />
         <Kpis counts={data.counts} />
         <DueKpis due={data.due} leadDays={data.due_lead_days} />
         <BriefingCharts history={data.history} />
+        <PageTips page="briefing" />
     </>
 );
 
