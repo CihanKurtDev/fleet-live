@@ -8,6 +8,7 @@ import {
 } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { SimToggle } from "./SimToggle";
+import { HelpButton } from "./help/HelpButton";
 import { SessionMenu } from "./SessionMenu";
 import { CompanySwitch } from "./CompanySwitch";
 import { Button } from "./ui/Button/Button";
@@ -147,6 +148,7 @@ export const AppHeader = ({
                         )}
                     </div>
                     <div className={styles.end}>
+                        {user && <HelpButton />}
                         {user && user.role === "dispatcher" && <SimToggle />}
                         <SessionMenu />
                     </div>
@@ -189,6 +191,7 @@ export const AppHeader = ({
                         <span className={styles.pageTitle}>
                             {sectionTitle(pathname)}
                         </span>
+                        <HelpButton />
                         {status}
                     </div>
                 )}

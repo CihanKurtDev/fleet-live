@@ -1,0 +1,105 @@
+/* Right-hand panel over the page. It spans the whole window height so it
+   does not depend on the header height. Phones get the full width. */
+.drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    /* Above the fleet-map overlays (500), which sit in the root stacking
+       context; the maps themselves are isolated at z-index 0. */
+    z-index: 600;
+    display: flex;
+    flex-direction: column;
+    width: min(400px, 100vw);
+    box-sizing: border-box;
+
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: -14px 0 30px rgb(0 0 0 / 0.18);
+    color: var(--text);
+    text-align: left;
+}
+
+.head {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 12px 12px 18px;
+    border-bottom: 1px solid var(--border);
+}
+
+.title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 650;
+    color: var(--text-h);
+
+    &:focus {
+        outline: none;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+}
+
+.body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+}
+
+.item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+
+    &:last-child {
+        border-bottom: 0;
+    }
+
+    h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--text-h);
+    }
+
+    p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+}
+
+.tipsLink {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+}
+
+@media (max-width: 700px) {
+    .drawer {
+        width: 100vw;
+        border-left: 0;
+    }
+}

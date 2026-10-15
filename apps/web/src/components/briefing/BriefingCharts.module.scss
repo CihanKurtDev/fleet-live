@@ -295,11 +295,13 @@
 }
 
 /* Desktop: the two chart rows share the height of their grid row on the
-   page. Open, the month table drops below the window; the page scrolls. */
+   page, but each keeps at least the height its card needs (min-content),
+   so legends never run into the next card. Open, the month table drops
+   below the window; the page scrolls. */
 @media (min-width: 701px) {
     .section {
         min-height: 0;
-        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: minmax(min-content, 1fr) minmax(min-content, 1fr);
     }
 
     .chart,

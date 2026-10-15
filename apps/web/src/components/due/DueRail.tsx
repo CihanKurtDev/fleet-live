@@ -44,7 +44,7 @@ export const DueRail = ({
 
     return (
         <aside className={styles.rail} aria-label="Filter und Regeln">
-            <section>
+            <section data-tip="due-kinds">
                 <h2 className={styles.railTitle}>Art und Regel</h2>
                 <ul className={styles.kindList}>
                     {kinds.map((kind) => {
@@ -89,7 +89,7 @@ export const DueRail = ({
                 </ul>
             </section>
 
-            <section className={styles.railBlock}>
+            <section className={styles.railBlock} data-tip="due-settings">
                 <h2 className={styles.railTitle}>Einstellungen der Firma</h2>
                 <DueSettingsFields onSaved={onSaved} />
             </section>
