@@ -10,7 +10,6 @@ import {
 } from "../../hooks/useLeafletFollowMap";
 import { useLatestRef } from "../../hooks/useLatestRef";
 import { useMarkerSlide } from "../../hooks/useMarkerSlide";
-import { MapStatusLegend } from "./MapStatusLegend";
 import type { MapPoint } from "./mapGeometry";
 import {
     VEHICLE_STATUS_COLORS,
@@ -26,6 +25,8 @@ type VehicleMapProps = {
     label: string;
     status: VehicleStatus;
     trail?: MapPoint[];
+    /** Fill the parent's height instead of the fixed map height. */
+    fill?: boolean;
 };
 
 const markerTooltip = (label: string, status: VehicleStatus) =>
@@ -45,6 +46,7 @@ export const VehicleMap = ({
     label,
     status,
     trail,
+    fill = false,
 }: VehicleMapProps) => {
     const {
         containerRef,
@@ -149,7 +151,9 @@ export const VehicleMap = ({
 
     return (
         <div
-            className={styles.wrap}
+            className={
+                fill ? `${styles.wrap} ${styles.wrapFill}` : styles.wrap
+            }
             data-status={status}
             style={
                 {
@@ -159,11 +163,12 @@ export const VehicleMap = ({
         >
             <div
                 ref={containerRef}
-                className={styles.map}
+                className={
+                    fill ? `${styles.map} ${styles.mapStretch}` : styles.map
+                }
                 role="img"
                 aria-label={`Karte mit Position von ${label}, Status ${statusLabel}`}
             />
-            <MapStatusLegend />
             {!following && (
                 <button
                     type="button"

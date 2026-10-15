@@ -29,6 +29,10 @@ type InDepotCountRow = {
     in_depot_count: number;
 };
 
+type SpeedingCountRow = {
+    speeding_count: number;
+};
+
 type RosterRow = {
     active_drivers: number;
     active_vehicles: number;
@@ -203,6 +207,20 @@ export class BriefingModel {
             `,
         ).get(companyId) as InDepotCountRow;
 
+        const speeding = stmt(
+            `
+            SELECT COUNT(*) AS speeding_count
+            FROM vehicles v
+            WHERE v.company_id = ?
+              AND EXISTS (
+                  SELECT 1 FROM alerts a
+                  WHERE a.vehicle_id = v.id
+                    AND a.type = 'SPEEDING'
+                    AND a.ended_at IS NULL
+              )
+            `,
+        ).get(companyId) as SpeedingCountRow;
+
         const counts: BriefingCounts = {
             open: Number(open.open_count),
             offline: Number(status.offline),
@@ -210,6 +228,7 @@ export class BriefingModel {
             idle: Number(status.idle),
             low_fuel: Number(lowFuel.low_fuel_count),
             in_depot: Number(inDepot.in_depot_count),
+            speeding: Number(speeding.speeding_count),
         };
 
         return {

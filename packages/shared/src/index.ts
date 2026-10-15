@@ -83,6 +83,8 @@ export {
 
 export type {
     Alert,
+    AlertBulkPatch,
+    AlertBulkPatchResponse,
     AlertDetails,
     AlertFilterId,
     AlertListCounts,
@@ -100,10 +102,12 @@ export type {
 } from "./models/alert";
 
 export {
+    ALERT_BULK_MAX_IDS,
     ALERT_FILTERS,
     ALERT_SEVERITIES,
     ALERT_SORT_KEYS,
     ALERT_TYPES,
+    alertBulkPatchSchema,
     alertListQuerySchema,
     alertPatchSchema,
     formatAlertDuration,
@@ -119,6 +123,7 @@ export {
     LOW_FUEL_THRESHOLD_PERCENT,
     lowFuelSeverity,
     OFFLINE_AFTER_MS,
+    parseAlertBulkPatch,
     parseAlertListQuery,
     parseAlertPatch,
     serializeAlertListQuery,
@@ -207,8 +212,10 @@ export {
 
 export {
     DRIVER_INCIDENT_TYPES,
+    DRIVER_MIN_OPEN_WARNINGS_MAX,
     DRIVER_PHONE_MAX,
     DRIVER_SORT_KEYS,
+    DRIVER_TALK_MIN_OPEN_WARNINGS,
     driverCreateSchema,
     driverCurrentVehicleSchema,
     driverListQuerySchema,

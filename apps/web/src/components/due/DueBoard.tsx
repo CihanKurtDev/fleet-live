@@ -62,7 +62,12 @@ export const DueBoard = () => {
                 />
             </header>
 
-            <div className={styles.tiles} role="group" aria-label="Stand">
+            <div
+                className={styles.tiles}
+                role="group"
+                aria-label="Stand"
+                data-tip="due-tiles"
+            >
                 {STATE_TILES.map((tile) => {
                     const active = query.state === tile.id;
                     const count = meta?.counts[tile.id];

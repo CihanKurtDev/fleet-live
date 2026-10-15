@@ -144,7 +144,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
         key: "active_alerts",
         displayText: "Warnungen",
-        width: "116px",
+        width: "156px",
         sortable: true,
         render: (_value, { row }) => {
             const types = warningTypes(row);

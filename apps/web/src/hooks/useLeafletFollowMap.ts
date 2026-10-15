@@ -67,7 +67,15 @@ export const useLeafletFollowMap = () => {
         themed.map.on("zoomstart", onUserView);
         themed.map.on("resize", onResize);
 
+        // The detail map fills its panel. Leaflet only watches the window,
+        // so a panel that changes height needs its own nudge.
+        const resizeObserver = new ResizeObserver(() => {
+            themed.map.invalidateSize();
+        });
+        resizeObserver.observe(container);
+
         return () => {
+            resizeObserver.disconnect();
             themed.map.off("dragstart", onUserView);
             themed.map.off("zoomstart", onUserView);
             themed.map.off("resize", onResize);

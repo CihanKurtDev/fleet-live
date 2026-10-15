@@ -5,7 +5,7 @@ import { getSim, setSimRunning } from "../api/sim";
 import { Button } from "./ui/Button/Button";
 import styles from "./SimToggle.module.scss";
 
-export const SimToggle = () => {
+export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
     const [sim, setSim] = useState<SimState | null>(null);
     const [isBusy, setIsBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -42,11 +42,16 @@ export const SimToggle = () => {
     };
 
     return (
-        <div className={styles.wrap}>
+        <div
+            className={
+                fullWidth ? `${styles.wrap} ${styles.fullWidth}` : styles.wrap
+            }
+        >
             <Button
                 variant="secondary"
-                size="sm"
+                size={fullWidth ? "md" : "sm"}
                 className={styles.toggle}
+                fullWidth={fullWidth}
                 disabled={isBusy}
                 onClick={toggle}
                 aria-pressed={sim.running}

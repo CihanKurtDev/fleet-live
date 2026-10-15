@@ -5,6 +5,114 @@
     max-width: 100%;
 }
 
-.tableWrap {
+/* The trip list scrolls here, not in the generic table container. */
+.scroll {
     max-height: 22.5rem;
+    min-width: 0;
+    overflow: auto;
+    scrollbar-gutter: stable;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+
+    .table {
+        overflow: visible;
+    }
+
+    th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--surface);
+    }
+
+    th,
+    td {
+        padding-block: 8px;
+    }
+}
+
+/* In the cockpit the panel sets the height: rows scroll, pagination stays. */
+@media (min-width: 1001px) {
+    .fill {
+        flex: 1 1 0;
+        min-height: 0;
+
+        .scroll {
+            flex: 1 1 0;
+            min-height: 0;
+            max-height: none;
+        }
+    }
+}
+
+/*
+ * Phones: no inner scroll box. Each trip is a small card in page flow,
+ * Start and Ende on the first line, Strecke and Spitze on the second.
+ * Pagination keeps the list short.
+ */
+@media (max-width: 700px) {
+    .scroll {
+        max-height: none;
+        overflow: visible;
+        scrollbar-gutter: auto;
+        border: 0;
+        border-radius: 0;
+
+        :global(table) {
+            display: block;
+        }
+
+        :global(thead) {
+            display: none;
+        }
+
+        :global(tbody) {
+            display: grid;
+            gap: 8px;
+        }
+
+        :global(tr) {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px 12px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+        }
+
+        :global(tr[aria-selected="true"]) {
+            border-color: var(--accent-border);
+            background: var(--accent-bg);
+        }
+
+        th,
+        td {
+            padding: 0;
+        }
+
+        td {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            border: 0;
+            font-size: 13px;
+            color: var(--text-h);
+
+            &::before {
+                content: attr(data-label);
+                color: var(--text);
+                font-size: 11px;
+                font-weight: 650;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+            }
+        }
+
+        td[colspan] {
+            grid-column: 1 / -1;
+            padding: 8px 0;
+        }
+    }
 }

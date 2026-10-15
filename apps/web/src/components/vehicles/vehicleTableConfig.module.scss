@@ -13,6 +13,14 @@
     gap: 4px;
 }
 
+/* One line per row on desktop: wrapped chips made rows taller and pushed the
+   pagination below the window. */
+@media (min-width: 701px) {
+    .chips {
+        flex-wrap: nowrap;
+    }
+}
+
 .clip {
     display: block;
     overflow: hidden;

@@ -9,7 +9,16 @@ import { useRetryTrigger } from "./useRetryTrigger";
 export const useDriverList = (query: DriverListQuery) => {
     const { listEpoch } = useVehicles();
     const { retryKey, retry } = useRetryTrigger();
-    const { search, sort, dir, page, limit, vehicle_id } = query;
+    const {
+        search,
+        sort,
+        dir,
+        page,
+        limit,
+        vehicle_id,
+        min_open_warnings,
+        without_vehicle,
+    } = query;
     const [response, setResponse] = useState<DriverListResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -21,6 +30,8 @@ export const useDriverList = (query: DriverListQuery) => {
         page,
         limit,
         vehicle_id,
+        min_open_warnings,
+        without_vehicle,
         listEpoch,
         retryKey,
     ].join("\0");
@@ -41,6 +52,8 @@ export const useDriverList = (query: DriverListQuery) => {
             page,
             limit,
             vehicle_id,
+            min_open_warnings,
+            without_vehicle,
         };
 
         retryTransient(
@@ -76,6 +89,8 @@ export const useDriverList = (query: DriverListQuery) => {
         page,
         limit,
         vehicle_id,
+        min_open_warnings,
+        without_vehicle,
         listEpoch,
         retryKey,
     ]);

@@ -64,6 +64,14 @@ export interface TableStateProps<RowType> {
     limit: number;
 }
 
+export interface TableSelectAll {
+    checked: boolean;
+    indeterminate: boolean;
+    disabled?: boolean;
+    label: string;
+    onChange: () => void;
+}
+
 export interface TableProps<RowType> {
     columns: TableColumn<RowType>[];
     rows: RowType[];
@@ -74,6 +82,21 @@ export interface TableProps<RowType> {
 
     selectedRows?: Array<string | number>;
     onSelectRow?: (key: string | number) => void;
+
+    /**
+     * Checkbox-Spalte ohne Bearbeiten-Modus: der Zeilenklick bleibt
+     * `onRowClick`, ausgewählt wird nur über die Checkbox.
+     */
+    selectable?: boolean;
+
+    /** Zeilen, die `false` liefern, bekommen keine Checkbox. */
+    isRowSelectable?: (row: RowType) => boolean;
+
+    /** Vorgelesener Name der Zeilen-Checkbox. */
+    getRowSelectLabel?: (row: RowType) => string;
+
+    /** Kopf-Checkbox für alle auswählbaren Zeilen der Seite. */
+    selectAll?: TableSelectAll;
 
     onRowClick?: (row: RowType) => void;
 

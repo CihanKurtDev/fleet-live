@@ -32,6 +32,8 @@ export type Driver = {
     /** Status des aktuellen Fahrzeugs; null ohne aktuelles Fahrzeug. */
     current_vehicle_status: VehicleStatus | null;
     open_warnings: number;
+    /** Neueste offene Tempo-Warnung (naive UTC); null ohne offene Warnung. */
+    last_warning_at: string | null;
     counts: DriverIncidentCounts;
 };
 
@@ -72,6 +74,15 @@ export const DRIVER_SORT_KEYS = [
 ] as const;
 
 export type DriverSortKey = (typeof DRIVER_SORT_KEYS)[number];
+
+/**
+ * Ab so vielen offenen Tempo-Warnungen steht ein Fahrer auf der Übersicht
+ * unter „Gespräch führen“. Vorschlag, keine Vorgabe der Firma.
+ */
+export const DRIVER_TALK_MIN_OPEN_WARNINGS = 5;
+
+/** Obergrenze für `min_open_warnings`. */
+export const DRIVER_MIN_OPEN_WARNINGS_MAX = 1000;
 
 export const driverListQuerySchema = z.object({
     search: z.preprocess(
@@ -118,6 +129,27 @@ export const driverListQuerySchema = z.object({
             .min(1, "Fahrzeug-ID muss mindestens 1 sein.")
             .optional(),
     ),
+    /** Nur Fahrer mit mindestens so vielen offenen Tempo-Warnungen. */
+    min_open_warnings: z.preprocess(
+        emptyToUndefined,
+        z.coerce
+            .number({ error: "Mindestzahl Warnungen muss eine Zahl sein." })
+            .int("Mindestzahl Warnungen muss eine ganze Zahl sein.")
+            .min(1, "Mindestzahl Warnungen muss mindestens 1 sein.")
+            .max(
+                DRIVER_MIN_OPEN_WARNINGS_MAX,
+                `Mindestzahl Warnungen darf höchstens ${DRIVER_MIN_OPEN_WARNINGS_MAX} sein.`,
+            )
+            .optional(),
+    ),
+    /** `true`: nur Fahrer ohne aktuelles Fahrzeug. */
+    without_vehicle: z.preprocess(
+        emptyToUndefined,
+        z
+            .enum(["true"], { error: "Ohne Fahrzeug muss true sein." })
+            .transform(() => true as const)
+            .optional(),
+    ),
 });
 
 export type DriverListQuery = z.infer<typeof driverListQuerySchema>;
@@ -150,6 +182,14 @@ export function serializeDriverListQuery(
 
     if (query.vehicle_id !== undefined) {
         params.set("vehicle_id", String(query.vehicle_id));
+    }
+
+    if (query.min_open_warnings !== undefined) {
+        params.set("min_open_warnings", String(query.min_open_warnings));
+    }
+
+    if (query.without_vehicle) {
+        params.set("without_vehicle", "true");
     }
 
     return params;

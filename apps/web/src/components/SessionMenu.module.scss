@@ -14,21 +14,6 @@
     min-height: 34px;
 }
 
-.companyField {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 3px;
-}
-
-.error {
-    max-width: 260px;
-    color: var(--danger);
-    font-size: 11px;
-    line-height: 1.25;
-    text-align: right;
-}
-
 .company {
     max-width: 180px;
     min-width: 0;
@@ -38,23 +23,6 @@
     font-size: 13px;
     line-height: 20px;
     color: var(--text);
-}
-
-.companySelect {
-    max-width: 220px;
-    height: 32px;
-    padding: 0 8px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text-h);
-    font: inherit;
-    font-size: 12px;
-
-    &:focus-visible {
-        outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
-    }
 }
 
 .account {
@@ -109,29 +77,4 @@
     }
 }
 
-@media (max-width: 700px) {
-    .menu {
-        flex: 1 1 auto;
-        min-width: 0;
-        justify-content: flex-end;
-        gap: 4px;
-    }
-
-    .identity {
-        flex: 1 1 auto;
-        min-width: 0;
-        justify-content: flex-end;
-    }
-
-    .company,
-    .companySelect {
-        flex: 0 1 108px;
-        max-width: 108px;
-    }
-
-    .account {
-        flex: 0 1 120px;
-        max-width: 120px;
-        padding: 0 8px;
-    }
-}
+/* Phones: signed-in users get the drawer in AppHeader instead of this menu. */

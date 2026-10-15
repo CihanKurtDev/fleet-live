@@ -1,0 +1,48 @@
+.summary {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.label {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    min-width: 0;
+    font-size: 14px;
+    color: var(--text-h);
+}
+
+.current {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.muted {
+    color: var(--text);
+    font-size: 13px;
+}
+
+/* Roster in the modal body; the large modal body itself does not scroll. */
+.roster {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px 20px 20px;
+}

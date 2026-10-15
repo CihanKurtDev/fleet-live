@@ -133,6 +133,14 @@ export const router = createBrowserRouter([
                                     ).DriverDetailPage,
                                 }),
                             },
+                            {
+                                path: 'konto',
+                                lazy: async () => ({
+                                    Component: (
+                                        await import('./pages/AccountPage')
+                                    ).AccountPage,
+                                }),
+                            },
                         ],
                     },
                     {
@@ -147,13 +155,6 @@ export const router = createBrowserRouter([
                                 }),
                             },
                         ],
-                    },
-                    {
-                        path: 'konto',
-                        lazy: async () => ({
-                            Component: (await import('./pages/AccountPage'))
-                                .AccountPage,
-                        }),
                     },
                 ],
             },

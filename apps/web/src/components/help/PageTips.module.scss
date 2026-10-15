@@ -1,0 +1,98 @@
+/* Coach mark: a ring around the target and a card beside it. Both are fixed
+   to the viewport and placed from the target's rectangle. */
+.ring {
+    position: fixed;
+    z-index: 20;
+    box-sizing: border-box;
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    pointer-events: none;
+}
+
+.card {
+    position: fixed;
+    z-index: 21;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-sizing: border-box;
+    padding: 12px 14px;
+
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--bg);
+    box-shadow: 0 14px 34px rgb(0 0 0 / 0.3);
+    text-align: left;
+}
+
+.arrowAbove,
+.arrowBelow {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    transform: rotate(45deg);
+}
+
+.arrowAbove {
+    top: -7px;
+}
+
+.arrowBelow {
+    bottom: -7px;
+}
+
+.title {
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.body {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.count {
+    font-size: 12px;
+}
+
+.actions {
+    display: flex;
+    gap: 6px;
+}
+
+.skip,
+.next {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--bg);
+    border-radius: 6px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: 2px solid var(--bg);
+        outline-offset: 2px;
+    }
+}
+
+.skip {
+    background: transparent;
+    color: var(--bg);
+}
+
+.next {
+    background: var(--bg);
+    color: var(--text-h);
+}

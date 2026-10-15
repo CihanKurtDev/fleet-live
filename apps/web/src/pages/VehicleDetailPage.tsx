@@ -4,6 +4,7 @@ import {
     dueExplanationText,
     explainHuMonth,
     explainUvv,
+    isLowFuelLevel,
 } from "@fleet-live/shared";
 import { decodePolyline, speedBand } from "@fleet-live/shared";
 import type { Trip, TripListItem, VehicleInput } from "@fleet-live/shared";
@@ -23,6 +24,8 @@ import {
     type MapPoint,
 } from "../components/vehicles/VehicleMap";
 import { VehicleTripArchive } from "../components/vehicles/VehicleTripArchive";
+import { VehicleMoreMenu } from "../components/vehicles/VehicleMoreMenu";
+import { pathLength, toLatLngs } from "../components/vehicles/mapGeometry";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
 import { VehicleStatusChip } from "../components/vehicles/VehicleStatusChip";
 import { Button } from "../components/ui/Button/Button";
@@ -39,16 +42,25 @@ import {
     formatTimestamp,
 } from "../utils/dateTime";
 import layout from "../styles/detailLayout.module.scss";
-import band from "../styles/pageBand.module.scss";
 import styles from "./VehicleDetailPage.module.scss";
 
-const formatCoordinate = (value: number | null) =>
-    value === null ? "—" : value.toFixed(4);
+const formatCoordinate = (
+    value: number,
+    positive: string,
+    negative: string,
+) =>
+    `${Math.abs(value).toLocaleString("de-DE", {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 4,
+    })}° ${value < 0 ? negative : positive}`;
+
+const formatKilometerValue = (meters: number) =>
+    (meters / 1_000).toLocaleString("de-DE", {
+        maximumFractionDigits: 1,
+    });
 
 const formatKilometers = (meters: number) =>
-    `${(meters / 1_000).toLocaleString("de-DE", {
-        maximumFractionDigits: 1,
-    })} km`;
+    `${formatKilometerValue(meters)} km`;
 
 const describeTrip = (trip: TripListItem): string => {
     if (trip.ended_at === null) {
@@ -298,6 +310,12 @@ export const VehicleDetailPage = () => {
         return [];
     }, [openPath, livePath, closedPath]);
     const showTrail = trail.length > 0;
+    // Length of the drawn line of the running trip, so the km grow with
+    // the live path. Only known while that trip is the selected one.
+    const openTrailMeters = useMemo(
+        () => (openPath ? pathLength(toLatLngs(trail)) : null),
+        [openPath, trail],
+    );
 
     if (isLoading) {
         return (
@@ -345,6 +363,16 @@ export const VehicleDetailPage = () => {
         vehicle.longitude !== null
             ? { latitude: vehicle.latitude, longitude: vehicle.longitude }
             : null;
+    const fuelPercent = Math.min(100, Math.max(0, Math.round(vehicle.fuel_level)));
+    const openTrip = isDriving
+        ? (archiveTrips.find((row) => row.ended_at === null) ??
+          (selectedTrip?.ended_at === null ? selectedTrip : null))
+        : null;
+    const summary = [
+        vehicle.vehicle_type ? VEHICLE_TYPE_LABELS[vehicle.vehicle_type] : null,
+        vehicle.driver_name ?? "Kein Fahrer",
+        vehicle.depot ? `Stammstandort ${vehicle.depot}` : null,
+    ].filter((part): part is string => part !== null);
 
     const handleSubmit = async (input: VehicleInput) => {
         const errors = await updateVehicle(vehicle.id, input);
@@ -380,16 +408,12 @@ export const VehicleDetailPage = () => {
     };
 
     return (
-        <section className={layout.page}>
-            <header className={`${band.band} ${band.bleedDetail}`}>
+        <section className={styles.page}>
+            <header className={styles.header}>
                 <DetailBackLink fallback="/vehicles" />
-                <div className={styles.header}>
-                <div className={styles.heading}>
-                    <h1 className={styles.title}>
-                        {vehicle.license_plate}
-                    </h1>
-                    <VehicleStatusChip status={vehicle.status} />
-                </div>
+                <h1 className={styles.title}>{vehicle.license_plate}</h1>
+                <VehicleStatusChip status={vehicle.status} />
+                <p className={styles.summary}>{summary.join(" · ")}</p>
 
                 {canWrite && (
                     <div className={styles.actions}>
@@ -400,191 +424,263 @@ export const VehicleDetailPage = () => {
                         >
                             Bearbeiten
                         </Button>
-                        <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={requestDelete}
-                        >
-                            Fahrzeug löschen
-                        </Button>
+                        <VehicleMoreMenu onDelete={requestDelete} />
                     </div>
                 )}
-                </div>
             </header>
 
-            <section className={layout.now}>
-                <h2 className={layout.nowTitle}>Jetzt</h2>
-                <dl className={layout.facts}>
-                    <div>
-                        <dt>Tempo</dt>
-                        <dd>
-                            {vehicle.speed === null ? (
-                                "—"
-                            ) : (
-                                <span
-                                    className={styles.speed}
-                                    data-band={liveSpeed.band}
-                                    style={{
-                                        color: SPEED_BAND_COLORS[liveSpeed.band],
-                                    }}
-                                    title={speedBandTitle(liveSpeed)}
-                                >
-                                    {vehicle.speed} km/h
+            <div className={styles.cockpit}>
+                <div className={styles.side}>
+                    <section className={styles.panel}>
+                        <div className={styles.panelHeader}>
+                            <h2 className={styles.panelTitle}>Jetzt</h2>
+                            <span
+                                className={styles.muted}
+                                title={formatTimestamp(vehicle.recorded_at)}
+                            >
+                                Letzte Meldung{" "}
+                                {formatRelativeTimestamp(vehicle.recorded_at)}
+                            </span>
+                        </div>
+                        <dl className={styles.now}>
+                            <div>
+                                <dt>Tempo</dt>
+                                <dd className={styles.nowValue}>
+                                    {vehicle.speed === null ? (
+                                        "—"
+                                    ) : (
+                                        <>
+                                            <span
+                                                className={styles.speed}
+                                                data-band={liveSpeed.band}
+                                                style={{
+                                                    color: SPEED_BAND_COLORS[
+                                                        liveSpeed.band
+                                                    ],
+                                                }}
+                                                title={speedBandTitle(liveSpeed)}
+                                            >
+                                                {vehicle.speed}
+                                            </span>{" "}
+                                            <span className={styles.unit}>
+                                                km/h
+                                            </span>
+                                        </>
+                                    )}
+                                </dd>
+                                {vehicle.speed_limit_kmh !== null && (
+                                    <dd className={styles.muted}>
+                                        Limit {vehicle.speed_limit_kmh} km/h
+                                    </dd>
+                                )}
+                            </div>
+                            <div>
+                                <dt>Tank</dt>
+                                <dd className={styles.nowValue}>
+                                    {fuelPercent} %
+                                </dd>
+                                <dd className={styles.fuelBar} aria-hidden="true">
+                                    <span
+                                        data-low={
+                                            isLowFuelLevel(vehicle.fuel_level)
+                                                ? "true"
+                                                : undefined
+                                        }
+                                        style={{ width: `${fuelPercent}%` }}
+                                    />
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Fahrt</dt>
+                                {openTrip ? (
+                                    <>
+                                        <dd className={styles.nowValue}>
+                                            {openTrailMeters === null ? (
+                                                "läuft"
+                                            ) : (
+                                                <>
+                                                    {formatKilometerValue(
+                                                        openTrailMeters,
+                                                    )}{" "}
+                                                    <span className={styles.unit}>
+                                                        km
+                                                    </span>
+                                                </>
+                                            )}
+                                        </dd>
+                                        <dd className={styles.muted}>
+                                            seit{" "}
+                                            {formatTimestamp(openTrip.started_at)}
+                                        </dd>
+                                    </>
+                                ) : (
+                                    <>
+                                        <dd className={styles.nowValue}>—</dd>
+                                        <dd className={styles.muted}>
+                                            Keine laufende Fahrt
+                                        </dd>
+                                    </>
+                                )}
+                            </div>
+                        </dl>
+                    </section>
+
+                    <section className={styles.panel}>
+                        <VehicleHintsPanel
+                            vehicle={vehicle}
+                            canWrite={canWrite}
+                            onEditMaster={() => setIsEditingMaster(true)}
+                        />
+                    </section>
+
+                    <section className={`${styles.panel} ${styles.master}`}>
+                        <h2 className={styles.panelTitle}>Stammdaten</h2>
+                        <dl className={styles.facts}>
+                            <div>
+                                <dt>VIN</dt>
+                                <dd className={styles.vin}>
+                                    {vehicle.vin ?? "—"}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Typ</dt>
+                                <dd>
+                                    {vehicle.vehicle_type
+                                        ? VEHICLE_TYPE_LABELS[
+                                              vehicle.vehicle_type
+                                          ]
+                                        : "—"}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Kostenstelle</dt>
+                                <dd>{vehicle.cost_center ?? "—"}</dd>
+                            </div>
+                            <div>
+                                <dt>HU fällig</dt>
+                                <dd>{formatYearMonth(vehicle.hu_due_on)}</dd>
+                            </div>
+                            <div>
+                                <dt>UVV geprüft</dt>
+                                <dd>{formatIsoDate(vehicle.uvv_checked_on)}</dd>
+                            </div>
+                            <div>
+                                <dt>UVV fällig am</dt>
+                                <dd>{formatIsoDate(vehicle.uvv_due_on)}</dd>
+                            </div>
+                            <div>
+                                <dt>Stammstandort</dt>
+                                <dd>
+                                    {vehicle.home_site_id && vehicle.depot ? (
+                                        <Link
+                                            to={`/fleet?depot=${vehicle.home_site_id}`}
+                                        >
+                                            {vehicle.depot}
+                                        </Link>
+                                    ) : (
+                                        "—"
+                                    )}
+                                </dd>
+                            </div>
+                        </dl>
+                        <p className={styles.note}>
+                            {dueExplanationText(
+                                "hu",
+                                explainHuMonth(vehicle.hu_due_on),
+                            )}{" "}
+                            {dueExplanationText(
+                                "uvv",
+                                explainUvv({
+                                    checkedOn: vehicle.uvv_checked_on,
+                                    manualDueOn: vehicle.uvv_due_on,
+                                    today: berlinTodayIso(),
+                                }),
+                            )}
+                        </p>
+                        <VehicleAssignmentPanel
+                            vehicle={vehicle}
+                            canWrite={canWrite}
+                        />
+                    </section>
+                </div>
+
+                <div className={styles.main}>
+                    <section className={`${styles.panel} ${styles.mapPanel}`}>
+                        <div className={styles.panelHeader}>
+                            <h2 className={styles.panelTitle}>Position</h2>
+                            {position && (
+                                <span className={styles.muted}>
+                                    {formatCoordinate(position.latitude, "N", "S")}
+                                    {" · "}
+                                    {formatCoordinate(position.longitude, "O", "W")}
                                 </span>
                             )}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>Tank</dt>
-                        <dd>{Math.round(vehicle.fuel_level)} %</dd>
-                    </div>
-                    <div>
-                        <dt>Letzte Meldung</dt>
-                        <dd title={formatTimestamp(vehicle.recorded_at)}>
-                            {formatRelativeTimestamp(vehicle.recorded_at)}
-                        </dd>
-                    </div>
-                </dl>
-            </section>
+                        </div>
 
-            <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Stammdaten</h2>
-                <dl className={layout.facts}>
-                    <div>
-                        <dt>VIN</dt>
-                        <dd>{vehicle.vin ?? "—"}</dd>
-                    </div>
-                    <div>
-                        <dt>Typ</dt>
-                        <dd>
-                            {vehicle.vehicle_type
-                                ? VEHICLE_TYPE_LABELS[vehicle.vehicle_type]
-                                : "—"}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>HU fällig</dt>
-                        <dd>{formatYearMonth(vehicle.hu_due_on)}</dd>
-                    </div>
-                    <div>
-                        <dt>UVV zuletzt geprüft</dt>
-                        <dd>{formatIsoDate(vehicle.uvv_checked_on)}</dd>
-                    </div>
-                    <div>
-                        <dt>UVV fällig am</dt>
-                        <dd>{formatIsoDate(vehicle.uvv_due_on)}</dd>
-                    </div>
-                    <div>
-                        <dt>Stammstandort</dt>
-                        <dd>
-                            {vehicle.home_site_id && vehicle.depot ? (
-                                <Link to={`/fleet?depot=${vehicle.home_site_id}`}>
-                                    {vehicle.depot}
-                                </Link>
-                            ) : (
-                                "—"
-                            )}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>Kostenstelle</dt>
-                        <dd>{vehicle.cost_center ?? "—"}</dd>
-                    </div>
-                </dl>
-                <p className={layout.note}>
-                    {dueExplanationText("hu", explainHuMonth(vehicle.hu_due_on))}{" "}
-                    {dueExplanationText(
-                        "uvv",
-                        explainUvv({
-                            checkedOn: vehicle.uvv_checked_on,
-                            manualDueOn: vehicle.uvv_due_on,
-                            today: berlinTodayIso(),
-                        }),
-                    )}
-                </p>
-            </section>
+                        {position ? (
+                            <div className={styles.mapBody}>
+                                <VehicleMap
+                                    key={vehicle.id}
+                                    latitude={position.latitude}
+                                    longitude={position.longitude}
+                                    label={vehicle.license_plate}
+                                    status={vehicle.status}
+                                    trail={showTrail ? trail : undefined}
+                                    fill
+                                />
+                            </div>
+                        ) : (
+                            <p className={styles.empty}>
+                                {isDriving
+                                    ? "Noch keine Position gemeldet. Sobald das Fahrzeug Daten sendet, erscheinen hier Karte und Tempo."
+                                    : "Dieses Fahrzeug hat noch keine Position gemeldet."}
+                            </p>
+                        )}
+                    </section>
 
-            <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Position</h2>
-
-                {position ? (
-                    <div className={styles.positionBody}>
-                        <VehicleMap
-                            key={vehicle.id}
-                            latitude={position.latitude}
-                            longitude={position.longitude}
-                            label={vehicle.license_plate}
-                            status={vehicle.status}
-                            trail={showTrail ? trail : undefined}
+                    <section className={`${styles.panel} ${styles.tripsPanel}`}>
+                        <div className={styles.panelHeader}>
+                            <h2 className={styles.panelTitle}>
+                                Fahrten{" "}
+                                {archiveTotal > 0 && (
+                                    <span className={styles.count}>
+                                        {archiveTotal.toLocaleString("de-DE")}
+                                    </span>
+                                )}
+                            </h2>
+                        </div>
+                        {selectedFacts && (
+                            <p className={styles.note}>
+                                Auf der Karte: {describeTrip(selectedFacts)}
+                            </p>
+                        )}
+                        {archiveError && (
+                            <RetryMessage
+                                message={archiveError}
+                                onRetry={() =>
+                                    setArchiveRetryKey((current) => current + 1)
+                                }
+                            />
+                        )}
+                        <VehicleTripArchive
+                            trips={archiveTrips}
+                            selectedTripId={selectedTripId}
+                            onSelectTrip={setSelectedTripId}
+                            page={archivePage}
+                            pageCount={archivePageCount}
+                            limit={archiveLimit}
+                            total={archiveTotal}
+                            onPageChange={setArchivePage}
+                            onLimitChange={(nextLimit) => {
+                                setArchiveLimit(nextLimit);
+                                setArchivePage(1);
+                            }}
+                            isLoading={archiveLoading}
+                            fill
                         />
-                        <details className={styles.coords}>
-                            <summary>Koordinaten</summary>
-                            <dl className={layout.facts}>
-                                <div>
-                                    <dt>Breitengrad</dt>
-                                    <dd>
-                                        {formatCoordinate(position.latitude)}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt>Längengrad</dt>
-                                    <dd>
-                                        {formatCoordinate(position.longitude)}
-                                    </dd>
-                                </div>
-                            </dl>
-                        </details>
-                    </div>
-                ) : (
-                    <p className={layout.empty}>
-                        {isDriving
-                            ? "Noch keine Position gemeldet. Sobald das Fahrzeug Daten sendet, erscheinen hier Karte und Tempo."
-                            : "Dieses Fahrzeug hat noch keine Position gemeldet."}
-                    </p>
-                )}
-            </section>
-
-            <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Fahrten</h2>
-                {selectedFacts && (
-                    <p className={layout.note}>{describeTrip(selectedFacts)}</p>
-                )}
-                {archiveError && (
-                    <RetryMessage
-                        message={archiveError}
-                        onRetry={() =>
-                            setArchiveRetryKey((current) => current + 1)
-                        }
-                    />
-                )}
-                <VehicleTripArchive
-                    trips={archiveTrips}
-                    selectedTripId={selectedTripId}
-                    onSelectTrip={setSelectedTripId}
-                    page={archivePage}
-                    pageCount={archivePageCount}
-                    limit={archiveLimit}
-                    total={archiveTotal}
-                    onPageChange={setArchivePage}
-                    onLimitChange={(nextLimit) => {
-                        setArchiveLimit(nextLimit);
-                        setArchivePage(1);
-                    }}
-                    isLoading={archiveLoading}
-                />
-            </section>
-
-            <VehicleAssignmentPanel
-                vehicle={vehicle}
-                canWrite={canWrite}
-            />
-
-            <section className={layout.panel}>
-                <VehicleHintsPanel
-                    vehicle={vehicle}
-                    canWrite={canWrite}
-                />
-            </section>
+                    </section>
+                </div>
+            </div>
 
             <Modal
                 open={canWrite && isEditingMaster}

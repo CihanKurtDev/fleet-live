@@ -33,3 +33,14 @@
     width: 220px;
     max-width: 100%;
 }
+
+/* Phones: the search gets its own full-width row so the placeholder fits. */
+@media (max-width: 700px) {
+    .search {
+        flex: 1 1 100%;
+    }
+
+    .searchInput {
+        width: 100%;
+    }
+}

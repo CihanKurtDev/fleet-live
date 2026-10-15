@@ -32,6 +32,16 @@
     gap: 8px 12px;
 }
 
+/* Rückmeldung nach dem Erledigen; die Zeile ist immer da, damit sie vorgelesen wird. */
+.notice {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--success);
+    font-size: 14px;
+    font-weight: 600;
+}
+
 .scope {
     flex-shrink: 0;
     margin: 0;
@@ -56,12 +66,18 @@
 }
 
 .filters {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px 20px;
     flex-shrink: 0;
+}
+
+/* Die Auswahlleiste liegt darüber; die Filter halten nur die Höhe. */
+.filtersCovered > :not(:first-child) {
+    visibility: hidden;
 }
 
 @media (min-width: 701px) {
@@ -130,11 +146,13 @@
             gap: 10px;
         }
 
+        // Event on top, then the fields in three columns with the label
+        // above the value, the action across the card at the end.
         :global(tr) {
             display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: 7px;
-            padding: 12px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px 10px;
+            padding: 12px 14px;
             border: 1px solid var(--border);
             border-radius: var(--radius);
             background: var(--surface);
@@ -147,45 +165,85 @@
         }
 
         :global(td) {
-            display: grid;
-            grid-template-columns: minmax(72px, 0.35fr) minmax(0, 1fr);
-            gap: 10px;
-            align-items: start;
+            display: block;
             min-width: 0;
             padding: 0;
             border: 0;
-            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 14px;
+            line-height: 20px;
+            color: var(--text-h);
         }
 
         :global(td)::before {
             content: attr(data-label);
+            display: block;
+            margin-bottom: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
             color: var(--text);
-            font-size: 11px;
-            font-weight: 650;
-            letter-spacing: 0.04em;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 14px;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
         }
 
-        :global(td:first-child) {
-            display: block;
-            padding-bottom: 5px;
-            border-bottom: 1px solid var(--border);
-            font-size: 14px;
+        :global(td[data-col="message"]) {
+            grid-column: 1 / -1;
+            white-space: normal;
+            font-size: 15px;
             font-weight: 650;
         }
 
-        :global(td:first-child)::before {
+        :global(td[data-col="created_at"]) {
+            grid-column: span 2;
+        }
+
+        :global(td[data-col="resolved_at"]) {
+            grid-column: 1 / -1;
+            overflow: visible;
+        }
+
+        // Selection checkbox top right, out of the grid flow.
+        :global(tr) {
+            position: relative;
+        }
+
+        :global(td[data-col="select"]) {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            overflow: visible;
+        }
+
+        // Room for the checkbox so a long event text does not run under it.
+        :global(td[data-col="select"]:has(input) ~ td[data-col="message"]) {
+            padding-right: 32px;
+        }
+
+        :global(td[data-col="select"])::before,
+        :global(td[data-col="message"])::before,
+        :global(td[data-col="resolved_at"])::before {
             display: none;
         }
 
-        :global(td:last-child) {
-            grid-template-columns: 1fr;
-            margin-top: 3px;
-            padding-top: 8px;
-            border-top: 1px solid var(--border);
+        // A selected card has no Erledigen button, so no empty action row.
+        :global(td[data-col="resolved_at"]:has(> span:empty)) {
+            display: none;
         }
 
-        :global(td:last-child)::before {
+        // Empty state: one cell across the card.
+        :global(td:only-child) {
+            grid-column: 1 / -1;
+            padding: 24px 12px;
+            white-space: normal;
+            text-align: center;
+        }
+
+        :global(td:only-child)::before {
             display: none;
         }
 
@@ -202,11 +260,6 @@
 
         :global(.skeletonRow td) {
             display: block;
-        }
-
-        :global(.empty) {
-            display: block;
-            padding: 24px 12px;
         }
     }
 }
