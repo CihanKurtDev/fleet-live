@@ -14,6 +14,7 @@ import { createDriver } from "../../api/drivers";
 import { useDueSettings } from "../../hooks/useDueSettings";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
+import { submitBusyLabel } from "../ui/Button/submitBusyLabel";
 import styles from "../vehicles/VehicleForm.module.scss";
 
 interface DriverCreateFormProps {
@@ -238,16 +239,20 @@ export const DriverCreateForm = ({
                     <Button
                         type="button"
                         variant="secondary"
-                        size="sm"
+                        size="md"
                         onClick={onCancel}
                     >
                         Abbrechen
                     </Button>
                 )}
-                <Button type="submit" size="sm" disabled={isSubmitting}>
-                    {isSubmitting && submitLabel === "Anlegen"
-                        ? "Wird angelegt…"
-                        : submitLabel}
+                <Button
+                    type="submit"
+                    size="md"
+                    disabled={isSubmitting}
+                    busy={isSubmitting}
+                    busyLabel={submitBusyLabel(submitLabel)}
+                >
+                    {submitLabel}
                 </Button>
             </div>
         </form>

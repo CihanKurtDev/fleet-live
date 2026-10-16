@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { AuthContext } from "../context/authContext";
 import type { BriefingResponse } from "@fleet-live/shared";
 import { ApiError, isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
@@ -12,7 +13,8 @@ export const useBriefing = () => {
     const [response, setResponse] = useState<BriefingResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const requestKey = `${listEpoch}\0${retryKey}`;
+    const companyId = useContext(AuthContext)?.user?.company_id ?? 0;
+    const requestKey = `${listEpoch}\0${retryKey}\0${companyId}`;
     const [fetchKey, setFetchKey] = useState(requestKey);
 
     if (requestKey !== fetchKey) {
@@ -50,7 +52,7 @@ export const useBriefing = () => {
             });
 
         return () => controller.abort();
-    }, [listEpoch, retryKey]);
+    }, [listEpoch, retryKey, companyId]);
 
     return {
         data: response?.data ?? null,

@@ -112,7 +112,7 @@ export const useVehicle = (id: number | null) => {
     return {
         vehicle: matchesId ? patched : undefined,
         isLoading: Boolean(
-            id !== null && !notFound && (isLoading || !matchesId),
+            id !== null && !notFound && !error && (isLoading || !matchesId),
         ),
         error,
         retry,

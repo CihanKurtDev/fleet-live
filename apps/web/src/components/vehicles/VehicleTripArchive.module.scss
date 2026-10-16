@@ -81,7 +81,7 @@
             background: var(--surface);
         }
 
-        :global(tr[aria-selected="true"]) {
+        :global(tr[data-selected]) {
             border-color: var(--accent-border);
             background: var(--accent-bg);
         }

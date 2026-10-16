@@ -40,11 +40,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 32px;
+    height: var(--control-sm);
     padding: 0 12px;
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
     font-size: 14px;
     font-weight: 500;
     line-height: 1;
@@ -56,8 +56,8 @@
     }
 
     &:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 38%, transparent);
+        outline: var(--focus-width) solid var(--focus-ring);
+        outline-offset: 2px;
     }
 }
 

@@ -71,7 +71,7 @@
 .nav a {
     display: inline-flex;
     align-items: center;
-    height: 34px;
+    height: var(--control-sm);
     padding: 0 10px;
     border-radius: var(--radius-sm);
     gap: 6px;
@@ -92,7 +92,7 @@
 }
 
 .nav a:focus-visible {
-    outline: 2px solid var(--focus-ring);
+    outline: var(--focus-width) solid var(--focus-ring);
     outline-offset: 2px;
 }
 
@@ -106,7 +106,7 @@
 
     border-radius: 999px;
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
 
     font-size: 11px;
     font-weight: 650;
@@ -159,8 +159,8 @@
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    width: 40px;
-    height: 40px;
+    width: var(--control-sm);
+    height: var(--control-sm);
     padding: 0;
     border: 1px solid var(--accent-border);
     border-radius: 8px;
@@ -169,7 +169,7 @@
     cursor: pointer;
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: 2px;
     }
 }
@@ -284,7 +284,7 @@
     }
 
     a:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: -2px;
     }
 }
@@ -304,7 +304,11 @@
     color: var(--accent);
 }
 
-@media (max-width: 700px) {
+/*
+ * The full navigation needs about 1000 px in one row. Below that the signed-in
+ * header uses the compact bar and the menu drawer instead of wrapping (F33).
+ */
+@media (max-width: 1023px) {
     .authed .bar {
         display: none;
     }
@@ -320,7 +324,7 @@
     }
 }
 
-@media (min-width: 701px) {
+@media (min-width: 1024px) {
     .backdrop,
     .drawer {
         display: none;

@@ -6,6 +6,7 @@ import {
     formatRelativeTimestamp,
     formatTimestamp,
 } from "../../utils/dateTime";
+import { Button } from "../ui/Button/Button";
 import { vehicleStatusLabel } from "./vehicleStatus";
 import styles from "./FleetDetailPanel.module.scss";
 
@@ -42,9 +43,9 @@ export const FleetDetailPanel = ({
         <div className={styles.panel}>
             <div className={styles.head}>
                 <h2 className={styles.plate}>{vehicle.license_plate}</h2>
-                <button type="button" className={styles.close} onClick={onClose}>
+                <Button variant="ghost" size="sm" onClick={onClose}>
                     Schließen
-                </button>
+                </Button>
             </div>
             <dl className={styles.facts}>
                 <div>

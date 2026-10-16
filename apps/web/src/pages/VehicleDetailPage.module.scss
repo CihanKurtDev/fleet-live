@@ -119,12 +119,6 @@
     font-size: 14px;
 }
 
-.error {
-    margin: 0;
-    font-size: 13px;
-    color: var(--danger);
-}
-
 /* Jetzt: three live tiles. */
 .now {
     display: grid;
@@ -239,7 +233,7 @@
 
 @media (max-width: 700px) {
     .title {
-        font-size: 22px;
+        font-size: 20px;
     }
 
     .actions {
@@ -248,7 +242,6 @@
 
     .actions > :global(button) {
         flex: 1 1 0;
-        min-height: 40px;
     }
 
     .facts {

@@ -73,11 +73,12 @@
     }
 }
 
+/* Same title as every other page (rules/design-system.md). */
 .title {
     margin: 0;
-    font-size: 32px;
+    font-size: 24px;
     font-weight: 650;
-    letter-spacing: -0.5px;
+    line-height: 1.1;
 }
 
 .subtitle {
@@ -204,7 +205,7 @@ a.kpi:hover {
     }
 
     .title {
-        font-size: 22px;
+        font-size: 20px;
     }
 
     .subtitle {
@@ -280,10 +281,6 @@ a.kpi:hover {
 
 /* Lower windows: flatter tiles and title leave the charts enough height. */
 @media (min-width: 701px) and (max-height: 960px) {
-    .title {
-        font-size: 26px;
-    }
-
     .subtitle {
         margin-top: 2px;
     }

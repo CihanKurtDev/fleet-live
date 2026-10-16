@@ -8,7 +8,8 @@ export const Table = <RowType,>({
     columns,
     rows,
     getRowKey,
-    isEditing = false,
+    selectionMode,
+    isEditing: isEditingProp = false,
     selectedRows = [],
     onSelectRow,
     selectable = false,
@@ -25,6 +26,7 @@ export const Table = <RowType,>({
     caption,
     className,
 }: TableProps<RowType>) => {
+    const isEditing = selectionMode ?? isEditingProp;
     const showSelect = isEditing || selectable;
     const columnCount = showSelect
         ? columns.length + 1

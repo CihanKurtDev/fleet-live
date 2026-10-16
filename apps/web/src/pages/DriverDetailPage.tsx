@@ -1,44 +1,71 @@
 import {
     berlinTodayIso,
     dueExplanationText,
-    dueRule,
     explainLicenceCheck,
     explainLicenceExpiry,
+    speedBand,
 } from "@fleet-live/shared";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
+import { deleteDriver } from "../api/drivers";
 import { DriverAssignmentPanel } from "../components/drivers/DriverAssignmentPanel";
 import { DriverEditForm } from "../components/drivers/DriverEditForm";
-import { DriverWarningCell } from "../components/drivers/DriverTableCells";
+import { DriverHintsPanel } from "../components/drivers/DriverHintsPanel";
+import type { DriverFormField } from "../components/drivers/driverHints";
+import { defaultCheckMonths } from "../components/drivers/driverHints";
+import { DriverMoreMenu } from "../components/drivers/DriverMoreMenu";
+import { DriverOpenWarningsPill } from "../components/drivers/DriverTableCells";
+import { DriverWarningsPanel } from "../components/drivers/DriverWarningsPanel";
+import {
+    deleteErrorMessage,
+    driverCountText,
+    driverDeleteTitle,
+} from "../components/drivers/driverDelete";
+import detail from "../components/drivers/driverDetail.module.scss";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
-import { RetryMessage } from "../components/ui/RetryMessage";
+import { backLabel } from "../components/navigation/detailBack";
+import { useDetailBack } from "../components/navigation/useDetailBack";
+import { SPEED_BAND_COLORS } from "../components/vehicles/speedBand";
+import { VehicleStatusChip } from "../components/vehicles/VehicleStatusChip";
 import { Button } from "../components/ui/Button/Button";
+import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Modal } from "../components/ui/Modal/Modal";
+import { RetryMessage } from "../components/ui/RetryMessage";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
-import { useDueSettings } from "../hooks/useDueSettings";
 import { useDriver } from "../hooks/useDriver";
+import { useDueSettings } from "../hooks/useDueSettings";
+import { useVehicle } from "../hooks/useVehicle";
 import { formatIsoDate } from "../utils/dateTime";
-import layout from "../styles/detailLayout.module.scss";
-import band from "../styles/pageBand.module.scss";
 import styles from "./DriverDetailPage.module.scss";
 
 export const DriverDetailPage = () => {
     const { id } = useParams();
+    const { from, navigate } = useDetailBack("/drivers");
     const { user } = useAuth();
     const { settings: dueSettings } = useDueSettings();
     const { refetchLists } = useVehicles();
     const canWrite = user?.role === "dispatcher";
     const driverId = Number(id);
     const parsedId = Number.isInteger(driverId) ? driverId : null;
-    const { driver, isLoading, error, retry, notFound } =
-        useDriver(parsedId);
+    const { driver, isLoading, error, retry, notFound } = useDriver(parsedId);
     const [isEditing, setIsEditing] = useState(false);
+    const [editField, setEditField] = useState<DriverFormField | undefined>();
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // The speed only exists on the vehicle, and only while it drives.
+    const currentVehicleId =
+        driver?.current_vehicle?.status === "DRIVING"
+            ? driver.current_vehicle.id
+            : null;
+    const { vehicle: drivingVehicle } = useVehicle(currentVehicleId);
 
     if (isLoading && !driver) {
         return (
-            <section className={layout.page}>
+            <section className={styles.page}>
                 <p>Fahrer wird geladen…</p>
             </section>
         );
@@ -46,7 +73,7 @@ export const DriverDetailPage = () => {
 
     if (error) {
         return (
-            <section className={layout.page}>
+            <section className={styles.page}>
                 <DetailBackLink fallback="/drivers" />
                 <h1 className={styles.title}>Fahrer konnte nicht geladen werden.</h1>
                 <RetryMessage message={error} onRetry={retry} />
@@ -56,7 +83,7 @@ export const DriverDetailPage = () => {
 
     if (!driver || notFound) {
         return (
-            <section className={layout.page}>
+            <section className={styles.page}>
                 <DetailBackLink fallback="/drivers" />
                 <h1 className={styles.title}>Fahrer nicht gefunden</h1>
                 <p>
@@ -66,108 +93,192 @@ export const DriverDetailPage = () => {
         );
     }
 
-    const inboxHref = `/alerts?driver_id=${driver.id}`;
-    const openInboxHref = `${inboxHref}&filter=open`;
+    const current = driver.current_vehicle;
+    const checkMonths =
+        dueSettings?.check_months ?? defaultCheckMonths();
+    const liveSpeed =
+        drivingVehicle && drivingVehicle.speed !== null
+            ? {
+                  speed: drivingVehicle.speed,
+                  band: speedBand({
+                      speed: drivingVehicle.speed,
+                      status: drivingVehicle.status,
+                      speeding_open: drivingVehicle.speeding_open,
+                      limit_kmh: drivingVehicle.speed_limit_kmh,
+                  }).band,
+              }
+            : null;
+
+    const releases = driver.vehicles.length;
+    const summary = [
+        current ? `fährt ${current.license_plate}` : "kein aktuelles Fahrzeug",
+        releases === 0
+            ? "darf kein Fahrzeug fahren"
+            : `darf ${releases} ${releases === 1 ? "Fahrzeug" : "Fahrzeuge"} fahren`,
+        driver.phone ? null : "Telefon fehlt",
+    ].filter((part): part is string => part !== null);
+
+    const backLink = from.startsWith("/drivers") ? "← Fahrer" : backLabel(from);
+
+    const requestDelete = () => {
+        setDeleteError(null);
+        setConfirmDelete(true);
+    };
+
+    const handleDelete = async () => {
+        setDeleteError(null);
+        setIsDeleting(true);
+
+        try {
+            await deleteDriver(driver.id);
+            navigate(from, {
+                state: { notice: `${driverCountText(1)} gelöscht.` },
+            });
+            refetchLists();
+        } catch (caught: unknown) {
+            setDeleteError(deleteErrorMessage(caught));
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     return (
-        <section className={layout.page}>
-            <header className={`${band.band} ${band.bleedDetail}`}>
-                <DetailBackLink fallback="/drivers" />
-                <div className={styles.header}>
-                <div className={styles.identity}>
-                    <h1 className={styles.title}>{driver.name}</h1>
-                    <div className={styles.statusRow}>
-                        <DriverWarningCell driver={driver} />
-                        {driver.open_warnings > 0 ? (
-                            <Link className={styles.inboxLink} to={openInboxHref}>
-                                Warnungen öffnen
-                            </Link>
-                        ) : null}
-                    </div>
-                    <p className={styles.openCount}>
-                        Telefon: {driver.phone ?? "—"}
-                    </p>
-                </div>
+        <section className={styles.page}>
+            <header className={styles.header}>
+                <Link className={styles.back} to={from}>
+                    {backLink}
+                </Link>
+                <h1 className={styles.title}>{driver.name}</h1>
+                <DriverOpenWarningsPill count={driver.open_warnings} />
+                <p className={styles.summary}>{summary.join(" · ")}</p>
                 {canWrite && (
-                    <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setIsEditing(true)}
-                    >
-                        Bearbeiten
-                    </Button>
+                    <div className={styles.actions}>
+                        <Button
+                            variant="secondary"
+                            size="toolbar"
+                            onClick={() => {
+                                setEditField(undefined);
+                                setIsEditing(true);
+                            }}
+                        >
+                            Bearbeiten
+                        </Button>
+                        <DriverMoreMenu onDelete={requestDelete} />
+                    </div>
                 )}
-                </div>
             </header>
 
-            <DriverAssignmentPanel driver={driver} canWrite={canWrite} />
+            <div className={styles.cockpit}>
+                <div className={styles.side}>
+                    <section className={detail.panel} aria-label="Jetzt">
+                        <div className={detail.panelHeader}>
+                            <h2 className={detail.panelTitle}>Jetzt</h2>
+                        </div>
+                        <dl className={styles.now}>
+                            <div>
+                                <dt>Fahrzeug</dt>
+                                <dd className={styles.nowValue}>
+                                    {current ? (
+                                        current.license_plate
+                                    ) : (
+                                        <span className={styles.quiet}>—</span>
+                                    )}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Status</dt>
+                                <dd>
+                                    {current ? (
+                                        <VehicleStatusChip
+                                            status={current.status}
+                                        />
+                                    ) : (
+                                        <span className={styles.quiet}>
+                                            Kein Fahrzeug
+                                        </span>
+                                    )}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt>Tempo</dt>
+                                <dd className={styles.nowValue}>
+                                    {liveSpeed ? (
+                                        <>
+                                            <span
+                                                style={{
+                                                    color: SPEED_BAND_COLORS[
+                                                        liveSpeed.band
+                                                    ],
+                                                }}
+                                            >
+                                                {liveSpeed.speed}
+                                            </span>{" "}
+                                            <span className={styles.unit}>
+                                                km/h
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className={styles.quiet}>—</span>
+                                    )}
+                                </dd>
+                            </div>
+                        </dl>
+                    </section>
 
-            <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Führerschein</h2>
-                <dl className={layout.facts}>
-                    <div>
-                        <dt>Gültig bis</dt>
-                        <dd>{formatIsoDate(driver.licence_expires_on)}</dd>
-                    </div>
-                    <div>
-                        <dt>Kontrolliert am</dt>
-                        <dd>{formatIsoDate(driver.licence_checked_on)}</dd>
-                    </div>
-                </dl>
-                <p className={layout.note}>
-                    Frühester Klassenablauf, zum Beispiel C/CE.{" "}
-                    {dueExplanationText(
-                        "licence_expiry",
-                        explainLicenceExpiry(driver.licence_expires_on),
-                    )}{" "}
-                    {dueExplanationText(
-                        "licence_check",
-                        explainLicenceCheck({
-                            checkedOn: driver.licence_checked_on,
-                            today: berlinTodayIso(),
-                            intervalMonths:
-                                dueSettings?.check_months ??
-                                dueRule("licence_check").interval_months ??
-                                6,
-                        }),
-                    )}
-                </p>
-            </section>
+                    <DriverHintsPanel
+                        driver={driver}
+                        canWrite={canWrite}
+                        checkMonths={checkMonths}
+                        onEdit={(field) => {
+                            setEditField(field);
+                            setIsEditing(true);
+                        }}
+                    />
 
-            <section className={layout.panel}>
-                <h2 className={layout.panelTitle}>Verstöße</h2>
-                <p className={layout.note}>
-                    Tempo-Überschreitungen am Fahrer. Tank und Funk hängen am
-                    Fahrzeug, nicht am Fahrer.
-                </p>
-                <dl className={layout.facts}>
-                    <div>
-                        <dt>Gesamt</dt>
-                        <dd>{driver.counts.all}</dd>
-                    </div>
-                    <div>
-                        <dt>Offen</dt>
-                        <dd>
-                            {driver.open_warnings > 0 ? (
-                                <Link to={openInboxHref}>
-                                    {driver.open_warnings}
-                                </Link>
-                            ) : (
-                                0
+                    <section className={detail.panel} aria-label="Stammdaten">
+                        <h2 className={detail.panelTitle}>Stammdaten</h2>
+                        <dl className={styles.facts}>
+                            <div>
+                                <dt>Telefon</dt>
+                                <dd>{driver.phone ?? "—"}</dd>
+                            </div>
+                            <div>
+                                <dt>Führerschein bis</dt>
+                                <dd>{formatIsoDate(driver.licence_expires_on)}</dd>
+                            </div>
+                            <div>
+                                <dt>Kontrolliert am</dt>
+                                <dd>{formatIsoDate(driver.licence_checked_on)}</dd>
+                            </div>
+                        </dl>
+                        <p className={detail.note}>
+                            Frühester Klassenablauf, zum Beispiel C/CE.{" "}
+                            {dueExplanationText(
+                                "licence_expiry",
+                                explainLicenceExpiry(driver.licence_expires_on),
+                            )}{" "}
+                            {dueExplanationText(
+                                "licence_check",
+                                explainLicenceCheck({
+                                    checkedOn: driver.licence_checked_on,
+                                    today: berlinTodayIso(),
+                                    intervalMonths: checkMonths,
+                                }),
                             )}
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>Tempo</dt>
-                        <dd>{driver.counts.SPEEDING}</dd>
-                    </div>
-                </dl>
-                <p className={layout.note}>
-                    <Link to={`${inboxHref}&filter=all&type=SPEEDING`}>
-                        Alle Tempo-Warnungen
-                    </Link>
-                </p>
-            </section>
+                        </p>
+                    </section>
+                </div>
+
+                <div className={styles.main}>
+                    <DriverWarningsPanel
+                        key={driver.id}
+                        driverId={driver.id}
+                        canWrite={canWrite}
+                        expectedTotal={driver.counts.SPEEDING}
+                    />
+                    <DriverAssignmentPanel driver={driver} canWrite={canWrite} />
+                </div>
+            </div>
 
             <Modal
                 open={canWrite && isEditing}
@@ -176,6 +287,7 @@ export const DriverDetailPage = () => {
             >
                 <DriverEditForm
                     driver={driver}
+                    focusField={editField}
                     onCancel={() => setIsEditing(false)}
                     onSaved={() => {
                         refetchLists();
@@ -183,6 +295,33 @@ export const DriverDetailPage = () => {
                     }}
                 />
             </Modal>
+
+            <ConfirmDialog
+                open={canWrite && confirmDelete}
+                onClose={() => {
+                    setConfirmDelete(false);
+                    setDeleteError(null);
+                }}
+                title={driverDeleteTitle(1)}
+                confirmLabel="Löschen"
+                busyLabel="Wird gelöscht…"
+                isBusy={isDeleting}
+                onConfirm={handleDelete}
+                itemsLabel="Ausgewählter Fahrer"
+                items={[
+                    {
+                        key: driver.id,
+                        name: driver.name,
+                        detail: current?.license_plate ?? "kein Fahrzeug",
+                    },
+                ]}
+                error={deleteError}
+            >
+                <p>
+                    Diesen Fahrer wirklich löschen? Das kann nicht rückgängig
+                    gemacht werden.
+                </p>
+            </ConfirmDialog>
         </section>
     );
 };

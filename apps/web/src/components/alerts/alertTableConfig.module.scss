@@ -1,0 +1,28 @@
+.identity {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.plate {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    color: var(--text-h);
+}
+
+.driver,
+.muted {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    color: var(--text);
+}
+
+/* The row button sits at the right edge; a resolved row shows its time. */
+.action {
+    display: flex;
+    justify-content: flex-end;
+}

@@ -30,6 +30,9 @@ import {
 } from "./vehicleStatus";
 import styles from "./leafletMap.module.scss";
 
+/** Depot circles; `--depot` in index.css is the same colour for the list. */
+const DEPOT_COLOR = "#5b7c99";
+
 const GERMANY_CENTER: L.LatLngTuple = [51.16, 10.45];
 const GERMANY_ZOOM = 6;
 const BOUNDS_DEBOUNCE_MS = 200;
@@ -754,9 +757,9 @@ export const FleetMap = ({
                     : depot;
             const circle = L.circle([shown.latitude, shown.longitude], {
                 radius: shown.radius_m,
-                color: "#5b7c99",
+                color: DEPOT_COLOR,
                 weight: selectedDepotId === depot.id ? 3 : 1.5,
-                fillColor: "#5b7c99",
+                fillColor: DEPOT_COLOR,
                 fillOpacity: 0.14,
             });
             circle.bindTooltip(depot.name, {
@@ -782,10 +785,10 @@ export const FleetMap = ({
         if (draft?.id === "new") {
             const circle = L.circle([draft.latitude, draft.longitude], {
                 radius: draft.radius_m,
-                color: "#5b7c99",
+                color: DEPOT_COLOR,
                 weight: 2,
                 dashArray: "6 6",
-                fillColor: "#5b7c99",
+                fillColor: DEPOT_COLOR,
                 fillOpacity: 0.12,
             });
             if (draft.name.trim()) {

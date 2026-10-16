@@ -1,0 +1,12 @@
+.labels {
+    display: inline-grid;
+
+    > * {
+        grid-area: 1 / 1;
+    }
+}
+
+/* Kept in the layout for its width, hidden from sight and screen readers. */
+.hidden {
+    visibility: hidden;
+}

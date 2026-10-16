@@ -8,18 +8,19 @@ import {
 
 import { useDueList } from "../../hooks/useDueList";
 import { useDueListQuery } from "../../hooks/useDueListQuery";
-import { formatCount } from "../../utils/formatCount";
 import { Input } from "../ui/Input/Input";
+import { KpiTiles, type KpiTileTone } from "../ui/KpiTiles/KpiTiles";
 import { RetryMessage } from "../ui/RetryMessage";
 import { DueFullList, DueOverview } from "./DueLists";
 import { DueRail } from "./DueRail";
 import { dueSoonLabel } from "./dueLabels";
 import styles from "./DueBoard.module.scss";
 
-const STATE_TILES: Array<{ id: DueListState; hint: string }> = [
-    { id: "overdue", hint: "zuerst: was abgelaufen ist" },
-    { id: "soon", hint: "Vorlauf der Firma" },
-    { id: "missing", hint: "Frist nicht prüfbar" },
+/** Datum fehlt is not red (rules/ui-placement.md). */
+const STATE_TILES: Array<{ id: DueListState; hint: string; tone: KpiTileTone }> = [
+    { id: "overdue", hint: "zuerst: was abgelaufen ist", tone: "critical" },
+    { id: "soon", hint: "Vorlauf der Firma", tone: "warning" },
+    { id: "missing", hint: "Frist nicht prüfbar", tone: "neutral" },
 ];
 
 /** Deadlines grouped by kind, with the rule of each kind beside the list. */
@@ -62,42 +63,21 @@ export const DueBoard = () => {
                 />
             </header>
 
-            <div
-                className={styles.tiles}
-                role="group"
-                aria-label="Stand"
-                data-tip="due-tiles"
-            >
-                {STATE_TILES.map((tile) => {
-                    const active = query.state === tile.id;
-                    const count = meta?.counts[tile.id];
-
-                    return (
-                        <button
-                            key={tile.id}
-                            type="button"
-                            className={[
-                                styles.tile,
-                                styles[`tile_${tile.id}`],
-                                active && styles.tileActive,
-                            ]
-                                .filter(Boolean)
-                                .join(" ")}
-                            aria-pressed={active}
-                            onClick={() => setFilter(tile.id)}
-                        >
-                            <span>
-                                <span className={styles.tileLabel}>
-                                    {tileLabel(tile.id)}
-                                </span>
-                                <span className={styles.tileHint}>{tile.hint}</span>
-                            </span>
-                            <span className={styles.tileCount}>
-                                {count === undefined ? "–" : formatCount(count)}
-                            </span>
-                        </button>
-                    );
-                })}
+            {/* The same tiles as the list pages; data-tip anchors the page tip. */}
+            <div data-tip="due-tiles">
+                <KpiTiles
+                    ariaLabel="Stand"
+                    phoneLayout="strip"
+                    tiles={STATE_TILES.map((tile) => ({
+                        key: tile.id,
+                        label: tileLabel(tile.id),
+                        value: meta?.counts[tile.id] ?? null,
+                        hint: tile.hint,
+                        tone: tile.tone,
+                        pressed: query.state === tile.id,
+                        onToggle: () => setFilter(tile.id),
+                    }))}
+                />
             </div>
 
             {summary.error && (

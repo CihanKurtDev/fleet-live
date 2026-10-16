@@ -9,6 +9,7 @@ import {
 import { Input } from "../ui/Input/Input";
 import { RetryMessage } from "../ui/RetryMessage";
 import { isDepotDraftDirty, type DepotDraft } from "./depotDraft";
+import { SwapLabel } from "../ui/Button/SwapLabel";
 import styles from "./DepotPanel.module.scss";
 
 interface DepotPanelProps {
@@ -23,6 +24,8 @@ interface DepotPanelProps {
     /** Steigt, wenn ein Depot von der Karte oder der Liste gewählt wird. */
     revealToken: number;
     onSelect: (site: Site) => void;
+    /** Clears the selection: panel, highlight and URL. */
+    onDeselect: () => void;
     onEdit: (site: Site) => void;
     onStartPlace: () => void;
     onCancel: () => void;
@@ -86,6 +89,7 @@ export const DepotPanel = ({
     isSaving,
     revealToken,
     onSelect,
+    onDeselect,
     onEdit,
     onStartPlace,
     onCancel,
@@ -182,6 +186,17 @@ export const DepotPanel = ({
                                             </button>
                                         </div>
                                     )}
+                                    {isSelected && !dirty && (
+                                        <button
+                                            type="button"
+                                            className={styles.iconButton}
+                                            aria-label="Auswahl aufheben"
+                                            title="Auswahl aufheben"
+                                            onClick={onDeselect}
+                                        >
+                                            <CloseIcon />
+                                        </button>
+                                    )}
                                 </div>
                                 <button
                                     type="button"
@@ -247,7 +262,9 @@ export const DepotPanel = ({
                     disabled={dirty}
                     onClick={onStartPlace}
                 >
-                    {placing ? "Klicken abbrechen" : "Depot anlegen"}
+                    <SwapLabel swapped={placing} alt="Klicken abbrechen">
+                        Depot anlegen
+                    </SwapLabel>
                 </button>
             )}
             {placing && draft === null && (

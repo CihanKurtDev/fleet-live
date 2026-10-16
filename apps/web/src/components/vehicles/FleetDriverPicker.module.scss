@@ -11,11 +11,11 @@
     gap: 6px;
     box-sizing: border-box;
     max-width: 220px;
-    height: 28px;
+    height: var(--control-sm);
     padding: 0 8px 0 10px;
 
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg);
 
     font: inherit;
@@ -34,8 +34,8 @@
     }
 
     &:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        outline: var(--focus-width) solid var(--focus-ring);
+        outline-offset: 2px;
     }
 }
 
@@ -106,7 +106,7 @@
     max-width: 100%;
     min-width: 0;
     padding: 8px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius);
     font-size: 14px;
     color: var(--text-h);
     cursor: pointer;
@@ -152,25 +152,6 @@
     flex-shrink: 0;
     padding: 12px 20px 16px;
     border-top: 1px solid var(--border);
-}
-
-.clear {
-    padding: 0;
-    border: 0;
-    background: none;
-    font: inherit;
-    font-size: 13px;
-    color: var(--text);
-    cursor: pointer;
-
-    &:hover:not(:disabled) {
-        color: var(--text-h);
-    }
-
-    &:disabled {
-        opacity: 0.5;
-        cursor: default;
-    }
 }
 
 .actions {

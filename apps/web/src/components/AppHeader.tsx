@@ -97,6 +97,8 @@ export const AppHeader = ({
 
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
+                // The drawer takes this Escape; the page under it stays as is.
+                event.preventDefault();
                 closeMenu();
             }
         };

@@ -62,7 +62,7 @@ const PAGES: Record<string, HelpPage> = {
         items: [
             {
                 question: "Was bedeuten die Filter?",
-                answer: `„Warnungen“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Kein Fahrer“: kein aktueller Fahrer. „Im Depot“: letzte Position in einem Depot-Kreis. „Auf Fahrt“, „Standby“ und „Kein Signal“ sind der gemeldete Status.`,
+                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Auf Fahrt“, „Standby“ und „Kein Signal“ sind der gemeldete Status. Unter „Weitere Filter“: „Kein Fahrer“ (kein aktueller Fahrer) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
             },
             {
                 question: "Warum ist das Tempo orange oder rot?",
@@ -77,7 +77,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Wie kommen neue Fahrzeuge dazu?",
                 answer:
-                    "Über „Fahrzeug anlegen“ oder „Importieren“ für eine CSV- oder Excel-Liste. „Exportieren“ und „Fahrten“ laden die Daten der Firma als CSV.",
+                    "Über „Fahrzeug anlegen“ oder „Importieren“ für eine CSV- oder Excel-Liste. „Exportieren“ lädt Fahrzeuge oder Fahrten der Firma als CSV.",
                 dispatcherOnly: true,
             },
         ],
@@ -219,9 +219,9 @@ const PAGES: Record<string, HelpPage> = {
             "Ein Fahrer: Telefon, Fahrzeuge, Führerschein-Daten und Tempo-Verstöße.",
         items: [
             {
-                question: "„Aktuell“ und „Zugewiesen“",
+                question: "„Aktuell“ und „Freigegeben“",
                 answer:
-                    "Aktuell ist das Fahrzeug, an dem der Fahrer gerade steht; nur das erscheint in den Übersichten. Zugewiesene Fahrzeuge darf er fahren.",
+                    "Aktuell ist das Fahrzeug, an dem der Fahrer gerade steht; nur das erscheint in den Übersichten. Freigegebene Fahrzeuge darf er fahren.",
             },
             {
                 question: "Woher kommen die Führerschein-Fristen?",

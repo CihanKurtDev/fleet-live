@@ -5,6 +5,7 @@ import type { UserRole } from "@fleet-live/shared";
 import {
     changePassword,
     confirmTotpSetup,
+    disableTotp,
     createCompany,
     getSecurity,
     inviteMember,
@@ -20,6 +21,7 @@ import {
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Checkbox } from "../components/ui/Checkbox/Checkbox";
+import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
 import { Table } from "../components/ui/Table/Table";
 import { useAuth } from "../hooks/useAuth";
@@ -55,6 +57,8 @@ export const AccountPage = () => {
     const [security, setSecurity] = useState<CompanySecurity | null>(null);
     const [error, setError] = useState<Message | null>(null);
     const [info, setInfo] = useState<Message | null>(null);
+    const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
+    const [isRemoving, setIsRemoving] = useState(false);
     const [recovery, setRecovery] = useState<string[]>([]);
     const [otpauth, setOtpauth] = useState<string | null>(null);
     const [setupToken, setSetupToken] = useState<string | null>(null);
@@ -62,6 +66,7 @@ export const AccountPage = () => {
     const [currentPassword, setCurrentPassword] = useState("");
     const [nextPassword, setNextPassword] = useState("");
     const [code, setCode] = useState("");
+    const [disableCode, setDisableCode] = useState("");
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteRole, setInviteRole] = useState<UserRole>("viewer");
     const [companyName, setCompanyName] = useState("");
@@ -136,10 +141,14 @@ export const AccountPage = () => {
         });
     };
 
-    const change = async (event: FormEvent) => {
-        event.preventDefault();
+    const clearMessages = () => {
         setError(null);
         setInfo(null);
+    };
+
+    const change = async (event: FormEvent) => {
+        event.preventDefault();
+        clearMessages();
 
         try {
             await changePassword(currentPassword, nextPassword);
@@ -155,7 +164,7 @@ export const AccountPage = () => {
     };
 
     const beginTotp = async () => {
-        setError(null);
+        clearMessages();
         try {
             const setup = await setupTotp();
             setOtpauth(setup.otpauth_url);
@@ -175,11 +184,15 @@ export const AccountPage = () => {
             return;
         }
 
+        clearMessages();
+
         try {
             const result = await confirmTotpSetup({ code, setup_token: setupToken });
             setUser({ ...user, totp_enabled: true });
             setRecovery(result.recovery_codes ?? []);
             setOtpauth(null);
+            setSetupToken(null);
+            setQr(null);
             setCode("");
             setInfo({
                 section: "zwei-faktor",
@@ -190,9 +203,24 @@ export const AccountPage = () => {
         }
     };
 
+    const turnOffTotp = async (event: FormEvent) => {
+        event.preventDefault();
+        clearMessages();
+
+        try {
+            const next = await disableTotp(disableCode);
+            setUser(next);
+            setRecovery([]);
+            setDisableCode("");
+            setInfo({ section: "zwei-faktor", text: "Zwei-Faktor ist ausgeschaltet." });
+        } catch (caught: unknown) {
+            showError("zwei-faktor", caught, "Zwei-Faktor konnte nicht ausgeschaltet werden.");
+        }
+    };
+
     const invite = async (event: FormEvent) => {
         event.preventDefault();
-        setError(null);
+        clearMessages();
         try {
             const result = await inviteMember(inviteEmail, inviteRole);
             setInfo({
@@ -210,22 +238,35 @@ export const AccountPage = () => {
     };
 
     const changeRole = async (member: Member, role: UserRole) => {
+        clearMessages();
+
         try {
             const listed = await setMemberRole(member.user_id, role);
             setMembers(listed.data);
+            setInfo({
+                section: "team",
+                text: `${member.name} ist jetzt ${ROLE_LABEL[role]}.`,
+            });
         } catch (caught: unknown) {
             showError("team", caught, "Rolle nicht geändert.");
         }
     };
 
     const remove = async (member: Member) => {
+        clearMessages();
+        setIsRemoving(true);
+
         try {
             await removeMember(member.user_id);
             setMembers((current) =>
                 current.filter((item) => item.user_id !== member.user_id),
             );
+            setInfo({ section: "team", text: `${member.name} entfernt.` });
         } catch (caught: unknown) {
             showError("team", caught, "Mitglied bleibt.");
+        } finally {
+            setIsRemoving(false);
+            setRemoveTarget(null);
         }
     };
 
@@ -235,7 +276,7 @@ export const AccountPage = () => {
             return;
         }
 
-        setError(null);
+        clearMessages();
         setSecurityNote(null);
 
         try {
@@ -276,7 +317,7 @@ export const AccountPage = () => {
     };
 
     const enterCompany = async (companyId: number) => {
-        setError(null);
+        clearMessages();
         try {
             const next = await switchCompany(companyId);
             setUser(next);
@@ -334,7 +375,7 @@ export const AccountPage = () => {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => remove(row)}
+                    onClick={() => setRemoveTarget(row)}
                 >
                     Entfernen
                 </Button>
@@ -367,6 +408,22 @@ export const AccountPage = () => {
 
     const sectionError = error?.section === section ? error.text : null;
     const sectionInfo = info?.section === section ? info.text : null;
+    // Shown right under the form that caused them, so the answer is next to
+    // the action and nothing above it moves.
+    const messages = (
+        <>
+            {sectionError && (
+                <p className={authForm.banner} role="alert">
+                    {sectionError}
+                </p>
+            )}
+            {sectionInfo && (
+                <p className={authForm.notice} role="status">
+                    {sectionInfo}
+                </p>
+            )}
+        </>
+    );
 
     return (
         <section className={styles.page}>
@@ -421,18 +478,8 @@ export const AccountPage = () => {
                 </nav>
 
                 <div className={styles.content}>
-                    {sectionError && (
-                        <p className={authForm.banner} role="alert">
-                            {sectionError}
-                        </p>
-                    )}
-                    {sectionInfo && (
-                        <p className={authForm.notice} role="status">
-                            {sectionInfo}
-                        </p>
-                    )}
-
                     {section === "passwort" && (
+                        <>
                         <section className={styles.panel}>
                             <form
                                 className={`${styles.form} ${styles.narrow}`}
@@ -446,7 +493,7 @@ export const AccountPage = () => {
                                     <Input
                                         id="current-password"
                                         type="password"
-                                        size="lg"
+                                        size="md"
                                         fullWidth
                                         required
                                         autoComplete="current-password"
@@ -461,7 +508,7 @@ export const AccountPage = () => {
                                     <Input
                                         id="next-password"
                                         type="password"
-                                        size="lg"
+                                        size="md"
                                         fullWidth
                                         required
                                         minLength={12}
@@ -476,9 +523,12 @@ export const AccountPage = () => {
                                 <Button type="submit">Passwort speichern</Button>
                             </form>
                         </section>
+                        {messages}
+                        </>
                     )}
 
                     {section === "zwei-faktor" && (
+                        <>
                         <section className={styles.panel}>
                             <form className={styles.form} onSubmit={finishTotp}>
                                 <h2 className={styles.panelTitle}>Zwei-Faktor</h2>
@@ -488,7 +538,7 @@ export const AccountPage = () => {
                                         : "Noch nicht eingerichtet."}
                                 </p>
                                 <Button type="button" variant="ghost" onClick={beginTotp}>
-                                    Einrichtung starten
+                                    {user.totp_enabled ? "Neu einrichten" : "Einrichtung starten"}
                                 </Button>
                                 {((otpauth && qr) || setupToken) && (
                                     <div className={styles.totpSetup}>
@@ -508,7 +558,7 @@ export const AccountPage = () => {
                                                 </label>
                                                 <Input
                                                     id="totp-code"
-                                                    size="lg"
+                                                    size="md"
                                                     fullWidth
                                                     required
                                                     autoComplete="one-time-code"
@@ -530,7 +580,35 @@ export const AccountPage = () => {
                                     </ul>
                                 )}
                             </form>
+                            {user.totp_enabled && !setupToken && (
+                                <form
+                                    className={`${styles.form} ${styles.narrow}`}
+                                    onSubmit={turnOffTotp}
+                                >
+                                    <h2 className={styles.panelTitle}>Ausschalten</h2>
+                                    <p className={styles.help}>
+                                        Zum Ausschalten den aktuellen Code aus der App eingeben.
+                                    </p>
+                                    <div className={authForm.field}>
+                                        <label htmlFor="totp-disable-code">Code aus der App</label>
+                                        <Input
+                                            id="totp-disable-code"
+                                            size="md"
+                                            fullWidth
+                                            required
+                                            autoComplete="one-time-code"
+                                            value={disableCode}
+                                            onChange={(event) => setDisableCode(event.target.value)}
+                                        />
+                                    </div>
+                                    <Button type="submit" variant="dangerOutline">
+                                        Zwei-Faktor ausschalten
+                                    </Button>
+                                </form>
+                            )}
                         </section>
+                        {messages}
+                        </>
                     )}
 
                     {section === "team" && (
@@ -544,7 +622,7 @@ export const AccountPage = () => {
                                             <Input
                                                 id="invite-email"
                                                 type="email"
-                                                size="lg"
+                                                size="md"
                                                 fullWidth
                                                 required
                                                 placeholder="name@firma.de"
@@ -569,12 +647,13 @@ export const AccountPage = () => {
                                                 <RoleOptions />
                                             </select>
                                         </div>
-                                        <Button type="submit" size="lg">
+                                        <Button type="submit" size="md">
                                             Einladen
                                         </Button>
                                     </div>
                                 </form>
                             </section>
+                            {messages}
                             <section className={`${styles.panel} ${styles.teamPanel}`}>
                                 <div className={styles.panelHead}>
                                     <h2 className={styles.panelTitle}>
@@ -600,6 +679,7 @@ export const AccountPage = () => {
                     )}
 
                     {section === "firmen-login" && (
+                        <>
                         <section className={styles.panel}>
                             <h2 className={styles.panelTitle}>Firmen-Login</h2>
                             {security ? (
@@ -639,7 +719,7 @@ export const AccountPage = () => {
                                         <label htmlFor="sso-issuer">OIDC-Issuer</label>
                                         <Input
                                             id="sso-issuer"
-                                            size="lg"
+                                            size="md"
                                             fullWidth
                                             placeholder="https://login.microsoftonline.com/…/v2.0"
                                             value={issuer}
@@ -672,7 +752,7 @@ export const AccountPage = () => {
                                             <label htmlFor="sso-client-id">Client-ID</label>
                                             <Input
                                                 id="sso-client-id"
-                                                size="lg"
+                                                size="md"
                                                 fullWidth
                                                 value={clientId}
                                                 onChange={(event) =>
@@ -687,7 +767,7 @@ export const AccountPage = () => {
                                             <Input
                                                 id="sso-client-secret"
                                                 type="password"
-                                                size="lg"
+                                                size="md"
                                                 fullWidth
                                                 autoComplete="new-password"
                                                 value={clientSecret}
@@ -714,6 +794,8 @@ export const AccountPage = () => {
                                 !sectionError && <p className={styles.help}>Laden…</p>
                             )}
                         </section>
+                        {messages}
+                        </>
                     )}
 
                     {section === "firmen" && (
@@ -761,7 +843,7 @@ export const AccountPage = () => {
                                         <label htmlFor="new-company">Firmenname</label>
                                         <Input
                                             id="new-company"
-                                            size="lg"
+                                            size="md"
                                             fullWidth
                                             required
                                             value={companyName}
@@ -773,10 +855,26 @@ export const AccountPage = () => {
                                     <Button type="submit">Firma anlegen und wechseln</Button>
                                 </form>
                             </section>
+                            {messages}
                         </>
                     )}
+
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={removeTarget !== null}
+                onClose={() => setRemoveTarget(null)}
+                title="Mitglied entfernen?"
+                confirmLabel="Entfernen"
+                busyLabel="Wird entfernt…"
+                isBusy={isRemoving}
+                onConfirm={() => (removeTarget ? remove(removeTarget) : undefined)}
+            >
+                {removeTarget
+                    ? `${removeTarget.name} verliert den Zugang zu dieser Firma. Das Konto selbst bleibt bestehen.`
+                    : null}
+            </ConfirmDialog>
         </section>
     );
 };

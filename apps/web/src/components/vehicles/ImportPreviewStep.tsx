@@ -560,8 +560,10 @@ export function ImportPreviewStep({
                     size="sm"
                     disabled={isLoading || !outcome.can_commit}
                     onClick={() => onCommit(rowActions)}
+                    busy={isLoading}
+                    busyLabel="Import läuft…"
                 >
-                    {isLoading ? "Import läuft…" : commitButtonLabel}
+                    {commitButtonLabel}
                 </Button>
             </div>
 

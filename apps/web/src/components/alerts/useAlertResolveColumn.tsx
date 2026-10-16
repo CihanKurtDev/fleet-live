@@ -8,8 +8,12 @@ import type { TableColumn } from "../../types/table";
 import { formatTimestamp } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
 import { alertColumns } from "./alertTableConfig";
-import styles from "./AlertTable.module.scss";
+import styles from "./alertTableConfig.module.scss";
 
+/**
+ * Columns plus the row button "Erledigen" (open rows, dispatchers). The
+ * button never navigates and hides itself in selection mode.
+ */
 export const useAlertResolveColumn = (
     canWrite: boolean,
     onResolved?: () => void,
@@ -43,25 +47,20 @@ export const useAlertResolveColumn = (
     const actionColumn = useMemo<TableColumn<Alert>>(
         () => ({
             key: "resolved_at",
-            displayText: canWrite ? "Aktion" : "Status",
-            render: (value, { row, isSelected }) => {
+            displayText: "Erledigen",
+            headerText: " ",
+            width: "150px",
+            render: (value, { row, selectionMode }) => {
                 if (value) {
                     return (
-                        <span className={styles.actionCell}>
+                        <span className={`${styles.action} ${styles.muted}`}>
                             {formatTimestamp(value)}
                         </span>
                     );
                 }
 
-                if (!canWrite) {
-                    return (
-                        <span className={styles.actionCell}>Offen</span>
-                    );
-                }
-
-                // Ausgewählte Zeilen erledigt die Auswahlleiste.
-                if (isSelected) {
-                    return <span className={styles.actionCell} />;
+                if (!canWrite || selectionMode) {
+                    return null;
                 }
 
                 const handleClick = (
@@ -72,10 +71,10 @@ export const useAlertResolveColumn = (
                 };
 
                 return (
-                    <span className={styles.actionCell}>
+                    <span className={styles.action}>
                         <Button
                             variant="secondary"
-                            size="sm"
+                            size="row"
                             disabled={resolvingId === row.id}
                             title={
                                 row.type === "SPEEDING"

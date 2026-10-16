@@ -212,7 +212,7 @@ export const AssignmentPicker = ({
                         <Input
                             className={styles.search}
                             type="search"
-                            size="lg"
+                            size="md"
                             fullWidth
                             value={search}
                             placeholder={searchPlaceholder}
@@ -310,7 +310,7 @@ export const AssignmentPicker = ({
                         {count > 0 && (
                             <Button
                                 variant="ghost"
-                                size="sm"
+                                size="md"
                                 disabled={busy}
                                 onClick={() => setSelected(new Set())}
                             >
@@ -321,14 +321,14 @@ export const AssignmentPicker = ({
                     <div className={styles.pickerActions}>
                         <Button
                             variant="secondary"
-                            size="sm"
+                            size="md"
                             disabled={busy}
                             onClick={onClose}
                         >
                             Abbrechen
                         </Button>
                         <Button
-                            size="sm"
+                            size="md"
                             disabled={count === 0 || busy}
                             onClick={() => onConfirm([...selected])}
                         >

@@ -19,8 +19,9 @@
 
 .title {
     margin: 0;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 650;
+    line-height: 1.1;
     color: var(--text-h);
 }
 
@@ -33,81 +34,6 @@
 .search {
     width: 300px;
     max-width: 100%;
-}
-
-/* State tiles: the active one takes its colour as border and wash. */
-.tiles {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.tile {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 18px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
-    color: var(--text);
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-
-    &:hover {
-        border-color: var(--accent-border);
-    }
-
-    &:focus-visible {
-        outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
-    }
-}
-
-.tileLabel {
-    display: block;
-    font-size: 11px;
-    font-weight: 650;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
-.tileHint {
-    display: block;
-    margin-top: 2px;
-    font-size: 13px;
-}
-
-.tileCount {
-    font-size: 28px;
-    font-weight: 650;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-h);
-}
-
-.tile_overdue .tileCount {
-    color: var(--danger);
-}
-
-.tile_soon .tileCount {
-    color: var(--warning);
-}
-
-.tileActive.tile_overdue {
-    border-color: var(--danger);
-    background: color-mix(in srgb, var(--danger) 8%, var(--surface));
-}
-
-.tileActive.tile_soon {
-    border-color: var(--warning);
-    background: color-mix(in srgb, var(--warning) 7%, var(--surface));
-}
-
-.tileActive.tile_missing {
-    border-color: var(--text);
-    background: var(--code-bg);
 }
 
 /* Rail beside the list; both fit the window and scroll on their own. */
@@ -158,7 +84,7 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    height: 30px;
+    height: var(--control-sm);
     padding: 0 10px;
     border: 0;
     border-radius: var(--radius);
@@ -173,7 +99,7 @@
     }
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: -2px;
     }
 }
@@ -293,7 +219,7 @@
     cursor: pointer;
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: -2px;
     }
 }
@@ -371,7 +297,7 @@
     grid-template-columns: 104px minmax(0, 1fr) minmax(0, 1.4fr) 240px;
     align-items: center;
     gap: 12px;
-    height: 44px;
+    height: 48px;
     box-sizing: border-box;
     padding: 0 20px;
     border-bottom: 1px solid var(--border);
@@ -384,7 +310,7 @@
     }
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: -2px;
     }
 }
@@ -491,24 +417,8 @@
 }
 
 @media (max-width: 700px) {
-    /* Three compact tiles side by side: the list starts above the fold. */
-    .tiles {
-        gap: 8px;
-    }
-
-    .tile {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-        padding: 10px 12px;
-    }
-
-    .tileHint {
-        display: none;
-    }
-
-    .tileCount {
-        font-size: 22px;
+    .title {
+        font-size: 20px;
     }
 
     .search {

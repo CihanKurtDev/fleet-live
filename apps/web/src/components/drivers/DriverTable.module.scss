@@ -1,71 +1,16 @@
-.driverTable {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    text-align: left;
-    padding: 0 16px;
-    transition: opacity 120ms ease;
-}
-
-@media (min-width: 701px) {
-    .driverTable {
-        flex: none;
-        min-height: auto;
-        padding: 0;
-    }
-}
-
-.title {
-    flex-shrink: 0;
-    margin: 0;
-    font-size: 22px;
-    font-weight: 650;
-    color: var(--text-h);
-}
-
-.lead {
-    flex-shrink: 0;
-    margin: 2px 0 0;
-    font-size: 14px;
-    color: var(--text);
-}
-
-.isFetching {
-    opacity: 0.72;
-}
-
 .error {
-    flex-shrink: 0;
-    margin: 8px 0 0;
-    color: var(--danger);
-    font-size: 14px;
-}
-
-.status {
-    flex-shrink: 0;
-    margin: 8px 0 0;
-    color: var(--text);
-    font-size: 13px;
+    flex: none;
+    padding: 8px 16px;
 }
 
 @media (max-width: 700px) {
-    .driverTable {
-        padding: 0 12px 20px;
+    .error {
+        padding: 0;
     }
 
-    .title {
-        font-size: 20px;
-    }
-
-    .lead {
-        max-width: 34rem;
-        margin-bottom: 8px;
-        font-size: 13px;
-        line-height: 1.4;
-    }
-
-    .mobileCards {
+    /* Cards: name on top with the open-warnings pill right, then Telefon,
+       Fahrzeug and Verstöße in three columns, label above the value. */
+    .cards {
         flex: none;
         overflow: visible;
 
@@ -83,14 +28,14 @@
         }
 
         :global(tr) {
+            position: relative;
             display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            gap: 7px;
-            padding: 12px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px 10px;
+            padding: 12px 14px;
             border: 1px solid var(--border);
-            border-radius: var(--radius);
+            border-radius: 12px;
             background: var(--surface);
-            box-shadow: var(--shadow);
         }
 
         :global(.tableRowInteractive:hover),
@@ -98,55 +43,98 @@
             background: var(--surface);
         }
 
+        :global(.tableRowSelected),
+        :global(.tableRowSelected:hover) {
+            border-color: var(--accent-border);
+            background: var(--accent-bg);
+        }
+
         :global(td) {
-            display: grid;
-            grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr);
-            gap: 10px;
-            align-items: start;
+            display: block;
             min-width: 0;
             padding: 0;
             border: 0;
-            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 14px;
+            line-height: 20px;
+            color: var(--text-h);
         }
 
         :global(td)::before {
             content: attr(data-label);
+            display: block;
+            margin-bottom: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
             color: var(--text);
-            font-size: 11px;
-            font-weight: 650;
-            letter-spacing: 0.04em;
+            font-size: 10px;
+            font-weight: 600;
+            line-height: 14px;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
         }
 
-        :global(td:first-child) {
-            display: block;
-            padding-bottom: 5px;
-            border-bottom: 1px solid var(--border);
-            font-size: 15px;
+        :global(td[data-col="name"]) {
+            grid-row: 1;
+            grid-column: 1 / span 2;
+            align-self: center;
+            font-size: 16px;
+        }
+
+        :global(td[data-col="name"] > span) {
+            font-size: 16px;
             font-weight: 700;
         }
 
-        :global(td:first-child)::before {
+        :global(td[data-col="open_warnings"]) {
+            grid-row: 1;
+            grid-column: 3;
+            justify-self: end;
+            align-self: center;
+            overflow: visible;
+        }
+
+        :global(td[data-col="name"])::before,
+        :global(td[data-col="open_warnings"])::before {
             display: none;
         }
 
-        :global(td:last-child) {
-            padding-top: 8px;
-            border-top: 1px solid var(--border);
+        /* Selection mode: the checkbox sits left of the name. */
+        &[data-editing="true"] :global(td[data-col="select"]) {
+            position: absolute;
+            top: 16px;
+            left: 14px;
+            overflow: visible;
+        }
+
+        &[data-editing="true"] :global(td[data-col="name"]) {
+            padding-left: 26px;
+        }
+
+        &[data-editing="true"] :global(td[data-col="select"])::before {
+            display: none;
+        }
+
+        /* Empty state: one cell across the card. */
+        :global(td:only-child) {
+            grid-column: 1 / -1;
+            padding: 24px 12px;
+            white-space: normal;
+            text-align: center;
+        }
+
+        :global(td:only-child)::before {
+            display: none;
         }
 
         :global(.skeletonRow) {
             display: grid;
-            box-shadow: none;
         }
 
         :global(.skeletonRow td) {
             display: block;
-        }
-
-        :global(.empty) {
-            display: block;
-            padding: 24px 12px;
         }
     }
 }

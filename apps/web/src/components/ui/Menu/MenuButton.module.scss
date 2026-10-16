@@ -1,0 +1,80 @@
+.root {
+    position: relative;
+    display: inline-flex;
+}
+
+.caret {
+    margin-left: -2px;
+    font-size: 11px;
+    color: var(--text);
+}
+
+/* A choice in this menu filters the list. */
+.active.active {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+    color: var(--text-h);
+}
+
+.menu {
+    position: absolute;
+    z-index: 600;
+    top: calc(100% + 4px);
+    right: 0;
+
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 4px;
+
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    box-shadow: var(--shadow);
+
+    button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: var(--radius);
+        background: none;
+
+        font: inherit;
+        font-size: 14px;
+        text-align: left;
+        white-space: nowrap;
+        color: var(--text-h);
+        cursor: pointer;
+
+        &:hover:not(:disabled) {
+            background: var(--code-bg);
+        }
+
+        &:focus-visible {
+            outline: var(--focus-width) solid var(--focus-ring);
+            outline-offset: -2px;
+        }
+
+        &:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        &[aria-checked="true"] {
+            background: var(--accent-bg);
+            color: var(--accent);
+        }
+    }
+
+    .danger {
+        color: var(--danger);
+    }
+}
+
+.alignStart {
+    right: auto;
+    left: 0;
+}

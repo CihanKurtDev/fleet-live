@@ -225,13 +225,28 @@ describe("GET /api/vehicles", () => {
         assert.equal(response.body.meta.pageCount, 1);
     });
 
-    it("rejects a limit outside the allowlist", async () => {
+    it("serves the page size the list measured", async () => {
+        seedFleet(12);
+
         const response = await api
             .get("/api/vehicles")
-            .query({ limit: 7 });
+            .query({ page: 2, limit: 7 });
 
-        assert.equal(response.status, 400);
-        assert.equal(response.body.code, "VALIDATION_ERROR");
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.length, 5);
+        assert.equal(response.body.meta.limit, 7);
+        assert.equal(response.body.meta.pageCount, 2);
+    });
+
+    it("rejects a limit outside 1 to 100", async () => {
+        for (const limit of [0, 101, 2.5]) {
+            const response = await api
+                .get("/api/vehicles")
+                .query({ limit });
+
+            assert.equal(response.status, 400, `limit ${limit}`);
+            assert.equal(response.body.code, "VALIDATION_ERROR");
+        }
     });
 
     it("keeps vehicles without a driver after named drivers in both sort directions", async () => {

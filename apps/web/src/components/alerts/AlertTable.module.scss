@@ -1,60 +1,17 @@
-.alertTable {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    text-align: left;
-    padding: 0 16px;
-    transition: opacity 120ms ease;
-}
-
-@media (min-width: 701px) {
-    .alertTable {
-        flex: none;
-        min-height: auto;
-        padding: 0;
-    }
-}
-
-.title {
-    flex-shrink: 0;
+.error {
+    flex: none;
     margin: 0;
-    font-size: 22px;
-    font-weight: 650;
-    color: var(--text-h);
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--danger);
 }
 
-.titleRow {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px 12px;
-}
-
-/* Rückmeldung nach dem Erledigen; die Zeile ist immer da, damit sie vorgelesen wird. */
-.notice {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin: 0;
-    color: var(--success);
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.scope {
-    flex-shrink: 0;
-    margin: 0;
-    font-size: 14px;
-    color: var(--text);
-}
-
+/* Scope note in the header sentence ("Alle Fahrzeuge"). */
 .scopeButton {
     padding: 0;
     border: 0;
     background: none;
     font: inherit;
-    font-size: 14px;
     color: var(--text-h);
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -65,71 +22,14 @@
     }
 }
 
-.filters {
-    position: relative;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px 20px;
-    flex-shrink: 0;
-}
-
-/* Die Auswahlleiste liegt darüber; die Filter halten nur die Höhe. */
-.filtersCovered > :not(:first-child) {
-    visibility: hidden;
-}
-
-@media (min-width: 701px) {
-    .filters {
-        --filter-group-pad-x: 0;
-        --filter-group-pad-bottom: 0;
-        padding-inline: var(--panel-pad-x, 0);
-        padding-top: var(--panel-pad-y, 0);
-        padding-bottom: 12px;
-    }
-}
-
-.isFetching {
-    opacity: 0.72;
-}
-
-.error {
-    flex-shrink: 0;
-    margin: 8px 0 0;
-    color: var(--danger);
-    font-size: 14px;
-}
-
-.status {
-    flex-shrink: 0;
-    margin: 8px 0 0;
-    color: var(--text);
-    font-size: 13px;
-}
-
-.actionCell {
-    display: flex;
-    align-items: center;
-    min-height: 32px;
-}
-
 @media (max-width: 700px) {
-    .alertTable {
-        padding: 0 12px 20px;
+    .error {
+        padding: 0;
     }
 
-    .title {
-        font-size: 20px;
-    }
-
-    .filters {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-    }
-
-    .mobileCards {
+    /* Cards: type and plate on top with the row button (or the checkbox)
+       right, the event text, then driver left and time right. */
+    .cards {
         flex: none;
         overflow: visible;
 
@@ -146,22 +46,27 @@
             gap: 10px;
         }
 
-        // Event on top, then the fields in three columns with the label
-        // above the value, the action across the card at the end.
         :global(tr) {
+            position: relative;
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px 10px;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 6px 8px;
             padding: 12px 14px;
             border: 1px solid var(--border);
-            border-radius: var(--radius);
+            border-radius: 12px;
             background: var(--surface);
-            box-shadow: var(--shadow);
         }
 
         :global(.tableRowInteractive:hover),
         :global(.tableRowInteractive:focus-within) {
             background: var(--surface);
+        }
+
+        :global(.tableRowSelected),
+        :global(.tableRowSelected:hover) {
+            border-color: var(--accent-border);
+            background: var(--accent-bg);
         }
 
         :global(td) {
@@ -178,64 +83,62 @@
         }
 
         :global(td)::before {
-            content: attr(data-label);
-            display: block;
-            margin-bottom: 2px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: var(--text);
-            font-size: 10px;
-            font-weight: 600;
-            line-height: 14px;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
+            display: none;
+        }
+
+        :global(td[data-col="type"]) {
+            grid-row: 1;
+            grid-column: 1;
+            overflow: visible;
+        }
+
+        /* The cell and its wrapper vanish so plate and driver can sit in
+           different grid rows of the card. */
+        :global(td[data-col="license_plate"]),
+        :global(td[data-col="license_plate"] > span) {
+            display: contents;
+        }
+
+        :global([data-part="plate"]) {
+            grid-row: 1;
+            grid-column: 2;
+            font-size: 16px;
+        }
+
+        :global([data-part="driver"]) {
+            grid-row: 3;
+            grid-column: 1 / span 2;
+            font-size: 13px;
         }
 
         :global(td[data-col="message"]) {
+            grid-row: 2;
             grid-column: 1 / -1;
             white-space: normal;
-            font-size: 15px;
-            font-weight: 650;
         }
 
         :global(td[data-col="created_at"]) {
-            grid-column: span 2;
+            grid-row: 3;
+            grid-column: 3;
+            justify-self: end;
+            font-size: 13px;
+            color: var(--text);
         }
 
-        :global(td[data-col="resolved_at"]) {
-            grid-column: 1 / -1;
-            overflow: visible;
-        }
-
-        // Selection checkbox top right, out of the grid flow.
-        :global(tr) {
-            position: relative;
-        }
-
+        :global(td[data-col="resolved_at"]),
         :global(td[data-col="select"]) {
-            position: absolute;
-            top: 12px;
-            right: 14px;
+            grid-row: 1;
+            grid-column: 3;
+            justify-self: end;
             overflow: visible;
         }
 
-        // Room for the checkbox so a long event text does not run under it.
-        :global(td[data-col="select"]:has(input) ~ td[data-col="message"]) {
-            padding-right: 32px;
-        }
-
-        :global(td[data-col="select"])::before,
-        :global(td[data-col="message"])::before,
-        :global(td[data-col="resolved_at"])::before {
+        /* Selection mode and viewers: no empty cell. */
+        :global(td[data-col="resolved_at"]:empty) {
             display: none;
         }
 
-        // A selected card has no Erledigen button, so no empty action row.
-        :global(td[data-col="resolved_at"]:has(> span:empty)) {
-            display: none;
-        }
-
-        // Empty state: one cell across the card.
+        /* Empty state: one cell across the card. */
         :global(td:only-child) {
             grid-column: 1 / -1;
             padding: 24px 12px;
@@ -243,19 +146,8 @@
             text-align: center;
         }
 
-        :global(td:only-child)::before {
-            display: none;
-        }
-
-        :global(.tableRowError),
-        :global(.tableRowProblem),
-        :global(.tableRowDeferred) {
-            box-shadow: inset 3px 0 0 var(--danger);
-        }
-
         :global(.skeletonRow) {
             display: grid;
-            box-shadow: none;
         }
 
         :global(.skeletonRow td) {

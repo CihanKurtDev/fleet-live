@@ -2,7 +2,9 @@ import "./env";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
+import { DRIVER_TALK_MIN_OPEN_WARNINGS } from "@fleet-live/shared";
 import { app } from "../app";
+import { db } from "../db/database";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { insertAlert, loginAs } from "./helpers";
@@ -434,6 +436,111 @@ describe("GET /api/drivers board filters", () => {
             .query({ min_open_warnings: 5, without_vehicle: "true" });
 
         assert.equal(response.status, 401);
+    });
+});
+
+describe("GET /api/drivers page size and tile counts", () => {
+    function seedDrivers(count: number) {
+        for (let index = 0; index < count; index += 1) {
+            VehicleModel.create({
+                license_plate: `K-PS ${index + 1}`,
+                driver_name: `Fahrer ${String(index + 1).padStart(2, "0")}`,
+                company_id: 1,
+            });
+        }
+    }
+
+    it("serves the page size the list measured", async () => {
+        seedDrivers(12);
+
+        const response = await api
+            .get("/api/drivers")
+            .query({ page: 2, limit: 7, sort: "name", dir: "asc" });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.length, 5);
+        assert.equal(response.body.meta.limit, 7);
+        assert.equal(response.body.meta.pageCount, 2);
+    });
+
+    it("rejects a limit outside 1 to 100", async () => {
+        for (const limit of [0, 101, 2.5]) {
+            const response = await api.get("/api/drivers").query({ limit });
+
+            assert.equal(response.status, 400, `limit ${limit}`);
+            assert.equal(response.body.code, "VALIDATION_ERROR");
+        }
+    });
+
+    it("counts all, talk and without-vehicle drivers for the tiles", async () => {
+        const anna = VehicleModel.create({
+            license_plate: "K-TC 1",
+            driver_name: "Anna",
+            company_id: 1,
+        });
+        const ben = VehicleModel.create({
+            license_plate: "K-TC 2",
+            driver_name: "Ben",
+            company_id: 1,
+        });
+        const other = VehicleModel.create({
+            license_plate: "K-TC 9",
+            driver_name: "Fremde",
+            company_id: 2,
+        });
+        await api.post("/api/drivers").send({ name: "Pool" });
+        for (let index = 0; index < DRIVER_TALK_MIN_OPEN_WARNINGS; index += 1) {
+            insertAlert(anna.id, {
+                type: "SPEEDING",
+                ended_at: "2026-01-01 00:00:00",
+            });
+        }
+        // Below the threshold, resolved rows and other companies do not count.
+        for (let index = 0; index < DRIVER_TALK_MIN_OPEN_WARNINGS - 1; index += 1) {
+            insertAlert(ben.id, {
+                type: "SPEEDING",
+                ended_at: "2026-01-01 00:00:00",
+            });
+        }
+        insertAlert(ben.id, {
+            type: "SPEEDING",
+            ended_at: "2026-01-01 00:00:00",
+            resolved_at: "2026-01-02 00:00:00",
+        });
+        for (let index = 0; index < 9; index += 1) {
+            insertAlert(other.id, {
+                type: "SPEEDING",
+                ended_at: "2026-01-01 00:00:00",
+            });
+        }
+
+        const all = await api.get("/api/drivers");
+        assert.deepEqual(all.body.meta.counts, {
+            all: 3,
+            talk: 1,
+            without_vehicle: 1,
+        });
+
+        // The numbers do not move with a tile filter, but follow the search.
+        const filtered = await api
+            .get("/api/drivers")
+            .query({ without_vehicle: "true" });
+        assert.equal(filtered.body.meta.total, 1);
+        assert.deepEqual(filtered.body.meta.counts, all.body.meta.counts);
+
+        const searched = await api.get("/api/drivers").query({ search: "ann" });
+        assert.deepEqual(searched.body.meta.counts, {
+            all: 1,
+            talk: 1,
+            without_vehicle: 0,
+        });
+
+        const theirs = await (await loginAs(2)).agent.get("/api/drivers");
+        assert.deepEqual(theirs.body.meta.counts, {
+            all: 1,
+            talk: 1,
+            without_vehicle: 0,
+        });
     });
 });
 
@@ -905,5 +1012,153 @@ describe("vehicle create no longer upserts drivers from the body", () => {
             patched.body.error,
             "Mindestens ein Feld ist erforderlich.",
         );
+    });
+});
+
+describe("DELETE /api/drivers/:id", () => {
+    it("deletes the driver, clears vehicles and eligibility, keeps alerts without a driver", async () => {
+        const current = VehicleModel.create({
+            license_plate: "K-RM 1",
+            driver_name: "Rita",
+            company_id: 1,
+        });
+        const eligible = VehicleModel.create({
+            license_plate: "K-RM 2",
+            company_id: 1,
+        });
+        const ritaId = requireCurrentDriver(current);
+        await api
+            .post(`/api/drivers/${ritaId}/vehicles`)
+            .send({ vehicle_id: eligible.id });
+        const alertId = insertAlert(current.id, {
+            type: "SPEEDING",
+            message: "rita-tempo",
+        });
+        await api.post("/api/drivers").send({ name: "Sven" });
+
+        const before = await api.get("/api/drivers");
+        assert.equal(before.body.meta.total, 2);
+        const eligibleBefore = await api
+            .get("/api/drivers")
+            .query({ vehicle_id: eligible.id });
+        assert.equal(eligibleBefore.body.meta.total, 1);
+
+        const removed = await api.delete(`/api/drivers/${ritaId}`);
+
+        assert.equal(removed.status, 204);
+        assert.equal(removed.text, "");
+
+        const detail = await api.get(`/api/drivers/${ritaId}`);
+        assert.equal(detail.status, 404);
+
+        const after = await api.get("/api/drivers");
+        assert.equal(after.body.meta.total, 1);
+        assert.equal(after.body.data[0].name, "Sven");
+
+        const vehicle = await api.get(`/api/vehicles/${current.id}`);
+        assert.equal(vehicle.body.current_driver_id, null);
+        assert.equal(vehicle.body.driver_name, null);
+
+        const eligibleAfter = await api
+            .get("/api/drivers")
+            .query({ vehicle_id: eligible.id });
+        assert.equal(eligibleAfter.body.meta.total, 0);
+        const links = db
+            .prepare(
+                `SELECT COUNT(*) AS n FROM driver_vehicles WHERE driver_id = ?`,
+            )
+            .get(ritaId) as { n: number };
+        assert.equal(links.n, 0);
+
+        const alerts = await api
+            .get("/api/alerts")
+            .query({ vehicle_id: current.id, filter: "all" });
+        assert.equal(alerts.body.data.length, 1);
+        assert.equal(alerts.body.data[0].id, alertId);
+        assert.equal(alerts.body.data[0].message, "rita-tempo");
+        assert.equal(alerts.body.data[0].driver_id, null);
+        assert.equal(alerts.body.data[0].driver_name, null);
+    });
+
+    it("rejects deleting a driver who is on a trip", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-RM 3",
+            driver_name: "Tom",
+            company_id: 1,
+            status: "DRIVING",
+        });
+        const tomId = requireCurrentDriver(vehicle);
+
+        const removed = await api.delete(`/api/drivers/${tomId}`);
+
+        assert.equal(removed.status, 409);
+        assert.equal(removed.body.code, "CONFLICT");
+        assert.equal(
+            removed.body.error,
+            "Tom ist noch unterwegs auf K-RM 3. Der Fahrer lässt sich erst nach der Fahrt löschen.",
+        );
+
+        const still = await api.get(`/api/drivers/${tomId}`);
+        assert.equal(still.status, 200);
+        const stillVehicle = await api.get(`/api/vehicles/${vehicle.id}`);
+        assert.equal(stillVehicle.body.current_driver_id, tomId);
+    });
+
+    it("forbids a viewer from deleting drivers", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-RM 4",
+            driver_name: "Uli",
+            company_id: 1,
+        });
+        const uliId = requireCurrentDriver(vehicle);
+        const viewer = (await loginAs(1, "viewer")).agent;
+
+        const removed = await viewer.delete(`/api/drivers/${uliId}`);
+
+        assert.equal(removed.status, 403);
+        const still = await api.get(`/api/drivers/${uliId}`);
+        assert.equal(still.status, 200);
+    });
+
+    it("requires a session", async () => {
+        const response = await request(app).delete("/api/drivers/1");
+
+        assert.equal(response.status, 401);
+        assert.equal(response.body.code, "UNAUTHORIZED");
+    });
+
+    it("returns 404 for another company's driver and leaves it in place", async () => {
+        const other = VehicleModel.create({
+            license_plate: "K-OTH 7",
+            driver_name: "Fremde",
+            company_id: 2,
+        });
+        const otherDriverId = requireCurrentDriver(other);
+
+        const removed = await api.delete(`/api/drivers/${otherDriverId}`);
+
+        assert.equal(removed.status, 404);
+        assert.equal(removed.body.code, "NOT_FOUND");
+        assert.equal(removed.body.error, "Fahrer nicht gefunden.");
+
+        const row = db
+            .prepare(`SELECT COUNT(*) AS n FROM drivers WHERE id = ?`)
+            .get(otherDriverId) as { n: number };
+        assert.equal(row.n, 1);
+    });
+
+    it("returns 404 for an unknown id", async () => {
+        const removed = await api.delete("/api/drivers/999999");
+
+        assert.equal(removed.status, 404);
+        assert.equal(removed.body.code, "NOT_FOUND");
+    });
+
+    it("returns 400 for an invalid id", async () => {
+        const removed = await api.delete("/api/drivers/abc");
+
+        assert.equal(removed.status, 400);
+        assert.equal(removed.body.code, "BAD_REQUEST");
+        assert.equal(removed.body.error, "Ungültige Fahrer-ID.");
     });
 });

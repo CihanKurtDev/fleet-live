@@ -17,14 +17,15 @@ import { retryTransient } from "../../api/retryTransient";
 import { useVehicles } from "../../context/vehiclesContext";
 import { formatIsoDate } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
+import type { VehicleFormField } from "../vehicles/VehicleForm";
 import { WarningChip } from "./WarningChip";
 import styles from "./VehicleHintsPanel.module.scss";
 
 interface VehicleHintsPanelProps {
     vehicle: Vehicle;
     canWrite: boolean;
-    /** Opens the master-data form, where a missing or past date is entered. */
-    onEditMaster?: () => void;
+    /** Opens the master-data form on the field that takes the missing date. */
+    onEditMaster?: (field: VehicleFormField) => void;
 }
 
 type DueHint = {
@@ -184,7 +185,7 @@ export const VehicleHintsPanel = ({
                             {canWrite && liveOfflineAlert ? (
                                 <Button
                                     variant="secondary"
-                                    size="sm"
+                                    size="row"
                                     disabled={resolvingId === liveOfflineAlert.id}
                                     title={
                                         liveOfflineAlert.type === "SPEEDING"
@@ -219,8 +220,12 @@ export const VehicleHintsPanel = ({
                             {canWrite && onEditMaster ? (
                                 <Button
                                     variant="ghost"
-                                    size="sm"
-                                    onClick={onEditMaster}
+                                    size="row"
+                                    onClick={() =>
+                                        onEditMaster(
+                                            hint.kind === "hu" ? "hu" : "uvv-checked",
+                                        )
+                                    }
                                 >
                                     Eintragen
                                 </Button>

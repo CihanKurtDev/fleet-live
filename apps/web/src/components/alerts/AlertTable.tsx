@@ -1,39 +1,58 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { serializeAlertListQuery, type Alert } from "@fleet-live/shared";
 
 import { resolveAlerts } from "../../api/alerts";
 import { ApiError } from "../../api/client";
 import { useVehicles } from "../../context/vehiclesContext";
-import { formatTimestamp } from "../../utils/dateTime";
-import { Table } from "../ui/Table/Table";
-import { TableFilterBar } from "../ui/Table/TableFilterBar";
-import { TablePagination } from "../ui/Table/TablePagination";
-import { RetryMessage } from "../ui/RetryMessage";
-import { useServerTable } from "../../hooks/useServerTable";
 import { useAlertList } from "../../hooks/useAlertList";
 import { useAlertListQuery } from "../../hooks/useAlertListQuery";
-import { alertFilters, alertTypeFilters } from "./alertTableConfig";
-import { useAlertResolveColumn } from "./useAlertResolveColumn";
-import { useAlertSelection } from "./useAlertSelection";
-import { useStatusNotice } from "./useStatusNotice";
-import { AlertBulkResolveDialog, AlertSelectionBar } from "./AlertBulkResolve";
-import { resolvedNotice } from "./alertLabels";
+import { useListPageSize } from "../../hooks/useListPageSize";
+import { useSelectionMode } from "../../hooks/useSelectionMode";
+import { useServerTable } from "../../hooks/useServerTable";
+import { useStatusNotice } from "../../hooks/useStatusNotice";
+import { formatTimestamp } from "../../utils/dateTime";
+import { formatCount } from "../../utils/formatCount";
 import { ExportButton } from "../export/ExportButton";
+import { Button } from "../ui/Button/Button";
+import { KpiTiles, type KpiTile } from "../ui/KpiTiles/KpiTiles";
+import {
+    ListBody,
+    ListEmpty,
+    ListFooter,
+    ListPage,
+    ListPageHeader,
+    ListPanel,
+    ListToolbar,
+    SelectionBar,
+} from "../ui/ListPage/ListPage";
+import { RetryMessage } from "../ui/RetryMessage";
+import { Table } from "../ui/Table/Table";
+import { AlertBulkResolveDialog } from "./AlertBulkResolve";
+import { resolvedNotice, selectionSummary } from "./alertLabels";
+import {
+    activeAlertTile,
+    alertTileCount,
+    alertTiles,
+} from "./alertTableConfig";
+import { useAlertResolveColumn } from "./useAlertResolveColumn";
+import { useOpenTypeCounts } from "./useOpenTypeCounts";
 import styles from "./AlertTable.module.scss";
-import band from "../../styles/pageBand.module.scss";
-import layout from "../../styles/layout.module.scss";
 
 interface AlertTableProps {
+    /** Dispatchers: Exportieren, Auswählen, Erledigen. */
     canWrite?: boolean;
+    /** Row click: opens the alert's vehicle. */
     onSelectAlert?: (alert: Alert) => void;
 }
 
+/** `/alerts`: header, status tiles, the list panel. */
 export const AlertTable = ({
     canWrite = false,
     onSelectAlert,
 }: AlertTableProps) => {
     const listQuery = useAlertListQuery();
-    const listResult = useAlertList(listQuery.query);
+    const { ref: bodyRef, pageSize } = useListPageSize(listQuery.query.limit);
+    const listResult = useAlertList({ ...listQuery.query, limit: pageSize });
     const { refetchLists } = useVehicles();
     const { notice, show: showNotice } = useStatusNotice();
     const onSingleResolved = useCallback(
@@ -44,49 +63,43 @@ export const AlertTable = ({
         canWrite,
         onSingleResolved,
     );
-    const selection = useAlertSelection(
-        listResult.data,
-        serializeAlertListQuery(listQuery.query).toString(),
-    );
-    const [pendingRows, setPendingRows] = useState<Alert[] | null>(null);
-    const [bulkError, setBulkError] = useState<string | null>(null);
-    const [isResolving, setIsResolving] = useState(false);
-    const {
-        query,
-        setType,
-        clearVehicle,
-        clearDriver,
-    } = listQuery;
+    const { query, setView, clearFilters, clearVehicle, clearDriver } =
+        listQuery;
     const { meta, notFound } = listResult;
+    const openTypeCounts = useOpenTypeCounts(meta, query.filter);
     const {
         tableState,
-        filtersWithCounts,
-        extraFiltersWithCounts,
         paginatedRows,
         isLoading,
+        isRefreshing,
         error,
         pageCount,
         total,
         showPagination,
-        sectionClassName,
         emptyContent,
-        setFilter,
         handleSort,
         setPage,
-        setLimit,
-    } = useServerTable<Alert>({
-        listQuery,
-        listResult,
-        filters: alertFilters,
-        counts: listResult.meta?.counts,
-        extras: {
-            filters: alertTypeFilters,
-            counts: listResult.meta?.type_counts,
-        },
-    });
+    } = useServerTable<Alert>({ listQuery, listResult });
 
     const selectable = canWrite && query.filter !== "resolved";
-    const hasSelection = selectable && selection.count > 0;
+    const openRows = useMemo(
+        () => paginatedRows.filter((row) => row.resolved_at === null),
+        [paginatedRows],
+    );
+    const rowKeys = useMemo(() => openRows.map((row) => row.id), [openRows]);
+    const selection = useSelectionMode(
+        rowKeys,
+        serializeAlertListQuery({ ...query, limit: pageSize }).toString(),
+    );
+    const selecting = selectable && selection.active;
+    const selectedRows = useMemo(
+        () => openRows.filter((row) => selection.selectedIds.includes(row.id)),
+        [openRows, selection.selectedIds],
+    );
+
+    const [pendingRows, setPendingRows] = useState<Alert[] | null>(null);
+    const [bulkError, setBulkError] = useState<string | null>(null);
+    const [isResolving, setIsResolving] = useState(false);
 
     const closeBulkDialog = () => {
         setPendingRows(null);
@@ -103,10 +116,11 @@ export const AlertTable = ({
 
         try {
             await resolveAlerts(pendingRows.map((row) => row.id));
-            selection.clear();
+            const count = pendingRows.length;
             setPendingRows(null);
+            selection.stop();
             refetchLists();
-            showNotice(resolvedNotice(pendingRows.length));
+            showNotice(resolvedNotice(count));
         } catch (caught: unknown) {
             setBulkError(
                 caught instanceof ApiError
@@ -120,116 +134,125 @@ export const AlertTable = ({
 
     if (notFound) {
         return (
-            <section className={`${styles.alertTable} ${layout.sheet}`}>
-            <header className={`${band.band} ${band.bleed}`}>
-                <h1 className={styles.title}>Nicht gefunden</h1>
-                <p className={styles.status}>
-                    Es gibt kein Fahrzeug oder keinen Fahrer mit dieser Kennung
-                    in deiner Firma.
-                </p>
-                <button
-                    type="button"
-                    className={styles.scopeButton}
-                    onClick={() => {
-                        clearVehicle();
-                        clearDriver();
-                    }}
-                >
-                    Alle Warnungen
-                </button>
-            </header>
-            </section>
+            <ListPage>
+                <ListPageHeader
+                    title="Nicht gefunden"
+                    summary="Es gibt kein Fahrzeug oder keinen Fahrer mit dieser Kennung in deiner Firma."
+                    actions={
+                        <Button
+                            variant="secondary"
+                            size="toolbar"
+                            onClick={() => {
+                                clearVehicle();
+                                clearDriver();
+                            }}
+                        >
+                            Alle Warnungen
+                        </Button>
+                    }
+                />
+            </ListPage>
         );
     }
 
-    return (
-        <section
-            className={sectionClassName(styles.alertTable, styles.isFetching)}
-        >
-            <header
-                className={`${band.band} ${band.bleed} ${layout.pageHead}`}
-            >
-                <div className={styles.titleRow}>
-                    <h1 className={styles.title}>Warnungen</h1>
-                    {canWrite && (
-                        <p
-                            className={styles.notice}
-                            role="status"
-                            aria-live="polite"
-                        >
-                            {notice}
-                        </p>
-                    )}
-                    {canWrite && <ExportButton kind="alerts" />}
-                </div>
+    const hasScope =
+        query.vehicle_id !== undefined || query.driver_id !== undefined;
+    const activeTile = activeAlertTile(query);
+    const isFiltered = activeTile !== "open" || hasScope;
+    const counts = meta?.counts;
 
-                {query.vehicle_id !== undefined && (
-                    <p className={styles.scope}>
-                        Nur Warnungen eines Fahrzeugs.{" "}
-                        <button
-                            type="button"
-                            className={styles.scopeButton}
-                            onClick={clearVehicle}
-                        >
-                            Alle Fahrzeuge
-                        </button>
-                    </p>
-                )}
-
-                {query.driver_id !== undefined && (
-                    <p className={styles.scope}>
-                        Nur Warnungen eines Fahrers.{" "}
-                        <button
-                            type="button"
-                            className={styles.scopeButton}
-                            onClick={clearDriver}
-                        >
-                            Alle Fahrer
-                        </button>
-                    </p>
-                )}
-            </header>
-
-            <div className={layout.sheet}>
-                {!isLoading && (
-                    <div
-                        className={
-                            hasSelection
-                                ? `${styles.filters} ${styles.filtersCovered}`
-                                : styles.filters
-                        }
+    const summary = (
+        <>
+            {counts
+                ? `${formatCount(counts.open)} offen · ${formatCount(counts.resolved)} erledigt · neueste zuerst`
+                : "Warnungen der Firma"}
+            {query.vehicle_id !== undefined && (
+                <>
+                    {" · "}Nur Warnungen eines Fahrzeugs.{" "}
+                    <button
+                        type="button"
+                        className={styles.scopeButton}
+                        onClick={clearVehicle}
                     >
-                        {hasSelection && (
-                            <AlertSelectionBar
-                                rows={selection.selectedRows}
-                                onClear={selection.clear}
-                                onResolve={() =>
-                                    setPendingRows(selection.selectedRows)
-                                }
-                            />
-                        )}
-                        <TableFilterBar
-                            filters={filtersWithCounts}
-                            activeFilterId={tableState.filterId}
-                            onFilterChange={setFilter}
-                            allCount={meta?.counts.all}
-                            groupLabel="Status"
-                            ariaLabel="Status"
-                        />
-                        <TableFilterBar
-                            filters={extraFiltersWithCounts}
-                            activeFilterId={query.type ?? null}
-                            onFilterChange={setType}
-                            allCount={meta?.type_counts?.all}
-                            allLabel="Alle Typen"
-                            groupLabel="Ereignisart"
-                            ariaLabel="Ereignisart"
-                        />
-                    </div>
+                        Alle Fahrzeuge
+                    </button>
+                </>
+            )}
+            {query.driver_id !== undefined && (
+                <>
+                    {" · "}Nur Warnungen eines Fahrers.{" "}
+                    <button
+                        type="button"
+                        className={styles.scopeButton}
+                        onClick={clearDriver}
+                    >
+                        Alle Fahrer
+                    </button>
+                </>
+            )}
+        </>
+    );
+
+    const tiles: KpiTile[] = alertTiles.map((tile) => ({
+        key: tile.id,
+        label: tile.label,
+        value: alertTileCount(tile.id, counts, openTypeCounts),
+        tone: tile.tone,
+        pressed: activeTile === tile.id,
+        onToggle: () => {
+            selection.stop();
+            setView(tile.view);
+        },
+    }));
+
+    return (
+        <ListPage selecting={selecting} busy={isRefreshing}>
+            <ListPageHeader
+                title="Warnungen"
+                summary={summary}
+                notice={notice}
+                actions={canWrite ? <ExportButton kind="alerts" size="toolbar" /> : undefined}
+            />
+
+            <KpiTiles ariaLabel="Status" phoneLayout="strip" tiles={tiles} />
+
+            <ListPanel label="Warnungsliste">
+                {selecting ? (
+                    <SelectionBar
+                        count={selection.count}
+                        pageCheckbox={selection.pageCheckbox}
+                        summary={
+                            selectedRows.length > 0
+                                ? selectionSummary(selectedRows)
+                                : undefined
+                        }
+                        onDone={selection.stop}
+                        actions={
+                            <Button
+                                variant="primary"
+                                size="toolbar"
+                                disabled={selection.count === 0}
+                                onClick={() => setPendingRows(selectedRows)}
+                            >
+                                {selection.count} erledigen
+                            </Button>
+                        }
+                    />
+                ) : (
+                    <ListToolbar
+                        onStartSelection={
+                            selectable ? selection.start : undefined
+                        }
+                    />
                 )}
 
                 {error && (
-                    <RetryMessage message={error} onRetry={listResult.retry} />
+                    <div className={styles.error}>
+                        <RetryMessage
+                            message={error}
+                            onRetry={listResult.retry}
+                        />
+                    </div>
                 )}
 
                 {actionError && (
@@ -238,68 +261,57 @@ export const AlertTable = ({
                     </p>
                 )}
 
-                {isLoading && (
-                    <p className={styles.status} aria-live="polite">
-                        Tabelle wird geladen…
-                    </p>
-                )}
+                <ListBody ref={bodyRef}>
+                    <Table
+                        columns={columns}
+                        rows={paginatedRows}
+                        getRowKey={(alert) => alert.id}
+                        selectionMode={selecting}
+                        selectedRows={selection.selectedIds}
+                        onSelectRow={(key) => selection.toggle(Number(key))}
+                        isRowSelectable={(alert) => alert.resolved_at === null}
+                        getRowSelectLabel={(alert) =>
+                            `Warnung ${alert.license_plate}, ${formatTimestamp(alert.created_at)} auswählen`
+                        }
+                        onRowClick={onSelectAlert}
+                        sortConfig={tableState.sortConfig}
+                        onSort={handleSort}
+                        caption="Warnungsliste"
+                        isLoading={isLoading}
+                        skeletonRowCount={pageSize}
+                        emptyContent={emptyContent(
+                            isFiltered ? (
+                                <ListEmpty
+                                    message="Keine Warnungen passen zum Filter."
+                                    onClearFilters={clearFilters}
+                                />
+                            ) : (
+                                <ListEmpty message="Keine offenen Warnungen." />
+                            ),
+                        )}
+                        className={styles.cards}
+                    />
+                </ListBody>
 
-                <Table
-                    columns={columns}
-                    rows={paginatedRows}
-                    getRowKey={(alert) => alert.id}
-                    selectable={selectable}
-                    selectedRows={selection.selectedIds}
-                    onSelectRow={(key) => selection.toggle(Number(key))}
-                    isRowSelectable={selection.isSelectable}
-                    getRowSelectLabel={(alert) =>
-                        `Warnung ${alert.license_plate}, ${formatTimestamp(alert.created_at)} auswählen`
-                    }
-                    selectAll={{
-                        checked: selection.allSelected,
-                        indeterminate: selection.someSelected,
-                        disabled: !selection.hasSelectable,
-                        label: "Alle auf dieser Seite",
-                        onChange: selection.toggleAll,
-                    }}
-                    onRowClick={onSelectAlert}
-                    sortConfig={tableState.sortConfig}
-                    onSort={handleSort}
-                    caption="Warnungsliste"
-                    isLoading={isLoading}
-                    skeletonRowCount={Math.min(tableState.limit, 10)}
-                    emptyContent={emptyContent(
-                        query.filter === "open" &&
-                            query.type === undefined &&
-                            query.vehicle_id === undefined &&
-                            query.driver_id === undefined
-                            ? "Keine offenen Warnungen."
-                            : "Keine Warnungen passen zum Filter.",
-                    )}
-                    className={styles.mobileCards}
+                <ListFooter
+                    page={tableState.page}
+                    pageCount={pageCount}
+                    limit={pageSize}
+                    total={total}
+                    onPageChange={setPage}
+                    show={showPagination}
                 />
+            </ListPanel>
 
-                {showPagination && (
-                    <TablePagination
-                        page={tableState.page}
-                        pageCount={pageCount}
-                        limit={tableState.limit}
-                        total={total}
-                        onPageChange={setPage}
-                        onLimitChange={setLimit}
-                    />
-                )}
-
-                {canWrite && (
-                    <AlertBulkResolveDialog
-                        rows={pendingRows}
-                        isBusy={isResolving}
-                        error={bulkError}
-                        onClose={closeBulkDialog}
-                        onConfirm={() => void confirmBulkResolve()}
-                    />
-                )}
-            </div>
-        </section>
+            {canWrite && (
+                <AlertBulkResolveDialog
+                    rows={pendingRows}
+                    isBusy={isResolving}
+                    error={bulkError}
+                    onClose={closeBulkDialog}
+                    onConfirm={() => void confirmBulkResolve()}
+                />
+            )}
+        </ListPage>
     );
 };

@@ -1,5 +1,4 @@
-.type,
-.severity {
+.type {
     display: inline-flex;
     align-items: center;
     min-height: 22px;
@@ -28,21 +27,3 @@
     background: color-mix(in srgb, var(--danger) 8%, var(--surface));
     color: var(--danger);
 }
-
-.severity {
-    color: var(--text);
-}
-
-.severity[data-severity="HIGH"] {
-    border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
-    background: color-mix(in srgb, var(--danger) 13%, var(--surface));
-    color: var(--danger);
-    font-weight: 650;
-}
-
-.severity[data-severity="MEDIUM"] {
-    border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
-    background: color-mix(in srgb, var(--warning) 10%, var(--surface));
-    color: var(--warning);
-}
-

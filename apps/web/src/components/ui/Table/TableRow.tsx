@@ -11,6 +11,7 @@ interface TableRowProps<RowType> {
     columns: TableColumn<RowType>[];
 
     isSelected: boolean;
+    /** Selection mode: a row click toggles the row. */
     isEditing: boolean;
     /** Checkbox-Spalte sichtbar (Bearbeiten-Modus oder `selectable`). */
     showSelect?: boolean;
@@ -42,6 +43,7 @@ const TableRowComponent = <RowType,>({
         row: rowData,
         isSelected,
         isEditing,
+        selectionMode: isEditing,
         onSelect,
     };
 
@@ -82,7 +84,11 @@ const TableRowComponent = <RowType,>({
                 }
             }}
             tabIndex={interactive && !isEditing && onClick ? 0 : undefined}
-            aria-selected={isSelected}
+            data-selected={isSelected || undefined}
+            // Without a checkbox column the selected row is the one shown
+            // elsewhere (the trip on the map): that is "current", not a
+            // multi-selection (aria-selected needs a grid role).
+            aria-current={!showSelect && isSelected ? "true" : undefined}
         >
             {showSelect && (
                 <td

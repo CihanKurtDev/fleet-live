@@ -3,7 +3,7 @@ import { ALERT_TYPES } from "./alert";
 import { emptyToUndefined, firstQueryString } from "./queryPreprocess";
 import { isValidIsoDate, type VehicleStatus } from "./vehicle";
 import { DRIVER_NAME_MAX } from "./vehicle";
-import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
+import { LIST_PAGE_LIMIT_MAX } from "./vehicleQuery";
 
 export const DRIVER_PHONE_MAX = 32;
 
@@ -50,11 +50,21 @@ export type DriverDetail = Driver & {
     current_vehicle: DriverVehicle | null;
 };
 
+/** Numbers for the tiles on `/drivers`; they follow the search only. */
+export type DriverListCounts = {
+    all: number;
+    /** Open SPEEDING warnings at `DRIVER_TALK_MIN_OPEN_WARNINGS` or more. */
+    talk: number;
+    /** No current vehicle. */
+    without_vehicle: number;
+};
+
 export type DriverListMeta = {
     page: number;
     limit: number;
     total: number;
     pageCount: number;
+    counts: DriverListCounts;
 };
 
 export type DriverListResponse = {
@@ -106,10 +116,10 @@ export const driverListQuerySchema = z.object({
         z.coerce
             .number({ error: "Limit muss eine Zahl sein." })
             .int("Limit muss eine ganze Zahl sein.")
-            .refine(
-                (value) =>
-                    (VEHICLE_PAGE_LIMITS as readonly number[]).includes(value),
-                { message: "Limit muss 10, 25, 50 oder 100 sein." },
+            .min(1, `Limit muss zwischen 1 und ${LIST_PAGE_LIMIT_MAX} liegen.`)
+            .max(
+                LIST_PAGE_LIMIT_MAX,
+                `Limit muss zwischen 1 und ${LIST_PAGE_LIMIT_MAX} liegen.`,
             )
             .default(10),
     ),

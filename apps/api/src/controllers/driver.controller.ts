@@ -96,6 +96,19 @@ export function updateDriver(req: Request, res: Response) {
     res.json({ data: driver });
 }
 
+export function deleteDriver(req: Request, res: Response) {
+    const companyId = sessionCompany(req);
+    const id = parseId(req.params.id, "Fahrer-ID");
+    const deleted = DriverModel.delete(id, companyId);
+
+    if (!deleted) {
+        throw new NotFoundError("Fahrer nicht gefunden.");
+    }
+
+    notifyVehiclesChanged(companyId);
+    res.status(204).send();
+}
+
 export function assignDriverVehicle(req: Request, res: Response) {
     const companyId = sessionCompany(req);
     const driverId = parseId(req.params.id, "Fahrer-ID");

@@ -695,8 +695,10 @@ export const ImportPage = () => {
                                 (!csvContent.trim() && !xlsxBase64) || isLoading
                             }
                             onClick={() => void runPreview("mapping")}
+                            busy={isLoading}
+                            busyLabel="Wird gelesen…"
                         >
-                            {isLoading ? "Wird gelesen…" : "Weiter"}
+                            Weiter
                         </Button>
                     </div>
                     <ImportLog runs={runs} />
@@ -839,8 +841,10 @@ export const ImportPage = () => {
                             size="sm"
                             disabled={isLoading}
                             onClick={() => void handleMappingNext()}
+                            busy={isLoading}
+                            busyLabel="Wird geprüft…"
                         >
-                            {isLoading ? "Wird geprüft…" : "Vorschau"}
+                            Vorschau
                         </Button>
                     </div>
                 </section>

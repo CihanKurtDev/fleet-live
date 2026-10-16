@@ -6,16 +6,36 @@ import { useAuth } from "./hooks/useAuth";
 import { useBriefing } from "./hooks/useBriefing";
 import "./App.css";
 
+/**
+ * First tab stop: moves focus past the header to the page (WCAG 2.4.1).
+ * Focus, not a #hash: /konto uses the hash for its sections.
+ */
+function SkipLink() {
+    return (
+        <a
+            className="skip-link"
+            href="#main"
+            onClick={(event) => {
+                event.preventDefault();
+                document.getElementById("main")?.focus();
+            }}
+        >
+            Zum Inhalt springen
+        </a>
+    );
+}
+
 function AuthedShell() {
     const { data } = useBriefing();
 
     return (
         <>
+            <SkipLink />
             <AppHeader
                 openAlertCount={data?.counts.open}
                 status={<HeaderLiveStatus />}
             />
-            <main>
+            <main id="main" tabIndex={-1}>
                 <Outlet />
             </main>
             <ScrollRestoration />
@@ -26,8 +46,9 @@ function AuthedShell() {
 function GuestShell() {
     return (
         <>
+            <SkipLink />
             <AppHeader />
-            <main>
+            <main id="main" tabIndex={-1}>
                 <Outlet />
             </main>
             <ScrollRestoration />

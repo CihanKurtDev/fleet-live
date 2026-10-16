@@ -9,12 +9,26 @@
   --accent-bg: #f0eafd;
   --accent-border: #a78bfa;
   --success: #15803d;
-  --warning: #b45309;
+  /* Darker than Tailwind amber-700 so 12 px tags on a warning tint reach 4.5:1. */
+  --warning: #a34a07;
   --danger: #b91c1c;
   --info: #0369a1;
+  /* Depot circles on the map and their list marker (FleetMap draws the same). */
+  --depot: #5b7c99;
+  /* Speed over the class limit before a warning opens (orange, not amber). */
+  --speed-warning: #c2410c;
   --focus-ring: #8b5cf6;
+  /* Text on a filled accent (primary button, nav badge). */
+  --on-accent: #ffffff;
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  /* Control heights (rules/design-system.md, "Control sizes"). */
+  --control-xs: 28px; /* the one row action, icon actions, dialog close */
+  --control-sm: 34px; /* header, toolbar, chips, pagination, panels */
+  --control-md: 36px; /* form and dialog fields and their buttons */
+  --control-lg: 40px; /* sign-in pages */
+  --focus-width: 2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -27,7 +41,8 @@
   --layout-wide: 1600px;
   --measure: 68ch;
 
-  font: 18px/145% var(--sans);
+  /* Unitless, so each element gets 1.45 x its own size, not 26.1 px (F01). */
+  font: 18px/1.45 var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
   color: var(--text);
@@ -57,7 +72,9 @@
     --warning: #fbbf24;
     --danger: #fca5a5;
     --info: #7dd3fc;
+    --speed-warning: #fb923c;
     --focus-ring: #c4b5fd;
+    --on-accent: #16141a;
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
     --surface-well: #171c24;
@@ -78,9 +95,26 @@
 }
 
 @media (max-width: 700px) {
+  :root {
+    /* Touch targets: 40 px for the row action, 44 px for everything else. */
+    --control-xs: 40px;
+    --control-sm: 44px;
+    --control-md: 44px;
+    --control-lg: 44px;
+  }
+
   #root {
     border-inline: 0;
   }
+}
+
+/*
+ * One focus indicator for every control (F03). Zero specificity, so a
+ * component may still move it (offset) when its container clips outlines.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 html,

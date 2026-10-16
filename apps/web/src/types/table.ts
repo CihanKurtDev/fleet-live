@@ -10,7 +10,10 @@ export type SortConfig<T> = {
 export type RenderContext<RowType> = {
     row: RowType;
     isSelected: boolean;
+    /** Selection mode is on (same value as `selectionMode`). */
     isEditing: boolean;
+    /** Selection mode is on: a row button hides itself (`return null`). */
+    selectionMode: boolean;
     onSelect: () => void;
 };
 
@@ -78,6 +81,13 @@ export interface TableProps<RowType> {
 
     getRowKey: (row: RowType) => string | number;
 
+    /**
+     * Selection mode (after "Auswählen"): the checkbox column appears and a
+     * row click toggles the row instead of `onRowClick`.
+     */
+    selectionMode?: boolean;
+
+    /** Older name for `selectionMode`. */
     isEditing?: boolean;
 
     selectedRows?: Array<string | number>;

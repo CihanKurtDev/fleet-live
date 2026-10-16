@@ -3,10 +3,12 @@ import type { SimState } from "@fleet-live/shared";
 
 import { getSim, setSimRunning } from "../api/sim";
 import { Button } from "./ui/Button/Button";
+import { SwapLabel } from "./ui/Button/SwapLabel";
 import styles from "./SimToggle.module.scss";
 
 export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
-    const [sim, setSim] = useState<SimState | null>(null);
+    // undefined: still loading; null: not available for this session.
+    const [sim, setSim] = useState<SimState | null | undefined>(undefined);
     const [isBusy, setIsBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -15,10 +17,32 @@ export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
 
         getSim(controller.signal)
             .then(setSim)
-            .catch(() => setSim(null));
+            .catch(() => {
+                if (!controller.signal.aborted) {
+                    setSim(null);
+                }
+            });
 
         return () => controller.abort();
     }, []);
+
+    if (sim === undefined) {
+        // Holds the button's place while loading, so the header does not shift.
+        return (
+            <div className={styles.wrap} aria-hidden="true">
+                <Button
+                    variant="secondary"
+                    size={fullWidth ? "md" : "sm"}
+                    className={`${styles.toggle} ${styles.placeholder}`}
+                    fullWidth={fullWidth}
+                    disabled
+                    tabIndex={-1}
+                >
+                    Simulation pausieren
+                </Button>
+            </div>
+        );
+    }
 
     if (!sim?.available) {
         return null;
@@ -61,7 +85,9 @@ export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
                         : "Startet die Simulation dieser Firma wieder."
                 }
             >
-                {sim.running ? "Simulation pausieren" : "Simulation starten"}
+                <SwapLabel swapped={!sim.running} alt="Simulation starten">
+                    Simulation pausieren
+                </SwapLabel>
             </Button>
             {error && (
                 <span className={styles.error} role="alert">

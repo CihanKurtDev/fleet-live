@@ -27,11 +27,11 @@
 }
 
 .limitSelect {
-    height: 32px;
+    height: var(--control-sm);
     padding: 0 6px;
 
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg);
 
     font: inherit;
@@ -41,9 +41,8 @@
     cursor: pointer;
 
     &:focus-visible {
-        outline: none;
-        border-color: var(--accent-border);
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        outline: var(--focus-width) solid var(--focus-ring);
+        outline-offset: 2px;
     }
 }
 
@@ -58,13 +57,13 @@
     align-items: center;
     justify-content: center;
 
-    min-width: 32px;
-    height: 32px;
+    min-width: var(--control-sm);
+    height: var(--control-sm);
     padding: 0 6px;
     box-sizing: border-box;
 
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: none;
 
     font: inherit;
@@ -84,8 +83,8 @@
     }
 
     &:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        outline: var(--focus-width) solid var(--focus-ring);
+        outline-offset: 2px;
     }
 
     &:disabled {
@@ -98,7 +97,6 @@
     border-color: var(--accent-border);
     background: var(--accent-bg);
     color: var(--text-h);
-    font-weight: 600;
 
     &:hover:not(:disabled) {
         background: var(--accent-bg);
@@ -111,7 +109,7 @@
     justify-content: center;
 
     min-width: 24px;
-    height: 32px;
+    height: var(--control-sm);
     color: var(--text);
 }
 
@@ -161,7 +159,32 @@
     }
 
     .pageButton {
-        min-width: 40px;
-        height: 40px;
+        min-width: var(--control-sm);
+    }
+}
+
+/* List panel footer: range left, pages right; the panel draws the line. */
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    font-size: 13px;
+
+    .range {
+        margin: 0;
+    }
+}
+
+@media (max-width: 700px) {
+    .footer {
+        flex-wrap: wrap;
+        justify-content: center;
+
+        .range {
+            width: 100%;
+            text-align: center;
+        }
     }
 }

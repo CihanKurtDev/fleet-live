@@ -10,7 +10,7 @@
     overflow: auto;
 
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg);
     color: var(--text-h);
     box-shadow: var(--shadow);
@@ -50,7 +50,7 @@
 
 .itemSelected {
     background: var(--code-bg);
-    box-shadow: inset 2px 0 0 #5b7c99;
+    box-shadow: inset 2px 0 0 var(--depot);
 }
 
 .head {
@@ -124,12 +124,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: var(--control-xs);
+    height: var(--control-xs);
     padding: 0;
 
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg);
     color: var(--text-h);
     cursor: pointer;
@@ -152,6 +152,7 @@
 .add {
     display: block;
     width: 100%;
+    min-height: var(--control-sm);
     padding: 7px 10px;
     color: var(--text-h);
     font-weight: 650;
@@ -221,11 +222,11 @@
 }
 
 .warn {
-    color: #b45309;
+    color: var(--warning);
 }
 
 .error {
-    color: #dc2626;
+    color: var(--danger);
 }
 
 .editor {
@@ -249,7 +250,7 @@
 
 .slider {
     width: 100%;
-    accent-color: #5b7c99;
+    accent-color: var(--depot);
 }
 
 .actions {
@@ -263,11 +264,11 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 28px;
+    height: var(--control-xs);
     padding: 0 8px;
 
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--text-h);
     font: inherit;
@@ -290,7 +291,7 @@
 .actionPrimary {
     border-color: transparent;
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 
     &:hover:not(:disabled) {
         filter: brightness(0.95);

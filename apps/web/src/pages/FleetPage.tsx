@@ -26,6 +26,7 @@ import { TableFilterBar } from "../components/ui/Table/TableFilterBar";
 import { DepotPanel } from "../components/vehicles/DepotPanel";
 import { DepotStrip } from "../components/vehicles/DepotStrip";
 import {
+    depotAfterClick,
     isDepotDraftDirty,
     type DepotDraft,
 } from "../components/vehicles/depotDraft";
@@ -296,6 +297,54 @@ export const FleetPage = () => {
     });
     const fleetPath = `/fleet${queryString ? `?${queryString}` : ""}`;
     const draftDirty = draft !== null && isDepotDraftDirty(draft, sites);
+    const vehiclePanelOpen = selectedVehicle !== null;
+
+    // Escape closes the innermost open thing on the map: the vehicle panel,
+    // then a placement, then the selected depot. Dialogs, menus and the help
+    // drawer take Escape first (they prevent the default).
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent) => {
+            if (event.key !== "Escape" || event.defaultPrevented) {
+                return;
+            }
+
+            const target = event.target;
+
+            if (
+                document.querySelector("dialog[open]") ||
+                (target instanceof Element &&
+                    target.closest("input, textarea, select, [contenteditable='true']"))
+            ) {
+                return;
+            }
+
+            if (vehiclePanelOpen) {
+                setSelectedId(null);
+                // The panel had focus or the page did; keep it in the page.
+                document.getElementById("main")?.focus();
+                return;
+            }
+
+            if (placing) {
+                setPlacing(false);
+                return;
+            }
+
+            if (draftDirty) {
+                return;
+            }
+
+            if (draft !== null || depotId !== undefined) {
+                setDraft(null);
+                setSaveError(null);
+                setDepot(null);
+            }
+        };
+
+        window.addEventListener("keydown", onKey);
+
+        return () => window.removeEventListener("keydown", onKey);
+    }, [vehiclePanelOpen, placing, draft, draftDirty, depotId, setDepot]);
     const showDepotPanel =
         placing ||
         draft !== null ||
@@ -387,9 +436,24 @@ export const FleetPage = () => {
         setSaveError("Speichern oder abbrechen, um ein anderes Depot zu wählen.");
     };
 
+    // Deselect: the map highlight, the panel and the `depot` URL parameter
+    // all follow `depotId`, so clearing it resets them together.
+    const clearDepot = () => {
+        setDraft(null);
+        setPlacing(false);
+        setSaveError(null);
+        setDepot(null);
+    };
+
     const selectDepot = (site: Site) => {
         if (draft && isDepotDraftDirty(draft, sites)) {
             rejectDirtyDepot();
+            return;
+        }
+
+        // A second click on the selected depot deselects it.
+        if (depotAfterClick(depotId, site.id, draft !== null || placing) === null) {
+            clearDepot();
             return;
         }
 
@@ -769,6 +833,7 @@ export const FleetPage = () => {
                                     setSitesRetryKey((current) => current + 1)
                                 }
                                 onSelect={selectDepot}
+                                onDeselect={clearDepot}
                                 onEdit={editDepot}
                                 onStartPlace={startPlaceDepot}
                                 onCancel={() => {
@@ -832,6 +897,7 @@ export const FleetPage = () => {
                 onClose={() => setDeleteTarget(null)}
                 title="Depot löschen?"
                 confirmLabel="Löschen"
+                busyLabel="Wird gelöscht…"
                 isBusy={isDeleting}
                 onConfirm={confirmDelete}
             >

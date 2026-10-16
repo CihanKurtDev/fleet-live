@@ -5,7 +5,9 @@ import {
     isAlertSortKey,
     isAlertType,
     serializeAlertListQuery,
+    type AlertFilterId,
     type AlertListQuery,
+    type AlertType,
 } from "@fleet-live/shared";
 import {
     createListQueryHook,
@@ -32,6 +34,11 @@ const useAlertListQueryBase = createListQueryHook<
     {
         setFilter: (filterId: string | null) => void;
         setType: (typeId: string | null) => void;
+        setView: (view: {
+            filter: AlertFilterId;
+            type: AlertType | null;
+        }) => void;
+        clearFilters: () => void;
         clearVehicle: () => void;
         clearDriver: () => void;
     }
@@ -70,6 +77,25 @@ const useAlertListQueryBase = createListQueryHook<
                 { replace: true, resetPage: true },
             );
         },
+        /** A KPI tile: status and type in one URL change. */
+        setView: (view: { filter: AlertFilterId; type: AlertType | null }) => {
+            patch(view as ListQueryPatch<AlertListQuery>, {
+                replace: true,
+                resetPage: true,
+            });
+        },
+        /** "Filter aufheben": back to all open warnings of the company. */
+        clearFilters: () => {
+            patch(
+                {
+                    filter: "open",
+                    type: null,
+                    vehicle_id: null,
+                    driver_id: null,
+                } as ListQueryPatch<AlertListQuery>,
+                { replace: true, resetPage: true },
+            );
+        },
         clearVehicle: () => {
             patch(
                 { vehicle_id: null } as ListQueryPatch<AlertListQuery>,
@@ -92,6 +118,8 @@ export const useAlertListQuery = () => {
         sortConfig,
         setFilter,
         setType,
+        setView,
+        clearFilters,
         handleSort,
         setPage,
         setLimit,
@@ -105,6 +133,8 @@ export const useAlertListQuery = () => {
         sortConfig,
         setFilter,
         setType,
+        setView,
+        clearFilters,
         handleSort,
         setPage,
         setLimit,

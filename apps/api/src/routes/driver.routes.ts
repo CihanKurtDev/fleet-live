@@ -3,6 +3,7 @@ import { requireDispatcher } from "../middleware/requireDispatcher";
 import {
     assignDriverVehicle,
     createDriver,
+    deleteDriver,
     getDriverById,
     getDrivers,
     setDriverCurrentVehicle,
@@ -16,6 +17,7 @@ router.get("/", getDrivers);
 router.post("/", requireDispatcher, createDriver);
 router.get("/:id", getDriverById);
 router.patch("/:id", requireDispatcher, updateDriver);
+router.delete("/:id", requireDispatcher, deleteDriver);
 router.post("/:id/vehicles", requireDispatcher, assignDriverVehicle);
 router.delete(
     "/:id/vehicles/:vehicleId",

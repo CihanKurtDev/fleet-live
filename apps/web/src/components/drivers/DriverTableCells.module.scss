@@ -1,36 +1,31 @@
-.assignment {
-    display: inline-flex;
+.identity {
+    display: flex;
     flex-direction: column;
-    gap: 2px;
     min-width: 0;
+    line-height: 1.25;
 }
 
-/* One line per row on desktop, so ten rows and the pagination fit the window. */
-@media (min-width: 701px) {
-    .assignment {
-        flex-direction: row;
-        align-items: baseline;
-        gap: 8px;
-        white-space: nowrap;
-    }
-}
-
-.assignment strong {
-    color: var(--text-h);
+.strong {
+    overflow: hidden;
+    font-size: 14px;
     font-weight: 650;
+    text-overflow: ellipsis;
+    color: var(--text-h);
 }
 
 .meta,
 .muted {
-    color: var(--text);
+    overflow: hidden;
     font-size: 12px;
+    text-overflow: ellipsis;
+    color: var(--text);
 }
 
 .warning {
     display: inline-flex;
     align-items: center;
     min-height: 22px;
-    padding: 0 7px;
+    padding: 0 8px;
     border: 1px solid var(--border);
     border-radius: 999px;
     color: var(--text);

@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from "react-router";
 import type { VehicleInput } from "@fleet-live/shared";
 
 import { VehicleTable } from "../components/vehicles/VehicleTable";
-import { ExportButton } from "../components/export/ExportButton";
+import { ExportMenu } from "../components/export/ExportMenu";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
+import { Button } from "../components/ui/Button/Button";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
+import { useStatusNotice } from "../hooks/useStatusNotice";
 import { rememberVehicle } from "../api/vehicleCache";
 import { setTelemetryFocus } from "../api/telemetryFocus";
 
@@ -19,6 +21,7 @@ export const VehiclesPage = () => {
     const location = useLocation();
 
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const { notice, show: showNotice } = useStatusNotice();
 
     const handleCreate = async (input: VehicleInput) => {
         const errors = await createVehicle(input);
@@ -28,23 +31,32 @@ export const VehiclesPage = () => {
         }
 
         setIsCreateOpen(false);
+        showNotice(`Fahrzeug ${input.license_plate.trim()} angelegt.`);
     };
 
     return (
         <>
             <VehicleTable
+                pageNotice={notice}
                 onDeleteVehicles={canWrite ? deleteVehicles : undefined}
-                onAddVehicle={canWrite ? () => setIsCreateOpen(true) : undefined}
-                onImport={
-                    canWrite
-                        ? () => navigate("/vehicles/import")
-                        : undefined
-                }
-                exportActions={
+                actions={
                     canWrite ? (
                         <>
-                            <ExportButton kind="vehicles" />
-                            <ExportButton kind="trips" />
+                            <Button
+                                variant="secondary"
+                                size="toolbar"
+                                onClick={() => navigate("/vehicles/import")}
+                            >
+                                Importieren
+                            </Button>
+                            <ExportMenu kinds={["vehicles", "trips"]} />
+                            <Button
+                                variant="primary"
+                                size="toolbar"
+                                onClick={() => setIsCreateOpen(true)}
+                            >
+                                Fahrzeug anlegen
+                            </Button>
                         </>
                     ) : undefined
                 }

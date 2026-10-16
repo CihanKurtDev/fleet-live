@@ -44,6 +44,8 @@ export const HelpDrawer = ({ page, onClose }: HelpDrawerProps) => {
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
+                // The drawer takes this Escape; the page under it stays as is.
+                event.preventDefault();
                 onClose();
             }
         };
