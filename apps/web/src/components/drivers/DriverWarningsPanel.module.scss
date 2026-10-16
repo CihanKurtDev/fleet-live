@@ -1,0 +1,108 @@
+.list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* Five rows of 40 px even when fewer exist, so the panel does not jump. */
+.rows {
+    min-height: 200px;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 74px 110px minmax(0, 1fr) 64px 78px;
+    align-items: center;
+    gap: 10px;
+    height: 40px;
+    box-sizing: border-box;
+    padding: 0 4px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-h);
+}
+
+.row:last-child {
+    border-bottom: 0;
+}
+
+.time {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.plate {
+    overflow: hidden;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.event {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.state {
+    justify-self: start;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text);
+
+    &[data-open="true"] {
+        border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+        color: var(--danger);
+    }
+}
+
+.action {
+    justify-self: end;
+}
+
+.footer {
+    flex: none;
+}
+
+@media (max-width: 700px) {
+    .rows {
+        min-height: 0;
+    }
+
+    .row {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "plate state action"
+            "event event time";
+        height: auto;
+        row-gap: 2px;
+        padding: 8px 4px;
+    }
+
+    .plate {
+        grid-area: plate;
+    }
+
+    .state {
+        grid-area: state;
+    }
+
+    .action {
+        grid-area: action;
+    }
+
+    .event {
+        grid-area: event;
+        color: var(--text);
+    }
+
+    .time {
+        grid-area: time;
+        justify-self: end;
+        font-size: 12px;
+    }
+}

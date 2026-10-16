@@ -26,7 +26,10 @@ const readVehicleParams = (
 const useVehicleListQueryBase = createListQueryHook<
     Vehicle,
     VehicleListQuery,
-    { setFilter: (filterId: string | null) => void }
+    {
+        setFilter: (filterId: string | null) => void;
+        clearFilters: () => void;
+    }
 >({
     schema: toListQuerySchema(vehicleListQuerySchema),
     isSortKey: isVehicleSortKey,
@@ -44,6 +47,13 @@ const useVehicleListQueryBase = createListQueryHook<
                 { replace: true, resetPage: true },
             );
         },
+        /** "Filter aufheben": filter and search in one URL change. */
+        clearFilters: () => {
+            patch(
+                { filter: null, search: "" } as ListQueryPatch<VehicleListQuery>,
+                { replace: true, resetPage: true },
+            );
+        },
     }),
 });
 
@@ -55,6 +65,7 @@ export const useVehicleListQuery = () => {
         sortConfig,
         setSearch,
         setFilter,
+        clearFilters,
         handleSort,
         setPage,
         setLimit,
@@ -67,6 +78,7 @@ export const useVehicleListQuery = () => {
         sortConfig,
         setSearch,
         setFilter,
+        clearFilters,
         handleSort,
         setPage,
         setLimit,

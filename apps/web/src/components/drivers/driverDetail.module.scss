@@ -1,0 +1,63 @@
+/* Shared blocks of the driver detail page: panel, header, small text. */
+.panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.panelHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+}
+
+.panelTitle {
+    margin: 0;
+    font-size: 16px;
+}
+
+.count {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text);
+}
+
+.muted {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.note,
+.empty {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.empty {
+    font-size: 14px;
+}
+
+.error {
+    margin: 0;
+    font-size: 13px;
+    color: var(--danger);
+}
+
+/* The roster / list inside a panel takes the rest of the height and scrolls. */
+.scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}

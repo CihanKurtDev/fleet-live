@@ -1,11 +1,16 @@
 import type { Driver } from "@fleet-live/shared";
 import {
+    DRIVER_TALK_MIN_OPEN_WARNINGS,
     driverListQuerySchema,
     isDriverSortKey,
     serializeDriverListQuery,
     type DriverListQuery,
 } from "@fleet-live/shared";
-import { createListQueryHook, toListQuerySchema } from "./createListQueryHook";
+import {
+    createListQueryHook,
+    toListQuerySchema,
+    type ListQueryPatch,
+} from "./createListQueryHook";
 
 const readDriverParams = (
     searchParams: URLSearchParams,
@@ -19,24 +24,35 @@ const readDriverParams = (
     without_vehicle: searchParams.get("without_vehicle") ?? undefined,
 });
 
-/** `/drivers` shows the board; this param switches to the table. */
-export const DRIVER_VIEW_PARAM = "ansicht";
-export const DRIVER_LIST_VIEW = "liste";
+/** The tiles on `/drivers`: the main filter, exactly one is pressed. */
+export type DriverTileId = "all" | "talk" | "without_vehicle";
 
-/**
- * The table lives at `/drivers?ansicht=liste`. The hook rewrites the URL to
- * its canonical form, so the view param is part of that form.
- */
-const serializeDriverTableQuery = (query: DriverListQuery) => {
-    const params = serializeDriverListQuery(query);
-    params.set(DRIVER_VIEW_PARAM, DRIVER_LIST_VIEW);
-    return params;
+/** Tile of the current query; `null` for a hand-edited warning minimum. */
+export const driverTileOf = (query: DriverListQuery): DriverTileId | null => {
+    if (query.without_vehicle) {
+        return query.min_open_warnings === undefined ? "without_vehicle" : null;
+    }
+
+    if (query.min_open_warnings === undefined) {
+        return "all";
+    }
+
+    return query.min_open_warnings === DRIVER_TALK_MIN_OPEN_WARNINGS
+        ? "talk"
+        : null;
 };
 
-const useDriverListQueryBase = createListQueryHook<Driver, DriverListQuery>({
+const useDriverListQueryBase = createListQueryHook<
+    Driver,
+    DriverListQuery,
+    {
+        setTile: (tile: DriverTileId) => void;
+        clearFilters: () => void;
+    }
+>({
     schema: toListQuerySchema(driverListQuerySchema),
     isSortKey: isDriverSortKey,
-    serialize: serializeDriverTableQuery,
+    serialize: serializeDriverListQuery,
     readParams: readDriverParams,
     fields: [
         "search",
@@ -49,6 +65,29 @@ const useDriverListQueryBase = createListQueryHook<Driver, DriverListQuery>({
     ],
     defaultSort: { key: "open_warnings", dir: "desc", mode: "implied" },
     debounceSearch: true,
+    extra: (patch) => ({
+        setTile: (tile: DriverTileId) => {
+            patch(
+                {
+                    min_open_warnings:
+                        tile === "talk" ? DRIVER_TALK_MIN_OPEN_WARNINGS : null,
+                    without_vehicle: tile === "without_vehicle" ? true : null,
+                } as ListQueryPatch<DriverListQuery>,
+                { replace: true, resetPage: true },
+            );
+        },
+        /** "Filter aufheben": tile and search in one URL change. */
+        clearFilters: () => {
+            patch(
+                {
+                    min_open_warnings: null,
+                    without_vehicle: null,
+                    search: "",
+                } as ListQueryPatch<DriverListQuery>,
+                { replace: true, resetPage: true },
+            );
+        },
+    }),
 });
 
 export const useDriverListQuery = () => {
@@ -57,6 +96,8 @@ export const useDriverListQuery = () => {
         apiQuery,
         tableState,
         setSearch,
+        setTile,
+        clearFilters,
         handleSort,
         setPage,
         setLimit,
@@ -67,6 +108,8 @@ export const useDriverListQuery = () => {
         apiQuery,
         tableState,
         setSearch,
+        setTile,
+        clearFilters,
         handleSort,
         setPage,
         setLimit,

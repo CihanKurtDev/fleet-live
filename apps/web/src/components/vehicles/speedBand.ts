@@ -6,8 +6,8 @@ import type { SpeedBand, SpeedBandResult } from "@fleet-live/shared";
  */
 export const SPEED_BAND_COLORS: Record<SpeedBand, string> = {
     normal: "var(--text-h)",
-    warning: "#ea580c",
-    critical: "#dc2626",
+    warning: "var(--speed-warning)",
+    critical: "var(--danger)",
 };
 
 export const SPEED_BAND_TITLES: Record<SpeedBand, string> = {

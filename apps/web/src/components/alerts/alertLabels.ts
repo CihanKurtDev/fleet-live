@@ -1,4 +1,4 @@
-import type { Alert, AlertSeverity, AlertType } from "@fleet-live/shared";
+import type { Alert, AlertType } from "@fleet-live/shared";
 
 export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
     SPEEDING: "Tempo",
@@ -12,16 +12,7 @@ export const ALERT_TYPE_CHIPS: Record<AlertType, string> = {
     OFFLINE: "Funk",
 };
 
-export const ALERT_SEVERITY_LABELS: Record<AlertSeverity, string> = {
-    LOW: "Niedrig",
-    MEDIUM: "Mittel",
-    HIGH: "Hoch",
-};
-
 export const alertTypeLabel = (type: AlertType) => ALERT_TYPE_LABELS[type];
-
-export const alertSeverityLabel = (severity: AlertSeverity) =>
-    ALERT_SEVERITY_LABELS[severity];
 
 export const warningCount = (count: number) =>
     count === 1 ? "1 Warnung" : `${count} Warnungen`;

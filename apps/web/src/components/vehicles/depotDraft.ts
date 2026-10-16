@@ -28,3 +28,16 @@ export function isDepotDraftDirty(draft: DepotDraft, sites: Site[]): boolean {
         Math.abs(draft.longitude - site.longitude) > POSITION_EPSILON
     );
 }
+
+/**
+ * The depot selected after a click on `clickedId`: a click on the depot that
+ * is already selected clears the selection, unless a placement or an edit is
+ * open. One depot at a time stays the rule.
+ */
+export function depotAfterClick(
+    currentId: number | undefined,
+    clickedId: number,
+    editing: boolean,
+): number | null {
+    return !editing && currentId === clickedId ? null : clickedId;
+}

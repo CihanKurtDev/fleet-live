@@ -36,13 +36,21 @@
     font-size: 13px;
 }
 
-/* Roster in the modal body; the large modal body itself does not scroll. */
-.roster {
+/* Dialog body: one sentence, then the roster (toolbar, rows). The dialog has
+   a fixed height, so adding or removing rows never resizes it. */
+.dialogBody {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     gap: 12px;
     min-height: 0;
-    overflow: auto;
-    padding: 16px 20px 20px;
+    padding: 14px 20px 16px;
+}
+
+.sentence {
+    flex: none;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text);
 }

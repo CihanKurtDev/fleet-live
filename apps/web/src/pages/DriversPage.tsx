@@ -1,49 +1,57 @@
 import { useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
-import { DriverBoard } from "../components/drivers/DriverBoard";
 import { DriverCreateForm } from "../components/drivers/DriverCreateForm";
-import { DriverListBar } from "../components/drivers/DriverListBar";
 import { DriverTable } from "../components/drivers/DriverTable";
+import { Button } from "../components/ui/Button/Button";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
-import {
-    DRIVER_LIST_VIEW,
-    DRIVER_VIEW_PARAM,
-} from "../hooks/useDriverListQuery";
 
-/** `/drivers` is the board; `?ansicht=liste` is the full table. */
+/** Status line handed over by the detail page after deleting a driver. */
+const noticeFrom = (state: unknown): string | null => {
+    if (typeof state === "object" && state !== null && "notice" in state) {
+        const { notice } = state as { notice: unknown };
+        return typeof notice === "string" ? notice : null;
+    }
+
+    return null;
+};
+
+/** `/drivers`: the driver list on the shared list-page frame. */
 export const DriversPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [searchParams] = useSearchParams();
     const { user } = useAuth();
     const { refetchLists } = useVehicles();
     const canWrite = user?.role === "dispatcher";
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const isList = searchParams.get(DRIVER_VIEW_PARAM) === DRIVER_LIST_VIEW;
-    const openCreate = canWrite ? () => setIsCreateOpen(true) : undefined;
 
     return (
         <>
-            {isList ? (
-                <>
-                    <DriverListBar />
-                    <DriverTable
-                        onAddDriver={openCreate}
-                        onSelectDriver={(driver) => {
-                            navigate(`/drivers/${driver.id}`, {
-                                state: {
-                                    from: `${location.pathname}${location.search}`,
-                                },
-                            });
-                        }}
-                    />
-                </>
-            ) : (
-                <DriverBoard onAddDriver={openCreate} />
-            )}
+            <DriverTable
+                canDelete={canWrite}
+                onDeleted={refetchLists}
+                initialNotice={noticeFrom(location.state)}
+                actions={
+                    canWrite ? (
+                        <Button
+                            variant="primary"
+                            size="toolbar"
+                            onClick={() => setIsCreateOpen(true)}
+                        >
+                            Fahrer anlegen
+                        </Button>
+                    ) : undefined
+                }
+                onSelectDriver={(driver) => {
+                    navigate(`/drivers/${driver.id}`, {
+                        state: {
+                            from: `${location.pathname}${location.search}`,
+                        },
+                    });
+                }}
+            />
 
             <Modal
                 open={isCreateOpen}

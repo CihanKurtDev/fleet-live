@@ -2,11 +2,11 @@
     box-sizing: border-box;
     width: 100%;
     max-width: 11rem;
-    height: 32px;
+    height: var(--control-sm);
     margin: 0;
     padding: 0 10px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg);
     font: inherit;
     font-size: 13px;
@@ -14,8 +14,8 @@
 
     &:focus {
         outline: none;
-        border-color: var(--accent-border);
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        border-color: var(--focus-ring);
+        box-shadow: 0 0 0 1px var(--focus-ring);
     }
 
     &:disabled {
@@ -51,18 +51,18 @@
 }
 
 .statusPillCaution {
-    background: color-mix(in srgb, #d97706 28%, transparent);
-    color: #fbbf24;
+    background: color-mix(in srgb, var(--warning) 12%, transparent);
+    color: var(--warning);
 }
 
 .statusPillError {
     background: color-mix(in srgb, var(--danger) 22%, transparent);
-    color: #f87171;
+    color: var(--danger);
 }
 
 .statusPillReady {
-    background: color-mix(in srgb, #22c55e 18%, transparent);
-    color: #86efac;
+    background: color-mix(in srgb, var(--success) 18%, transparent);
+    color: var(--success);
 }
 
 .statusPillMuted {

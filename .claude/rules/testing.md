@@ -21,6 +21,7 @@ paths:
 - Runner: Vitest + Testing Library (jsdom) in `apps/web/src/test/`. Command: `npm run test:web`.
 - Test what a user sees and does (text, roles, navigation), not component internals.
 - Layout is checked in the browser, not in Vitest: measure the page at 1440×900, 1920×1080 and 375 px (see `rules/layout.md`).
+- `apps/web/scripts/ui-measure.js` (load it on the dev server with `await import("/scripts/ui-measure.js")`) measures control heights, alignment, text contrast, focus contrast, dialog reachability and layout shifts. It only reads.
 
 ## Always
 

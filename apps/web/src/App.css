@@ -10,6 +10,31 @@ main {
   background: var(--bg);
 }
 
+/* The skip link's target; it takes focus but needs no ring around the page. */
+main:focus {
+  outline: none;
+}
+
+/* Hidden until focused, then the first thing on the page. */
+.skip-link {
+  position: absolute;
+  z-index: 1000;
+  top: 8px;
+  left: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
 /* The fleet map fills the window. An empty gutter would shrink it. */
 main:has([data-layout="full"]) {
   overflow: hidden;

@@ -78,7 +78,7 @@ export const useDriver = (id: number | null) => {
     return {
         driver: matchesId ? driver : null,
         isLoading: Boolean(
-            id !== null && !notFound && (isLoading || !matchesId),
+            id !== null && !notFound && !error && (isLoading || !matchesId),
         ),
         error,
         retry,

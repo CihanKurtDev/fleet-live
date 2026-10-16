@@ -61,6 +61,18 @@ export const DueOverview = ({
         : [];
     const hasSearch = query.search.length > 0;
 
+    // One line while loading: groups appear once, at their final size, so
+    // nothing already on screen moves when the lists arrive.
+    if (!loaded) {
+        return (
+            <div ref={ref} className={styles.list}>
+                <p className={styles.calm} role="status">
+                    Fristen werden geladen…
+                </p>
+            </div>
+        );
+    }
+
     return (
         <div ref={ref} className={styles.list}>
             {shown.map((group) => {

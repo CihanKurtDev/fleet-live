@@ -1,3 +1,58 @@
+.identity {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.plate {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    color: var(--text-h);
+}
+
+.subline,
+.muted {
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    color: var(--text);
+}
+
+.fuel {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+
+    &[data-low] {
+        color: var(--warning);
+    }
+}
+
+.fuelBar {
+    display: inline-block;
+    flex: none;
+    width: 60px;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--code-bg);
+}
+
+.fuelFill {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--success);
+}
+
+.fuel[data-low] .fuelFill {
+    background: var(--warning);
+}
+
 .speed {
     font-variant-numeric: tabular-nums;
 
@@ -7,24 +62,15 @@
     }
 }
 
+/* One line per row on desktop: wrapped chips would make rows taller. */
 .chips {
     display: inline-flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
 }
 
-/* One line per row on desktop: wrapped chips made rows taller and pushed the
-   pagination below the window. */
-@media (min-width: 701px) {
+@media (max-width: 700px) {
     .chips {
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
     }
 }
-
-.clip {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-

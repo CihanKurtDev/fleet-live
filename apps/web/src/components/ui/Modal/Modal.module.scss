@@ -40,11 +40,16 @@
     }
 }
 
+/* Header stays, the body scrolls: no action is ever cut off (F26). */
 .content {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100svh - 34px);
     text-align: left;
 }
 
 .header {
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -65,12 +70,12 @@
     align-items: center;
     justify-content: center;
 
-    width: 28px;
-    height: 28px;
+    width: var(--control-xs);
+    height: var(--control-xs);
     padding: 0;
 
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: none;
     color: var(--text);
 
@@ -82,13 +87,19 @@
     }
 
     &:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px var(--accent-bg);
+        outline: var(--focus-width) solid var(--focus-ring);
+        outline-offset: 2px;
     }
 }
 
 .body {
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* A focused field is never hidden under the sticky form actions. */
+    scroll-padding-bottom: 72px;
 }
 
 .confirm {
@@ -112,4 +123,40 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+}
+
+/* Affected items of a bulk action: name left, detail right. */
+.confirmList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 240px;
+    margin: 12px 0 0;
+    padding: 10px 14px;
+    overflow-y: auto;
+    list-style: none;
+    border-radius: var(--radius);
+    background: var(--code-bg);
+    font-size: 13px;
+}
+
+.confirmItem {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.confirmItemName {
+    color: var(--text-h);
+    font-weight: 650;
+}
+
+.confirmItemDetail,
+.confirmMore {
+    color: var(--text);
+}
+
+.confirmBody .confirmError {
+    margin-top: 12px;
+    color: var(--danger);
 }

@@ -15,6 +15,7 @@ vi.mock("../api/auth", () => ({
     changePassword: vi.fn(),
     confirmTotpSetup: vi.fn(),
     createCompany: vi.fn(),
+    disableTotp: vi.fn(),
     getSecurity: vi.fn(),
     inviteMember: vi.fn(),
     listMembers: vi.fn(),
@@ -29,6 +30,7 @@ import {
     changePassword,
     confirmTotpSetup,
     createCompany,
+    disableTotp,
     getSecurity,
     inviteMember,
     listMembers,
@@ -89,6 +91,17 @@ const submit = (name: string) => {
 
 describe("account page", () => {
     beforeEach(() => {
+        HTMLDialogElement.prototype.showModal ??= function (
+            this: HTMLDialogElement,
+        ) {
+            this.setAttribute("open", "");
+        };
+        HTMLDialogElement.prototype.close ??= function (
+            this: HTMLDialogElement,
+        ) {
+            this.removeAttribute("open");
+        };
+        vi.mocked(removeMember).mockReset();
         vi.mocked(listMembers).mockResolvedValue({ data: members });
         vi.mocked(getSecurity).mockResolvedValue(security);
         vi.mocked(changePassword).mockReset();
@@ -173,6 +186,28 @@ describe("account page", () => {
             code: "123456",
             setup_token: "setup-1",
         });
+    });
+
+    it("turns second factor off with a current code", async () => {
+        const user = authUser({ totp_enabled: true });
+        vi.mocked(disableTotp).mockResolvedValue({ ...user, totp_enabled: false });
+        const { setUser } = renderAuth(<AccountPage />, {
+            user,
+            route: "/konto#zwei-faktor",
+        });
+
+        fireEvent.change(await screen.findByLabelText("Code aus der App"), {
+            target: { value: "654321" },
+        });
+        submit("Zwei-Faktor ausschalten");
+
+        expect(
+            await screen.findByText("Zwei-Faktor ist ausgeschaltet."),
+        ).toBeInTheDocument();
+        expect(disableTotp).toHaveBeenCalledWith("654321");
+        expect(setUser).toHaveBeenCalledWith(
+            expect.objectContaining({ totp_enabled: false }),
+        );
     });
 
     it("switches into a newly created company", async () => {
@@ -263,6 +298,13 @@ describe("account page", () => {
         const row = await memberRow("viewer@example.com");
         fireEvent.click(within(row).getByRole("button", { name: "Entfernen" }));
 
+        const dialog = await screen.findByRole("dialog", {
+            name: "Mitglied entfernen?",
+            hidden: true,
+        });
+        expect(removeMember).not.toHaveBeenCalled();
+        fireEvent.click(within(dialog).getByRole("button", { name: "Entfernen" }));
+
         await waitFor(() => {
             expect(
                 [...document.querySelectorAll("tbody tr")].some((item) =>
@@ -272,6 +314,22 @@ describe("account page", () => {
         });
         expect(await memberRow("cihan@example.com")).toBeInTheDocument();
         expect(removeMember).toHaveBeenCalledWith(2);
+        expect(await screen.findByText("Viewer entfernt.")).toBeInTheDocument();
+    });
+
+    it("keeps the member when the removal is cancelled", async () => {
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#team" });
+
+        const row = await memberRow("viewer@example.com");
+        fireEvent.click(within(row).getByRole("button", { name: "Entfernen" }));
+        const dialog = await screen.findByRole("dialog", {
+            name: "Mitglied entfernen?",
+            hidden: true,
+        });
+        fireEvent.click(within(dialog).getByRole("button", { name: "Abbrechen" }));
+
+        expect(removeMember).not.toHaveBeenCalled();
+        expect(await memberRow("viewer@example.com")).toBeInTheDocument();
     });
 
     it("saves the company second-factor requirement", async () => {

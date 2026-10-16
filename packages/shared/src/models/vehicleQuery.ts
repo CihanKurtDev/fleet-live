@@ -29,6 +29,12 @@ export const VEHICLE_FILTERS = [
 
 export const VEHICLE_PAGE_LIMITS = [10, 25, 50, 100] as const;
 
+/**
+ * Largest page the vehicle list serves. The list page asks for as many rows
+ * as fit its measured height, so any whole number from 1 up to this is valid.
+ */
+export const LIST_PAGE_LIMIT_MAX = 100;
+
 export type VehicleSortKey = (typeof VEHICLE_SORT_KEYS)[number];
 export type VehicleFilterId = (typeof VEHICLE_FILTERS)[number];
 export type VehiclePageLimit = (typeof VEHICLE_PAGE_LIMITS)[number];
@@ -63,10 +69,10 @@ export const vehicleListQuerySchema = z.object({
         z.coerce
             .number({ error: "Limit muss eine Zahl sein." })
             .int("Limit muss eine ganze Zahl sein.")
-            .refine(
-                (value) =>
-                    (VEHICLE_PAGE_LIMITS as readonly number[]).includes(value),
-                { message: "Limit muss 10, 25, 50 oder 100 sein." },
+            .min(1, `Limit muss zwischen 1 und ${LIST_PAGE_LIMIT_MAX} liegen.`)
+            .max(
+                LIST_PAGE_LIMIT_MAX,
+                `Limit muss zwischen 1 und ${LIST_PAGE_LIMIT_MAX} liegen.`,
             )
             .default(10),
     ),

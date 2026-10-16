@@ -50,7 +50,7 @@
     }
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: 2px;
     }
 }
@@ -74,7 +74,7 @@
 
 .add {
     flex-shrink: 0;
-    height: 30px;
+    height: var(--control-sm);
     margin-left: auto;
     padding: 0 12px;
     border: 1px solid var(--border);
@@ -91,7 +91,7 @@
     }
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: 2px;
     }
 }

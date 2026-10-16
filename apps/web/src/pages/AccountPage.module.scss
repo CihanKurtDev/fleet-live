@@ -16,8 +16,9 @@
 
 .title {
     margin: 0;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 650;
+    line-height: 1.1;
     color: var(--text-h);
 }
 
@@ -74,7 +75,7 @@
     }
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: -2px;
     }
 
@@ -189,7 +190,7 @@
 
 .roleSelect {
     width: 100%;
-    min-height: 40px;
+    min-height: var(--control-md);
     padding: 0 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -200,7 +201,7 @@
 }
 
 .roleSelectSm {
-    min-height: 32px;
+    min-height: var(--control-sm);
     font-size: 13px;
 }
 
@@ -316,6 +317,10 @@
 
 /* Telefon: Bereiche als waagrechte Reihe über dem Inhalt, die Seite scrollt. */
 @media (max-width: 700px) {
+    .title {
+        font-size: 20px;
+    }
+
     /* The page scrolls here; nothing in the column may shrink below its content. */
     .page {
         min-height: auto;

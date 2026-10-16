@@ -1,29 +1,24 @@
 import type { Driver } from "@fleet-live/shared";
 
-import { DriverNameLink } from "./DriverNameLink";
 import styles from "./DriverTableCells.module.scss";
 
-export const DriverVehicleCell = ({ driver }: { driver: Driver }) => {
-    if (driver.vehicle_count === 0) {
-        return <span className={styles.muted}>Kein Fahrzeug</span>;
-    }
+/** "Kein Fahrzeug" or the current plate, with the number of releases below. */
+export const DriverVehicleCell = ({ driver }: { driver: Driver }) => (
+    <span className={styles.identity}>
+        {driver.current_vehicle_plate ? (
+            <span className={styles.strong}>{driver.current_vehicle_plate}</span>
+        ) : (
+            <span className={styles.muted}>Kein Fahrzeug</span>
+        )}
+        {driver.vehicle_count > 0 && (
+            <span className={styles.meta}>
+                {driver.vehicle_count} freigegeben
+            </span>
+        )}
+    </span>
+);
 
-    return (
-        <span className={styles.assignment}>
-            {driver.current_vehicle_plate ? (
-                <strong>{driver.current_vehicle_plate}</strong>
-            ) : (
-                <span className={styles.muted}>Kein aktuelles Fahrzeug</span>
-            )}
-            {driver.vehicle_count > 1 ? (
-                <span className={styles.meta}>
-                    {driver.vehicle_count} freigegeben
-                </span>
-            ) : null}
-        </span>
-    );
-};
-
+/** Open speeding warnings as a pill; "keine offen" stays quiet. */
 export const DriverWarningCell = ({ driver }: { driver: Driver }) => (
     <span
         className={styles.warning}
@@ -31,12 +26,16 @@ export const DriverWarningCell = ({ driver }: { driver: Driver }) => (
     >
         {driver.open_warnings > 0
             ? `${driver.open_warnings} offen`
-            : "Keine offenen"}
+            : "keine offen"}
     </span>
 );
 
-export const DriverNameCell = ({
-    driver,
-}: {
-    driver: Driver;
-}) => <DriverNameLink driverId={driver.id} name={driver.name} />;
+/** "N offene Tempo-Warnungen" for the detail header (red pill). */
+export const DriverOpenWarningsPill = ({ count }: { count: number }) =>
+    count > 0 ? (
+        <span className={styles.warning} data-active="true">
+            {count === 1
+                ? "1 offene Tempo-Warnung"
+                : `${count} offene Tempo-Warnungen`}
+        </span>
+    ) : null;

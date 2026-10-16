@@ -118,6 +118,37 @@ describe("GET /api/alerts", () => {
         assert.equal(response.body.fields.type, "Ungültiger Warnungstyp.");
     });
 
+    it("serves the page size the list measured", async () => {
+        // One open alert per vehicle and type: twelve vehicles.
+        for (let index = 0; index < 12; index += 1) {
+            const vehicle = VehicleModel.create({
+                license_plate: `K-LM ${index}`,
+                driver_name: `Limit ${index}`,
+                company_id: 1,
+            });
+
+            insertAlert(vehicle.id, { message: `warnung ${index}` });
+        }
+
+        const response = await api
+            .get("/api/alerts")
+            .query({ page: 2, limit: 7 });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.data.length, 5);
+        assert.equal(response.body.meta.limit, 7);
+        assert.equal(response.body.meta.pageCount, 2);
+    });
+
+    it("rejects a limit outside 1 to 100", async () => {
+        for (const limit of [0, 101, 2.5]) {
+            const response = await api.get("/api/alerts").query({ limit });
+
+            assert.equal(response.status, 400, `limit ${limit}`);
+            assert.equal(response.body.code, "VALIDATION_ERROR");
+        }
+    });
+
     it("sorts by type and rejects injection", async () => {
         const vehicle = VehicleModel.create({
             license_plate: "K-SR 1",

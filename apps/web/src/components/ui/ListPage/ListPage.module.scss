@@ -1,0 +1,307 @@
+/* List page frame: header, tiles, one panel. Heights match
+   `hooks/useListPageSize` (head 38 px, rows 48 px). */
+
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-sizing: border-box;
+    min-width: 0;
+    text-align: left;
+}
+
+@media (min-width: 701px) {
+    .page {
+        flex: 1 0 auto;
+    }
+}
+
+/* Header ---------------------------------------------------------------- */
+
+.header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px 16px;
+    flex: none;
+}
+
+.heading {
+    min-width: 0;
+}
+
+.title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 650;
+    line-height: 1.1;
+    color: var(--text-h);
+}
+
+.summary {
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text);
+}
+
+.notice {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: right;
+    color: var(--success);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Panel ----------------------------------------------------------------- */
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+@media (min-width: 701px) {
+    .panel {
+        flex: 1 1 0;
+        /* Toolbar, head, three rows, footer; below that the page scrolls. */
+        min-height: 290px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+    }
+}
+
+.toolbar,
+.selectionBar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    box-sizing: border-box;
+}
+
+@media (min-width: 701px) {
+    .toolbar,
+    .selectionBar {
+        height: 54px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--border);
+    }
+}
+
+.search {
+    width: 260px;
+    max-width: 100%;
+    margin-left: auto;
+}
+
+.selectionBar {
+    border-radius: 12px 12px 0 0;
+    border-bottom-color: var(--accent-border);
+    background: var(--accent-bg);
+}
+
+.selectionText {
+    display: flex;
+    align-items: baseline;
+    gap: 4px 12px;
+    min-width: 0;
+    margin: 0 0 0 4px;
+    font-size: 14px;
+}
+
+.selectionCount {
+    font-weight: 650;
+    white-space: nowrap;
+    color: var(--text-h);
+}
+
+.selectionSummary {
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+}
+
+.selectionActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+/* Body: the measured table region --------------------------------------- */
+
+.body {
+    --panel-pad-x: 16px;
+    --panel-last-row-border: 0;
+    --panel-thead-bg: color-mix(in srgb, var(--bg) 45%, var(--surface));
+    min-width: 0;
+    transition: opacity 120ms ease;
+}
+
+.busy .body {
+    opacity: 0.72;
+}
+
+@media (min-width: 701px) {
+    .body {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+
+        :global(table) {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        /* Lines are inset shadows so a row is exactly its height. */
+        :global(th) {
+            height: 38px;
+            padding: 0 12px;
+            border-bottom: 0;
+            box-shadow: inset 0 -1px 0 var(--border);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        :global(tbody td) {
+            height: 48px;
+            box-sizing: border-box;
+            padding: 0 12px;
+            border-bottom: 0;
+            box-shadow: inset 0 -1px 0 var(--border);
+            overflow: hidden;
+            font-size: 13px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        :global(tbody tr:last-child td) {
+            box-shadow: none;
+        }
+
+        /* Empty state: one cell, no fixed row height. */
+        :global(tbody td:only-child) {
+            height: auto;
+            padding: 32px 16px;
+            white-space: normal;
+        }
+    }
+}
+
+/* Footer ---------------------------------------------------------------- */
+
+.footer {
+    display: flex;
+    align-items: center;
+    flex: none;
+    box-sizing: border-box;
+}
+
+@media (min-width: 701px) {
+    .footer {
+        height: 48px;
+        padding: 0 16px;
+        border-top: 1px solid var(--border);
+    }
+}
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+
+    p {
+        margin: 0;
+    }
+}
+
+/* Phones: title, tiles strip, search, cards; selection bar at the bottom. */
+@media (max-width: 700px) {
+    .page {
+        gap: 10px;
+        padding: 12px 12px 20px;
+    }
+
+    .page[data-selecting="true"] {
+        padding-bottom: 96px;
+    }
+
+    .title {
+        font-size: 20px;
+    }
+
+    /*
+     * A short confirmation floats above the bottom edge instead of pushing the
+     * list down (F17). It sits above the selection bar.
+     */
+    .notice {
+        position: fixed;
+        z-index: 410;
+        right: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom));
+        left: 16px;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        text-align: left;
+    }
+
+    .notice:empty {
+        display: none;
+    }
+
+    .actions {
+        width: 100%;
+    }
+
+    .toolbar {
+        flex-wrap: wrap;
+    }
+
+    .search {
+        order: -1;
+        flex: 1 1 100%;
+        width: 100%;
+        margin-left: 0;
+        font-size: 14px;
+    }
+
+    .selectionBar {
+        position: fixed;
+        z-index: 400;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        flex-wrap: wrap;
+        min-height: 60px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--accent-border);
+        border-radius: 0;
+        box-shadow: var(--shadow);
+    }
+
+    .footer {
+        justify-content: center;
+        padding-top: 4px;
+    }
+}

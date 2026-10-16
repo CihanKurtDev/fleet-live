@@ -6,7 +6,11 @@
 }
 
 .live {
-    color: #15803d;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--success);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .notice {

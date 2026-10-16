@@ -1,6 +1,6 @@
 .band {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--tile-cols, 6), minmax(0, 1fr));
     gap: 10px;
 }
 
@@ -24,7 +24,7 @@
     }
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: 2px;
     }
 
@@ -84,7 +84,7 @@
 
 @media (max-width: 1100px) {
     .band {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(var(--tile-cols-narrow, 3), minmax(0, 1fr));
         gap: 8px;
     }
 
@@ -104,5 +104,17 @@
 
     .tile {
         min-height: 44px;
+    }
+
+    /* List pages: one row of tiles that scrolls sideways. */
+    .strip {
+        display: flex;
+        overflow-x: auto;
+        scrollbar-width: none;
+
+        .tile {
+            flex: none;
+            min-width: 96px;
+        }
     }
 }

@@ -59,6 +59,12 @@ interface TablePaginationProps {
     /** Nur Seitennavigation — ohne Limit-Auswahl und Bereichstext. */
     compact?: boolean;
 
+    /**
+     * `footer`: list panel footer — "X–Y von N" left, pages right, no
+     * page-size select (the list measures its page size).
+     */
+    layout?: "default" | "footer";
+
     disabled?: boolean;
 }
 
@@ -71,6 +77,7 @@ export const TablePagination = ({
     onLimitChange,
     limitOptions: allowedLimits = LIMIT_OPTIONS,
     compact = false,
+    layout = "default",
     disabled = false,
 }: TablePaginationProps) => {
     const limitSelectId = useId();
@@ -178,6 +185,22 @@ export const TablePagination = ({
         return pages;
     }
 
+    const range = (
+        <p className={styles.range} aria-live="polite">
+            {formatCount(firstRow)}–{formatCount(lastRow)} von{" "}
+            {formatCount(total)}
+        </p>
+    );
+
+    if (layout === "footer") {
+        return (
+            <div className={styles.footer}>
+                {range}
+                {pages}
+            </div>
+        );
+    }
+
     return (
         <div className={styles.pagination}>
             <div className={styles.limit}>
@@ -206,10 +229,7 @@ export const TablePagination = ({
 
             {pages}
 
-            <p className={styles.range} aria-live="polite">
-                {formatCount(firstRow)}–{formatCount(lastRow)} von{" "}
-                {formatCount(total)}
-            </p>
+            {range}
         </div>
     );
 };

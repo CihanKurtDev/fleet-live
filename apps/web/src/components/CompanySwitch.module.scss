@@ -15,17 +15,17 @@
 
 .select {
     max-width: 220px;
-    height: 32px;
+    height: var(--control-sm);
     padding: 0 8px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--text-h);
     font: inherit;
     font-size: 12px;
 
     &:focus-visible {
-        outline: 2px solid var(--focus-ring);
+        outline: var(--focus-width) solid var(--focus-ring);
         outline-offset: 2px;
     }
 }
@@ -37,7 +37,7 @@
     .select {
         max-width: none;
         width: 100%;
-        height: 36px;
+        height: var(--control-md);
         font-size: 14px;
     }
 

@@ -183,7 +183,7 @@ export function dueGroupEmpty(
 }
 
 /** Fixed heights in px of the overview parts. `DueBoard.module.scss` uses the same. */
-export const DUE_LIST_SIZES = { head: 40, row: 44, more: 40, calm: 40 };
+export const DUE_LIST_SIZES = { head: 40, row: 48, more: 40, calm: 40 };
 
 /**
  * Rows per kind so the overview fills `height` without scrolling. Kinds without

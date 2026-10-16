@@ -18,7 +18,10 @@ import { VehicleHintsPanel } from "../components/alerts/VehicleHintsPanel";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { useDetailBack } from "../components/navigation/useDetailBack";
 import { VehicleAssignmentPanel } from "../components/vehicles/VehicleAssignmentPanel";
-import { VehicleForm } from "../components/vehicles/VehicleForm";
+import {
+    VehicleForm,
+    type VehicleFormField,
+} from "../components/vehicles/VehicleForm";
 import {
     VehicleMap,
     type MapPoint,
@@ -28,6 +31,7 @@ import { VehicleMoreMenu } from "../components/vehicles/VehicleMoreMenu";
 import { pathLength, toLatLngs } from "../components/vehicles/mapGeometry";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
 import { VehicleStatusChip } from "../components/vehicles/VehicleStatusChip";
+import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Modal } from "../components/ui/Modal/Modal";
@@ -88,6 +92,7 @@ export const VehicleDetailPage = () => {
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEditingMaster, setIsEditingMaster] = useState(false);
+    const [masterField, setMasterField] = useState<VehicleFormField | undefined>();
     const [tripVehicleId, setTripVehicleId] = useState(parsedId);
     const [livePath, setLivePath] = useState("");
     const [archiveTrips, setArchiveTrips] = useState<TripListItem[]>([]);
@@ -419,8 +424,11 @@ export const VehicleDetailPage = () => {
                     <div className={styles.actions}>
                         <Button
                             variant="secondary"
-                            size="sm"
-                            onClick={() => setIsEditingMaster(true)}
+                            size="toolbar"
+                            onClick={() => {
+                                setMasterField(undefined);
+                                setIsEditingMaster(true);
+                            }}
                         >
                             Bearbeiten
                         </Button>
@@ -529,7 +537,10 @@ export const VehicleDetailPage = () => {
                         <VehicleHintsPanel
                             vehicle={vehicle}
                             canWrite={canWrite}
-                            onEditMaster={() => setIsEditingMaster(true)}
+                            onEditMaster={(field) => {
+                                setMasterField(field);
+                                setIsEditingMaster(true);
+                            }}
                         />
                     </section>
 
@@ -649,11 +660,15 @@ export const VehicleDetailPage = () => {
                                 )}
                             </h2>
                         </div>
-                        {selectedFacts && (
-                            <p className={styles.note}>
-                                Auf der Karte: {describeTrip(selectedFacts)}
-                            </p>
-                        )}
+                        {/* The line is kept while the trip loads, so the list does not jump. */}
+                        <p
+                            className={styles.note}
+                            aria-hidden={selectedFacts ? undefined : true}
+                        >
+                            {selectedFacts
+                                ? `Auf der Karte: ${describeTrip(selectedFacts)}`
+                                : "\u00a0"}
+                        </p>
                         {archiveError && (
                             <RetryMessage
                                 message={archiveError}
@@ -688,6 +703,7 @@ export const VehicleDetailPage = () => {
                 title="Stammdaten"
             >
                 <VehicleForm
+                    focusField={masterField}
                     initialValue={{
                         license_plate: vehicle.license_plate,
                         fuel_level: vehicle.fuel_level,
@@ -715,18 +731,30 @@ export const VehicleDetailPage = () => {
                 }}
                 title="Fahrzeug löschen?"
                 confirmLabel="Löschen"
+                busyLabel="Wird gelöscht…"
                 isBusy={isDeleting}
                 onConfirm={handleDelete}
+                itemsLabel="Ausgewähltes Fahrzeug"
+                items={[
+                    {
+                        key: vehicle.id,
+                        name: vehicle.license_plate,
+                        detail: [
+                            vehicle.vehicle_type
+                                ? VEHICLE_TYPE_LABELS[vehicle.vehicle_type]
+                                : null,
+                            vehicleStatusLabel(vehicle.status),
+                        ]
+                            .filter(Boolean)
+                            .join(" · "),
+                    },
+                ]}
+                error={deleteError}
             >
                 <p>
-                    „{vehicle.license_plate}“ wirklich löschen? Das
-                    kann nicht rückgängig gemacht werden.
+                    Dieses Fahrzeug wirklich löschen? Das kann nicht
+                    rückgängig gemacht werden.
                 </p>
-                {deleteError && (
-                    <p className={styles.error} role="alert">
-                        {deleteError}
-                    </p>
-                )}
             </ConfirmDialog>
         </section>
     );

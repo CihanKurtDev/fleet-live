@@ -1,91 +1,136 @@
-import { useState, type ReactNode } from "react";
-import type { Vehicle } from "@fleet-live/shared";
+import { useMemo, useState, type ReactNode } from "react";
+import {
+    serializeVehicleListQuery,
+    VEHICLE_TYPE_LABELS,
+    type Vehicle,
+} from "@fleet-live/shared";
 
 import { Table } from "../ui/Table/Table";
-import { TableToolbar } from "../ui/Table/TableToolbar";
-import { TableFilterBar } from "../ui/Table/TableFilterBar";
-import { TablePagination } from "../ui/Table/TablePagination";
+import { Button } from "../ui/Button/Button";
+import { KpiTiles, type KpiTile } from "../ui/KpiTiles/KpiTiles";
+import {
+    ListBody,
+    ListEmpty,
+    ListFooter,
+    ListPage,
+    ListPageHeader,
+    ListPanel,
+    ListToolbar,
+    SelectionBar,
+} from "../ui/ListPage/ListPage";
+import { MenuButton } from "../ui/Menu/MenuButton";
 import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
 import { RetryMessage } from "../ui/RetryMessage";
+import { useListPageSize } from "../../hooks/useListPageSize";
+import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useServerTable } from "../../hooks/useServerTable";
+import { useStatusNotice } from "../../hooks/useStatusNotice";
 import { useVehicleList } from "../../hooks/useVehicleList";
 import { useVehicleListQuery } from "../../hooks/useVehicleListQuery";
-import { vehicleColumns, vehicleFilters } from "./vehicleTableConfig";
-import band from "../../styles/pageBand.module.scss";
-import layout from "../../styles/layout.module.scss";
+import { formatCount } from "../../utils/formatCount";
+import {
+    vehicleColumns,
+    vehicleMoreFilters,
+    vehicleTileFilters,
+} from "./vehicleTableConfig";
+import { vehicleStatusLabel } from "./vehicleStatus";
 import styles from "./VehicleTable.module.scss";
 
 interface VehicleTableProps {
+    /** Header actions for dispatchers (Importieren, Exportieren, anlegen). */
+    actions?: ReactNode;
+    /** Enables "Auswählen" and bulk delete. Dispatchers only. */
     onDeleteVehicles?: (ids: number[]) => Promise<void>;
-    onAddVehicle?: () => void;
-    onImport?: () => void;
-    exportActions?: ReactNode;
+    /** Row click: opens the vehicle. */
     onSelectVehicle?: (vehicle: Vehicle) => void;
+    /** Message from the page, for example after "Fahrzeug anlegen". */
+    pageNotice?: string | null;
 }
 
+const vehicleCount = (count: number) =>
+    `${formatCount(count)} ${count === 1 ? "Fahrzeug" : "Fahrzeuge"}`;
+
+/** `/vehicles`: header, status tiles, the list panel. */
 export const VehicleTable = ({
+    actions,
     onDeleteVehicles,
-    onAddVehicle,
-    onImport,
-    exportActions,
     onSelectVehicle,
+    pageNotice,
 }: VehicleTableProps) => {
     const listQuery = useVehicleListQuery();
-    const listResult = useVehicleList(listQuery.apiQuery);
+    const { ref: bodyRef, pageSize } = useListPageSize(listQuery.query.limit);
+    const listResult = useVehicleList({
+        ...listQuery.apiQuery,
+        limit: pageSize,
+    });
+    const counts = listResult.meta?.counts;
     const {
         tableState,
-        filtersWithCounts,
         paginatedRows,
         isLoading,
+        isRefreshing,
         error,
         pageCount,
         total,
         showPagination,
-        sectionClassName,
         emptyContent,
         setSearch,
         setFilter,
         handleSort,
         setPage,
-        setLimit,
-    } = useServerTable<Vehicle>({
-        listQuery,
-        listResult,
-        filters: vehicleFilters,
-        counts: listResult.meta?.counts,
-    });
+    } = useServerTable<Vehicle>({ listQuery, listResult });
+    const { notice, show: showNotice } = useStatusNotice();
 
-    const [isEditing, setIsEditing] = useState(false);
-    const [selectedIds, setSelectedIds] = useState<number[]>([]);
-    const [pendingDeleteIds, setPendingDeleteIds] = useState<number[] | null>(
-        null,
+    const rowKeys = useMemo(
+        () => paginatedRows.map((vehicle) => vehicle.id),
+        [paginatedRows],
     );
+    const selection = useSelectionMode(
+        rowKeys,
+        serializeVehicleListQuery({
+            ...listQuery.query,
+            limit: pageSize,
+        }).toString(),
+    );
+
+    const [pendingDelete, setPendingDelete] = useState<Vehicle[] | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    const toggleEditMode = () => {
-        setIsEditing((current) => !current);
-        setSelectedIds([]);
-    };
+    const activeFilter = tableState.filterId;
+    const hasSearch = tableState.search.trim().length > 0;
+    const isFiltered = activeFilter !== null || hasSearch;
 
-    const toggleSelection = (id: number) => {
-        setSelectedIds((current) =>
-            current.includes(id)
-                ? current.filter((selectedId) => selectedId !== id)
-                : [...current, id],
-        );
-    };
+    const summary = counts
+        ? [
+              hasSearch
+                  ? `${formatCount(counts.all)} Treffer`
+                  : `${formatCount(counts.all)} im Bestand`,
+              `${formatCount(counts.alerts)} mit offener Warnung`,
+              `${formatCount(counts.unassigned)} ohne Fahrer`,
+          ].join(" · ")
+        : null;
 
-    const pendingCount = pendingDeleteIds?.length ?? 0;
-    const pendingVehicle =
-        pendingCount === 1
-            ? listResult.data.find(
-                  (vehicle) => vehicle.id === pendingDeleteIds?.[0],
-              )
-            : undefined;
+    const tiles: KpiTile[] = vehicleTileFilters.map((filter) => ({
+        key: filter.id ?? "all",
+        label: filter.label,
+        value: counts ? counts[filter.count] : null,
+        tone: filter.tone,
+        pressed: activeFilter === filter.id,
+        onToggle: () => setFilter(filter.id),
+    }));
+
+    const activeMore = vehicleMoreFilters.find(
+        (filter) => filter.id === activeFilter,
+    );
+
+    const closeDelete = () => {
+        setPendingDelete(null);
+        setDeleteError(null);
+    };
 
     const confirmDelete = async () => {
-        if (!pendingDeleteIds) {
+        if (!pendingDelete || !onDeleteVehicles) {
             return;
         }
 
@@ -93,9 +138,11 @@ export const VehicleTable = ({
         setIsDeleting(true);
 
         try {
-            await onDeleteVehicles?.(pendingDeleteIds);
-            setSelectedIds([]);
-            setPendingDeleteIds(null);
+            await onDeleteVehicles(pendingDelete.map((vehicle) => vehicle.id));
+            const count = pendingDelete.length;
+            setPendingDelete(null);
+            selection.stop();
+            showNotice(`${vehicleCount(count)} gelöscht.`);
         } catch (caught: unknown) {
             setDeleteError(
                 caught instanceof Error
@@ -107,126 +154,173 @@ export const VehicleTable = ({
         }
     };
 
+    const pendingCount = pendingDelete?.length ?? 0;
+
     return (
-        <section
-            className={sectionClassName(styles.vehicleTable, styles.isFetching)}
-        >
-            <header
-                className={`${band.band} ${band.bleed} ${layout.pageHead}`}
-            >
-                <h1 className={styles.title}>Fahrzeuge</h1>
-            </header>
+        <ListPage selecting={selection.active} busy={isRefreshing}>
+            <ListPageHeader
+                title="Fahrzeuge"
+                summary={summary}
+                notice={notice ?? pageNotice}
+                actions={actions}
+            />
 
-            <div className={layout.sheet}>
-                <TableToolbar
-                    search={tableState.search}
-                    onSearchChange={setSearch}
-                    searchPlaceholder="Kennzeichen oder Fahrer suchen..."
-                    searchAriaLabel="Kennzeichen oder Fahrer suchen"
-                    addNewLabel="Fahrzeug anlegen"
-                    isEditing={isEditing}
-                    onToggleEditMode={
-                        onDeleteVehicles ? toggleEditMode : undefined
-                    }
-                    selectedCount={selectedIds.length}
-                    onDeleteSelected={
-                        onDeleteVehicles
-                            ? () => setPendingDeleteIds(selectedIds)
-                            : undefined
-                    }
-                    onAddNew={onAddVehicle}
-                    onSecondaryAction={onImport}
-                    secondaryActionLabel="Importieren"
-                    extraActions={exportActions}
-                />
+            <KpiTiles ariaLabel="Status" phoneLayout="strip" tiles={tiles} />
 
-                {!isLoading && (
-                    <TableFilterBar
-                        filters={filtersWithCounts}
-                        activeFilterId={tableState.filterId}
-                        onFilterChange={setFilter}
-                        allCount={listResult.meta?.counts.all}
-                        groupLabel="Status"
-                        ariaLabel="Status"
+            <ListPanel label="Fahrzeugliste">
+                {selection.active ? (
+                    <SelectionBar
+                        count={selection.count}
+                        pageCheckbox={selection.pageCheckbox}
+                        onDone={selection.stop}
+                        actions={
+                            <Button
+                                variant="dangerOutline"
+                                size="toolbar"
+                                disabled={selection.count === 0}
+                                onClick={() =>
+                                    setPendingDelete(
+                                        paginatedRows.filter((vehicle) =>
+                                            selection.selectedIds.includes(
+                                                vehicle.id,
+                                            ),
+                                        ),
+                                    )
+                                }
+                            >
+                                {selection.count} löschen
+                            </Button>
+                        }
+                    />
+                ) : (
+                    <ListToolbar
+                        onStartSelection={
+                            onDeleteVehicles ? selection.start : undefined
+                        }
+                        filters={
+                            <MenuButton
+                                label={activeMore?.label ?? "Weitere Filter"}
+                                ariaLabel={
+                                    activeMore
+                                        ? `Weitere Filter: ${activeMore.label}`
+                                        : "Weitere Filter"
+                                }
+                                menuLabel="Weitere Filter"
+                                align="start"
+                                active={activeMore !== undefined}
+                                items={vehicleMoreFilters.map((filter) => ({
+                                    key: filter.id ?? "all",
+                                    checked: activeFilter === filter.id,
+                                    label: (
+                                        <>
+                                            <span>{filter.label}</span>
+                                            {counts && (
+                                                <span className={styles.menuCount}>
+                                                    {formatCount(
+                                                        counts[filter.count],
+                                                    )}
+                                                </span>
+                                            )}
+                                        </>
+                                    ),
+                                    onSelect: () =>
+                                        setFilter(
+                                            activeFilter === filter.id
+                                                ? null
+                                                : filter.id,
+                                        ),
+                                }))}
+                            />
+                        }
+                        search={{
+                            value: tableState.search,
+                            onChange: setSearch,
+                            placeholder: "Kennzeichen oder Fahrer",
+                            ariaLabel: "Kennzeichen oder Fahrer suchen",
+                        }}
                     />
                 )}
 
                 {error && (
-                    <RetryMessage message={error} onRetry={listResult.retry} />
+                    <div className={styles.error}>
+                        <RetryMessage
+                            message={error}
+                            onRetry={listResult.retry}
+                        />
+                    </div>
                 )}
 
-                {isLoading && (
-                    <p className={styles.status} aria-live="polite">
-                        Tabelle wird geladen…
-                    </p>
-                )}
-
-                <Table
-                    columns={vehicleColumns}
-                    rows={paginatedRows}
-                    getRowKey={(vehicle) => vehicle.id}
-                    isEditing={isEditing}
-                    selectedRows={selectedIds}
-                    onSelectRow={(key) => toggleSelection(Number(key))}
-                    onRowClick={onSelectVehicle}
-                    sortConfig={tableState.sortConfig}
-                    onSort={handleSort}
-                    caption="Fahrzeugliste"
-                    isLoading={isLoading}
-                    skeletonRowCount={Math.min(tableState.limit, 10)}
-                    emptyContent={emptyContent(
-                        tableState.search || tableState.filterId
-                            ? "Keine Fahrzeuge passen zu Suche und Filter."
-                            : "Keine Fahrzeuge vorhanden.",
-                    )}
-                    className={`${styles.mobileCards} ${styles.fit}`}
-                />
-
-                {showPagination && (
-                    <TablePagination
-                        page={tableState.page}
-                        pageCount={pageCount}
-                        limit={tableState.limit}
-                        total={total}
-                        onPageChange={setPage}
-                        onLimitChange={setLimit}
+                <ListBody ref={bodyRef}>
+                    <Table
+                        columns={vehicleColumns}
+                        rows={paginatedRows}
+                        getRowKey={(vehicle) => vehicle.id}
+                        selectionMode={selection.active}
+                        selectedRows={selection.selectedIds}
+                        onSelectRow={(key) => selection.toggle(Number(key))}
+                        getRowSelectLabel={(vehicle) =>
+                            `${vehicle.license_plate} auswählen`
+                        }
+                        onRowClick={onSelectVehicle}
+                        sortConfig={tableState.sortConfig}
+                        onSort={handleSort}
+                        caption="Fahrzeugliste"
+                        isLoading={isLoading}
+                        skeletonRowCount={pageSize}
+                        emptyContent={emptyContent(
+                            isFiltered ? (
+                                <ListEmpty
+                                    message="Keine Fahrzeuge passen zu Suche und Filter."
+                                    onClearFilters={listQuery.clearFilters}
+                                />
+                            ) : (
+                                <ListEmpty message="Keine Fahrzeuge vorhanden." />
+                            ),
+                        )}
+                        className={styles.cards}
                     />
-                )}
+                </ListBody>
 
-                <ConfirmDialog
-                    open={pendingDeleteIds !== null}
-                    onClose={() => {
-                        setPendingDeleteIds(null);
-                        setDeleteError(null);
-                    }}
-                    title={
-                        pendingCount === 1
-                            ? "Fahrzeug löschen?"
-                            : `${pendingCount} Fahrzeuge löschen?`
-                    }
-                    confirmLabel="Löschen"
-                    isBusy={isDeleting}
-                    onConfirm={confirmDelete}
-                >
-                    {pendingCount === 1 ? (
-                        <p>
-                            {pendingVehicle
-                                ? `„${pendingVehicle.license_plate}“ wirklich löschen? Das kann nicht rückgängig gemacht werden.`
-                                : "Dieses Fahrzeug wirklich löschen? Das kann nicht rückgängig gemacht werden."}
-                        </p>
-                    ) : (
-                        <p>
-                            Diese {pendingCount} Fahrzeuge wirklich löschen? Das
-                            kann nicht rückgängig gemacht werden.
-                        </p>
-                    )}
-                    {deleteError && (
-                        <p className={styles.error} role="alert">
-                            {deleteError}
-                        </p>
-                    )}
-                </ConfirmDialog>
-            </div>
-        </section>
+                <ListFooter
+                    page={tableState.page}
+                    pageCount={pageCount}
+                    limit={pageSize}
+                    total={total}
+                    onPageChange={setPage}
+                    show={showPagination}
+                />
+            </ListPanel>
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                onClose={closeDelete}
+                title={`${vehicleCount(pendingCount)} löschen?`}
+                confirmLabel={`${pendingCount} löschen`}
+                busyLabel="Wird gelöscht…"
+                isBusy={isDeleting}
+                onConfirm={confirmDelete}
+                itemsLabel="Ausgewählte Fahrzeuge"
+                items={pendingDelete?.map((vehicle) => ({
+                    key: vehicle.id,
+                    name: vehicle.license_plate,
+                    detail: [
+                        vehicle.vehicle_type
+                            ? VEHICLE_TYPE_LABELS[vehicle.vehicle_type]
+                            : null,
+                        vehicleStatusLabel(vehicle.status),
+                    ]
+                        .filter(Boolean)
+                        .join(" · "),
+                }))}
+                error={deleteError}
+            >
+                <p>
+                    {pendingCount === 1
+                        ? "Dieses Fahrzeug wirklich löschen?"
+                        : `Diese ${pendingCount} Fahrzeuge wirklich löschen?`}{" "}
+                    Das kann nicht rückgängig gemacht werden.
+                </p>
+            </ConfirmDialog>
+        </ListPage>
     );
 };

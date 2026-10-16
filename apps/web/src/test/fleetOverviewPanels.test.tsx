@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { FleetEventFeed } from "../components/alerts/FleetEventFeed";
 import { fleetEventDetail } from "../components/alerts/fleetEvents";
+import { DepotPanel } from "../components/vehicles/DepotPanel";
 import { DepotStrip } from "../components/vehicles/DepotStrip";
+import { depotAfterClick } from "../components/vehicles/depotDraft";
 import {
     FleetKpiBand,
     type FleetKpiTile,
@@ -205,6 +207,52 @@ describe("FleetEventFeed", () => {
         renderFeed({ alerts: [], typeCounts: undefined });
 
         expect(screen.getByText("Keine Ereignisse.")).toBeInTheDocument();
+    });
+});
+
+describe("depot selection", () => {
+    it("clears the depot on a second click and keeps it while editing", () => {
+        expect(depotAfterClick(undefined, 1, false)).toBe(1);
+        expect(depotAfterClick(1, 1, false)).toBeNull();
+        expect(depotAfterClick(1, 2, false)).toBe(2);
+        expect(depotAfterClick(1, 1, true)).toBe(1);
+    });
+
+    it("offers Auswahl aufheben on the selected depot", () => {
+        const onDeselect = vi.fn();
+
+        render(
+            <MemoryRouter>
+                <DepotPanel
+                    sites={[site(), site({ id: 2, name: "Bremen" })]}
+                    selectedId={1}
+                    draft={null}
+                    placing={false}
+                    canEdit={false}
+                    saveError={null}
+                    loadError={null}
+                    isSaving={false}
+                    revealToken={0}
+                    onSelect={vi.fn()}
+                    onDeselect={onDeselect}
+                    onEdit={vi.fn()}
+                    onStartPlace={vi.fn()}
+                    onCancel={vi.fn()}
+                    onDraftChange={vi.fn()}
+                    onSave={vi.fn()}
+                    onAskDelete={vi.fn()}
+                    onRetryLoad={vi.fn()}
+                />
+            </MemoryRouter>,
+        );
+
+        const buttons = screen.getAllByRole("button", {
+            name: "Auswahl aufheben",
+            hidden: true,
+        });
+        expect(buttons).toHaveLength(1);
+        fireEvent.click(buttons[0]);
+        expect(onDeselect).toHaveBeenCalledTimes(1);
     });
 });
 

@@ -2,6 +2,7 @@ import type { Site } from "@fleet-live/shared";
 
 import { formatCount } from "../../utils/formatCount";
 import { RetryMessage } from "../ui/RetryMessage";
+import { SwapLabel } from "../ui/Button/SwapLabel";
 import styles from "./DepotStrip.module.scss";
 
 type DepotStripProps = {
@@ -62,7 +63,9 @@ export const DepotStrip = ({
                 aria-pressed={placing}
                 onClick={onStartPlace}
             >
-                {placing ? "Klicken abbrechen" : "Depot anlegen"}
+                <SwapLabel swapped={placing} alt="Klicken abbrechen">
+                    Depot anlegen
+                </SwapLabel>
             </button>
         )}
     </section>

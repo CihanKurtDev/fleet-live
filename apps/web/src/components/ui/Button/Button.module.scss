@@ -4,7 +4,7 @@
     justify-content: center;
     gap: 8px;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--radius);
     font-family: inherit;
     font-size: 14px;
     font-weight: 500;
@@ -17,12 +17,11 @@
         background-color 120ms ease,
         border-color 120ms ease,
         color 120ms ease,
-        box-shadow 120ms ease,
         transform 120ms ease;
 
     &:focus-visible {
-        outline: none;
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 38%, transparent);
+        outline: var(--focus-width) solid var(--focus-ring);
+        outline-offset: 2px;
     }
 
     &:active:not(:disabled) {
@@ -35,10 +34,9 @@
     }
 }
 
-
 .primary {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
 
     &:hover:not(:disabled) {
         filter: brightness(0.95);
@@ -74,21 +72,42 @@
     }
 }
 
-.sm {
-    height: 32px;
+.dangerOutline {
+    background: transparent;
+    color: var(--danger);
+    border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+
+    &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--danger) 12%, transparent);
+    }
+}
+
+/* Header, toolbar and panel buttons (`sm` is the same size). */
+.sm,
+.toolbar {
+    height: var(--control-sm);
     padding: 0 12px;
     font-size: 13px;
 }
 
+/* Forms and dialog footers, next to 36 px fields. */
 .md {
-    height: 36px;
+    height: var(--control-md);
     padding: 0 16px;
 }
 
+/* Sign-in pages. */
 .lg {
-    height: 40px;
+    height: var(--control-lg);
     padding: 0 20px;
     font-size: 15px;
+}
+
+/* The one button inside a list row. */
+.row {
+    height: var(--control-xs);
+    padding: 0 10px;
+    font-size: 12px;
 }
 
 .fullWidth {
@@ -96,14 +115,19 @@
 }
 
 .icon {
-    width: 36px;
+    width: var(--control-md);
     padding: 0;
 
-    &.sm {
-        width: 32px;
+    &.sm,
+    &.toolbar {
+        width: var(--control-sm);
     }
 
     &.lg {
-        width: 40px;
+        width: var(--control-lg);
+    }
+
+    &.row {
+        width: var(--control-xs);
     }
 }

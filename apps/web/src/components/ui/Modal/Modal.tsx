@@ -29,9 +29,13 @@ export const Modal = ({
         // ohne zusätzliche Bibliothek.
         if (open && !dialog.open) {
             dialog.showModal();
-            const field = dialog.querySelector<HTMLElement>(
-                "[data-modal-body] input, [data-modal-body] textarea, [data-modal-body] select",
-            );
+            const field =
+                dialog.querySelector<HTMLElement>(
+                    "[data-modal-body] [data-autofocus]",
+                ) ??
+                dialog.querySelector<HTMLElement>(
+                    "[data-modal-body] input, [data-modal-body] textarea, [data-modal-body] select",
+                );
             field?.focus();
         }
 

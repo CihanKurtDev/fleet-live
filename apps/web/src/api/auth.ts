@@ -176,6 +176,12 @@ export const confirmTotp = (input: {
         body: input,
     });
 
+export const disableTotp = (code: string) =>
+    request<AuthUser>("/api/auth/totp/disable", {
+        method: "POST",
+        body: { code },
+    });
+
 export const confirmTotpSetup = (input: {
     code: string;
     setup_token: string;

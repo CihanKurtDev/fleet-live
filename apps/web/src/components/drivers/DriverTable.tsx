@@ -1,111 +1,311 @@
-import type { Driver } from "@fleet-live/shared";
+import { useMemo, useState, type ReactNode } from "react";
+import { serializeDriverListQuery, type Driver } from "@fleet-live/shared";
 
 import { Table } from "../ui/Table/Table";
-import { TableToolbar } from "../ui/Table/TableToolbar";
-import { TablePagination } from "../ui/Table/TablePagination";
+import { Button } from "../ui/Button/Button";
+import { KpiTiles, type KpiTile } from "../ui/KpiTiles/KpiTiles";
+import {
+    ListBody,
+    ListEmpty,
+    ListFooter,
+    ListPage,
+    ListPageHeader,
+    ListPanel,
+    ListToolbar,
+    SelectionBar,
+} from "../ui/ListPage/ListPage";
+import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
 import { RetryMessage } from "../ui/RetryMessage";
-import { useServerTable } from "../../hooks/useServerTable";
+import { deleteDriver } from "../../api/drivers";
 import { useDriverList } from "../../hooks/useDriverList";
-import { useDriverListQuery } from "../../hooks/useDriverListQuery";
-import { driverColumns } from "./driverTableConfig";
-import band from "../../styles/pageBand.module.scss";
-import layout from "../../styles/layout.module.scss";
+import {
+    driverTileOf,
+    useDriverListQuery,
+} from "../../hooks/useDriverListQuery";
+import { useListPageSize } from "../../hooks/useListPageSize";
+import { useSelectionMode } from "../../hooks/useSelectionMode";
+import { useServerTable } from "../../hooks/useServerTable";
+import { useStatusNotice } from "../../hooks/useStatusNotice";
+import { formatCount } from "../../utils/formatCount";
+import { driverColumns, driverTileOptions } from "./driverTableConfig";
+import {
+    deleteErrorMessage,
+    driverCountText,
+    driverDeleteTitle,
+} from "./driverDelete";
 import styles from "./DriverTable.module.scss";
 
 interface DriverTableProps {
+    /** Header actions for dispatchers ("Fahrer anlegen"). */
+    actions?: ReactNode;
+    /** Enables "Auswählen" and bulk delete. Dispatchers only. */
+    canDelete?: boolean;
+    /** Called after drivers were deleted, to refetch the lists. */
+    onDeleted?: () => void;
+    /** Status line to show once on arrival (after deleting on the detail page). */
+    initialNotice?: string | null;
+    /** Row click: opens the driver. */
     onSelectDriver?: (driver: Driver) => void;
-    onAddDriver?: () => void;
 }
 
+/** `/drivers`: header, tiles, the list panel. */
 export const DriverTable = ({
+    actions,
+    canDelete = false,
+    onDeleted,
+    initialNotice = null,
     onSelectDriver,
-    onAddDriver,
 }: DriverTableProps) => {
     const listQuery = useDriverListQuery();
-    const listResult = useDriverList(listQuery.apiQuery);
+    const { ref: bodyRef, pageSize } = useListPageSize(listQuery.query.limit);
+    const listResult = useDriverList({
+        ...listQuery.apiQuery,
+        limit: pageSize,
+    });
+    const counts = listResult.meta?.counts;
     const {
         tableState,
         paginatedRows,
         isLoading,
+        isRefreshing,
         error,
         pageCount,
         total,
         showPagination,
-        sectionClassName,
         emptyContent,
         setSearch,
         handleSort,
         setPage,
-        setLimit,
-    } = useServerTable<Driver>({
-        listQuery,
-        listResult,
-    });
+    } = useServerTable<Driver>({ listQuery, listResult });
+    const { notice, show: showNotice } = useStatusNotice();
+    const [shownInitial, setShownInitial] = useState(false);
+
+    if (initialNotice && !shownInitial) {
+        setShownInitial(true);
+        showNotice(initialNotice);
+    }
+
+    const rowKeys = useMemo(
+        () => paginatedRows.map((driver) => driver.id),
+        [paginatedRows],
+    );
+    const selection = useSelectionMode(
+        rowKeys,
+        serializeDriverListQuery({
+            ...listQuery.query,
+            limit: pageSize,
+        }).toString(),
+    );
+
+    const [pendingDelete, setPendingDelete] = useState<Driver[] | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const activeTile = driverTileOf(listQuery.query);
+    const hasSearch = tableState.search.trim().length > 0;
+    const isFiltered = activeTile !== "all" || hasSearch;
+    const isDefaultSort =
+        listQuery.query.sort === undefined ||
+        (listQuery.query.sort === "open_warnings" &&
+            listQuery.query.dir === "desc");
+
+    const summary = counts
+        ? [
+              hasSearch
+                  ? `${formatCount(counts.all)} Treffer`
+                  : driverCountText(counts.all),
+              isDefaultSort ? "sortiert nach offenen Tempo-Warnungen" : null,
+          ]
+              .filter(Boolean)
+              .join(" · ")
+        : null;
+
+    const tiles: KpiTile[] = driverTileOptions.map((tile) => ({
+        key: tile.id,
+        label: tile.label,
+        value: counts ? counts[tile.count] : null,
+        hint: tile.hint,
+        tone: tile.tone,
+        pressed: activeTile === tile.id,
+        onToggle: () => listQuery.setTile(tile.id),
+    }));
+
+    const closeDelete = () => {
+        setPendingDelete(null);
+        setDeleteError(null);
+    };
+
+    const confirmDelete = async () => {
+        if (!pendingDelete) {
+            return;
+        }
+
+        setDeleteError(null);
+        setIsDeleting(true);
+
+        const results = await Promise.allSettled(
+            pendingDelete.map((driver) => deleteDriver(driver.id)),
+        );
+        const failed: Driver[] = [];
+        const failures: string[] = [];
+        let deleted = 0;
+
+        results.forEach((result, index) => {
+            if (result.status === "fulfilled") {
+                deleted += 1;
+            } else {
+                failed.push(pendingDelete[index]);
+                failures.push(deleteErrorMessage(result.reason));
+            }
+        });
+
+        setIsDeleting(false);
+
+        if (deleted > 0) {
+            onDeleted?.();
+        }
+
+        if (failed.length === 0) {
+            setPendingDelete(null);
+            selection.stop();
+            showNotice(`${deleted} Fahrer gelöscht.`);
+            return;
+        }
+
+        // Deleted drivers leave the page with the refetch; the failed ones
+        // stay selected and are listed in the dialog with the reason.
+        setPendingDelete(failed);
+        setDeleteError([...new Set(failures)].join(" "));
+        if (deleted > 0) {
+            showNotice(`${deleted} Fahrer gelöscht.`);
+        }
+    };
+
+    const pendingCount = pendingDelete?.length ?? 0;
 
     return (
-        <section
-            className={sectionClassName(styles.driverTable, styles.isFetching)}
-        >
-            <header
-                className={`${band.band} ${band.bleed} ${layout.pageHead}`}
-            >
-                <div>
-                    <h1 className={styles.title}>Fahrer</h1>
-                    <p className={styles.lead}>
-                        Offene Warnungen sind Tempo-Überschreitungen unter
-                        Warnungen; Verstöße die Historie.
-                    </p>
-                </div>
-            </header>
+        <ListPage selecting={selection.active} busy={isRefreshing}>
+            <ListPageHeader
+                title="Fahrer"
+                summary={summary}
+                notice={notice}
+                actions={actions}
+            />
 
-            <div className={layout.sheet}>
-                <TableToolbar
-                    search={tableState.search}
-                    onSearchChange={setSearch}
-                    searchPlaceholder="Fahrer suchen..."
-                    addNewLabel="Fahrer anlegen"
-                    onAddNew={onAddDriver}
-                />
+            <KpiTiles ariaLabel="Filter" phoneLayout="strip" tiles={tiles} />
 
-                {error && (
-                    <RetryMessage message={error} onRetry={listResult.retry} />
-                )}
-
-                {isLoading && (
-                    <p className={styles.status} aria-live="polite">
-                        Tabelle wird geladen…
-                    </p>
-                )}
-
-                <Table
-                    columns={driverColumns}
-                    rows={paginatedRows}
-                    getRowKey={(driver) => driver.id}
-                    onRowClick={onSelectDriver}
-                    sortConfig={tableState.sortConfig}
-                    onSort={handleSort}
-                    caption="Fahrerliste"
-                    isLoading={isLoading}
-                    skeletonRowCount={Math.min(tableState.limit, 10)}
-                    emptyContent={emptyContent(
-                        tableState.search
-                            ? "Keine Fahrer passen zur Suche."
-                            : "Keine Fahrer.",
-                    )}
-                    className={styles.mobileCards}
-                />
-
-                {showPagination && (
-                    <TablePagination
-                        page={tableState.page}
-                        pageCount={pageCount}
-                        limit={tableState.limit}
-                        total={total}
-                        onPageChange={setPage}
-                        onLimitChange={setLimit}
+            <ListPanel label="Fahrerliste">
+                {selection.active ? (
+                    <SelectionBar
+                        count={selection.count}
+                        pageCheckbox={selection.pageCheckbox}
+                        onDone={selection.stop}
+                        actions={
+                            <Button
+                                variant="dangerOutline"
+                                size="toolbar"
+                                disabled={selection.count === 0}
+                                onClick={() =>
+                                    setPendingDelete(
+                                        paginatedRows.filter((driver) =>
+                                            selection.selectedIds.includes(
+                                                driver.id,
+                                            ),
+                                        ),
+                                    )
+                                }
+                            >
+                                {selection.count} löschen
+                            </Button>
+                        }
+                    />
+                ) : (
+                    <ListToolbar
+                        onStartSelection={
+                            canDelete ? selection.start : undefined
+                        }
+                        search={{
+                            value: tableState.search,
+                            onChange: setSearch,
+                            placeholder: "Fahrer suchen",
+                            ariaLabel: "Fahrer suchen",
+                        }}
                     />
                 )}
-            </div>
-        </section>
+
+                {error && (
+                    <div className={styles.error}>
+                        <RetryMessage
+                            message={error}
+                            onRetry={listResult.retry}
+                        />
+                    </div>
+                )}
+
+                <ListBody ref={bodyRef}>
+                    <Table
+                        columns={driverColumns}
+                        rows={paginatedRows}
+                        getRowKey={(driver) => driver.id}
+                        selectionMode={selection.active}
+                        selectedRows={selection.selectedIds}
+                        onSelectRow={(key) => selection.toggle(Number(key))}
+                        getRowSelectLabel={(driver) =>
+                            `${driver.name} auswählen`
+                        }
+                        onRowClick={onSelectDriver}
+                        sortConfig={tableState.sortConfig}
+                        onSort={handleSort}
+                        caption="Fahrerliste"
+                        isLoading={isLoading}
+                        skeletonRowCount={pageSize}
+                        emptyContent={emptyContent(
+                            isFiltered ? (
+                                <ListEmpty
+                                    message="Keine Fahrer passen zu Suche und Filter."
+                                    onClearFilters={listQuery.clearFilters}
+                                />
+                            ) : (
+                                <ListEmpty message="Keine Fahrer vorhanden." />
+                            ),
+                        )}
+                        className={styles.cards}
+                    />
+                </ListBody>
+
+                <ListFooter
+                    page={tableState.page}
+                    pageCount={pageCount}
+                    limit={pageSize}
+                    total={total}
+                    onPageChange={setPage}
+                    show={showPagination}
+                />
+            </ListPanel>
+
+            <ConfirmDialog
+                open={pendingDelete !== null}
+                onClose={closeDelete}
+                title={driverDeleteTitle(pendingCount)}
+                confirmLabel={`${pendingCount} löschen`}
+                busyLabel="Wird gelöscht…"
+                isBusy={isDeleting}
+                onConfirm={confirmDelete}
+                itemsLabel="Ausgewählte Fahrer"
+                items={pendingDelete?.map((driver) => ({
+                    key: driver.id,
+                    name: driver.name,
+                    detail: driver.current_vehicle_plate ?? "kein Fahrzeug",
+                }))}
+                error={deleteError}
+            >
+                <p>
+                    {pendingCount === 1
+                        ? "Diesen Fahrer wirklich löschen?"
+                        : `Diese ${pendingCount} Fahrer wirklich löschen?`}{" "}
+                    Das kann nicht rückgängig gemacht werden.
+                </p>
+            </ConfirmDialog>
+        </ListPage>
     );
 };

@@ -50,6 +50,12 @@ export function updateDriver(id: number, input: DriverPatchInput) {
     }).then((response) => response.data);
 }
 
+export function deleteDriver(id: number): Promise<void> {
+    return request<void>(`/api/drivers/${id}`, {
+        method: "DELETE",
+    });
+}
+
 export function assignDriverVehicle(
     driverId: number,
     input: DriverVehicleAssignInput,

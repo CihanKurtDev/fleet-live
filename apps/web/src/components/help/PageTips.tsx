@@ -98,6 +98,10 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
         }
 
         let frame = 0;
+        let last = "";
+        // Measured every frame while the tip is open: content that loads later
+        // (the first-steps line, charts) moves the target without a scroll or
+        // resize event, and the ring must follow it.
         const measure = () => {
             const target = findTarget(tip.target);
 
@@ -111,23 +115,21 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
                 return;
             }
 
-            setPlacement(placeNear(target));
-        };
-        const schedule = () => {
-            cancelAnimationFrame(frame);
+            const next = placeNear(target);
+            const key = JSON.stringify(next);
+
+            if (key !== last) {
+                last = key;
+                setPlacement(next);
+            }
+
             frame = requestAnimationFrame(measure);
         };
 
         findTarget(tip.target)?.scrollIntoView?.({ block: "nearest" });
-        schedule();
-        window.addEventListener("resize", schedule);
-        window.addEventListener("scroll", schedule, true);
+        frame = requestAnimationFrame(measure);
 
-        return () => {
-            cancelAnimationFrame(frame);
-            window.removeEventListener("resize", schedule);
-            window.removeEventListener("scroll", schedule, true);
-        };
+        return () => cancelAnimationFrame(frame);
     }, [tip, index, tips.length]);
 
     useEffect(() => {

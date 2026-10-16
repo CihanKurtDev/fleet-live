@@ -15,7 +15,9 @@ import { updateDriver } from "../../api/drivers";
 import { useDueSettings } from "../../hooks/useDueSettings";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
+import { submitBusyLabel } from "../ui/Button/submitBusyLabel";
 import styles from "../vehicles/VehicleForm.module.scss";
+import type { DriverFormField } from "./driverHints";
 
 interface DriverEditFormProps {
     driver: Pick<
@@ -23,6 +25,8 @@ interface DriverEditFormProps {
         "id" | "name" | "phone" | "licence_expires_on" | "licence_checked_on"
     >;
     submitLabel?: string;
+    /** Field the dialog focuses first; the name when unset. */
+    focusField?: DriverFormField;
     onSaved: (driver: Driver) => void;
     onCancel?: () => void;
 }
@@ -55,6 +59,7 @@ function validateDriverFields(name: string, phone: string): {
 export const DriverEditForm = ({
     driver,
     submitLabel = "Speichern",
+    focusField,
     onSaved,
     onCancel,
 }: DriverEditFormProps) => {
@@ -160,6 +165,7 @@ export const DriverEditForm = ({
                 <label htmlFor={`${fieldId}-phone`}>Telefon</label>
                 <Input
                     id={`${fieldId}-phone`}
+                    data-autofocus={focusField === "phone" ? true : undefined}
                     type="tel"
                     size="md"
                     fullWidth
@@ -188,6 +194,7 @@ export const DriverEditForm = ({
                 </label>
                 <Input
                     id={`${fieldId}-licence-expires`}
+                    data-autofocus={focusField === "licence-expires" ? true : undefined}
                     type="date"
                     size="md"
                     fullWidth
@@ -216,6 +223,7 @@ export const DriverEditForm = ({
                 </label>
                 <Input
                     id={`${fieldId}-licence-checked`}
+                    data-autofocus={focusField === "licence-checked" ? true : undefined}
                     type="date"
                     size="md"
                     fullWidth
@@ -252,7 +260,7 @@ export const DriverEditForm = ({
                     <Button
                         type="button"
                         variant="secondary"
-                        size="sm"
+                        size="md"
                         onClick={onCancel}
                     >
                         Abbrechen
@@ -260,12 +268,12 @@ export const DriverEditForm = ({
                 )}
                 <Button
                     type="submit"
-                    size="sm"
+                    size="md"
                     disabled={isSubmitting || !isDirty}
+                    busy={isSubmitting}
+                    busyLabel={submitBusyLabel(submitLabel)}
                 >
-                    {isSubmitting && submitLabel === "Speichern"
-                        ? "Wird gespeichert…"
-                        : submitLabel}
+                    {submitLabel}
                 </Button>
             </div>
         </form>

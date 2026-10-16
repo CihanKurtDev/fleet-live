@@ -18,6 +18,7 @@ import {
 import { isAbortError } from "../../api/client";
 import { listSites } from "../../api/sites";
 import { Button } from "../ui/Button/Button";
+import { submitBusyLabel } from "../ui/Button/submitBusyLabel";
 import { Input } from "../ui/Input/Input";
 import { NEW_VEHICLE_STATUS } from "./vehicleStatus";
 import styles from "./VehicleForm.module.scss";
@@ -80,7 +81,12 @@ const toValues = (input?: VehicleInput): FormValues =>
           }
         : EMPTY_VALUES;
 
+export type VehicleFormField = "hu" | "uvv-checked";
+
 interface VehicleFormProps {
+    /** Field the dialog focuses first; the plate when unset. */
+    focusField?: VehicleFormField;
+
     /** Vorhanden im Bearbeiten-Modus, leer beim Anlegen. */
     initialValue?: VehicleInput;
 
@@ -102,6 +108,7 @@ export const VehicleForm = ({
     initialValue,
     isFuelMeasured = false,
     readOnly = false,
+    focusField,
     submitLabel,
     onSubmit,
     onCancel,
@@ -324,6 +331,7 @@ export const VehicleForm = ({
                 <label htmlFor={`${fieldId}-hu`}>HU fällig</label>
                 <Input
                     id={`${fieldId}-hu`}
+                    data-autofocus={focusField === "hu" ? true : undefined}
                     type="month"
                     size="md"
                     fullWidth
@@ -349,6 +357,7 @@ export const VehicleForm = ({
                 <label htmlFor={`${fieldId}-uvv-checked`}>UVV zuletzt geprüft</label>
                 <Input
                     id={`${fieldId}-uvv-checked`}
+                    data-autofocus={focusField === "uvv-checked" ? true : undefined}
                     type="date"
                     size="md"
                     fullWidth
@@ -496,7 +505,7 @@ export const VehicleForm = ({
                         <Button
                             type="button"
                             variant="secondary"
-                            size="sm"
+                            size="md"
                             onClick={onCancel}
                         >
                             Abbrechen
@@ -505,14 +514,12 @@ export const VehicleForm = ({
 
                     <Button
                         type="submit"
-                        size="sm"
+                        size="md"
                         disabled={isSubmitting || (isEditing && !isDirty)}
+                        busy={isSubmitting}
+                        busyLabel={submitBusyLabel(submitLabel)}
                     >
-                        {isSubmitting && submitLabel === "Anlegen"
-                            ? "Wird angelegt…"
-                            : isSubmitting && submitLabel === "Speichern"
-                              ? "Wird gespeichert…"
-                              : submitLabel}
+                        {submitLabel}
                     </Button>
                 </div>
             )}

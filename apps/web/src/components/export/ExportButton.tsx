@@ -23,7 +23,13 @@ const LABELS: Record<ExportKind, { label: string; aria: string }> = {
     },
 };
 
-export function ExportButton({ kind }: { kind: ExportKind }) {
+export function ExportButton({
+    kind,
+    size = "sm",
+}: {
+    kind: ExportKind;
+    size?: "sm" | "toolbar";
+}) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const copy = LABELS[kind];
@@ -46,13 +52,14 @@ export function ExportButton({ kind }: { kind: ExportKind }) {
         <span className={styles.wrap}>
             <Button
                 variant="secondary"
-                size="sm"
+                size={size}
                 disabled={busy}
-                aria-busy={busy}
+                busy={busy}
+                busyLabel="Wird exportiert…"
                 aria-label={copy.aria}
                 onClick={onClick}
             >
-                {busy ? "Wird exportiert…" : copy.label}
+                {copy.label}
             </Button>
             {error && (
                 <span className={styles.error} role="alert">

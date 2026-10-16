@@ -40,6 +40,7 @@ export type {
 } from "./models/vehicleQuery";
 
 export {
+    LIST_PAGE_LIMIT_MAX,
     VEHICLE_FILTERS,
     VEHICLE_PAGE_LIMITS,
     VEHICLE_SORT_KEYS,
@@ -237,6 +238,7 @@ export type {
     DriverDetail,
     DriverDetailResponse,
     DriverIncidentCounts,
+    DriverListCounts,
     DriverListMeta,
     DriverListQuery,
     DriverListResponse,

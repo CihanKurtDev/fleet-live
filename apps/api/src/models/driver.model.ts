@@ -1,3 +1,4 @@
+import { DRIVER_TALK_MIN_OPEN_WARNINGS } from "@fleet-live/shared";
 import type {
     Driver,
     DriverDetail,
@@ -415,7 +416,7 @@ export class DriverModel {
             params.push(query.min_open_warnings);
         }
 
-        return pagedQuery<DriverRow, Driver>({
+        const { data, meta } = pagedQuery<DriverRow, Driver>({
             listSql,
             listParams: [...params, query.limit, offset],
             countSql,
@@ -424,6 +425,57 @@ export class DriverModel {
             limit: query.limit,
             map: toDriver,
         });
+
+        // Tile numbers follow the search (and a vehicle scope), not the
+        // tile filters, so each tile shows what pressing it would list.
+        const facetParams: SqlParam[] = [
+            DRIVER_TALK_MIN_OPEN_WARNINGS,
+            companyId,
+            ...(search !== "" ? [like] : []),
+            ...(query.vehicle_id !== undefined ? [query.vehicle_id] : []),
+        ];
+        const counts = stmt(
+            `
+            SELECT
+                COUNT(*) AS all_count,
+                COALESCE(SUM(open_warnings >= ?), 0) AS talk,
+                COALESCE(SUM(has_current = 0), 0) AS without_vehicle
+            FROM (
+                SELECT
+                    (
+                        SELECT COUNT(*)
+                        FROM alerts a
+                        WHERE a.driver_id = d.id
+                          AND a.type = 'SPEEDING'
+                          AND a.resolved_at IS NULL
+                    ) AS open_warnings,
+                    EXISTS (
+                        SELECT 1 FROM vehicles v
+                        WHERE v.current_driver_id = d.id
+                    ) AS has_current
+                FROM drivers d
+                WHERE d.company_id = ?
+                  ${searchSql}
+                  ${vehicleSql}
+            )
+            `,
+        ).get(...facetParams) as {
+            all_count: number;
+            talk: number;
+            without_vehicle: number;
+        };
+
+        return {
+            data,
+            meta: {
+                ...meta,
+                counts: {
+                    all: Number(counts.all_count),
+                    talk: Number(counts.talk),
+                    without_vehicle: Number(counts.without_vehicle),
+                },
+            },
+        };
     }
 
     static getDetail(id: number, companyId: number): DriverDetail | undefined {
@@ -544,6 +596,57 @@ export class DriverModel {
         }
 
         return detail;
+    }
+
+    /**
+     * Löscht einen Fahrer der Firma. `false`, wenn es ihn dort nicht gibt.
+     * Fahrzeuge verlieren ihn als aktuellen Fahrer, Freigaben entfallen,
+     * Warnungen bleiben als Historie ohne Fahrer (`driver_id` NULL).
+     */
+    static delete(driverId: number, companyId: number): boolean {
+        const driver = this.getById(driverId, companyId);
+        if (!driver) {
+            return false;
+        }
+
+        const driving = stmt(
+            `
+            SELECT license_plate
+            FROM vehicles
+            WHERE current_driver_id = ?
+              AND status = 'DRIVING'
+            LIMIT 1
+            `,
+        ).get(driverId) as { license_plate: string } | undefined;
+
+        if (driving) {
+            throw new ConflictError(
+                `${driver.name} ist noch unterwegs auf ${driving.license_plate}. Der Fahrer lässt sich erst nach der Fahrt löschen.`,
+            );
+        }
+
+        withTransaction(() => {
+            stmt(
+                `
+                UPDATE vehicles
+                SET current_driver_id = NULL,
+                    driver_name = NULL
+                WHERE current_driver_id = ?
+                `,
+            ).run(driverId);
+            stmt(`DELETE FROM driver_vehicles WHERE driver_id = ?`).run(
+                driverId,
+            );
+            stmt(`UPDATE alerts SET driver_id = NULL WHERE driver_id = ?`).run(
+                driverId,
+            );
+            stmt(`DELETE FROM drivers WHERE id = ? AND company_id = ?`).run(
+                driverId,
+                companyId,
+            );
+        });
+
+        return true;
     }
 
     static setCurrentVehicle(

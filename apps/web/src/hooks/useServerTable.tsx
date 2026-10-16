@@ -93,8 +93,10 @@ export const useServerTable = <RowType,>({
     const sectionClassName = (base: string, fetchingClass: string) =>
         isRefreshing ? `${base} ${fetchingClass}` : base;
 
+    // A failed request shows its own message above the list; an empty-state
+    // sentence under it would contradict that message.
     const emptyContent = (fallback: ReactNode): ReactNode =>
-        isPageOutOfRange ? (
+        error ? null : isPageOutOfRange ? (
             <TablePageOutOfRange
                 page={tableState.page}
                 pageCount={pageCount}

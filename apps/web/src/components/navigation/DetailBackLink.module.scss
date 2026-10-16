@@ -1,5 +1,9 @@
 .back {
+    /* At least 24 px tall: a target, not just a line of text (WCAG 2.5.8). */
+    display: inline-flex;
+    align-items: center;
     align-self: flex-start;
+    min-height: 24px;
     font-size: 14px;
     line-height: 1.45;
     color: var(--text);

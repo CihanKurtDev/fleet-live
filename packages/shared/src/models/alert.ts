@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { emptyToUndefined } from "./queryPreprocess";
-import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
+import { LIST_PAGE_LIMIT_MAX, VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
 
 export const ALERT_TYPES = ["SPEEDING", "LOW_FUEL", "OFFLINE"] as const;
 export const ALERT_SEVERITIES = ["LOW", "MEDIUM", "HIGH"] as const;
@@ -223,10 +223,10 @@ export const alertListQuerySchema = z.object({
         z.coerce
             .number({ error: "Limit muss eine Zahl sein." })
             .int("Limit muss eine ganze Zahl sein.")
-            .refine(
-                (value) =>
-                    (VEHICLE_PAGE_LIMITS as readonly number[]).includes(value),
-                { message: "Limit muss 10, 25, 50 oder 100 sein." },
+            .min(1, `Limit muss zwischen 1 und ${LIST_PAGE_LIMIT_MAX} liegen.`)
+            .max(
+                LIST_PAGE_LIMIT_MAX,
+                `Limit muss zwischen 1 und ${LIST_PAGE_LIMIT_MAX} liegen.`,
             )
             .default(10),
     ),

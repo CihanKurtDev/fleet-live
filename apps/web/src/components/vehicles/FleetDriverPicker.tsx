@@ -92,7 +92,7 @@ export const FleetDriverPicker = ({
                         <Input
                             ref={searchRef}
                             type="search"
-                            size="sm"
+                            size="md"
                             fullWidth
                             placeholder="Name oder Kennzeichen"
                             aria-label="Name oder Kennzeichen"
@@ -156,14 +156,14 @@ export const FleetDriverPicker = ({
                         </p>
                     )}
                     <div className={styles.footer}>
-                        <button
-                            type="button"
-                            className={styles.clear}
+                        <Button
+                            variant="ghost"
+                            size="md"
                             disabled={draft.length === 0}
                             onClick={() => setDraft([])}
                         >
                             Auswahl aufheben
-                        </button>
+                        </Button>
                         {searching && !searchPending && pageCount > 1 && (
                             <div className={styles.pager}>
                                 <Button
@@ -194,7 +194,7 @@ export const FleetDriverPicker = ({
                             <Button
                                 type="button"
                                 variant="secondary"
-                                size="sm"
+                                size="md"
                                 onClick={closeModal}
                             >
                                 Abbrechen
@@ -202,7 +202,7 @@ export const FleetDriverPicker = ({
                             <Button
                                 type="button"
                                 variant="primary"
-                                size="sm"
+                                size="md"
                                 onClick={apply}
                             >
                                 Übernehmen

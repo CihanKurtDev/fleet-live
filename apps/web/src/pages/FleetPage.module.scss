@@ -21,6 +21,10 @@
 }
 
 .toolbar {
+    /* The shared filter bar sits inline here, not at the top of a list panel. */
+    --filter-group-pad-x: 0;
+    --filter-group-pad-bottom: 0;
+
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -38,7 +42,6 @@
 .search {
     width: 180px;
     max-width: 100%;
-    height: 28px;
 }
 
 .hits {
@@ -86,14 +89,16 @@
 }
 
 .frameAll {
-    height: 28px;
+    flex: none;
+    height: var(--control-sm);
     padding: 0 10px;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg);
     color: var(--text-h);
     font: inherit;
     font-size: 13px;
+    white-space: nowrap;
     cursor: pointer;
 
     &:disabled {
@@ -155,9 +160,33 @@
 .meta {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
     margin-left: auto;
+}
+
+/*
+ * Wide desktop: one row; the live line gives way (ellipsis) first. Narrower
+ * windows put the live line and „Alle Fahrzeuge anzeigen“ on a second row on
+ * purpose, so the live state never shrinks to nothing (F05).
+ */
+@media (min-width: 1400px) {
+    /* Wraps only when even the shortened live line no longer fits. */
+    .toolbar {
+        gap: 8px;
+    }
+
+    /* Search, driver filter and chips keep their size; only the live line shrinks. */
+    .toolbar > :not(.meta) {
+        flex: none;
+    }
+
+    .meta {
+        flex: 1 1 0;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        min-width: min-content;
+    }
 }
 
 .count,
@@ -217,7 +246,7 @@
 }
 
 .error {
-    color: #dc2626;
+    color: var(--danger);
 }
 
 .mapArea {
@@ -238,7 +267,7 @@
     padding: 8px 12px;
 
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius);
     background: var(--bg);
     color: var(--text);
     font-size: 13px;
@@ -301,11 +330,6 @@
     .search {
         flex: 1 1 150px;
         width: auto;
-        height: 36px;
-    }
-
-    .toolbar :global(button) {
-        min-height: 36px;
     }
 
     .meta {
@@ -319,7 +343,5 @@
         min-height: 300px;
     }
 
-    .frameAll {
-        min-height: 36px;
-    }
+
 }
