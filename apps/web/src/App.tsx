@@ -1,4 +1,4 @@
-import { Outlet, ScrollRestoration } from "react-router";
+import { Outlet, ScrollRestoration, useLocation } from "react-router";
 import { AuthProvider } from "./context/AuthProvider";
 import { VehiclesProvider } from "./context/VehiclesProvider";
 import { AppHeader, HeaderLiveStatus } from "./components/AppHeader";
@@ -44,10 +44,13 @@ function AuthedShell() {
 }
 
 function GuestShell() {
+    // The landing page brings its own header.
+    const isLanding = useLocation().pathname === "/";
+
     return (
         <>
             <SkipLink />
-            <AppHeader />
+            {!isLanding && <AppHeader />}
             <main id="main" tabIndex={-1}>
                 <Outlet />
             </main>

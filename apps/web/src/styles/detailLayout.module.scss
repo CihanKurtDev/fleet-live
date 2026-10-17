@@ -24,36 +24,13 @@
     box-sizing: border-box;
     padding: 20px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--surface);
 }
-
-.now {
-    composes: panel;
-    padding: 16px 20px;
-}
-
-.panelHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-}
-
 .panelTitle {
     margin: 0;
-    font-size: 16px;
+    font-size: 20px;
 }
-
-.nowTitle {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text);
-}
-
 .facts {
     display: grid;
     grid-template-columns: repeat(
@@ -88,8 +65,7 @@
     }
 }
 
-.note,
-.empty {
+.note {
     margin: 0;
     color: var(--text);
     font-size: 13px;
@@ -103,8 +79,4 @@
             color: var(--accent);
         }
     }
-}
-
-.empty {
-    font-size: 14px;
 }

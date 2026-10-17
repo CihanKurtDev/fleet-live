@@ -12,7 +12,7 @@ import detail from "./driverDetail.module.scss";
 import styles from "./DriverWarningsPanel.module.scss";
 
 /** Rows per page: the panel keeps this height. */
-export const DRIVER_WARNINGS_PAGE_SIZE = 5;
+const DRIVER_WARNINGS_PAGE_SIZE = 5;
 
 interface DriverWarningsPanelProps {
     driverId: number;

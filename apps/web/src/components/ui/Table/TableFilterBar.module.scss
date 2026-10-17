@@ -37,7 +37,7 @@
 
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--code-bg);
 }
 
@@ -100,7 +100,7 @@
     padding: 0 5px;
     box-sizing: border-box;
 
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: var(--bg);
 
     font-size: 11px;

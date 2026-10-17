@@ -1,6 +1,6 @@
 .menu {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
     min-width: 0;
 }
@@ -8,7 +8,7 @@
 .identity {
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
     min-width: 0;
     min-height: var(--control-sm);

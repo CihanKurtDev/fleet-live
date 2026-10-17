@@ -75,6 +75,7 @@ const listResponse = (data: Vehicle[]): VehicleListResponse => ({
             idle: 20,
             offline: 3,
             in_depot: 7,
+            driving_unassigned: 0,
         },
     },
 });

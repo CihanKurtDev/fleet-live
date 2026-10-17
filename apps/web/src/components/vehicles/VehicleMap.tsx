@@ -10,9 +10,10 @@ import {
 } from "../../hooks/useLeafletFollowMap";
 import { useLatestRef } from "../../hooks/useLatestRef";
 import { useMarkerSlide } from "../../hooks/useMarkerSlide";
+import { themeColor } from "./leafletMap";
 import type { MapPoint } from "./mapGeometry";
 import {
-    VEHICLE_STATUS_COLORS,
+    vehicleStatusColor,
     vehicleStatusLabel,
 } from "./vehicleStatus";
 import styles from "./leafletMap.module.scss";
@@ -71,10 +72,12 @@ export const VehicleMap = ({
             return;
         }
 
+        // The selected trip is drawn in the yellow marking colour, the dot
+        // keeps the status colour.
         const line = L.polyline([], {
-            color: VEHICLE_STATUS_COLORS[statusRef.current],
-            weight: 4,
-            opacity: 0.85,
+            color: themeColor("--accent-fill", "#ffc24b"),
+            weight: 3,
+            opacity: 0.95,
             lineJoin: "round",
             lineCap: "round",
             smoothFactor: 0,
@@ -85,7 +88,7 @@ export const VehicleMap = ({
 
         themed.onThemeChange(() => {
             lineRef.current?.setStyle({
-                color: VEHICLE_STATUS_COLORS[statusRef.current],
+                color: themeColor("--accent-fill", "#ffc24b"),
             });
         });
 
@@ -100,7 +103,6 @@ export const VehicleMap = ({
 
     useEffect(() => {
         markerRef.current?.setTooltipContent(markerTooltip(label, status));
-        lineRef.current?.setStyle({ color: VEHICLE_STATUS_COLORS[status] });
     }, [label, status]);
 
     useEffect(() => {
@@ -157,7 +159,7 @@ export const VehicleMap = ({
             data-status={status}
             style={
                 {
-                    "--marker-fill": VEHICLE_STATUS_COLORS[status],
+                    "--marker-fill": vehicleStatusColor(status),
                 } as CSSProperties
             }
         >

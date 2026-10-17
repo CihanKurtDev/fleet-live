@@ -8,9 +8,12 @@ import { ImportPrompt } from "../components/auth/ImportPrompt";
 
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
 import { FirstSteps } from "../components/briefing/FirstSteps";
+import { LiveBand } from "../components/briefing/LiveBand";
+import { TodayPanel } from "../components/briefing/TodayPanel";
 import { PageTips } from "../components/help/PageTips";
 import { dueSoonLabel } from "../components/due/dueLabels";
 import { ExportButton } from "../components/export/ExportButton";
+import { buttonClass } from "../components/ui/Button/buttonClass";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { useAuth } from "../hooks/useAuth";
 import { useBriefing } from "../hooks/useBriefing";
@@ -93,6 +96,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
                     <>
                         <span className={styles.kpiLabel}>{tile.label}</span>
                         <span
+                            key={counts[tile.key]}
                             className={styles.kpiValue}
                         >
                             {formatCount(counts[tile.key])}
@@ -109,6 +113,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
                             key={tile.key}
                             className={`${styles.kpi} ${styles[`kpi${tile.tone[0].toUpperCase()}${tile.tone.slice(1)}`]}`}
                             to={tile.to}
+                            viewTransition
                         >
                             {body}
                         </Link>
@@ -184,9 +189,10 @@ const DueKpis = ({
                             toneClass ? `${styles.kpi} ${toneClass}` : styles.kpi
                         }
                         to={tile.to}
+                        viewTransition
                     >
                         <span className={styles.kpiLabel}>{tile.label}</span>
-                        <span className={styles.kpiValue}>
+                        <span key={tile.value} className={styles.kpiValue}>
                             {formatCount(tile.value)}
                         </span>
                         {tile.hint ? (
@@ -207,26 +213,40 @@ const BriefingBody = ({
     canWrite: boolean;
 }) => (
     <>
-        <header className={`${band.band} ${band.bleed} ${styles.header}`}>
-            <div className={styles.headGrid}>
-                <h1 className={`${styles.title} ${styles.headTitle}`}>
+        <LiveBand labelledBy="briefing-title">
+            <header className={styles.headGrid}>
+                <h1
+                    id="briefing-title"
+                    className={`${styles.title} ${styles.headTitle}`}
+                >
                     Schicht
                 </h1>
                 <p className={styles.subtitle}>
-                    {briefingDateLabel()} · {briefingNeed(data.counts.open)}
+                    {briefingDateLabel()} ·{" "}
+                    <span className={styles.need}>
+                        {briefingNeed(data.counts.open)}
+                    </span>
                 </p>
                 <FirstSteps className={styles.headSteps} />
-                {canWrite && (
-                    <div className={styles.headAction}>
-                        <ExportButton kind="period" />
-                    </div>
-                )}
+                <div className={styles.headAction}>
+                    <Link
+                        className={buttonClass("secondary", "sm")}
+                        to="/fleet"
+                        viewTransition
+                    >
+                        Karte öffnen
+                    </Link>
+                    {canWrite && <ExportButton kind="period" />}
+                </div>
+            </header>
+            <div className={styles.tiles}>
+                <Kpis counts={data.counts} />
+                <span className={styles.tileSeparator} aria-hidden="true" />
+                <DueKpis due={data.due} leadDays={data.due_lead_days} />
             </div>
-        </header>
+        </LiveBand>
         <ImportPrompt />
-        <Kpis counts={data.counts} />
-        <DueKpis due={data.due} leadDays={data.due_lead_days} />
-        <BriefingCharts history={data.history} />
+        <BriefingCharts history={data.history} lead={<TodayPanel />} />
         <PageTips page="briefing" />
     </>
 );

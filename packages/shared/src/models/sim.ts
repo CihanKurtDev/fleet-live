@@ -12,6 +12,19 @@ export type SimState = {
 
 export type SimPatch = z.infer<typeof simPatchSchema>;
 
+/**
+ * A road the simulator drives on, for drawing the network under the
+ * vehicles. `path` is an encoded polyline (precision 5, `decodePolyline`).
+ */
+export type SimRouteLine = {
+    id: string;
+    from: string;
+    to: string;
+    path: string;
+};
+
+export type SimRouteListResponse = { data: SimRouteLine[] };
+
 export function parseSimPatch(input: unknown): SimPatch {
     return simPatchSchema.parse(input);
 }

@@ -14,7 +14,7 @@
     min-height: 36px;
     box-sizing: border-box;
     padding: 6px 10px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--code-bg);
 }
 
@@ -58,8 +58,6 @@
     }
 }
 
-@media (prefers-color-scheme: dark) {
-    .tag[data-tone="warning"] {
-        background: color-mix(in srgb, var(--warning) 22%, var(--surface));
-    }
+:global(:root[data-theme="dark"]) .tag[data-tone="warning"] {
+    background: color-mix(in srgb, var(--warning) 22%, var(--surface));
 }

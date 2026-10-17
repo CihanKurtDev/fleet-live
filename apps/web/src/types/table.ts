@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type SortDirection = "asc" | "desc";
+type SortDirection = "asc" | "desc";
 
 export type SortConfig<T> = {
     key: keyof T;
@@ -67,7 +67,7 @@ export interface TableStateProps<RowType> {
     limit: number;
 }
 
-export interface TableSelectAll {
+interface TableSelectAll {
     checked: boolean;
     indeterminate: boolean;
     disabled?: boolean;

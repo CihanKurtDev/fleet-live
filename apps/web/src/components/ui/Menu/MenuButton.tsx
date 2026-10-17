@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import { usePresence } from "../../../hooks/usePresence";
 import { Button } from "../Button/Button";
 import styles from "./MenuButton.module.scss";
 
-export type MenuItem = {
+type MenuItem = {
     key: string;
     label: ReactNode;
     onSelect: () => void;
@@ -56,6 +57,7 @@ export const MenuButton = ({
     const menuRef = useRef<HTMLDivElement>(null);
     const menuId = useId();
     const isChoice = items.some((item) => item.checked !== undefined);
+    const presence = usePresence(open);
 
     useEffect(() => {
         if (!open) {
@@ -113,17 +115,22 @@ export const MenuButton = ({
             >
                 {label}
                 {caret && (
-                    <span className={styles.caret} aria-hidden="true">
+                    <span
+                        className={styles.caret}
+                        data-open={open || undefined}
+                        aria-hidden="true"
+                    >
                         ▾
                     </span>
                 )}
             </Button>
 
-            {open && (
+            {presence.mounted && (
                 <div
                     ref={menuRef}
                     id={menuId}
                     role="menu"
+                    data-closing={presence.closing || undefined}
                     aria-label={menuLabel}
                     className={
                         align === "start"

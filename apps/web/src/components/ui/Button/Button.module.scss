@@ -14,10 +14,12 @@
     user-select: none;
 
     transition:
-        background-color 120ms ease,
-        border-color 120ms ease,
-        color 120ms ease,
-        transform 120ms ease;
+        background-color var(--dur-1) var(--ease-out),
+        border-color var(--dur-1) var(--ease-out),
+        color var(--dur-1) var(--ease-out),
+        box-shadow var(--dur-2) var(--ease-out),
+        filter var(--dur-1) var(--ease-out),
+        transform var(--dur-2) var(--ease-spring);
 
     &:focus-visible {
         outline: var(--focus-width) solid var(--focus-ring);
@@ -25,7 +27,8 @@
     }
 
     &:active:not(:disabled) {
-        transform: translateY(1px);
+        transform: scale(0.97);
+        transition-duration: 60ms;
     }
 
     &:disabled {
@@ -35,18 +38,20 @@
 }
 
 .primary {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--on-accent);
+    font-weight: 600;
 
     &:hover:not(:disabled) {
-        filter: brightness(0.95);
+        filter: brightness(1.06);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-fill) 22%, transparent);
     }
 }
 
 .secondary {
     background: var(--surface);
     color: var(--text-h);
-    border-color: var(--border);
+    border-color: var(--border-strong);
 
     &:hover:not(:disabled) {
         background: var(--code-bg);

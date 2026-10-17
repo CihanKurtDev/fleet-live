@@ -23,7 +23,7 @@ main:focus {
   left: 8px;
   padding: 8px 14px;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 14px;
   font-weight: 600;

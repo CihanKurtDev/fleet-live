@@ -1,0 +1,107 @@
+@use "../../styles/motion";
+
+@include motion.keyframes;
+
+/* Live band on Schicht: the fleet behind title and tiles. */
+.band {
+    position: relative;
+    isolation: isolate;
+    flex-shrink: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-well);
+    text-align: left;
+}
+
+.canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    animation: fade-in var(--dur-4) var(--ease-out);
+}
+
+/* Darker on the left and at the bottom, so text and tiles stay readable. */
+.shade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--surface-well) 94%, transparent) 0%,
+            color-mix(in srgb, var(--surface-well) 70%, transparent) 36%,
+            color-mix(in srgb, var(--surface-well) 10%, transparent) 72%,
+            color-mix(in srgb, var(--surface-well) 30%, transparent) 100%
+        ),
+        linear-gradient(
+            0deg,
+            color-mix(in srgb, var(--surface-well) 90%, transparent) 0%,
+            transparent 55%
+        );
+}
+
+/* The whole map area opens the fleet map. */
+.mapLink {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: inherit;
+    cursor: pointer;
+}
+
+/* Text passes clicks through to the map link; controls take their own. */
+.content {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 18px 16px;
+    pointer-events: none;
+
+    :global(:is(a, button, summary, input, select, [role="button"])) {
+        pointer-events: auto;
+    }
+}
+
+.live {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+.liveDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: live-breathe 2.4s var(--ease-in-out) infinite;
+}
+
+@keyframes live-breathe {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent);
+    }
+
+    50% {
+        box-shadow: 0 0 0 4px transparent;
+    }
+}
+
+@media (max-width: 700px) {
+    .content {
+        padding: 12px;
+    }
+}

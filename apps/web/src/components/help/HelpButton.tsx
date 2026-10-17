@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useLocation } from "react-router";
 
+import { usePresence } from "../../hooks/usePresence";
 import { Button } from "../ui/Button/Button";
 import { helpForPath } from "./helpContent";
 import { HELP_DRAWER_ID, HelpDrawer } from "./HelpDrawer";
@@ -11,6 +12,7 @@ export const HelpButton = () => {
     const page = helpForPath(pathname);
     const [open, setOpen] = useState(false);
     const close = useCallback(() => setOpen(false), []);
+    const presence = usePresence(open);
 
     if (!page) {
         return null;
@@ -29,7 +31,13 @@ export const HelpButton = () => {
             >
                 ?
             </Button>
-            {open && <HelpDrawer page={page} onClose={close} />}
+            {presence.mounted && (
+                <HelpDrawer
+                    page={page}
+                    closing={presence.closing}
+                    onClose={close}
+                />
+            )}
         </>
     );
 };

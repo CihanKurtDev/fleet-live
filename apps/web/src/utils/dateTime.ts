@@ -140,3 +140,20 @@ export const formatEventTime = (value: string | null): string => {
         ? clockFormat.format(date)
         : dayMonthFormat.format(date);
 };
+
+/** Kurzer Zeitpunkt im Satz: heute `HH:MM`, sonst `TT.MM., HH:MM`. */
+export const formatShortStamp = (value: string | null): string => {
+    if (value === null) {
+        return "—";
+    }
+
+    const date = parseSqliteUtc(value);
+
+    if (!date) {
+        return "—";
+    }
+
+    return isSameDay(date, new Date())
+        ? clockFormat.format(date)
+        : `${dayMonthFormat.format(date)}, ${clockFormat.format(date)}`;
+};

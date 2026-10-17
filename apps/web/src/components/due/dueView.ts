@@ -8,9 +8,9 @@ import {
 import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
 
 /** How strongly a row asks for action. Drives the colour of its pill. */
-export type DueTone = "block" | "legal" | "internal" | "soon" | "missing";
+type DueTone = "block" | "legal" | "internal" | "soon" | "missing";
 
-export type DueGroupDef = {
+type DueGroupDef = {
     kind: DueKind;
     title: string;
 };
@@ -183,7 +183,7 @@ export function dueGroupEmpty(
 }
 
 /** Fixed heights in px of the overview parts. `DueBoard.module.scss` uses the same. */
-export const DUE_LIST_SIZES = { head: 40, row: 48, more: 40, calm: 40 };
+const DUE_LIST_SIZES = { head: 40, row: 48, more: 40, calm: 40 };
 
 /**
  * Rows per kind so the overview fills `height` without scrolling. Kinds without

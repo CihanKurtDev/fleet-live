@@ -148,31 +148,58 @@
 
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    background: #f4f4f4;
+    border-radius: var(--radius);
+    background: #e3e8ef;
 
     &[data-theme="dark"] {
-        background: #2b2b2b;
+        background: #0b0f16;
+    }
+
+    /*
+     * The Esri grey basemap, tinted into the app's asphalt blue and kept
+     * quiet: the vehicles are the brightest thing on the map.
+     */
+    :global(.fl-tiles-base) {
+        filter: sepia(0.25) hue-rotate(180deg) saturate(0.9) brightness(1.02);
+    }
+
+    :global(.fl-tiles-labels) {
+        opacity: 0.7;
+    }
+
+    :global(.fl-tiles-labels.fl-tiles-zooming) {
+        visibility: hidden;
+    }
+
+    /* Dark: leafletMap.ts sets a zoom-matched SVG filter on the base tiles. */
+    &[data-theme="dark"] :global(.fl-tiles-base) {
+        filter: none;
+    }
+
+    &[data-theme="dark"] :global(.fl-tiles-labels) {
+        filter: brightness(0.75) sepia(1) hue-rotate(185deg) saturate(0.5);
+        opacity: 0.5;
     }
 
     :global {
         .leaflet-control-zoom {
             margin: 12px 0 0 12px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--border-strong);
             border-radius: var(--radius);
             overflow: hidden;
             box-shadow: none;
         }
 
         .leaflet-control-zoom a {
-            width: 28px;
-            height: 28px;
-            line-height: 28px;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
 
-            background: var(--bg);
+            background: var(--surface);
             color: var(--text-h);
             border-bottom-color: var(--border);
             font-size: 16px;
+            transition: background-color var(--dur-1) var(--ease-out);
         }
 
         .leaflet-control-zoom a:hover {
@@ -181,20 +208,20 @@
         }
 
         .leaflet-bar a:first-child {
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
+            border-top-left-radius: var(--radius);
+            border-top-right-radius: var(--radius);
         }
 
         .leaflet-bar a:last-child {
-            border-bottom-left-radius: 6px;
-            border-bottom-right-radius: 6px;
+            border-bottom-left-radius: var(--radius);
+            border-bottom-right-radius: var(--radius);
         }
 
         .leaflet-control-attribution {
-            background: var(--bg);
-            color: var(--text);
+            background: color-mix(in srgb, var(--bg) 80%, transparent);
+            color: var(--text-muted);
             font-size: 10px;
-            font-family: inherit;
+            font-family: var(--mono);
             line-height: 1.4;
             padding: 2px 8px;
 
@@ -208,24 +235,29 @@
         }
 
         .leaflet-control-scale-line {
-            border-color: var(--border);
-            background: var(--bg);
-            color: var(--text);
-            font-family: inherit;
+            border-color: var(--text-muted);
+            background: transparent;
+            color: var(--text-muted);
+            font-family: var(--mono);
             font-size: 10px;
         }
 
         .leaflet-tooltip {
             padding: 4px 8px;
 
-            background: var(--bg);
+            background: var(--surface);
             color: var(--text-h);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius-sm);
             box-shadow: var(--shadow);
 
-            font-family: inherit;
+            font-family: var(--mono);
             font-size: 12px;
+        }
+
+        /* Zooming eases instead of snapping. */
+        .leaflet-zoom-anim .leaflet-zoom-animated {
+            transition-timing-function: var(--ease-out);
         }
 
         .leaflet-tooltip-top:before {
@@ -294,22 +326,40 @@
     cursor: crosshair;
 }
 
+/* Depot names in mono capitals, like the live band on Schicht. */
 :global(.leaflet-tooltip).depotLabel {
     padding: 1px 6px;
     border: 0;
     border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
     box-shadow: none;
     color: var(--text-h);
-    font-weight: 650;
-    font-size: 13px;
-    line-height: 1.2;
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    line-height: 1.3;
     white-space: nowrap;
     pointer-events: none;
 }
 
+/* A group or vehicle symbol on top of the name wins; the name steps back. */
+:global(.leaflet-tooltip).depotLabel[data-covered] {
+    opacity: 0 !important;
+}
+
 :global(.leaflet-tooltip).depotLabel::before {
     display: none;
+}
+
+/* The selected vehicle above the groups: same look as its canvas dot. */
+.selectedDot span {
+    display: block;
+    width: 11px;
+    height: 11px;
+    border: 3px solid var(--accent-fill);
+    border-radius: 50%;
 }
 
 .depotHandle {
@@ -317,7 +367,7 @@
     height: 14px;
     border: 2px solid var(--depot);
     border-radius: 50%;
-    background: #fff;
+    background: var(--surface);
     box-shadow: none;
     cursor: grab;
 }
@@ -327,6 +377,7 @@
     border: none;
 }
 
+/* A group is a thin ring split by status around its count, not a bubble. */
 .clusterRing {
     display: flex;
     align-items: center;
@@ -335,12 +386,14 @@
     width: 100%;
     height: 100%;
     border-radius: 999px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 35%);
+    transition: transform var(--dur-2) var(--ease-spring);
+
+    &:hover {
+        transform: scale(1.08);
+    }
 
     &[data-problem="true"] {
-        box-shadow:
-            0 0 0 3px #b91c1c,
-            0 1px 3px rgb(0 0 0 / 35%);
+        box-shadow: 0 0 0 2px var(--danger);
     }
 }
 
@@ -348,12 +401,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 68%;
-    height: 68%;
+    width: calc(100% - 5px);
+    height: calc(100% - 5px);
     border-radius: 999px;
-    background: #1f4b73;
-    color: #fff;
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
+    color: var(--text-h);
+    font-family: var(--mono);
     font-size: 11px;
-    font-weight: 650;
+    font-weight: 600;
     line-height: 1;
 }

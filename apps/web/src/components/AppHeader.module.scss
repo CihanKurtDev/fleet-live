@@ -1,3 +1,7 @@
+@use "../styles/motion";
+
+@include motion.keyframes;
+
 .header {
     position: sticky;
     top: 0;
@@ -9,11 +13,23 @@
     overflow-y: hidden;
     scrollbar-gutter: stable;
     border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    background: color-mix(in srgb, var(--header-bg) 94%, transparent);
     backdrop-filter: blur(12px);
     text-align: left;
+    /* Stays in place while the page under it changes (index.css). */
+    view-transition-name: app-header;
 }
 
+/*
+ * Logo, menu, buttons and names share one text baseline. The fonts differ
+ * (condensed logo, Plex Sans, Plex Mono), so centring the boxes would leave
+ * the letters a few pixels apart.
+ */
+/*
+ * Everything in the bar is centred: the logo caps are far taller than the
+ * 14 px text, so one shared baseline would lift the logo off the middle.
+ * The controls are all 34 px boxes with their text centred inside.
+ */
 .bar {
     display: flex;
     align-items: center;
@@ -33,6 +49,11 @@
     min-width: 0;
 }
 
+/* Header buttons use the menu text size, so their boxes line up as well. */
+.end :global(button) {
+    font-size: 14px;
+}
+
 .end {
     display: flex;
     align-items: center;
@@ -45,15 +66,18 @@
 .brand {
     display: inline-flex;
     align-items: center;
-    height: 32px;
 
     font-family: var(--heading);
-    font-size: 18px;
-    font-weight: 500;
+    font-size: 24px;
+    font-weight: 900;
     line-height: 24px;
-    letter-spacing: -0.3px;
+    /* Caps only: the ink sits high in the line box; this centres it. */
+    padding-top: 2px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
     color: var(--text-h);
     text-decoration: none;
+    transition: color var(--dur-1) var(--ease-out);
 }
 
 .brand:hover {
@@ -69,26 +93,49 @@
 }
 
 .nav a {
+    position: relative;
     display: inline-flex;
     align-items: center;
     height: var(--control-sm);
-    padding: 0 10px;
+    padding: 0 12px;
     border-radius: var(--radius-sm);
     gap: 6px;
 
     font-size: 14px;
+    font-weight: 500;
     line-height: 24px;
     color: var(--text);
     text-decoration: none;
-    transition:
-        background-color 120ms ease,
-        color 120ms ease;
+    transition: color var(--dur-1) var(--ease-out);
+
+    /* The current page is marked like a lane line under its name. */
+    &::after {
+        content: "";
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        bottom: -11px;
+        height: 2px;
+        background: var(--accent-fill);
+        transform: scaleX(0);
+        transition: transform var(--dur-3) var(--ease-out);
+    }
 }
 
-.nav a:hover,
+.nav a:hover {
+    color: var(--text-h);
+
+    &::after {
+        transform: scaleX(0.35);
+    }
+}
+
 .nav a.active {
-    color: var(--accent);
-    background: var(--accent-bg);
+    color: var(--text-h);
+
+    &::after {
+        transform: scaleX(1);
+    }
 }
 
 .nav a:focus-visible {
@@ -104,14 +151,23 @@
     height: 18px;
     padding: 0 5px;
 
-    border-radius: 999px;
-    background: var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--accent-fill);
     color: var(--on-accent);
 
+    font-family: var(--mono);
     font-size: 11px;
-    font-weight: 650;
+    font-weight: 600;
     line-height: 1;
     font-variant-numeric: tabular-nums;
+    animation: badge-pop var(--dur-3) var(--ease-spring);
+}
+
+@keyframes badge-pop {
+    from {
+        transform: scale(0.6);
+        opacity: 0;
+    }
 }
 
 @media (min-width: 701px) {
@@ -162,11 +218,16 @@
     width: var(--control-sm);
     height: var(--control-sm);
     padding: 0;
-    border: 1px solid var(--accent-border);
-    border-radius: 8px;
-    background: var(--accent-bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
     color: var(--text-h);
     cursor: pointer;
+    transition: transform var(--dur-2) var(--ease-spring);
+
+    &:active {
+        transform: scale(0.94);
+    }
 
     &:focus-visible {
         outline: var(--focus-width) solid var(--focus-ring);
@@ -182,9 +243,11 @@
     white-space: nowrap;
 
     font-family: var(--heading);
-    font-size: 16px;
-    font-weight: 650;
+    font-size: 22px;
+    font-weight: 800;
     line-height: 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
     color: var(--text-h);
 }
 
@@ -203,6 +266,19 @@
     height: 8px;
     border-radius: 50%;
     background: currentColor;
+    animation: live-breathe 2.4s var(--ease-in-out) infinite;
+}
+
+/* The live dot breathes slowly, like a status LED. */
+@keyframes live-breathe {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+    }
+
+    50% {
+        box-shadow: 0 0 0 4px transparent;
+    }
 }
 
 /* Above Leaflet panes and controls (z-index up to 1000) on /fleet. */
@@ -217,7 +293,12 @@
 
 .backdrop {
     right: 0;
-    background: rgb(0 0 0 / 45%);
+    background: rgb(8 11 16 / 55%);
+    animation: fade-in var(--dur-3) var(--ease-out);
+
+    &[data-closing] {
+        animation: fade-out var(--dur-2) var(--ease-in-out) forwards;
+    }
 }
 
 .drawer {
@@ -228,10 +309,16 @@
     width: min(300px, calc(100vw - 48px));
     overflow-y: auto;
     overscroll-behavior: contain;
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--border-strong);
     background: var(--surface);
     box-shadow: 12px 0 30px rgb(0 0 0 / 35%);
     text-align: left;
+    animation: slide-in-left var(--dur-3) var(--ease-out);
+
+    &[data-closing] {
+        animation: slide-out-left var(--dur-2) var(--ease-in-out) forwards;
+        pointer-events: none;
+    }
 }
 
 .drawerHead {
@@ -244,9 +331,11 @@
 
 .drawerBrand {
     font-family: var(--heading);
-    font-size: 16px;
-    font-weight: 650;
+    font-size: 22px;
+    font-weight: 900;
     line-height: 22px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
     color: var(--text-h);
 }
 
@@ -275,12 +364,18 @@
         line-height: 20px;
         color: var(--text-h);
         text-decoration: none;
+        transition:
+            background-color var(--dur-1) var(--ease-out),
+            box-shadow var(--dur-2) var(--ease-out);
     }
 
-    a:hover,
+    a:hover {
+        background: var(--code-bg);
+    }
+
     a.active {
-        color: var(--accent);
         background: var(--accent-bg);
+        box-shadow: inset 3px 0 0 var(--accent-fill);
     }
 
     a:focus-visible {

@@ -11,7 +11,7 @@ import { formatIsoDate } from "../../utils/dateTime";
 
 export type DriverFormField = "phone" | "licence-expires" | "licence-checked";
 
-export type Hint = {
+type Hint = {
     key: string;
     /** The edit-form field the hint asks for. */
     field: DriverFormField;

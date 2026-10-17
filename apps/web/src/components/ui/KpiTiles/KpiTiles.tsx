@@ -85,7 +85,9 @@ export const KpiTiles = ({
                     onClick={tile.onToggle}
                 >
                     <span className={styles.label}>{tile.label}</span>
-                    <span className={styles.value}>{value}</span>
+                    <span key={value} className={styles.value}>
+                        {value}
+                    </span>
                     {/* Always one hint line, so every tile on every list page has one height. */}
                     <span
                         className={styles.hint}

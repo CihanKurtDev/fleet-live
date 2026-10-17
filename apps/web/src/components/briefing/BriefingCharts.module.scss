@@ -12,15 +12,42 @@
     margin-top: 10px;
     padding: 8px 12px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--surface);
     color: var(--text-h);
     font-size: 13px;
     text-align: left;
+    transition: border-color var(--dur-2) var(--ease-out);
+
+    &:hover {
+        border-color: var(--border-strong);
+    }
 
     summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         cursor: pointer;
         font-weight: 600;
+        list-style: none;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        /* A small yellow arrow that turns when the table opens. */
+        &::before {
+            content: "";
+            width: 0;
+            height: 0;
+            border-block: 5px solid transparent;
+            border-left: 7px solid var(--accent-fill);
+            transition: transform var(--dur-3) var(--ease-out);
+        }
+    }
+
+    &[open] summary::before {
+        transform: rotate(90deg);
     }
 }
 
@@ -90,7 +117,6 @@
         min-height: auto;
     }
 
-    .hero,
     .card {
         min-height: 0;
         height: auto;
@@ -118,13 +144,15 @@
     }
 }
 
-.hero {
-    grid-column: 1 / -1;
-    min-height: 0;
+/* The list left over both rows, the two charts right. */
+.withLead {
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+}
 
-    .lead {
-        max-width: none;
-    }
+.leadSlot {
+    grid-row: 1 / -1;
+    min-width: 0;
+    min-height: 0;
 }
 
 .card {
@@ -135,10 +163,16 @@
     height: 100%;
     padding: 12px 16px 14px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--surface);
     text-align: left;
     box-sizing: border-box;
+
+    /* Axes in mono, like every other label. */
+    :global(.recharts-cartesian-axis-tick text) {
+        font-family: var(--mono);
+        font-size: 11px;
+    }
 }
 
 .kicker {
@@ -154,9 +188,9 @@
 
 .title {
     flex-shrink: 0;
-    margin: 6px 0 4px;
-    font-size: 16px;
-    font-weight: 650;
+    margin: 6px 0 6px;
+    font-size: 22px;
+    line-height: 1;
     color: var(--text-h);
 }
 
@@ -233,7 +267,7 @@
     min-width: 180px;
     padding: 10px 12px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--bg);
     box-shadow: var(--shadow);
     text-align: left;
@@ -279,8 +313,7 @@
 }
 
 @media (max-width: 700px) {
-    .card,
-    .hero {
+    .card {
         height: auto;
         min-height: 0;
         overflow: hidden;

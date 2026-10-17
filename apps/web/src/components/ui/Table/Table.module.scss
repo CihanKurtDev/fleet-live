@@ -89,6 +89,9 @@
 
 .tableRowInteractive {
     cursor: pointer;
+    transition:
+        background-color var(--dur-1) var(--ease-out),
+        box-shadow var(--dur-2) var(--ease-out);
 }
 
 .tableRowInteractive:hover {
@@ -104,17 +107,8 @@
 .tableRowSelected,
 .tableRowSelected:hover {
     background-color: var(--accent-bg);
+    box-shadow: inset 3px 0 0 var(--accent-fill);
 }
-
-.tableRowProblem {
-    background-color: color-mix(in srgb, var(--warning) 12%, var(--surface));
-    box-shadow: inset 3px 0 0 var(--warning);
-}
-
-.tableRowProblem:hover {
-    background-color: color-mix(in srgb, var(--warning) 18%, var(--surface));
-}
-
 .tableRowDeferred {
     background-color: color-mix(in srgb, var(--code-bg) 70%, var(--bg));
     box-shadow: inset 3px 0 0 var(--border);

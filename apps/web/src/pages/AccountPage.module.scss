@@ -16,8 +16,8 @@
 
 .title {
     margin: 0;
-    font-size: 24px;
-    font-weight: 650;
+    font-size: 34px;
+    font-weight: 800;
     line-height: 1.1;
     color: var(--text-h);
 }
@@ -113,7 +113,7 @@
     min-width: 0;
     padding: 18px 20px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--surface);
 }
 
@@ -127,8 +127,8 @@
 
 .panelTitle {
     margin: 0;
-    font-size: 16px;
-    font-weight: 650;
+    font-size: 20px;
+    font-weight: 800;
     letter-spacing: -0.2px;
     color: var(--text-h);
 }

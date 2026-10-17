@@ -46,6 +46,7 @@ export const DriversPage = () => {
                 }
                 onSelectDriver={(driver) => {
                     navigate(`/drivers/${driver.id}`, {
+                        viewTransition: true,
                         state: {
                             from: `${location.pathname}${location.search}`,
                         },
@@ -64,6 +65,7 @@ export const DriversPage = () => {
                         refetchLists();
                         setIsCreateOpen(false);
                         navigate(`/drivers/${created.id}`, {
+                            viewTransition: true,
                             state: {
                                 from: `${location.pathname}${location.search}`,
                             },

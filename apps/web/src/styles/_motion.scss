@@ -1,0 +1,83 @@
+// Shared motion for CSS modules. Keyframe names in a module are local, so a
+// module that animates includes them once: `@include motion.keyframes;`.
+// Durations and curves are the --dur-* / --ease-* tokens in index.css; reduced
+// motion shortens them there, so nothing here needs its own media query.
+
+@mixin keyframes {
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+        }
+    }
+
+    @keyframes fade-out {
+        to {
+            opacity: 0;
+        }
+    }
+
+    @keyframes rise-in {
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+    }
+
+    @keyframes drop-in {
+        from {
+            opacity: 0;
+            transform: translateY(-6px) scale(0.98);
+        }
+    }
+
+    @keyframes pop-in {
+        from {
+            opacity: 0;
+            transform: translateY(10px) scale(0.97);
+        }
+    }
+
+    @keyframes pop-out {
+        to {
+            opacity: 0;
+            transform: translateY(6px) scale(0.98);
+        }
+    }
+
+    @keyframes slide-in-right {
+        from {
+            transform: translateX(100%);
+        }
+    }
+
+    @keyframes slide-out-right {
+        to {
+            transform: translateX(100%);
+        }
+    }
+
+    @keyframes slide-in-left {
+        from {
+            transform: translateX(-100%);
+        }
+    }
+
+    @keyframes slide-out-left {
+        to {
+            transform: translateX(-100%);
+        }
+    }
+
+    @keyframes slide-up {
+        from {
+            transform: translateY(100%);
+        }
+    }
+
+    // A live number that just changed glows in the accent for a moment.
+    @keyframes value-flash {
+        from {
+            color: var(--accent);
+        }
+    }
+}

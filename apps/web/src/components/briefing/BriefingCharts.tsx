@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { BriefingHistoryMonth } from "@fleet-live/shared";
 
 import {
@@ -9,7 +10,6 @@ import {
 } from "./briefingChartSeries";
 import { BriefingKmChart } from "./BriefingKmChart";
 import { BriefingRateChart } from "./BriefingRateChart";
-import { BriefingTypeChart } from "./BriefingTypeChart";
 import { formatCount } from "../../utils/formatCount";
 import styles from "./BriefingCharts.module.scss";
 
@@ -67,8 +67,14 @@ const toneClass = (
 
 export const BriefingCharts = ({
     history,
+    lead,
 }: {
     history: BriefingHistoryMonth[];
+    /**
+     * Left over both chart rows, e.g. the "Heute dran" list. The monthly
+     * type figures that once had their own chart are in the month table.
+     */
+    lead: ReactNode;
 }) => {
     const rateSeries = toRateSeries(history);
     const typeSeries = toTypeSeries(history);
@@ -92,8 +98,8 @@ export const BriefingCharts = ({
 
     return (
         <>
-            <div className={styles.section}>
-                <BriefingTypeChart series={typeSeries} year={year} />
+            <div className={`${styles.section} ${styles.withLead}`}>
+                <div className={styles.leadSlot}>{lead}</div>
                 <BriefingRateChart
                     series={rateSeries}
                     baseline={baseline}

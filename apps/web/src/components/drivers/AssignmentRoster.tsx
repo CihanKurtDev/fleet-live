@@ -8,7 +8,7 @@ import { SelectionBar } from "../ui/ListPage/ListPage";
 import { type AssignmentStatusLine } from "./assignmentMeta";
 import styles from "./assignment.module.scss";
 
-export type AssignmentRosterRow = {
+type AssignmentRosterRow = {
     id: number;
     title: ReactNode;
     avatarName: string;
@@ -19,7 +19,7 @@ export type AssignmentRosterRow = {
     removeLocked?: boolean;
 };
 
-export type RosterSelection = ReturnType<typeof useSelectionMode<number>>;
+type RosterSelection = ReturnType<typeof useSelectionMode<number>>;
 
 type AssignmentRosterProps = {
     items: AssignmentRosterRow[];

@@ -195,7 +195,12 @@ export {
     parseTotpCodeInput,
 } from "./models/auth";
 
-export type { SimPatch, SimState } from "./models/sim";
+export type {
+    SimPatch,
+    SimRouteLine,
+    SimRouteListResponse,
+    SimState,
+} from "./models/sim";
 
 export { parseSimPatch, simPatchSchema } from "./models/sim";
 
@@ -438,3 +443,16 @@ export {
     serializeFleetDriversQuery,
     serializeFleetPositionsQuery,
 } from "./models/fleet";
+export type {
+    TodayCounts,
+    TodayItem,
+    TodayKind,
+    TodayQuery,
+    TodayResponse,
+} from "./models/today";
+export {
+    parseTodayQuery,
+    TODAY_KINDS,
+    TODAY_LIMIT_DEFAULT,
+    TODAY_LIMIT_MAX,
+} from "./models/today";

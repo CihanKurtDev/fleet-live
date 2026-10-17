@@ -7,7 +7,7 @@ import type {
     TableStateProps,
 } from "../types/table";
 
-export type ServerListResult<RowType> = {
+type ServerListResult<RowType> = {
     data: RowType[];
     isLoading: boolean;
     isFetching: boolean;
@@ -16,7 +16,7 @@ export type ServerListResult<RowType> = {
     total: number;
 };
 
-export type ServerTableQuery<RowType> = {
+type ServerTableQuery<RowType> = {
     tableState: TableStateProps<RowType>;
     setSearch?: (search: string) => void;
     setFilter?: (filterId: string | null) => void;

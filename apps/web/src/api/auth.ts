@@ -8,7 +8,7 @@ import type {
 } from "@fleet-live/shared";
 import { request } from "./client";
 
-export type MailResult = {
+type MailResult = {
     email?: string;
     delivery: MailDelivery;
     message: string;
@@ -154,7 +154,7 @@ export const updateSecurity = (input: {
         body: input,
     });
 
-export type TotpSetup = {
+type TotpSetup = {
     secret: string;
     otpauth_url: string;
     setup_token?: string;

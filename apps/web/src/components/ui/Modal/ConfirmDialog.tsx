@@ -3,7 +3,7 @@ import { Button } from "../Button/Button";
 import { Modal } from "./Modal";
 import styles from "./Modal.module.scss";
 
-export type ConfirmItem = {
+type ConfirmItem = {
     key: string | number;
     /** Bold name, e.g. the plate. */
     name: string;

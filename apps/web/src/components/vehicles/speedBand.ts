@@ -10,7 +10,7 @@ export const SPEED_BAND_COLORS: Record<SpeedBand, string> = {
     critical: "var(--danger)",
 };
 
-export const SPEED_BAND_TITLES: Record<SpeedBand, string> = {
+const SPEED_BAND_TITLES: Record<SpeedBand, string> = {
     normal: "Tempo im Rahmen",
     warning: "Über dem Simulationslimit (Stadt oder Autobahn). Warnung noch nicht offen.",
     critical: "Tempo-Warnung läuft. Erledigen ändert die Farbe nicht.",

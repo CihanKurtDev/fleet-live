@@ -2,7 +2,7 @@ import type { UserRole } from "@fleet-live/shared";
 
 export type TipPageId = "briefing" | "fristen";
 
-export type PageTip = {
+type PageTip = {
     /** Matches a `data-tip` attribute on the page. */
     target: string;
     title: string;
@@ -10,7 +10,7 @@ export type PageTip = {
     role?: UserRole;
 };
 
-export const PAGE_TIPS: Record<TipPageId, PageTip[]> = {
+const PAGE_TIPS: Record<TipPageId, PageTip[]> = {
     briefing: [
         {
             target: "briefing-kpis",

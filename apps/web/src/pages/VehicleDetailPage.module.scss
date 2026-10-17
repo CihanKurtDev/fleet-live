@@ -20,19 +20,24 @@
     }
 }
 
+/* Back link, name, status, summary and actions share one text baseline. */
 .header {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: baseline;
     gap: 8px 14px;
     flex-shrink: 0;
     min-width: 0;
+
+    > * {
+        align-self: baseline;
+    }
 }
 
 .title {
     margin: 0;
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 34px;
+    font-weight: 800;
     line-height: 1.2;
     letter-spacing: -0.3px;
 }
@@ -79,7 +84,7 @@
     box-sizing: border-box;
     padding: 14px 16px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--surface);
 }
 
@@ -93,7 +98,7 @@
 
 .panelTitle {
     margin: 0;
-    font-size: 16px;
+    font-size: 20px;
 }
 
 .count {

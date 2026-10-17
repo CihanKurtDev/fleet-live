@@ -5,7 +5,7 @@ import { useDebouncedValue } from "./useDebouncedValue";
 
 type SortDir = "asc" | "desc";
 
-export type ListQueryBase = {
+type ListQueryBase = {
     page: number;
     limit: number;
     dir: SortDir;
@@ -17,12 +17,12 @@ export type ListQueryPatch<TQuery> = {
     [K in keyof TQuery]?: TQuery[K] | null;
 };
 
-export type ListQueryPatchOptions = {
+type ListQueryPatchOptions = {
     replace?: boolean;
     resetPage?: boolean;
 };
 
-export type ListQueryDefaultSort<TSort extends string = string> = {
+type ListQueryDefaultSort<TSort extends string = string> = {
     key: TSort;
     dir: SortDir;
     /**

@@ -17,6 +17,7 @@ import {
     HIGHWAY_LIMIT_KMH,
     SIM_OVERSPEED_EVERY,
     SIM_ROUTES,
+    TIME_SCALE,
     haversineMeters,
     resetSimProgress,
     seedSimProgress,
@@ -1436,6 +1437,24 @@ describe("GET /api/sim", () => {
         assert.equal(response.body.available, false);
     });
 
+    it("lists the simulator roads as encoded polylines", async () => {
+        const response = await api.get("/api/sim/routes");
+
+        assert.equal(response.status, 200);
+        assert.ok(response.body.data.length > 0);
+        const route = response.body.data[0];
+        assert.equal(typeof route.id, "string");
+        assert.equal(typeof route.from, "string");
+        assert.equal(typeof route.to, "string");
+        assert.ok(decodePolyline(route.path).length > 1);
+    });
+
+    it("keeps the simulator roads behind the session", async () => {
+        const response = await request(app).get("/api/sim/routes");
+
+        assert.equal(response.status, 401);
+    });
+
     it("rejects enabling the ticker when TELEMETRY_TICK_MS is 0", async () => {
         const response = await api
             .patch("/api/sim")
@@ -1726,7 +1745,8 @@ describe("telemetry route simulation", () => {
         let farthest = 0;
         let lastDistance = 0;
 
-        for (let index = 0; index < 80; index += 1) {
+        // 80 ticks at the old time-lapse of 20: the same road distance.
+        for (let index = 0; index < (80 * 20) / TIME_SCALE; index += 1) {
             const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
             assert.ok(patch);
             lastDistance = haversineMeters(origin, {
@@ -2189,7 +2209,8 @@ describe("GET /api/vehicles/:id/trips/latest", () => {
         });
         seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.2);
 
-        const ticks = 60;
+        // 60 ticks at the old time-lapse of 20: the same road distance.
+        const ticks = (60 * 20) / TIME_SCALE;
         for (let index = 0; index < ticks; index += 1) {
             TelemetryModel.tickDrivingVehicles([vehicle.id]);
         }

@@ -15,12 +15,26 @@ const MONTH_LABELS = [
     "Dez",
 ] as const;
 
+/** A colour token from index.css; recharts needs a real colour string. */
+const token = (name: string, fallback: string) =>
+    (typeof document === "undefined"
+        ? ""
+        : getComputedStyle(document.documentElement)
+              .getPropertyValue(name)
+              .trim()) || fallback;
+
+/**
+ * Series colours follow the status tokens, so the charts match the tags in
+ * both colour schemes. Getters read the token when a chart renders.
+ */
 export const CHART_SERIES = {
-    speeding: "#dc2626",
-    lowFuel: "#d97706",
-    offline: "#64748b",
-    km: "#0f766e",
-} as const;
+    get speeding() {
+        return token("--danger", "#dc2626");
+    },
+    get km() {
+        return token("--info", "#0f766e");
+    },
+};
 
 const pct = (numerator: number, denominator: number) => {
     if (denominator <= 0) {

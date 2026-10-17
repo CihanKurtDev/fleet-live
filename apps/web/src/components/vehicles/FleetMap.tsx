@@ -11,8 +11,17 @@ import "leaflet/dist/leaflet.css";
 import { useLatestRef } from "../../hooks/useLatestRef";
 import { formatCount } from "../../utils/formatCount";
 import type { DepotDraft } from "./depotDraft";
-import { createThemedMap, prefersDark } from "./leafletMap";
+import { listSimRoutes } from "../../api/sim";
 import {
+    addRouteLines,
+    depotColor,
+    depotStyle,
+    markerStroke,
+    markerStyle,
+} from "./fleetMapStyle";
+import { createThemedMap, themeColor } from "./leafletMap";
+import {
+    CLUSTER_INDEX_DEBOUNCE_MS,
     FLEET_CLUSTER_FIT_PADDING_PX,
     FLEET_CLUSTER_MAX_ZOOM,
     clusterMemberIds,
@@ -25,19 +34,40 @@ import {
 import { useClusterIndex } from "./useClusterIndex";
 import {
     MAP_STATUS_LEGEND,
-    VEHICLE_STATUS_COLORS,
+    vehicleStatusColor,
     vehicleStatusLabel,
 } from "./vehicleStatus";
 import styles from "./leafletMap.module.scss";
 
-/** Depot circles; `--depot` in index.css is the same colour for the list. */
-const DEPOT_COLOR = "#5b7c99";
 
 const GERMANY_CENTER: L.LatLngTuple = [51.16, 10.45];
+/** Pane for depot names: above the rings, below the vehicle markers. */
+const DEPOT_LABEL_PANE = "fl-depot-labels";
+const METERS_PER_DEGREE_LAT = 111_320;
+/** Largest group symbol in px (`clusterIconSize`); depot names keep clear of it. */
+const CLUSTER_ICON_MAX = 48;
 const GERMANY_ZOOM = 6;
+/*
+ * Not `usePresence.skipMotion`: that also skips when matchMedia is missing.
+ */
+const prefersReducedMotion = () =>
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const BOUNDS_DEBOUNCE_MS = 200;
 /** Nur anzeigen, wenn der Ausschnitt die Liste vollständig fasst. */
 const MAP_VEHICLE_LIST_LIMIT = 100;
+
+type Box = { left: number; right: number; top: number; bottom: number };
+
+/** A dot or group symbol travelling from where it is to its new place. */
+type Glide = {
+    from: L.LatLng;
+    to: L.LatLng;
+    start: number;
+    duration: number;
+};
+
+type Glides = Map<L.Marker | L.CircleMarker, Glide>;
 
 type MarkerRecord = {
     marker: L.CircleMarker;
@@ -45,14 +75,82 @@ type MarkerRecord = {
     selected: boolean;
     latitude: number;
     longitude: number;
+    /** When the last report arrived; the next glide takes that long. */
+    reportedAt: number;
 };
+
+/*
+ * A dot glides to each new report over the time the previous report took,
+ * so it arrives about when the next one comes in and keeps moving instead of
+ * jumping. A longer gap than the limit is not motion any more: it jumps.
+ * Group symbols move when the index is rebuilt (every few seconds while
+ * vehicles drive), so they get a longer limit.
+ */
+const GLIDE_MIN_MS = 250;
+const DOT_GLIDE = { ms: 3_000, px: 400 };
+/*
+ * A rebuilt index can hand a group id to a group somewhere else; a symbol
+ * that would travel further than its own size is that other group and
+ * jumps, so it never flies across the map under the pointer.
+ */
+const CLUSTER_GLIDE = { ms: CLUSTER_INDEX_DEBOUNCE_MS + 2_000, px: 48 };
+/**
+ * A group with vehicles on the road is framed with this much room around each
+ * of them: the simulator runs in time-lapse and covers well over 100 m per
+ * second, so a tight frame would be empty soon after the flight ends.
+ */
+const DRIVING_FRAME_MARGIN_M = 500;
+/** Same reach as the canvas renderer's `tolerance`. */
+const VEHICLE_HIT_TOLERANCE_PX = 6;
 
 const roundCoord = (value: number) => Math.round(value * 10_000) / 10_000;
 
 type ClusterMarkerRecord = {
     marker: L.Marker;
     signature: string;
+    latitude: number;
+    longitude: number;
+    reportedAt: number;
 };
+
+/**
+ * Moves a layer to `to`: a glide over `gap` ms while the hop is on screen,
+ * otherwise (reduced motion, a long gap, off screen) at once.
+ */
+function moveLayer(
+    map: L.Map,
+    glides: Glides,
+    layer: L.Marker | L.CircleMarker,
+    to: L.LatLng,
+    gap: number,
+    limit: { ms: number; px: number },
+    run: () => void,
+) {
+    const from = layer.getLatLng();
+    const seen = map.getBounds().pad(0.5);
+    const hop = map
+        .latLngToContainerPoint(from)
+        .distanceTo(map.latLngToContainerPoint(to));
+
+    if (
+        prefersReducedMotion() ||
+        gap > limit.ms ||
+        hop > limit.px ||
+        (!seen.contains(from) && !seen.contains(to))
+    ) {
+        glides.delete(layer);
+        layer.setLatLng(to);
+        return;
+    }
+
+    glides.set(layer, {
+        from,
+        to,
+        start: performance.now(),
+        duration: Math.max(GLIDE_MIN_MS, gap),
+    });
+    run();
+}
 
 function clusterGradient(counts: StatusCounts): string {
     const total = MAP_STATUS_LEGEND.reduce(
@@ -61,7 +159,7 @@ function clusterGradient(counts: StatusCounts): string {
     );
 
     if (total <= 0) {
-        return "#1f4b73";
+        return themeColor("--border-strong", "#3c475c");
     }
 
     let cursor = 0;
@@ -75,7 +173,7 @@ function clusterGradient(counts: StatusCounts): string {
         }
 
         const next = cursor + share * 100;
-        stops.push(`${VEHICLE_STATUS_COLORS[status]} ${cursor}% ${next}%`);
+        stops.push(`${vehicleStatusColor(status)} ${cursor}% ${next}%`);
         cursor = next;
     }
 
@@ -123,15 +221,6 @@ const boundsToBBox = (bounds: L.LatLngBounds): GeoBBox => ({
     north: roundCoord(Math.min(90, bounds.getNorth())),
 });
 
-const markerStroke = () => (prefersDark() ? "#16171d" : "#ffffff");
-
-const markerStyle = (status: VehicleStatus, selected: boolean) => ({
-    radius: selected ? 8 : 6,
-    color: markerStroke(),
-    weight: selected ? 3 : 2,
-    fillColor: VEHICLE_STATUS_COLORS[status],
-    fillOpacity: 1,
-});
 
 const hasMapPosition = (
     vehicle: FleetPosition,
@@ -158,7 +247,7 @@ const densityTooltip = (cell: FleetDensityCell) =>
         )
         .join(" · ")}`;
 
-export type MapDepot = {
+type MapDepot = {
     id: number;
     name: string;
     latitude: number;
@@ -251,15 +340,45 @@ export const FleetMap = ({
     const onSelectDepotRef = useLatestRef(onSelectDepot);
     const ignoreMapClickRef = useRef(false);
     const depotLayerRef = useRef<L.LayerGroup | null>(null);
+    /** Hides depot names that a group or vehicle symbol would cover. */
+    const declutterRef = useRef<() => void>(() => undefined);
+    /** Starts the frame loop that moves gliding dots. */
+    const glideRef = useRef<() => void>(() => undefined);
+    const glidesRef = useRef<Glides>(new Map());
+    /**
+     * The selected vehicle stays in the middle while it drives, until the user
+     * drags or zooms; selecting it again resumes (like the detail map).
+     */
+    const followRef = useRef({ on: false, at: 0, lat: NaN, lng: NaN });
+    /**
+     * The selected vehicle once more as a DOM symbol above the groups, so a
+     * group driving over it never takes the click (dots are on the canvas,
+     * groups are DOM markers on top of it).
+     */
+    const selectedMarkerRef = useRef<{
+        marker: L.Marker;
+        id: number;
+        status: VehicleStatus;
+    } | null>(null);
+    const syncSelectedMarker = () => {
+        const chosen = selectedMarkerRef.current;
+        const dot = chosen ? markersRef.current.get(chosen.id) : undefined;
+        if (chosen && dot) {
+            chosen.marker.setLatLng(dot.marker.getLatLng());
+        }
+    };
+    const vehiclesRef = useLatestRef(vehicles);
     const lastDepotFocusRef = useRef("");
     const listedVehicles =
         inViewVehicles.length <= MAP_VEHICLE_LIST_LIMIT
             ? inViewVehicles
             : [];
+    // The selected vehicle never hides in a group: it is drawn on its own,
+    // with its ring, at every zoom.
     const clusterPoints = useMemo(
         () =>
             vehicles.flatMap((vehicle) =>
-                hasMapPosition(vehicle)
+                hasMapPosition(vehicle) && vehicle.id !== selectedId
                     ? [
                           {
                               id: vehicle.id,
@@ -270,16 +389,30 @@ export const FleetMap = ({
                       ]
                     : [],
             ),
-        [vehicles],
+        [selectedId, vehicles],
+    );
+    const selectedVehicle = useMemo(
+        () => vehicles.find((vehicle) => vehicle.id === selectedId) ?? null,
+        [selectedId, vehicles],
     );
     const clusterIndex = useClusterIndex(clusterPoints);
-    const clusters = useMemo(
-        () =>
-            view && mode === "positions"
-                ? clustersFromIndex(clusterIndex, view.bbox, view.zoom)
-                : [],
-        [clusterIndex, mode, view],
-    );
+    const clusters = useMemo((): FleetCluster[] => {
+        if (!view || mode !== "positions") {
+            return [];
+        }
+        const shown = clustersFromIndex(clusterIndex, view.bbox, view.zoom);
+        return selectedVehicle && hasMapPosition(selectedVehicle)
+            ? [
+                  ...shown,
+                  {
+                      kind: "vehicle",
+                      id: selectedVehicle.id,
+                      latitude: selectedVehicle.latitude,
+                      longitude: selectedVehicle.longitude,
+                  },
+              ]
+            : shown;
+    }, [clusterIndex, mode, selectedVehicle, view]);
     const clusterIndexRef = useRef(clusterIndex);
     const clustersRef = useRef(clusters);
     clusterIndexRef.current = clusterIndex;
@@ -336,9 +469,16 @@ export const FleetMap = ({
 
         const themed = createThemedMap(container, {
             invalidateDelays: [],
+            // Quarter steps let "all vehicles" fill a wide screen instead of
+            // falling back a whole level; the buttons still zoom by one.
+            mapOptions: { zoomSnap: 0.25 },
         });
         const map = themed.map;
-        const canvas = L.canvas({ padding: 0.3 });
+        // Tolerance keeps the small dots easy to click.
+        const canvas = L.canvas({
+            padding: 0.3,
+            tolerance: VEHICLE_HIT_TOLERANCE_PX,
+        });
         canvas.addTo(map);
 
         let ignoreView = true;
@@ -364,8 +504,18 @@ export const FleetMap = ({
             timer = window.setTimeout(emitBounds, BOUNDS_DEBOUNCE_MS);
         };
 
-        map.on("dragend", onUserView);
-        map.on("zoomend", onUserView);
+        // Every settled view counts: dragging, zooming, a cluster flight and
+        // a search hit alike, so URL and live focus follow what is shown.
+        map.on("moveend", onUserView);
+
+        // The user's own pan or zoom ends following the selected vehicle.
+        const stopFollow = () => {
+            followRef.current.on = false;
+        };
+        map.on("dragstart", stopFollow);
+        L.DomEvent.on(container, "wheel dblclick", stopFollow);
+        const zoomButtons = container.querySelector(".leaflet-control-zoom");
+        zoomButtons?.addEventListener("click", stopFollow);
         map.on("moveend", publishView);
         const start = initialBboxRef.current;
 
@@ -394,10 +544,59 @@ export const FleetMap = ({
             ignoreView = false;
         });
 
+        const glides = glidesRef.current;
+        let glideFrame = 0;
+        const glideStep = (now: number) => {
+            glideFrame = 0;
+            let moving = false;
+
+            for (const [layer, glide] of glides) {
+                if (!map.hasLayer(layer)) {
+                    glides.delete(layer);
+                    continue;
+                }
+
+                const t = Math.min(1, (now - glide.start) / glide.duration);
+                layer.setLatLng([
+                    glide.from.lat + (glide.to.lat - glide.from.lat) * t,
+                    glide.from.lng + (glide.to.lng - glide.from.lng) * t,
+                ]);
+
+                if (t >= 1) {
+                    glides.delete(layer);
+                } else {
+                    moving = true;
+                }
+            }
+
+            syncSelectedMarker();
+
+            if (moving) {
+                glideFrame = requestAnimationFrame(glideStep);
+            }
+        };
+        glideRef.current = () => {
+            if (glideFrame === 0) {
+                glideFrame = requestAnimationFrame(glideStep);
+            }
+        };
+
+        // Roads the fleet drives on, under the dots (tiles have none at low zoom).
+        let routeLines: ReturnType<typeof addRouteLines> | null = null;
+        let routesGone = false;
+        listSimRoutes()
+            .then((response) => {
+                if (!routesGone) {
+                    routeLines = addRouteLines(map, response.data);
+                }
+            })
+            .catch(() => undefined);
+
         themed.onThemeChange(() => {
+            routeLines?.restyle();
             const stroke = markerStroke();
             for (const entry of markersRef.current.values()) {
-                entry.marker.setStyle({ color: stroke });
+                entry.marker.setStyle(markerStyle(entry.status, entry.selected));
             }
             for (const marker of densityMarkersRef.current) {
                 marker.setStyle({ color: stroke });
@@ -407,12 +606,19 @@ export const FleetMap = ({
         const markers = markersRef.current;
 
         return () => {
+            cancelAnimationFrame(glideFrame);
+            glideRef.current = () => undefined;
+            glides.clear();
+            routesGone = true;
+            routeLines?.remove();
             resizeObserver.disconnect();
             if (timer !== undefined) {
                 window.clearTimeout(timer);
             }
-            map.off("dragend", onUserView);
-            map.off("zoomend", onUserView);
+            map.off("moveend", onUserView);
+            map.off("dragstart", stopFollow);
+            L.DomEvent.off(container, "wheel dblclick", stopFollow);
+            zoomButtons?.removeEventListener("click", stopFollow);
             map.off("moveend", publishView);
             for (const entry of markers.values()) {
                 entry.marker.remove();
@@ -481,6 +687,7 @@ export const FleetMap = ({
                 marker.on("click", (event) => {
                     L.DomEvent.stopPropagation(event);
                     ignoreMapClickRef.current = true;
+                    followRef.current.on = true;
                     onSelectRef.current(vehicle.id);
                 });
                 marker.addTo(map);
@@ -490,6 +697,7 @@ export const FleetMap = ({
                     selected,
                     latitude: vehicle.latitude,
                     longitude: vehicle.longitude,
+                    reportedAt: performance.now(),
                 });
                 continue;
             }
@@ -498,9 +706,19 @@ export const FleetMap = ({
                 existing.latitude !== vehicle.latitude ||
                 existing.longitude !== vehicle.longitude
             ) {
-                existing.marker.setLatLng(at);
+                const now = performance.now();
+                moveLayer(
+                    map,
+                    glidesRef.current,
+                    existing.marker,
+                    at,
+                    now - existing.reportedAt,
+                    DOT_GLIDE,
+                    glideRef.current,
+                );
                 existing.latitude = vehicle.latitude;
                 existing.longitude = vehicle.longitude;
+                existing.reportedAt = now;
             }
 
             if (
@@ -520,7 +738,48 @@ export const FleetMap = ({
                 markers.delete(id);
             }
         }
+
+        const dot = selectedId !== null ? markers.get(selectedId) : undefined;
+        const shown = selectedMarkerRef.current;
+        if (
+            shown &&
+            (!dot || shown.id !== selectedId || shown.status !== dot.status)
+        ) {
+            shown.marker.remove();
+            selectedMarkerRef.current = null;
+        }
+        if (dot && selectedId !== null && !selectedMarkerRef.current) {
+            const id = selectedId;
+            const marker = L.marker(dot.marker.getLatLng(), {
+                icon: L.divIcon({
+                    className: styles.selectedDot,
+                    iconSize: [17, 17],
+                    html: `<span style="background:${vehicleStatusColor(dot.status)}"></span>`,
+                }),
+                zIndexOffset: 10_000,
+                keyboard: false,
+            });
+            marker.on("click", (event) => {
+                L.DomEvent.stopPropagation(event);
+                ignoreMapClickRef.current = true;
+                followRef.current.on = true;
+                onSelectRef.current(id);
+            });
+            marker.addTo(map);
+            selectedMarkerRef.current = { marker, id, status: dot.status };
+        }
+        syncSelectedMarker();
+
+        declutterRef.current();
     }, [clusters, mode, onSelectRef, selectedId, vehicles]);
+
+    useEffect(
+        () => () => {
+            selectedMarkerRef.current?.marker.remove();
+            selectedMarkerRef.current = null;
+        },
+        [],
+    );
 
     useEffect(() => {
         const map = mapRef.current;
@@ -545,15 +804,49 @@ export const FleetMap = ({
 
             const expansionZoom =
                 clusterIndexRef.current.getClusterExpansionZoom(id);
+            const members = clusterMemberIds(clusterIndexRef.current, id);
+            /*
+             * Frame where the members are now, not where the index saw them:
+             * it is rebuilt only every few seconds while vehicles drive.
+             */
+            const byId = new Map(
+                vehiclesRef.current.map((vehicle) => [vehicle.id, vehicle]),
+            );
+            let area: L.LatLngBounds | null = null;
+            for (const memberId of members) {
+                const vehicle = byId.get(memberId);
+                if (!vehicle || !hasMapPosition(vehicle)) {
+                    continue;
+                }
+                const at = L.latLng(vehicle.latitude, vehicle.longitude);
+                const box =
+                    vehicle.status === "DRIVING"
+                        ? at.toBounds(DRIVING_FRAME_MARGIN_M * 2)
+                        : L.latLngBounds(at, at);
+                area = area ? area.extend(box) : box;
+            }
+            area ??= L.latLngBounds(
+                [current.bounds.south, current.bounds.west],
+                [current.bounds.north, current.bounds.east],
+            );
             const open = clusterOpen({
                 expansionZoom,
+                fitZoom: map.getBoundsZoom(
+                    area,
+                    false,
+                    L.point(
+                        FLEET_CLUSTER_FIT_PADDING_PX * 2,
+                        FLEET_CLUSTER_FIT_PADDING_PX * 2,
+                    ),
+                ),
                 bounds: current.bounds,
             });
             const zoomDelta = Math.abs(open.zoom - map.getZoom());
+            followRef.current.on = false;
 
             stackZoomRef.current = map.getZoom();
             if (open.list) {
-                setStackIds(clusterMemberIds(clusterIndexRef.current, id));
+                setStackIds(members);
             } else {
                 stackZoomRef.current = null;
                 setStackIds(null);
@@ -563,7 +856,7 @@ export const FleetMap = ({
                 return;
             }
 
-            map.flyTo([current.latitude, current.longitude], open.zoom, {
+            map.flyTo(area.getCenter(), open.zoom, {
                 animate: true,
                 duration: Math.min(1.1, Math.max(0.45, zoomDelta * 0.25)),
             });
@@ -583,7 +876,24 @@ export const FleetMap = ({
             const existing = markers.get(item.id);
 
             if (existing) {
-                existing.marker.setLatLng([item.latitude, item.longitude]);
+                if (
+                    existing.latitude !== item.latitude ||
+                    existing.longitude !== item.longitude
+                ) {
+                    const now = performance.now();
+                    moveLayer(
+                        map,
+                        glidesRef.current,
+                        existing.marker,
+                        L.latLng(item.latitude, item.longitude),
+                        now - existing.reportedAt,
+                        CLUSTER_GLIDE,
+                        glideRef.current,
+                    );
+                    existing.latitude = item.latitude;
+                    existing.longitude = item.longitude;
+                    existing.reportedAt = now;
+                }
 
                 if (existing.signature !== signature) {
                     existing.marker.setIcon(clusterIcon(item, label));
@@ -614,7 +924,13 @@ export const FleetMap = ({
                 marker.getElement()?.setAttribute("aria-label", caption);
             });
             marker.addTo(map);
-            markers.set(item.id, { marker, signature });
+            markers.set(item.id, {
+                marker,
+                signature,
+                latitude: item.latitude,
+                longitude: item.longitude,
+                reportedAt: performance.now(),
+            });
         }
 
         for (const [id, entry] of markers) {
@@ -623,7 +939,9 @@ export const FleetMap = ({
                 markers.delete(id);
             }
         }
-    }, [clusters, mode]);
+
+        declutterRef.current();
+    }, [clusters, mode, vehiclesRef]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -643,10 +961,10 @@ export const FleetMap = ({
                 [cell.latitude, cell.longitude],
                 {
                     radius: Math.min(32, 8 + Math.sqrt(cell.total) * 1.4),
-                    color: markerStroke(),
-                    weight: 2,
-                    fillColor: VEHICLE_STATUS_COLORS[densityStatus(cell)],
-                    fillOpacity: 0.72,
+                    color: vehicleStatusColor(densityStatus(cell)),
+                    weight: 1.5,
+                    fillColor: vehicleStatusColor(densityStatus(cell)),
+                    fillOpacity: 0.28,
                     renderer: canvas,
                 },
             );
@@ -667,6 +985,54 @@ export const FleetMap = ({
             return marker;
         });
     }, [densityCells, mode]);
+
+    useEffect(() => {
+        followRef.current = {
+            on: selectedId !== null,
+            at: performance.now(),
+            lat: NaN,
+            lng: NaN,
+        };
+    }, [selectedId]);
+
+    // Pans with the selected vehicle over the same time its dot glides, so
+    // the dot stays in the middle and the map moves evenly underneath.
+    useEffect(() => {
+        const map = mapRef.current;
+        const follow = followRef.current;
+
+        if (!map || !follow.on || selectedId === null) {
+            return;
+        }
+
+        const vehicle = vehicles.find((item) => item.id === selectedId);
+
+        if (
+            !vehicle ||
+            !hasMapPosition(vehicle) ||
+            vehicle.status !== "DRIVING" ||
+            (vehicle.latitude === follow.lat && vehicle.longitude === follow.lng)
+        ) {
+            return;
+        }
+
+        const now = performance.now();
+        const gap = now - follow.at;
+        follow.at = now;
+        follow.lat = vehicle.latitude;
+        follow.lng = vehicle.longitude;
+        map.panTo(
+            [vehicle.latitude, vehicle.longitude],
+            prefersReducedMotion() || gap > DOT_GLIDE.ms
+                ? { animate: false }
+                : {
+                      animate: true,
+                      duration: Math.max(GLIDE_MIN_MS, gap) / 1000,
+                      easeLinearity: 1,
+                      noMoveStart: true,
+                  },
+        );
+    }, [selectedId, vehicles]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -725,11 +1091,129 @@ export const FleetMap = ({
         const group = L.layerGroup().addTo(map);
         depotLayerRef.current = group;
 
+        const vehicleAt = (point: L.Point): number | null => {
+            let best: number | null = null;
+            let bestDistance = Infinity;
+            for (const [id, { marker }] of markersRef.current) {
+                const distance = map
+                    .latLngToContainerPoint(marker.getLatLng())
+                    .distanceTo(point);
+                if (
+                    distance <= marker.getRadius() + VEHICLE_HIT_TOLERANCE_PX &&
+                    distance < bestDistance
+                ) {
+                    best = id;
+                    bestDistance = distance;
+                }
+            }
+            return best;
+        };
+
+        /*
+         * Depot names sit just above the ring, in a pane below the vehicle
+         * markers (600): a group count inside the depot always stays readable,
+         * the name gives way.
+         */
+        if (!map.getPane(DEPOT_LABEL_PANE)) {
+            map.createPane(DEPOT_LABEL_PANE).style.zIndex = "590";
+        }
+
+        /*
+         * Just above the ring, but never closer to the centre than half the
+         * largest group symbol, so a group in the depot never covers the name.
+         */
+        const labelAt = (latitude: number, longitude: number, radius: number) => {
+            const centre = map.latLngToLayerPoint([latitude, longitude]);
+            const edge = map.latLngToLayerPoint([
+                latitude + radius / METERS_PER_DEGREE_LAT,
+                longitude,
+            ]);
+            const lift = Math.max(centre.y - edge.y, CLUSTER_ICON_MAX / 2 + 2);
+            return map.layerPointToLatLng(centre.subtract([0, lift]));
+        };
+        const placed: Array<{
+            label: L.Tooltip;
+            circle: L.Circle;
+        }> = [];
+        const replace = () => {
+            for (const { label, circle } of placed) {
+                const at = circle.getLatLng();
+                label.setLatLng(labelAt(at.lat, at.lng, circle.getRadius()));
+            }
+        };
+        /*
+         * Vehicles first: a depot name that would touch a group symbol or a
+         * vehicle dot is hidden until the view leaves room for it again.
+         * Dots live on the canvas, so their boxes come from the map.
+         */
+        const declutter = () => {
+            const origin = map.getContainer().getBoundingClientRect();
+            const dots = [...markersRef.current.values()].map(({ marker }) => {
+                const at = map.latLngToContainerPoint(marker.getLatLng());
+                const size = marker.getRadius() + 2;
+                return {
+                    left: origin.left + at.x - size,
+                    right: origin.left + at.x + size,
+                    top: origin.top + at.y - size,
+                    bottom: origin.top + at.y + size,
+                };
+            });
+            const icons = [
+                ...map
+                    .getPane("markerPane")!
+                    .querySelectorAll<HTMLElement>(".leaflet-marker-icon"),
+            ]
+                .filter((icon) => !icon.classList.contains(styles.depotHandle))
+                .map((icon): Box => icon.getBoundingClientRect())
+                .concat(dots);
+            for (const { label } of placed) {
+                const element = label.getElement();
+                if (!element) {
+                    continue;
+                }
+                element.removeAttribute("data-covered");
+                const box = element.getBoundingClientRect();
+                const covered = icons.some(
+                    (icon) =>
+                        box.left < icon.right &&
+                        box.right > icon.left &&
+                        box.top < icon.bottom &&
+                        box.bottom > icon.top,
+                );
+                element.toggleAttribute("data-covered", covered);
+            }
+        };
+        const onZoomEnd = () => {
+            replace();
+            declutter();
+        };
+        map.on("zoomend", onZoomEnd);
+        declutterRef.current = declutter;
+
+        const addLabel = (
+            name: string,
+            latitude: number,
+            longitude: number,
+            radius: number,
+        ) =>
+            L.tooltip({
+                permanent: true,
+                direction: "top",
+                offset: [0, -2],
+                pane: DEPOT_LABEL_PANE,
+                className: styles.depotLabel,
+                interactive: false,
+            })
+                .setLatLng(labelAt(latitude, longitude, radius))
+                .setContent(name)
+                .addTo(group);
+
         const drawHandle = (
             id: number | "new",
             latitude: number,
             longitude: number,
             circle: L.Circle,
+            label: L.Tooltip | null,
         ) => {
             const handle = L.marker([latitude, longitude], {
                 draggable: true,
@@ -741,7 +1225,9 @@ export const FleetMap = ({
                 zIndexOffset: 800,
             });
             handle.on("drag", () => {
-                circle.setLatLng(handle.getLatLng());
+                const at = handle.getLatLng();
+                circle.setLatLng(at);
+                label?.setLatLng(labelAt(at.lat, at.lng, circle.getRadius()));
             });
             handle.on("dragend", () => {
                 const at = handle.getLatLng();
@@ -757,19 +1243,25 @@ export const FleetMap = ({
                     : depot;
             const circle = L.circle([shown.latitude, shown.longitude], {
                 radius: shown.radius_m,
-                color: DEPOT_COLOR,
-                weight: selectedDepotId === depot.id ? 3 : 1.5,
-                fillColor: DEPOT_COLOR,
-                fillOpacity: 0.14,
+                ...depotStyle(selectedDepotId === depot.id),
             });
-            circle.bindTooltip(depot.name, {
-                permanent: true,
-                direction: "center",
-                className: styles.depotLabel,
-            });
+            const label = addLabel(
+                depot.name,
+                shown.latitude,
+                shown.longitude,
+                shown.radius_m,
+            );
+            placed.push({ label, circle });
             circle.on("click", (event) => {
                 L.DomEvent.stopPropagation(event);
                 ignoreMapClickRef.current = true;
+                // The ring lies above the vehicle canvas: a dot under the
+                // pointer is what the click meant, not the depot around it.
+                const hit = vehicleAt(event.containerPoint);
+                if (hit !== null) {
+                    onSelectRef.current(hit);
+                    return;
+                }
                 if (lockDepotSelection) {
                     return;
                 }
@@ -778,33 +1270,47 @@ export const FleetMap = ({
             circle.addTo(group);
 
             if (canEditDepots && draft?.id === depot.id) {
-                drawHandle(depot.id, shown.latitude, shown.longitude, circle);
+                drawHandle(
+                    depot.id,
+                    shown.latitude,
+                    shown.longitude,
+                    circle,
+                    label,
+                );
             }
         }
 
         if (draft?.id === "new") {
             const circle = L.circle([draft.latitude, draft.longitude], {
                 radius: draft.radius_m,
-                color: DEPOT_COLOR,
+                color: depotColor(),
                 weight: 2,
                 dashArray: "6 6",
-                fillColor: DEPOT_COLOR,
+                fillColor: depotColor(),
                 fillOpacity: 0.12,
             });
-            if (draft.name.trim()) {
-                circle.bindTooltip(draft.name.trim(), {
-                    permanent: true,
-                    direction: "center",
-                    className: styles.depotLabel,
-                });
-            }
+            const label = draft.name.trim()
+                ? addLabel(
+                      draft.name.trim(),
+                      draft.latitude,
+                      draft.longitude,
+                      draft.radius_m,
+                  )
+                : null;
             circle.addTo(group);
+            if (label) {
+                placed.push({ label, circle });
+            }
             if (canEditDepots) {
-                drawHandle("new", draft.latitude, draft.longitude, circle);
+                drawHandle("new", draft.latitude, draft.longitude, circle, label);
             }
         }
 
+        declutter();
+
         return () => {
+            map.off("zoomend", onZoomEnd);
+            declutterRef.current = () => undefined;
             group.remove();
             if (depotLayerRef.current === group) {
                 depotLayerRef.current = null;
@@ -818,6 +1324,7 @@ export const FleetMap = ({
         lockDepotSelection,
         onMoveDepotRef,
         onSelectDepotRef,
+        onSelectRef,
     ]);
 
     useEffect(() => {

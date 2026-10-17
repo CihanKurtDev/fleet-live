@@ -12,7 +12,7 @@ type CacheEntry = {
 const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<VehicleListResponse>>();
 
-export function vehicleQueryKey(query: VehicleListQuery): string {
+function vehicleQueryKey(query: VehicleListQuery): string {
     return serializeVehicleListQuery(query).toString();
 }
 
@@ -91,7 +91,7 @@ export function fetchVehicleList(
     return followUntilAborted(pending, signal);
 }
 
-export function isVehicleListFresh(query: VehicleListQuery) {
+function isVehicleListFresh(query: VehicleListQuery) {
     const entry = cache.get(vehicleQueryKey(query));
     return Boolean(entry && Date.now() - entry.timestamp < STALE_MS);
 }

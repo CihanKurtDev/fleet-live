@@ -76,7 +76,7 @@
     min-height: 0;
     padding: 0 12px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--radius);
     box-shadow: none;
 }
 
@@ -251,7 +251,7 @@
     max-width: 100%;
     min-width: 0;
     padding: 10px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     cursor: pointer;
 }
 

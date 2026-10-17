@@ -19,14 +19,14 @@ type ConfirmAssignContext = {
     closePicker: () => void;
 };
 
-export type AssignmentCandidatePage<TCandidate> = {
+type AssignmentCandidatePage<TCandidate> = {
     data: TCandidate[];
     page: number;
     pageCount: number;
     total: number;
 };
 
-export type EntityAssignmentPickerConfig<TCandidate, TAssigned = never> = {
+type EntityAssignmentPickerConfig<TCandidate, TAssigned = never> = {
     mode: "entity";
     excludedIds?: Set<number>;
     fetchCandidates: (
