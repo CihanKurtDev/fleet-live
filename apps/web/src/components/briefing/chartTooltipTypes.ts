@@ -16,15 +16,6 @@ export const isRateMonth = (value: unknown): value is RateMonth =>
     typeof value.verstoss === "number" &&
     typeof value.rate === "number";
 
-export const isTypeMonth = (value: unknown): value is TypeMonth =>
-    isRecord(value) &&
-    typeof value.month === "string" &&
-    typeof value.rate === "number" &&
-    typeof value.lowFuel === "number" &&
-    typeof value.offline === "number" &&
-    typeof value.highShare === "number" &&
-    !("verstoss" in value);
-
 export const isKmMonth = (value: unknown): value is KmMonth =>
     isRecord(value) &&
     typeof value.month === "string" &&

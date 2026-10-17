@@ -64,6 +64,7 @@ export const VehiclesPage = () => {
                     rememberVehicle(vehicle);
                     setTelemetryFocus("detail", [vehicle.id]);
                     navigate(`/vehicles/${vehicle.id}`, {
+                        viewTransition: true,
                         state: {
                             from: `${location.pathname}${location.search}`,
                         },

@@ -6,7 +6,7 @@ import {
 
 import { isInsideBBox } from "./clusterFleet";
 
-export type StatusTotals = Record<
+type StatusTotals = Record<
     VehicleStatus,
     { inView: number; fleet: number }
 >;
@@ -18,7 +18,7 @@ type Positioned = {
     longitude: number | null;
 };
 
-export function emptyStatusTotals(): StatusTotals {
+function emptyStatusTotals(): StatusTotals {
     return {
         IDLE: { inView: 0, fleet: 0 },
         DRIVING: { inView: 0, fleet: 0 },
@@ -67,7 +67,7 @@ export function countFleetStatus(
     return totals;
 }
 
-export function bboxesOverlap(left: GeoBBox, right: GeoBBox): boolean {
+function bboxesOverlap(left: GeoBBox, right: GeoBBox): boolean {
     return (
         left.west <= right.east &&
         left.east >= right.west &&

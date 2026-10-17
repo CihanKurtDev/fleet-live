@@ -1,3 +1,8 @@
+@use "../../styles/motion";
+
+@include motion.keyframes;
+
+/* A newly selected vehicle slides in; the panel is keyed by vehicle. */
 .panel {
     display: flex;
     flex-direction: column;
@@ -5,6 +10,7 @@
     height: 100%;
     padding: 16px;
     text-align: left;
+    animation: rise-in var(--dur-3) var(--ease-out);
 }
 
 .head {
@@ -16,8 +22,11 @@
 
 .plate {
     margin: 0;
-    font-size: 18px;
-    line-height: 1.2;
+    font-family: var(--heading);
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
 }
 
 .facts {

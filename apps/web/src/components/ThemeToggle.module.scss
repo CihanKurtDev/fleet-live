@@ -1,0 +1,122 @@
+/*
+ * Sun (dark scheme) and moon with stars (light scheme). Transitions run on
+ * every change; the ray keyframes only once the switch was used
+ * (data-animated), so the first paint does not animate. Reduced motion turns
+ * all of it off in index.css.
+ */
+.icon {
+    width: 18px;
+    height: 18px;
+    overflow: visible;
+    transition: color var(--dur-3) var(--ease-out);
+
+    * {
+        transform-box: view-box;
+    }
+
+    &[data-show="sun"] {
+        color: var(--accent);
+    }
+
+    &[data-show="moon"] {
+        color: var(--text-h);
+    }
+}
+
+.rays {
+    transform-origin: 12px 12px;
+
+    [data-show="moon"] & {
+        opacity: 0;
+    }
+
+    [data-animated][data-show="sun"] & {
+        animation: rays-in 560ms cubic-bezier(0.34, 1.4, 0.64, 1) 120ms both;
+    }
+
+    [data-animated][data-show="moon"] & {
+        animation: rays-out 460ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+    }
+}
+
+.core {
+    transition: r 520ms cubic-bezier(0.45, 0, 0.15, 1);
+
+    [data-show="sun"] & {
+        r: 4.6px;
+    }
+
+    [data-show="moon"] & {
+        r: 7.5px;
+    }
+}
+
+.bite {
+    transition: transform 560ms cubic-bezier(0.45, 0, 0.15, 1);
+
+    [data-show="sun"] & {
+        transform: translate(9px, -9px);
+    }
+}
+
+.star {
+    transform-origin: center;
+    transform-box: fill-box;
+    transition:
+        transform 420ms cubic-bezier(0.34, 1.8, 0.64, 1),
+        opacity 300ms;
+
+    [data-show="sun"] & {
+        transform: scale(0);
+        opacity: 0;
+        transition-duration: 200ms;
+    }
+}
+
+[data-show="moon"] .s1 {
+    transition-delay: 300ms;
+}
+
+[data-show="moon"] .s2 {
+    transition-delay: 420ms;
+    animation: twinkle 2.4s ease-in-out 1.2s infinite;
+}
+
+[data-show="moon"] .s3 {
+    transition-delay: 540ms;
+}
+
+@keyframes rays-in {
+    from {
+        transform: rotate(-90deg) scale(0.3);
+        opacity: 0;
+    }
+
+    to {
+        transform: rotate(0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes rays-out {
+    from {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    to {
+        transform: scale(1.7);
+        opacity: 0;
+    }
+}
+
+@keyframes twinkle {
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.35;
+    }
+}

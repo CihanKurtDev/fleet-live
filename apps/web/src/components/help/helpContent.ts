@@ -2,7 +2,7 @@ import { LOW_FUEL_THRESHOLD_PERCENT } from "@fleet-live/shared";
 
 import type { TipPageId } from "./tipCatalog";
 
-export type HelpItem = {
+type HelpItem = {
     question: string;
     answer: string;
     /** Only shown to dispatchers (the action is not open to viewers). */

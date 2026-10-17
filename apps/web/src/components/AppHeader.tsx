@@ -10,11 +10,13 @@ import { Link, NavLink, useLocation } from "react-router";
 import { SimToggle } from "./SimToggle";
 import { HelpButton } from "./help/HelpButton";
 import { SessionMenu } from "./SessionMenu";
+import { ThemeToggle } from "./ThemeToggle";
 import { CompanySwitch } from "./CompanySwitch";
 import { Button } from "./ui/Button/Button";
 import { useAuth } from "../hooks/useAuth";
 import { useLogout } from "../hooks/useLogout";
 import { useVehicles } from "../context/vehiclesContext";
+import { usePresence } from "../hooks/usePresence";
 import { formatCount } from "../utils/formatCount";
 import styles from "./AppHeader.module.scss";
 
@@ -82,6 +84,7 @@ export const AppHeader = ({
     // The menu belongs to the page it was opened on, so navigating closes it.
     const [menuPath, setMenuPath] = useState<string | null>(null);
     const menuOpen = user !== null && menuPath === pathname;
+    const drawer = usePresence(menuOpen);
 
     const closeMenu = useCallback(() => {
         setMenuPath(null);
@@ -123,6 +126,7 @@ export const AppHeader = ({
                 <div className={styles.bar}>
                     <div className={styles.start}>
                         <Link
+                            viewTransition
                             className={styles.brand}
                             to={user ? "/" : "/login"}
                         >
@@ -138,6 +142,7 @@ export const AppHeader = ({
                                 ).map((item) => (
                                     <NavLink
                                         key={item.to}
+                                        viewTransition
                                         to={item.to}
                                         aria-label={item.ariaLabel}
                                         className={navClassName}
@@ -151,6 +156,7 @@ export const AppHeader = ({
                     </div>
                     <div className={styles.end}>
                         {user && <HelpButton />}
+                        <ThemeToggle />
                         {user && user.role === "dispatcher" && <SimToggle />}
                         <SessionMenu />
                     </div>
@@ -194,15 +200,17 @@ export const AppHeader = ({
                             {sectionTitle(pathname)}
                         </span>
                         <HelpButton />
+                        <ThemeToggle />
                         {status}
                     </div>
                 )}
             </header>
 
-            {menuOpen && user && (
+            {drawer.mounted && user && (
                 <>
                     <div
                         className={styles.backdrop}
+                        data-closing={drawer.closing || undefined}
                         aria-hidden="true"
                         onClick={closeMenu}
                     />
@@ -210,6 +218,7 @@ export const AppHeader = ({
                         ref={drawerRef}
                         id={drawerId}
                         className={styles.drawer}
+                        data-closing={drawer.closing || undefined}
                     >
                         <div className={styles.drawerHead}>
                             <span className={styles.drawerBrand}>
@@ -236,6 +245,7 @@ export const AppHeader = ({
                             {NAV_ITEMS.map((item) => (
                                 <NavLink
                                     key={item.to}
+                                    viewTransition
                                     to={item.to}
                                     end={item.to === "/"}
                                     aria-label={item.ariaLabel}

@@ -1,12 +1,22 @@
+@use "../../styles/motion";
+
+@include motion.keyframes;
+
 /* Coach mark: a ring around the target and a card beside it. Both are fixed
    to the viewport and placed from the target's rectangle. */
 .ring {
     position: fixed;
     z-index: 20;
     box-sizing: border-box;
-    border: 2px solid var(--accent);
-    border-radius: 12px;
+    border: 2px solid var(--accent-fill);
+    border-radius: var(--radius);
     pointer-events: none;
+    animation: fade-in var(--dur-3) var(--ease-out);
+    transition:
+        top var(--dur-3) var(--ease-in-out),
+        left var(--dur-3) var(--ease-in-out),
+        width var(--dur-3) var(--ease-in-out),
+        height var(--dur-3) var(--ease-in-out);
 }
 
 .card {
@@ -18,11 +28,12 @@
     box-sizing: border-box;
     padding: 12px 14px;
 
-    border-radius: 10px;
-    background: var(--accent);
+    border-radius: var(--radius);
+    background: var(--accent-fill);
     color: var(--on-accent);
     box-shadow: 0 14px 34px rgb(0 0 0 / 0.3);
     text-align: left;
+    animation: pop-in var(--dur-3) var(--ease-out);
 }
 
 .arrowAbove,
@@ -30,7 +41,7 @@
     position: absolute;
     width: 14px;
     height: 14px;
-    background: var(--accent);
+    background: var(--accent-fill);
     transform: rotate(45deg);
 }
 
@@ -44,7 +55,7 @@
 
 .title {
     font-size: 14px;
-    font-weight: 650;
+    font-weight: 600;
 }
 
 .body {
@@ -74,25 +85,31 @@
 .next {
     height: var(--control-xs);
     padding: 0 10px;
-    border: 1px solid var(--bg);
+    border: 1px solid var(--on-accent);
     border-radius: var(--radius);
     font: inherit;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
+    transition: transform var(--dur-2) var(--ease-spring);
 
+    &:active {
+        transform: scale(0.96);
+    }
+
+    /* The card is the yellow fill in both schemes: dark ink on it. */
     &:focus-visible {
-        outline: 2px solid var(--bg);
+        outline: 2px solid var(--on-accent);
         outline-offset: 2px;
     }
 }
 
 .skip {
     background: transparent;
-    color: var(--bg);
+    color: var(--on-accent);
 }
 
 .next {
-    background: var(--bg);
-    color: var(--text-h);
+    background: var(--on-accent);
+    color: var(--accent-fill);
 }

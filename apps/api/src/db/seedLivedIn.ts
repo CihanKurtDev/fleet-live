@@ -208,8 +208,18 @@ function costCenterAt(rng: Rng, companyId: number): string | null {
     return `KST-${companyId}${suffix}`;
 }
 
+/**
+ * A random moment in the month. In the current month only days before today,
+ * so no seeded warning or trip lies in the future (it would sit above every
+ * real event in the newest-first lists).
+ */
 function stampInMonth(month: string, rng: Rng, dayMax = 27) {
-    const day = String(pickInt(rng, 1, dayMax)).padStart(2, "0");
+    const today = utcTodayIso();
+    const lastDay =
+        month === today.slice(0, 7)
+            ? Math.max(1, Math.min(dayMax, Number(today.slice(8, 10)) - 1))
+            : dayMax;
+    const day = String(pickInt(rng, 1, lastDay)).padStart(2, "0");
     const hour = String(pickInt(rng, 5, 21)).padStart(2, "0");
     const minute = String(pickInt(rng, 0, 59)).padStart(2, "0");
     return `${month}-${day} ${hour}:${minute}:00`;

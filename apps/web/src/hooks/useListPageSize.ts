@@ -2,8 +2,8 @@ import { LIST_PAGE_LIMIT_MAX } from "@fleet-live/shared";
 import { useBoundHeight } from "./useBoundHeight";
 
 /** Row and header heights of the list panel (`ListPage.module.scss`). */
-export const LIST_ROW_HEIGHT = 48;
-export const LIST_HEAD_HEIGHT = 38;
+const LIST_ROW_HEIGHT = 48;
+const LIST_HEAD_HEIGHT = 38;
 
 /**
  * Rows that fit the list body. Put `ref` on `ListBody`. While the body is

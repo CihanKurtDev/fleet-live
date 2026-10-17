@@ -17,12 +17,17 @@ import alertRoutes from "./routes/alert.routes";
 import driverRoutes from "./routes/driver.routes";
 import briefingRoutes from "./routes/briefing.routes";
 import dueRoutes from "./routes/due.routes";
+import todayRoutes from "./routes/today.routes";
 import authRoutes from "./routes/auth.routes";
 import importRoutes from "./routes/import.routes";
 import exportRoutes from "./routes/export.routes";
 import siteRoutes from "./routes/site.routes";
 import { setStreamFocus, streamEvents } from "./controllers/stream.controller";
-import { getSim, updateSim } from "./controllers/sim.controller";
+import {
+    getSim,
+    getSimRoutes,
+    updateSim,
+} from "./controllers/sim.controller";
 
 export function createApp() {
     const app = express();
@@ -107,12 +112,14 @@ export function createApp() {
     });
 
     app.get("/api/sim", requireAuth, getSim);
+    app.get("/api/sim/routes", requireAuth, getSimRoutes);
     app.patch("/api/sim", requireAuth, requireDispatcher, updateSim);
     app.get("/api/stream", requireAuth, streamEvents);
     app.post("/api/stream/focus", requireAuth, setStreamFocus);
     app.use("/api/auth", authRoutes);
     app.use("/api/briefing", requireAuth, briefingRoutes);
     app.use("/api/due", requireAuth, dueRoutes);
+    app.use("/api/today", requireAuth, todayRoutes);
     app.use("/api/vehicles", requireAuth, vehicleRoutes);
     app.use("/api/alerts", requireAuth, alertRoutes);
     app.use("/api/drivers", requireAuth, driverRoutes);

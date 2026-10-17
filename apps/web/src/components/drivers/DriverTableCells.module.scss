@@ -27,7 +27,7 @@
     min-height: 22px;
     padding: 0 8px;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     color: var(--text);
     font-size: 12px;
     white-space: nowrap;

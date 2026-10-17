@@ -17,7 +17,7 @@ import { TablePagination } from "../ui/Table/TablePagination";
 import { AssignmentStatusMeta } from "./AssignmentRoster";
 import type { AssignmentStatusLine } from "./assignmentMeta";
 import styles from "./assignment.module.scss";
-export type AssignmentPickerItem = {
+type AssignmentPickerItem = {
     id: number;
     title: string;
     status: AssignmentStatusLine;

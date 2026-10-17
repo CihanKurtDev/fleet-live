@@ -14,14 +14,14 @@ import {
     type VehicleStatus,
 } from "@fleet-live/shared";
 
-export const FLEET_CLUSTER_RADIUS_PX = 60;
+const FLEET_CLUSTER_RADIUS_PX = 60;
 /**
  * Letzte Stufe, auf der Supercluster noch Gruppen bildet.
  * Die Karte zoomt eine Stufe weiter, damit daraus einzelne Marker werden.
  */
 export const FLEET_CLUSTER_MAX_ZOOM = 16;
 /** Hülle unter dieser Diagonale öffnet die Liste, die Marker liegen aufeinander. */
-export const FLEET_CLUSTER_LIST_SPAN_M = 25;
+const FLEET_CLUSTER_LIST_SPAN_M = 25;
 /** Gleicher Rand wie `fitBounds`, damit die Entscheidung zur Karte passt. */
 export const FLEET_CLUSTER_FIT_PADDING_PX = 48;
 /** Laufende Fahrt: höchstens ein neuer Index in diesem Abstand. */
@@ -53,7 +53,7 @@ export type FleetCluster =
           longitude: number;
       };
 
-export type ClusterOpen = {
+type ClusterOpen = {
     zoom: number;
     list: boolean;
 };
@@ -75,7 +75,7 @@ type ClusterAgg = {
 
 export type FleetClusterIndex = Supercluster<PointProps, ClusterAgg>;
 
-export function emptyStatusCounts(): StatusCounts {
+function emptyStatusCounts(): StatusCounts {
     return { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0 };
 }
 
@@ -140,15 +140,19 @@ export function boundsSpanMeters(bounds: GeoBBox): number {
 }
 
 /**
- * Klick fliegt auf den Zoom, an dem die Gruppe auseinanderfällt.
+ * Klick fliegt so nah heran, wie alle Mitglieder noch ins Bild passen
+ * (`fitZoom`), mindestens aber auf den Zoom, an dem die Gruppe
+ * auseinanderfällt. Die Gruppe zerfällt so in einem Schritt so weit wie
+ * möglich, ohne dass ein Fahrzeug aus dem Bild fällt.
  * Liegen die Fahrzeuge auf einem Fleck, kommt zusätzlich die Liste.
  */
 export function clusterOpen(input: {
     expansionZoom: number;
+    fitZoom?: number;
     bounds: GeoBBox;
 }): ClusterOpen {
     const zoom = Math.min(
-        Math.max(input.expansionZoom, 0),
+        Math.max(input.expansionZoom, Math.floor(input.fitZoom ?? 0), 0),
         FLEET_CLUSTER_MAX_ZOOM + 1,
     );
     const piled =
@@ -187,6 +191,9 @@ export function createFleetClusterIndex(
 ): FleetClusterIndex {
     const index = new Supercluster<PointProps, ClusterAgg>({
         radius: FLEET_CLUSTER_RADIUS_PX,
+        // Leaflet tiles are 256 px; with the default 512 the radius would be
+        // half of FLEET_CLUSTER_RADIUS_PX on screen and symbols would overlap.
+        extent: 256,
         maxZoom: FLEET_CLUSTER_MAX_ZOOM,
         minPoints: 2,
         map: pointAggregate,
@@ -229,9 +236,11 @@ export function clustersFromIndex(
     bbox: GeoBBox,
     zoom: number,
 ): FleetCluster[] {
+    // Rounded down: at a quarter step such as 15.75 the groups of level 15
+    // keep their full spacing; level 16 would pack them closer than a symbol.
     const zoomLevel = Math.max(
         0,
-        Math.min(FLEET_CLUSTER_MAX_ZOOM + 1, Math.round(zoom)),
+        Math.min(FLEET_CLUSTER_MAX_ZOOM + 1, Math.floor(zoom + 1e-9)),
     );
     const features = index.getClusters(
         [bbox.west, bbox.south, bbox.east, bbox.north],

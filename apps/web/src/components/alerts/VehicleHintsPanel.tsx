@@ -15,7 +15,7 @@ import { ApiError, isAbortError } from "../../api/client";
 import { listAlerts, resolveAlert } from "../../api/alerts";
 import { retryTransient } from "../../api/retryTransient";
 import { useVehicles } from "../../context/vehiclesContext";
-import { formatIsoDate } from "../../utils/dateTime";
+import { formatIsoDate, formatShortStamp } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
 import type { VehicleFormField } from "../vehicles/VehicleForm";
 import { WarningChip } from "./WarningChip";
@@ -34,8 +34,13 @@ type DueHint = {
     due_on: string | null;
 };
 
-const liveOffline = (alerts: Alert[]): Alert | undefined =>
-    alerts.find((alert) => alert.type === "OFFLINE" && alert.ended_at === null);
+/**
+ * The open (not yet resolved) no-signal warning to show: a running one first,
+ * else the newest one that has ended but nobody has resolved yet.
+ */
+const openOffline = (alerts: Alert[]): Alert | undefined =>
+    alerts.find((alert) => alert.type === "OFFLINE" && alert.ended_at === null) ??
+    alerts.find((alert) => alert.type === "OFFLINE");
 
 /**
  * HU and UVV of this vehicle that need a date now: missing or past. "Soon"
@@ -78,7 +83,7 @@ export const VehicleHintsPanel = ({
     onEditMaster,
 }: VehicleHintsPanelProps) => {
     const { listEpoch, refetchLists } = useVehicles();
-    const [liveOfflineAlert, setLiveOfflineAlert] = useState<
+    const [offlineAlert, setOfflineAlert] = useState<
         Alert | undefined
     >();
     const [error, setError] = useState<string | null>(null);
@@ -95,7 +100,7 @@ export const VehicleHintsPanel = ({
     if (requestKey !== fetchKey) {
         setFetchKey(requestKey);
         setError(null);
-        setLiveOfflineAlert(undefined);
+        setOfflineAlert(undefined);
     }
 
     useEffect(() => {
@@ -118,7 +123,7 @@ export const VehicleHintsPanel = ({
             controller.signal,
         )
             .then((offline) => {
-                setLiveOfflineAlert(liveOffline(offline.data));
+                setOfflineAlert(openOffline(offline.data));
             })
             .catch((caught: unknown) => {
                 if (controller.signal.aborted || isAbortError(caught)) {
@@ -154,7 +159,12 @@ export const VehicleHintsPanel = ({
     };
 
     const showTank = tankLow;
-    const showFunk = noSignal || liveOfflineAlert !== undefined;
+    const showFunk = noSignal || offlineAlert !== undefined;
+    // The vehicle reports again: say so, the warning only waits to be resolved.
+    const signalBack =
+        vehicle.status !== "OFFLINE" &&
+        offlineAlert !== undefined &&
+        offlineAlert.ended_at !== null;
     const dueHints = dueHintsFor(vehicle);
 
     return (
@@ -181,19 +191,19 @@ export const VehicleHintsPanel = ({
                     {showFunk && (
                         <li className={styles.item} data-tone="danger">
                             <WarningChip type="OFFLINE" />
-                            <p className={styles.message}>Kein Signal</p>
-                            {canWrite && liveOfflineAlert ? (
+                            <p className={styles.message}>
+                                {signalBack
+                                    ? `Kein Signal · beendet ${formatShortStamp(offlineAlert.ended_at)}`
+                                    : "Kein Signal"}
+                            </p>
+                            {canWrite && offlineAlert ? (
                                 <Button
                                     variant="secondary"
                                     size="row"
-                                    disabled={resolvingId === liveOfflineAlert.id}
-                                    title={
-                                        liveOfflineAlert.type === "SPEEDING"
-                                            ? "Aus der Liste nehmen. Zustand und Tempo-Farbe bleiben."
-                                            : "Aus der Liste nehmen. Zustand am Fahrzeug bleibt."
-                                    }
+                                    disabled={resolvingId === offlineAlert.id}
+                                    title="Aus der Liste nehmen. Zustand am Fahrzeug bleibt."
                                     onClick={() =>
-                                        void handleResolve(liveOfflineAlert.id)
+                                        void handleResolve(offlineAlert.id)
                                     }
                                 >
                                     Erledigen

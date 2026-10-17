@@ -1,5 +1,9 @@
 /* Right-hand panel over the page. It spans the whole window height so it
    does not depend on the header height. Phones get the full width. */
+@use "../../styles/motion";
+
+@include motion.keyframes;
+
 .drawer {
     position: fixed;
     top: 0;
@@ -13,11 +17,17 @@
     width: min(400px, 100vw);
     box-sizing: border-box;
 
-    border-left: 1px solid var(--border);
+    border-left: 1px solid var(--border-strong);
     background: var(--surface);
     box-shadow: -14px 0 30px rgb(0 0 0 / 0.18);
     color: var(--text);
     text-align: left;
+    animation: slide-in-right var(--dur-3) var(--ease-out);
+
+    &[data-closing] {
+        animation: slide-out-right var(--dur-2) var(--ease-in-out) forwards;
+        pointer-events: none;
+    }
 }
 
 .head {
@@ -32,8 +42,7 @@
 
 .title {
     margin: 0;
-    font-size: 16px;
-    font-weight: 650;
+    font-size: 22px;
     color: var(--text-h);
 
     &:focus {

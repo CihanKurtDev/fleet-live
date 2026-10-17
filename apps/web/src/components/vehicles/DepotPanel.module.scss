@@ -1,4 +1,9 @@
+@use "../../styles/motion";
+
+@include motion.keyframes;
+
 .panel {
+    animation: drop-in var(--dur-3) var(--ease-out);
     position: absolute;
     top: 12px;
     left: 48px;
@@ -290,7 +295,7 @@
 
 .actionPrimary {
     border-color: transparent;
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--on-accent);
 
     &:hover:not(:disabled) {

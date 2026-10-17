@@ -124,6 +124,17 @@ describe("clusterFleet", () => {
         expect(open.zoom).toBeLessThanOrEqual(FLEET_CLUSTER_MAX_ZOOM + 1);
     });
 
+    it("opens a group as far as all its vehicles still fit, not just one split", () => {
+        const bounds = { west: 6.9, south: 50.9, east: 7.0, north: 51.0 };
+
+        expect(clusterOpen({ expansionZoom: 9, fitZoom: 12.6, bounds }).zoom).toBe(12);
+        // A group that only fits further out still splits.
+        expect(clusterOpen({ expansionZoom: 9, fitZoom: 7, bounds }).zoom).toBe(9);
+        expect(clusterOpen({ expansionZoom: 9, fitZoom: 30, bounds }).zoom).toBe(
+            FLEET_CLUSTER_MAX_ZOOM + 1,
+        );
+    });
+
     it("ignores points outside the bbox and an empty set", () => {
         const points = [
             at(1, 50.94, 6.96),

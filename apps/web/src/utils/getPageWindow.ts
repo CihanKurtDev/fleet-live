@@ -1,4 +1,4 @@
-export type PageWindowItem =
+type PageWindowItem =
     | number
     | "ellipsis-start"
     | "ellipsis-end";

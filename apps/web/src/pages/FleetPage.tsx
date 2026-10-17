@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
     DEPOT_RADIUS_DEFAULT_M,
@@ -119,6 +119,8 @@ export const FleetPage = () => {
         setDrivers,
         setBBox,
         setDepot,
+        vehicleId: selectedId,
+        setVehicle: setSelectedId,
         searchParams,
     } = useFleetPageQuery();
     const {
@@ -161,13 +163,14 @@ export const FleetPage = () => {
     const [statusChip, setStatusChip] = useState<VehicleStatus | null>(() =>
         statusFromFilter(filter),
     );
-    const [selectedId, setSelectedId] = useState<number | null>(null);
     const [focus, setFocus] = useState<{
         key: string;
         vehicle: FleetPosition;
     } | null>(null);
     const [frameNonce, setFrameNonce] = useState(0);
     const [searchOpen, setSearchOpen] = useState(false);
+    // Set when a search hit is chosen: the panel then takes the focus.
+    const [pickedId, setPickedId] = useState<number | null>(null);
     const searchWrapRef = useRef<HTMLDivElement>(null);
 
     // `?filter=driving|idle|offline` (Links von der Schicht) wird zum
@@ -261,6 +264,16 @@ export const FleetPage = () => {
                 : fleetBounds(shownVehicles),
         [densityCells, mode, shownVehicles],
     );
+    // Opened without a saved view (nav, Schicht): frame the whole fleet once
+    // it has loaded, not a fixed Germany view that is a continent on a wide
+    // screen.
+    const [autoFrame, setAutoFrame] = useState(
+        () => bbox === null && depotId === undefined,
+    );
+    if (autoFrame && hasLoaded && frameBounds) {
+        setAutoFrame(false);
+        setFrameNonce((current) => current + 1);
+    }
     const hits = useMemo(
         () => (mode === "positions" ? plateHits(vehicles, searchDraft) : []),
         [mode, searchDraft, vehicles],
@@ -299,6 +312,16 @@ export const FleetPage = () => {
     const draftDirty = draft !== null && isDepotDraftDirty(draft, sites);
     const vehiclePanelOpen = selectedVehicle !== null;
 
+    // Closing the vehicle (Escape or Schließen) returns the focus to the
+    // search field, where the user was looking for vehicles; the hit list
+    // stays shut.
+    const closeVehicle = useCallback(() => {
+        setSelectedId(null);
+        setPickedId(null);
+        searchWrapRef.current?.querySelector("input")?.focus();
+        setSearchOpen(false);
+    }, [setSelectedId]);
+
     // Escape closes the innermost open thing on the map: the vehicle panel,
     // then a placement, then the selected depot. Dialogs, menus and the help
     // drawer take Escape first (they prevent the default).
@@ -319,9 +342,7 @@ export const FleetPage = () => {
             }
 
             if (vehiclePanelOpen) {
-                setSelectedId(null);
-                // The panel had focus or the page did; keep it in the page.
-                document.getElementById("main")?.focus();
+                closeVehicle();
                 return;
             }
 
@@ -344,7 +365,15 @@ export const FleetPage = () => {
         window.addEventListener("keydown", onKey);
 
         return () => window.removeEventListener("keydown", onKey);
-    }, [vehiclePanelOpen, placing, draft, draftDirty, depotId, setDepot]);
+    }, [
+        vehiclePanelOpen,
+        placing,
+        draft,
+        draftDirty,
+        depotId,
+        setDepot,
+        closeVehicle,
+    ]);
     const showDepotPanel =
         placing ||
         draft !== null ||
@@ -403,6 +432,7 @@ export const FleetPage = () => {
     const pickVehicle = (vehicle: FleetPosition) => {
         setSearchOpen(false);
         setSelectedId(vehicle.id);
+        setPickedId(vehicle.id);
 
         if (
             vehicle.has_position &&
@@ -428,6 +458,7 @@ export const FleetPage = () => {
         }
 
         navigate(`/vehicles/${alert.vehicle_id}`, {
+            viewTransition: true,
             state: { from: fleetPath },
         });
     };
@@ -740,6 +771,7 @@ export const FleetPage = () => {
                                                 navigate(
                                                     `/vehicles/${vehicle.id}`,
                                                     {
+                                                        viewTransition: true,
                                                         state: {
                                                             from: fleetPath,
                                                         },
@@ -872,9 +904,11 @@ export const FleetPage = () => {
                     {selectedVehicle && (
                         <div className={styles.detail}>
                             <FleetDetailPanel
+                                key={selectedVehicle.id}
                                 vehicle={selectedVehicle}
                                 from={fleetPath}
-                                onClose={() => setSelectedId(null)}
+                                onClose={closeVehicle}
+                                focusOnOpen={pickedId === selectedVehicle.id}
                             />
                         </div>
                     )}

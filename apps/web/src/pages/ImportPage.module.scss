@@ -9,8 +9,8 @@
 
 .title {
     margin: 0;
-    font-size: 24px;
-    font-weight: 650;
+    font-size: 34px;
+    font-weight: 800;
     color: var(--text-h);
 }
 
@@ -85,8 +85,8 @@
 }
 
 .stepBadgeActive {
-    border-color: var(--accent);
-    background: var(--accent);
+    border-color: var(--accent-fill);
+    background: var(--accent-fill);
     color: var(--on-accent);
 }
 

@@ -11,6 +11,8 @@ export const HELP_DRAWER_ID = "help-drawer";
 
 interface HelpDrawerProps {
     page: HelpPage;
+    /** On its way out: slides away, ignores clicks. */
+    closing?: boolean;
     onClose: () => void;
 }
 
@@ -18,7 +20,11 @@ interface HelpDrawerProps {
  * Side panel with help for the current page. It does not block the page:
  * Escape or "Schließen" closes it and focus returns to the help button.
  */
-export const HelpDrawer = ({ page, onClose }: HelpDrawerProps) => {
+export const HelpDrawer = ({
+    page,
+    closing = false,
+    onClose,
+}: HelpDrawerProps) => {
     const { user } = useAuth();
     const headingRef = useRef<HTMLHeadingElement>(null);
     const restoreFocus = useRef(true);
@@ -61,6 +67,7 @@ export const HelpDrawer = ({ page, onClose }: HelpDrawerProps) => {
         <aside
             id={HELP_DRAWER_ID}
             className={styles.drawer}
+            data-closing={closing || undefined}
             role="dialog"
             aria-modal="false"
             aria-labelledby="help-drawer-title"

@@ -24,6 +24,7 @@ export const AlertsPage = () => {
 
                 setTelemetryFocus("detail", [alert.vehicle_id]);
                 navigate(`/vehicles/${alert.vehicle_id}`, {
+                    viewTransition: true,
                     state: {
                         from: `${location.pathname}${location.search}`,
                     },

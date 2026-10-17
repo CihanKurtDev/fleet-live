@@ -8,9 +8,23 @@
       name="description"
       content="fleet-live zeigt Flottenstatus, Warnungen, Fahrer und Fahrten in einer live aktualisierten Dispatcher-Ansicht."
     />
-    <meta name="theme-color" content="#f7f7f8" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#16171d" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="fleet-live · Flottenleitstelle für Disponenten" />
+    <meta property="og:description" content="Fahrzeugstatus, Warnungen, Fristen und Fahrer auf einem Schirm, live aktualisiert." />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0c1017" media="(prefers-color-scheme: dark)" />
     <title>fleet-live</title>
+    <script>
+      // Before the first paint: the picked scheme, else the system's (utils/theme.ts).
+      (function () {
+        var dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        try {
+          var stored = localStorage.getItem("fleet-live:theme");
+          if (stored === "dark" || stored === "light") dark = stored === "dark";
+        } catch (e) {}
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

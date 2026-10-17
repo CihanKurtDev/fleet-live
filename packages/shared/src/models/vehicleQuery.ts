@@ -25,6 +25,8 @@ export const VEHICLE_FILTERS = [
     "in_depot",
     /** Laufende Tempoüberschreitung (`speeding_open`). */
     "speeding",
+    /** Auf Fahrt ohne aktuellen Fahrer (Heute-Liste auf der Schicht). */
+    "driving_unassigned",
 ] as const;
 
 export const VEHICLE_PAGE_LIMITS = [10, 25, 50, 100] as const;
@@ -89,6 +91,7 @@ export type VehicleListCounts = {
     idle: number;
     offline: number;
     in_depot: number;
+    driving_unassigned: number;
 };
 
 export type VehicleListMeta = {

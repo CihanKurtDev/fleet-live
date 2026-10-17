@@ -7,7 +7,7 @@ import {
 } from "@fleet-live/shared";
 
 /** Reihenfolge der Typ-Chips in den Live-Ereignissen. */
-export const FLEET_EVENT_TYPES: AlertType[] = ["SPEEDING", "OFFLINE", "LOW_FUEL"];
+const FLEET_EVENT_TYPES: AlertType[] = ["SPEEDING", "OFFLINE", "LOW_FUEL"];
 
 /** Läuft noch: Tempo über dem Limit oder Funkstille ohne Ende. */
 export const isRunningEvent = (alert: Pick<Alert, "type" | "ended_at">) =>

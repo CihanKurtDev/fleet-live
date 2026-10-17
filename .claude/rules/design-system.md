@@ -4,7 +4,16 @@ description: The shared page frame and building blocks every screen follows; che
 
 # Design system
 
-The source design is board 0 on the canvas "fleet-live Ein Rahmen für alle Seiten" (https://claude.ai/artifact/3iV4K12uzw8ySatWcbVFiG). This file is its written form. Every new page, block or dialog starts here: use an existing page type and block, or extend this file in the same change and say so. Click behaviour is in `rules/interaction-design.md`.
+The source design is board 0 on the canvas "fleet-live Ein Rahmen für alle Seiten" (https://claude.ai/artifact/3iV4K12uzw8ySatWcbVFiG) for the frame, and the "Leitstelle" boards L0–L5 on the same canvas for the look. This file is its written form. Every new page, block or dialog starts here: use an existing page type and block, or extend this file in the same change and say so. Click behaviour is in `rules/interaction-design.md`.
+
+## Look ("Leitstelle")
+
+- Colours are tokens in `index.css`; components never hard-code them. Dark is asphalt blue (`--bg` #0f131b, `--surface` #151b26); light follows the system setting (`--bg` #f3f5f8, white surfaces). `--accent-fill` (#ffc24b, road-marking yellow) fills the primary button, badges, the pressed-tile edge and the active nav line, always with `--on-accent` text. `--accent` is the same yellow as text on dark and #8a5a00 on light. Status colours stay: `--success`, `--warning`, `--status-off` (Feierabend, Funk), `--danger`.
+- Type: `--heading` Big Shoulders Display (upper case) for page titles (34 px), panel titles (20 px), dialog titles and big numbers; `--sans` IBM Plex Sans for text; `--mono` IBM Plex Mono for labels, tags, plates in lists, table headers and axes. Fonts are self-hosted (`@fontsource`, Latin subsets).
+- Tags (status, alert type, hints) are outlined: status colour as text and a 42 % border, no fill, mono capitals.
+- Map: Esri dark grey tiles mapped onto the Leitstelle colours by zoom-matched SVG filters (`fl-tiles-dark-63/65/71` in `leafletMap.ts`; the land grey changes with the tile zoom), land one step lighter than the page and water clearly darker (variant C on the canvas), place names only from city zoom; light mode keeps a soft blue tint. The roads the fleet drives on are the strongest line (`fleetMapStyle.ts`, hidden from street zoom). Dots and depot rings come from `fleetMapStyle.ts` for `/fleet` and the Schicht band alike: vehicles as 4 px dots in the status colour without outline, the selected one with a yellow ring, groups as a thin status ring around the count, depots as thin rings with the name in mono capitals. The selected trip is drawn in `--accent-fill`.
+- Light and dark: `index.html` sets `data-theme` on `<html>` before the first paint, `utils/theme.ts` keeps it (system setting until someone picks the other scheme; picking the system scheme goes back to following it). Never `@media (prefers-color-scheme)` in components; use `:root[data-theme="dark"]`, and in canvas code `isDarkTheme()` / `onThemeChange()`. The header switch (`ThemeToggle`, next to the "?") shows where it switches to: the sun in the dark scheme, the moon with three stars in the light one. The switch dims the page down and brings it back up in the other scheme ("Dimmer", 420 ms, `theme-switching` in index.css). Header items are centred in the bar (the logo caps would sit high on a shared baseline).
+- Motion: only the `--dur-*` / `--ease-*` tokens and the keyframes in `styles/_motion.scss`. Dialogs pop in and fade out (Escape closes natively, without the fade), menus drop in, drawers slide, the selection bar drops in, new rows and events rise in, a changed number glows once, routes cross-fade (`viewTransition` on links and row navigation). `hooks/usePresence` keeps a closing element for its exit. Reduced motion turns all of it off.
 
 ## Page types
 
@@ -14,7 +23,7 @@ The source design is board 0 on the canvas "fleet-live Ein Rahmen für alle Seit
 
 ## List page frame (top to bottom)
 
-1. **Header**: h1 24 px (20 px on phones) on every page, one muted sentence with the situation below it. The sentence line is kept (non-breaking space) while it loads, so nothing below moves. Right: the page's actions for dispatchers, primary action last and filled ("Fahrzeug anlegen", "Fahrer anlegen"). Viewers see no action buttons.
+1. **Header**: h1 34 px (28 px on phones) on every page, one muted sentence with the situation below it. The sentence line is kept (non-breaking space) while it loads, so nothing below moves. Right: the page's actions for dispatchers, primary action last and filled ("Fahrzeug anlegen", "Fahrer anlegen"). Viewers see no action buttons.
 2. **KPI tiles**: `ui/KpiTiles` on Fahrzeuge, Warnungen, Fahrer, Fristen and Karte (uppercase label, number, hint line). The hint line is always there, empty if needed, so every tile has one height (80 px desktop). A tile is a filter button with a pressed state; one is always active ("Alle" / "Offen").
 3. **List panel** (one bordered panel that fills the remaining height):
    - Toolbar, 54 px: "Auswählen" first (only where a bulk action exists, dispatchers only), further filters as menus, search right-aligned.

@@ -17,8 +17,11 @@ export type SimRoute = {
 
 /** Nominelle Tick-Dauer für die Kinematik — nicht `TELEMETRY_TICK_MS` (in Tests 0). */
 export const SIM_SECONDS_PER_TICK = 0.4;
-/** Zeitraffer, damit Köln–Düsseldorf grob 1–2 Minuten dauert. */
-export const TIME_SCALE = 20;
+/**
+ * Zeitraffer: Köln–Düsseldorf dauert grob 5–8 Minuten. Schneller lässt
+ * sich ein fahrendes Fahrzeug auf der Karte nicht mehr anklicken.
+ */
+export const TIME_SCALE = 5;
 export const CITY_LIMIT_KMH = 50;
 export const HIGHWAY_LIMIT_KMH = 120;
 /** Jedes 8. Fahrzeug darf über dem Klassenlimit fahren, sonst gibt es nie SPEEDING. */

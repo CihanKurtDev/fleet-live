@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { FleetPosition } from "@fleet-live/shared";
 
@@ -14,14 +14,26 @@ type FleetDetailPanelProps = {
     vehicle: FleetPosition;
     from: string;
     onClose: () => void;
+    /** Focus the plate when the panel opens (a search hit was chosen). */
+    focusOnOpen?: boolean;
 };
 
 export const FleetDetailPanel = ({
     vehicle,
     from,
     onClose,
+    focusOnOpen = false,
 }: FleetDetailPanelProps) => {
     const [tick, setTick] = useState(0);
+    const plateRef = useRef<HTMLHeadingElement>(null);
+
+    // The search list closes on choice; without this the focus would fall
+    // back to the top of the page.
+    useEffect(() => {
+        if (focusOnOpen) {
+            plateRef.current?.focus();
+        }
+    }, [focusOnOpen]);
 
     useEffect(() => {
         const timer = window.setInterval(() => {
@@ -42,7 +54,9 @@ export const FleetDetailPanel = ({
     return (
         <div className={styles.panel}>
             <div className={styles.head}>
-                <h2 className={styles.plate}>{vehicle.license_plate}</h2>
+                <h2 ref={plateRef} className={styles.plate} tabIndex={-1}>
+                    {vehicle.license_plate}
+                </h2>
                 <Button variant="ghost" size="sm" onClick={onClose}>
                     Schließen
                 </Button>

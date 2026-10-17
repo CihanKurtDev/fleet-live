@@ -57,7 +57,7 @@
     overflow: auto;
     list-style: none;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius);
     background: var(--bg);
     box-shadow: var(--shadow);
 
@@ -157,12 +157,17 @@
     background: var(--bg);
 }
 
+/*
+ * Always its own second row, right-aligned: the toolbar then has the same two
+ * 34 px rows at every width, matching the event column beside the map.
+ */
 .meta {
     display: flex;
+    flex: 1 0 100%;
     flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
-    margin-left: auto;
 }
 
 /*
@@ -182,7 +187,7 @@
     }
 
     .meta {
-        flex: 1 1 0;
+        flex: 1 0 100%;
         flex-wrap: nowrap;
         justify-content: flex-end;
         min-width: min-content;
@@ -190,8 +195,7 @@
 }
 
 .count,
-.note,
-.error {
+.note {
     margin: 0;
     font-size: 13px;
     color: var(--text);
@@ -244,11 +248,6 @@
         }
     }
 }
-
-.error {
-    color: var(--danger);
-}
-
 .mapArea {
     position: relative;
     flex: 1 1 0;
@@ -272,6 +271,8 @@
     color: var(--text);
     font-size: 13px;
     text-align: center;
+    /* Only a note: wheel, drag and clicks go through to the map below. */
+    pointer-events: none;
 }
 
 /* Narrow desktop: events and vehicle panel move under the map. */

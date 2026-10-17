@@ -8,7 +8,7 @@
     box-sizing: border-box;
     padding: 14px 16px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     background: var(--surface);
 }
 
@@ -22,7 +22,7 @@
 
 .panelTitle {
     margin: 0;
-    font-size: 16px;
+    font-size: 20px;
 }
 
 .count {
@@ -30,13 +30,6 @@
     font-weight: 400;
     color: var(--text);
 }
-
-.muted {
-    margin: 0;
-    font-size: 13px;
-    color: var(--text);
-}
-
 .note,
 .empty {
     margin: 0;
@@ -54,10 +47,3 @@
     color: var(--danger);
 }
 
-/* The roster / list inside a panel takes the rest of the height and scrolls. */
-.scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-}

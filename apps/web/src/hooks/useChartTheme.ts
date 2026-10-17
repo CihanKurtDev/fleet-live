@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
+import { onThemeChange } from "../utils/theme";
 
-export type ChartTheme = {
+type ChartTheme = {
     text: string;
     border: string;
     accent: string;
 };
 
+/** Before the tokens are read (and in tests): the surrounding text colour. */
 const FALLBACK: ChartTheme = {
-    text: "#514b5d",
-    border: "#d9d6df",
-    accent: "#6d28d9",
+    text: "currentColor",
+    border: "currentColor",
+    accent: "currentColor",
 };
 
 const readTheme = (): ChartTheme => {
@@ -30,10 +32,7 @@ export const useChartTheme = (): ChartTheme => {
         const apply = () => setTheme(readTheme());
         apply();
 
-        const media = window.matchMedia("(prefers-color-scheme: dark)");
-        media.addEventListener("change", apply);
-
-        return () => media.removeEventListener("change", apply);
+        return onThemeChange(apply);
     }, []);
 
     return theme;

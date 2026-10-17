@@ -8,9 +8,9 @@ import { listVehicles } from "../api/vehicles";
 import { formatCount } from "../utils/formatCount";
 import { readFlag, userCompanyKey, writeFlag } from "../utils/localFlags";
 
-export type FirstStepId = "import" | "depot" | "due" | "team" | "totp";
+type FirstStepId = "import" | "depot" | "due" | "team" | "totp";
 
-export type FirstStep = {
+type FirstStep = {
     id: FirstStepId;
     title: string;
     /** Short line under the title while the step is open. */
@@ -46,7 +46,7 @@ const plural = (count: number, one: string, many: string) =>
     count === 1 ? `1 ${one}` : `${formatCount(count)} ${many}`;
 
 /** Builds the steps that have a known state. A step without a signal is left out. */
-export function buildFirstSteps(
+function buildFirstSteps(
     user: AuthUser,
     signals: Signals,
     dueVisited: boolean,

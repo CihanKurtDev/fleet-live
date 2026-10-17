@@ -4,6 +4,7 @@ import layout from './styles/layout.module.scss';
 import { RequireAuth } from './components/RequireAuth';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { HomeRoute } from './pages/HomeRoute';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -36,6 +37,11 @@ export const router = createBrowserRouter([
         ErrorBoundary: RouteErrorPage,
         children: [
             {
+                // Landing page for visitors, Schicht once signed in.
+                index: true,
+                Component: HomeRoute,
+            },
+            {
                 path: 'login',
                 Component: LoginPage,
             },
@@ -65,14 +71,6 @@ export const router = createBrowserRouter([
                     {
                         Component: WideLayout,
                         children: [
-                            {
-                                index: true,
-                                lazy: async () => ({
-                                    Component: (
-                                        await import('./pages/BriefingPage')
-                                    ).BriefingPage,
-                                }),
-                            },
                             {
                                 path: 'vehicles',
                                 lazy: async () => ({

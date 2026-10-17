@@ -78,6 +78,8 @@ const FILTER_SQL: Record<VehicleFilterId, string> = {
     idle: "v.status = 'IDLE'",
     offline: "v.status = 'OFFLINE'",
     in_depot: "v.depot_site_id IS NOT NULL",
+    driving_unassigned:
+        "v.status = 'DRIVING' AND v.current_driver_id IS NULL",
     speeding: `EXISTS (
         SELECT 1 FROM alerts a
         WHERE a.vehicle_id = v.id
@@ -197,7 +199,9 @@ const FACET_SQL = `
         COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
         COALESCE(SUM(status = 'IDLE'), 0) AS idle,
         COALESCE(SUM(status = 'OFFLINE'), 0) AS offline,
-        COALESCE(SUM(depot_site_id IS NOT NULL), 0) AS in_depot
+        COALESCE(SUM(depot_site_id IS NOT NULL), 0) AS in_depot,
+        COALESCE(SUM(status = 'DRIVING' AND current_driver_id IS NULL), 0)
+            AS driving_unassigned
     FROM vehicles v
     WHERE v.company_id = ?
       AND ${LIST_SEARCH_SQL}
@@ -236,6 +240,7 @@ type FacetRow = {
     idle: number;
     offline: number;
     in_depot: number;
+    driving_unassigned: number;
 };
 
 function toLikePattern(search: string): string {
@@ -386,6 +391,7 @@ export class VehicleModel {
                     idle: Number(counts.idle),
                     offline: Number(counts.offline),
                     in_depot: Number(counts.in_depot),
+                    driving_unassigned: Number(counts.driving_unassigned),
                 },
             },
         };

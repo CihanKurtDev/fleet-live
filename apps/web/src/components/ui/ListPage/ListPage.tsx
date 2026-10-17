@@ -15,8 +15,9 @@
  * </ListPage>
  * ```
  */
-import { useEffect, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, type ReactNode, type Ref } from "react";
 
+import { skipMotion } from "../../../hooks/usePresence";
 import { Button } from "../Button/Button";
 import { Checkbox } from "../Checkbox/Checkbox";
 import { Input } from "../Input/Input";
@@ -42,7 +43,7 @@ export const ListPage = ({ children, selecting = false, busy = false }: ListPage
 );
 
 interface ListPageHeaderProps {
-    /** h1, 24 px. */
+    /** h1, 34 px. */
     title: string;
     /** One muted sentence about the situation. */
     summary?: ReactNode;
@@ -60,21 +61,55 @@ export const ListPageHeader = ({
     summary,
     notice,
     actions,
-}: ListPageHeaderProps) => (
-    <header className={styles.header}>
-        <div className={styles.heading}>
-            <h1 className={styles.title}>{title}</h1>
-            {/* The line is kept while loading, so the tiles below do not jump. */}
-            <p className={styles.summary} aria-hidden={summary ? undefined : true}>
-                {summary || "\u00a0"}
+}: ListPageHeaderProps) => {
+    const noticeRef = useRef<HTMLParagraphElement>(null);
+
+    // Each new confirmation rises in; the live region itself stays in place.
+    useEffect(() => {
+        const element = noticeRef.current;
+
+        if (
+            !notice ||
+            !element ||
+            typeof element.animate !== "function" ||
+            skipMotion()
+        ) {
+            return;
+        }
+
+        element.animate(
+            [
+                { opacity: 0, transform: "translateY(6px)" },
+                { opacity: 1, transform: "none" },
+            ],
+            { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+        );
+    }, [notice]);
+
+    return (
+        <header className={styles.header}>
+            <div className={styles.heading}>
+                <h1 className={styles.title}>{title}</h1>
+                {/* The line is kept while loading, so the tiles below do not jump. */}
+                <p
+                    className={styles.summary}
+                    aria-hidden={summary ? undefined : true}
+                >
+                    {summary || "\u00a0"}
+                </p>
+            </div>
+            <p
+                ref={noticeRef}
+                className={styles.notice}
+                role="status"
+                aria-live="polite"
+            >
+                {notice}
             </p>
-        </div>
-        <p className={styles.notice} role="status" aria-live="polite">
-            {notice}
-        </p>
-        {actions && <div className={styles.actions}>{actions}</div>}
-    </header>
-);
+            {actions && <div className={styles.actions}>{actions}</div>}
+        </header>
+    );
+};
 
 interface ListPanelProps {
     /** Spoken name of the list region. */
@@ -89,7 +124,7 @@ export const ListPanel = ({ label, children }: ListPanelProps) => (
     </section>
 );
 
-export type ListSearch = {
+type ListSearch = {
     value: string;
     onChange: (value: string) => void;
     placeholder: string;
@@ -132,7 +167,7 @@ export const ListToolbar = ({
     </div>
 );
 
-export type PageCheckbox = {
+type PageCheckbox = {
     checked: boolean;
     indeterminate: boolean;
     disabled?: boolean;

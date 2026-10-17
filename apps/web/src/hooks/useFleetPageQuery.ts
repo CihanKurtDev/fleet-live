@@ -47,6 +47,13 @@ export const useFleetPageQuery = () => {
         depotRaw !== null && /^[1-9]\d*$/.test(depotRaw)
             ? Number(depotRaw)
             : undefined;
+    // The selected vehicle lives in the URL too, so Back from its detail
+    // page returns to it.
+    const vehicleRaw = searchParams.get("vehicle");
+    const vehicleId =
+        vehicleRaw !== null && /^[1-9]\d*$/.test(vehicleRaw)
+            ? Number(vehicleRaw)
+            : null;
     const [searchDraft, setSearchDraft] = useState(search);
     const [prevSearch, setPrevSearch] = useState(search);
     if (search !== prevSearch) {
@@ -55,17 +62,26 @@ export const useFleetPageQuery = () => {
     }
     const debouncedSearch = useDebouncedValue(searchDraft);
     const writeQuery = useCallback(
-        (next: FleetPositionsQuery, nextDepot?: number | null) => {
+        (
+            next: FleetPositionsQuery,
+            nextDepot?: number | null,
+            nextVehicle?: number | null,
+        ) => {
             const params = serializeFleetPositionsQuery(next);
             const depot = nextDepot === undefined ? depotId : nextDepot;
+            const vehicle = nextVehicle === undefined ? vehicleId : nextVehicle;
 
             if (depot) {
                 params.set("depot", String(depot));
             }
 
+            if (vehicle) {
+                params.set("vehicle", String(vehicle));
+            }
+
             setSearchParams(params, { replace: true });
         },
-        [depotId, setSearchParams],
+        [depotId, setSearchParams, vehicleId],
     );
 
     useEffect(() => {
@@ -136,12 +152,30 @@ export const useFleetPageQuery = () => {
         [bbox, drivers, filter, search, writeQuery],
     );
 
+    const setVehicle = useCallback(
+        (id: number | null) => {
+            writeQuery(
+                {
+                    bbox: bbox ?? undefined,
+                    filter,
+                    search: search || undefined,
+                    drivers: drivers.length > 0 ? drivers : undefined,
+                },
+                undefined,
+                id,
+            );
+        },
+        [bbox, drivers, filter, search, writeQuery],
+    );
+
     return {
         bbox,
         filter,
         search,
         drivers,
         depotId,
+        vehicleId,
+        setVehicle,
         searchDraft,
         setSearchDraft,
         setFilter,

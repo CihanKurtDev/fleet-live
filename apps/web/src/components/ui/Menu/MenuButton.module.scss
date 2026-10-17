@@ -1,3 +1,7 @@
+@use "../../../styles/motion";
+
+@include motion.keyframes;
+
 .root {
     position: relative;
     display: inline-flex;
@@ -7,6 +11,11 @@
     margin-left: -2px;
     font-size: 11px;
     color: var(--text);
+    transition: transform var(--dur-2) var(--ease-out);
+
+    &[data-open] {
+        transform: rotate(180deg);
+    }
 }
 
 /* A choice in this menu filters the list. */
@@ -27,10 +36,17 @@
     min-width: 180px;
     padding: 4px;
 
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
     box-shadow: var(--shadow);
+    transform-origin: top right;
+    animation: drop-in var(--dur-2) var(--ease-out);
+
+    &[data-closing] {
+        animation: fade-out var(--dur-2) var(--ease-in-out) forwards;
+        pointer-events: none;
+    }
 
     button {
         display: flex;
@@ -48,6 +64,10 @@
         white-space: nowrap;
         color: var(--text-h);
         cursor: pointer;
+
+        transition:
+            background-color var(--dur-1) var(--ease-out),
+            color var(--dur-1) var(--ease-out);
 
         &:hover:not(:disabled) {
             background: var(--code-bg);
@@ -77,4 +97,5 @@
 .alignStart {
     right: auto;
     left: 0;
+    transform-origin: top left;
 }

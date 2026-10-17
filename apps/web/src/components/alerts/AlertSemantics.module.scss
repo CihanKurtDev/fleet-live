@@ -1,29 +1,30 @@
+/* Alert type tag (Tempo red, Funk grey, Tank amber), same shape as the
+   vehicle status tag. */
 .type {
     display: inline-flex;
     align-items: center;
     min-height: 22px;
     padding: 0 7px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    font-size: 12px;
+    border: 1px solid color-mix(in srgb, var(--tag, var(--text)) 42%, transparent);
+    border-radius: var(--radius-sm);
+    color: var(--tag, var(--text-h));
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     line-height: 1;
+    text-transform: uppercase;
     white-space: nowrap;
 }
 
 .type[data-type="SPEEDING"] {
-    border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
-    background: color-mix(in srgb, var(--danger) 11%, var(--surface));
-    color: var(--danger);
+    --tag: var(--danger);
 }
 
 .type[data-type="LOW_FUEL"] {
-    border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
-    background: color-mix(in srgb, var(--warning) 12%, var(--surface));
-    color: var(--warning);
+    --tag: var(--warning);
 }
 
 .type[data-type="OFFLINE"] {
-    border-color: color-mix(in srgb, var(--danger) 36%, var(--border));
-    background: color-mix(in srgb, var(--danger) 8%, var(--surface));
-    color: var(--danger);
+    --tag: var(--status-off);
 }

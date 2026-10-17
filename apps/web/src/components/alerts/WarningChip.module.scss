@@ -1,47 +1,33 @@
+/* Hint tag in a row (Tempo red, Funk grey, Tank amber): the same outlined
+   mono shape as the alert type and the vehicle status. */
 .chip {
     display: inline-flex;
     align-items: center;
     height: 20px;
     padding: 0 6px;
 
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--tag, var(--text)) 42%, transparent);
     border-radius: var(--radius-sm);
-    background: var(--code-bg);
+    background: transparent;
 
-    font-size: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     line-height: 1;
-    color: var(--text-h);
+    text-transform: uppercase;
+    color: var(--tag, var(--text-h));
     white-space: nowrap;
 
     &[data-type="SPEEDING"] {
-        border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
-        background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-        color: var(--danger);
+        --tag: var(--danger);
     }
 
     &[data-type="LOW_FUEL"] {
-        border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
-        background: color-mix(in srgb, var(--warning) 13%, var(--surface));
-        color: var(--warning);
+        --tag: var(--warning);
     }
 
     &[data-type="OFFLINE"] {
-        border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
-        background: color-mix(in srgb, var(--danger) 10%, var(--surface));
-        color: var(--danger);
-    }
-}
-
-@media (prefers-color-scheme: dark) {
-    .chip[data-type="SPEEDING"] {
-        background: color-mix(in srgb, var(--danger) 22%, var(--surface));
-    }
-
-    .chip[data-type="LOW_FUEL"] {
-        background: color-mix(in srgb, var(--warning) 22%, var(--surface));
-    }
-
-    .chip[data-type="OFFLINE"] {
-        background: color-mix(in srgb, var(--danger) 22%, var(--surface));
+        --tag: var(--status-off);
     }
 }

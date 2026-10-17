@@ -11,7 +11,7 @@ import type { KpiTileTone } from "../ui/KpiTiles/KpiTiles";
 import { AlertTypeChip } from "./AlertSemantics";
 import styles from "./alertTableConfig.module.scss";
 
-export type AlertTileId = "open" | AlertType | "resolved";
+type AlertTileId = "open" | AlertType | "resolved";
 
 type AlertTileOption = {
     id: AlertTileId;

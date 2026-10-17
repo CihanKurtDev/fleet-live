@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@fleet-live/shared": "1.0.0",
+    "@fontsource/big-shoulders-display": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
     "leaflet": "^1.9.4",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",

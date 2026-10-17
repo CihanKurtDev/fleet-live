@@ -1,6 +1,6 @@
 import { ApiError, isAbortError } from "./client";
 
-export function isTransientApiError(error: unknown): boolean {
+function isTransientApiError(error: unknown): boolean {
     if (isAbortError(error)) {
         return false;
     }
@@ -16,7 +16,7 @@ export function isTransientApiError(error: unknown): boolean {
     return error instanceof TypeError;
 }
 
-export function sleep(ms: number, signal: AbortSignal): Promise<void> {
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
         if (signal.aborted) {
             reject(
