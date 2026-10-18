@@ -1,6 +1,7 @@
 // PreToolUse guard for fleet-live. Reads the hook payload on stdin and denies:
 // - branches that start with cursor/ or claude/ (see rules/git-branches.md)
 // - force pushes and commits directly on main
+// - the demo seed, which replaces the grown dev data (rules/backend.md)
 import { execSync } from "node:child_process";
 
 const deny = (reason) => {
@@ -34,6 +35,15 @@ if (payload.tool_name === "Bash") {
 
     if (/\bgit\s+push\b[^\n;&|]*\s(?:--force(?:-with-lease)?|-f)\b/.test(command)) {
         deny("No force push in this repo.");
+    }
+
+    if (
+        /\bdb:seed\b|\bsrc[\\/]db[\\/]seed\.ts\b/.test(command) &&
+        !/\bALLOW_SEED=1\b/.test(command)
+    ) {
+        deny(
+            "The demo seed replaces the grown dev data in apps/api/data/fleetlive.db and cannot be undone from the seed. Fix data in place with SQL after a backup (rules/backend.md). Only when the user asked for a reseed: back up fleetlive.db*, then prefix the command with ALLOW_SEED=1.",
+        );
     }
 
     if (/\bgit\s+commit\b/.test(command)) {

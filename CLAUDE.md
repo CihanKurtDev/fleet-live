@@ -22,7 +22,7 @@
 - `npm test` — API tests (`node:test` + SuperTest)
 - `npm run test:web` — web tests (Vitest)
 - `npm run typecheck`, `npm run build -w web`
-- `npm run lint` — currently fails on older errors outside recent work; lint the files you change (`npx eslint <file>` in the app folder). A hook runs ESLint on every TypeScript file Claude edits in `apps/web` or `apps/api`.
+- `npm run lint` — currently fails on older errors outside recent work; lint the files you change (`npx eslint <file>` in the app folder). A hook runs ESLint on every TypeScript file Claude edits in `apps/web` or `apps/api`. Other hooks block `db:seed` on the dev data (`rules/backend.md`, Dev data) and flag `prefers-color-scheme` in web sources (the header switch sets `data-theme`).
 - `npm run verify` — typecheck, tests, lint and build; fails until the old lint errors are fixed.
 
 ## Slash commands
