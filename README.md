@@ -393,7 +393,7 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `DATABASE_PATH` | `apps/api/data/fleetlive.db` | `:memory:` in Tests |
 | `CORS_ORIGIN` | `*` | Same origin über den Vite-Proxy |
 | `TELEMETRY_TICK_MS` | `400` | `0` schaltet den Simulator aus |
-| `TELEMETRY_BATCH_SIZE` | `32` | Cap pro Tick über die Fokus-IDs |
+| `TELEMETRY_BATCH_SIZE` | `3000` | Cap pro Tick über die Fokus-IDs |
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
 | `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
 | `LOG_LEVEL` | `info` | |
