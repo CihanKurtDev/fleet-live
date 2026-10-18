@@ -5,12 +5,11 @@ import { emptyToUndefined } from "./queryPreprocess";
 
 /**
  * What needs doing today, most urgent kind first. The order is the product
- * decision: legal deadlines, a vehicle driving without a driver, drivers due
- * for a talk, vehicles without signal, low fuel, deadlines coming up.
+ * decision: legal deadlines, drivers due for a talk, vehicles without signal,
+ * low fuel, deadlines coming up.
  */
 export const TODAY_KINDS = [
     "deadline_overdue",
-    "driving_unassigned",
     "driver_talk",
     "offline",
     "low_fuel",

@@ -44,6 +44,33 @@ export async function loginAs(
     return { agent, cookie: String(header).split(";")[0] };
 }
 
+/**
+ * Legt einen Fahrer an, gibt ihm das Fahrzeug frei und macht es zu seinem
+ * aktuellen: der Weg, auf dem ein Fahrzeug einen Fahrer bekommt. Erst danach
+ * kann es per HTTP auf `DRIVING` gehen.
+ */
+export async function giveCurrentDriver(
+    api: ReturnType<typeof request.agent>,
+    vehicleId: number,
+    name = `Fahrer ${vehicleId}`,
+) {
+    const driver = await api.post("/api/drivers").send({ name });
+    assert.equal(driver.status, 201);
+
+    const driverId = driver.body.data.id as number;
+    const eligible = await api
+        .post(`/api/drivers/${driverId}/vehicles`)
+        .send({ vehicle_id: vehicleId });
+    assert.equal(eligible.status, 201);
+
+    const current = await api
+        .patch(`/api/drivers/${driverId}/current-vehicle`)
+        .send({ vehicle_id: vehicleId });
+    assert.equal(current.status, 200);
+
+    return driverId;
+}
+
 export function insertAlert(
     vehicleId: number,
     input: {

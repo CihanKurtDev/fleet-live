@@ -8,7 +8,10 @@ import {
 } from "@fleet-live/shared";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
-import { SpeedingEventModel } from "../models/speedingEvent.model";
+import {
+    SPEEDING_STALE_MS,
+    SpeedingEventModel,
+} from "../models/speedingEvent.model";
 import { stepSpeeding } from "../lib/speeding";
 import { loginAs } from "./helpers";
 
@@ -221,6 +224,38 @@ describe("SPEEDING events", () => {
         const afterEnd = await api.get(`/api/vehicles/${vehicle.id}`);
         assert.equal(afterEnd.body.speeding_open, false);
         assert.equal(afterEnd.body.active_alerts, 1);
+    });
+
+    it("ends an open event that gets no tick for a minute, not before", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 9",
+            driver_name: "Stumm",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        const start = 7_000_000;
+
+        patchAt(vehicle.id, 1, OVER_CITY, start);
+        patchAt(vehicle.id, 1, OVER_CITY, start + SPEEDING_OPEN_AFTER_MS);
+        const lastTick = start + SPEEDING_OPEN_AFTER_MS;
+
+        assert.deepEqual(
+            SpeedingEventModel.endStale(lastTick + SPEEDING_STALE_MS - 1),
+            [],
+        );
+        let rows = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(rows.body.data[0].ended_at, null);
+
+        assert.deepEqual(
+            SpeedingEventModel.endStale(lastTick + SPEEDING_STALE_MS),
+            [1],
+        );
+        rows = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(typeof rows.body.data[0].ended_at, "string");
+        assert.equal(rows.body.data[0].resolved_at, null);
+
+        const car = await api.get(`/api/vehicles/${vehicle.id}`);
+        assert.equal(car.body.speeding_open, false);
     });
 
     it("keeps a single open SPEEDING row per vehicle", async () => {

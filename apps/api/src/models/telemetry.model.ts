@@ -3,7 +3,7 @@ import { config } from "../config";
 import { db } from "../db/database";
 import { stmt } from "../db/statements";
 import { nowSqlite } from "../lib/sqlTime";
-import { nextSimTick } from "../sim/routes";
+import { nextSimTick, SIM_PING_SECONDS } from "../sim/routes";
 import { TripModel } from "./trip.model";
 import { isCompanySimRunning } from "../lib/simControl";
 
@@ -16,7 +16,11 @@ type DrivingVehicle = {
     fuel_level: number;
 };
 
-const SELECT_DRIVING_BY_IDS = `
+/** Ein Ping, den ein Gerät senden würde: das Fahrzeug und die Zeit seit dem letzten. */
+type Ping = { vehicle: DrivingVehicle; elapsedS: number };
+
+/** Alle fahrenden Fahrzeuge, oder nur die Ids aus dem JSON-Array (`?` = null: alle). */
+const SELECT_DRIVING = `
     SELECT
         v.id,
         v.company_id,
@@ -30,7 +34,10 @@ const SELECT_DRIVING_BY_IDS = `
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
     WHERE v.status = 'DRIVING'
-      AND v.id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
+      AND (
+          ?1 IS NULL
+          OR v.id IN (SELECT CAST(value AS INTEGER) FROM json_each(?1))
+      )
       AND (
           v.current_driver_id IS NOT NULL
           OR NOT EXISTS (
@@ -107,8 +114,8 @@ function takeBatch<T>(items: T[], limit: number): T[] {
 
 type TickedPatch = TelemetryPatch & { company_id: number };
 
-function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
-    if (vehicles.length === 0) {
+function writePatches(pings: Ping[]): TickedPatch[] {
+    if (pings.length === 0) {
         return [];
     }
 
@@ -121,7 +128,7 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
 
     db.exec("BEGIN");
     try {
-        for (const vehicle of vehicles) {
+        for (const { vehicle, elapsedS } of pings) {
             const next = nextSimTick(
                 vehicle.id,
                 {
@@ -129,6 +136,7 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
                     lng: vehicle.longitude,
                 },
                 vehicle.speed,
+                elapsedS,
             );
             const { lat: latitude, lng: longitude, speed, path, limit_kmh } =
                 next;
@@ -144,6 +152,12 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
 
             prune.run(vehicle.id, vehicle.id, keep);
             updateFuelAndLimit.run(fuelLevel, limit_kmh, vehicle.id);
+
+            // Moved off a convoy at the start: the old trip ends where it was,
+            // the line does not jump across the map.
+            if (next.relocated) {
+                TripModel.close(vehicle.id);
+            }
 
             const pathDelta = TripModel.appendPoints(
                 vehicle.id,
@@ -181,7 +195,7 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
         throw error;
     }
 
-    const companies = new Set(vehicles.map((vehicle) => vehicle.company_id));
+    const companies = new Set(pings.map(({ vehicle }) => vehicle.company_id));
 
     for (const companyId of companies) {
         TripModel.pruneClosedForCompany(companyId);
@@ -190,23 +204,91 @@ function writePatches(vehicles: DrivingVehicle[]): TickedPatch[] {
     return patches;
 }
 
-export class TelemetryModel {
-    static tickDrivingVehicles(
-        focusIds: number[] = [],
-        limit = config.telemetryBatchSize,
-    ): TickedPatch[] {
-        if (focusIds.length === 0) {
-            return [];
+/**
+ * Wie ein Gerät: jedes Fahrzeug meldet sich in seinem eigenen, leicht
+ * schwankenden Abstand um `PING_INTERVAL_MS` (60–160 %), nicht alle im selben
+ * Moment. Die Strecke eines Pings folgt aus der echten Zeit seit dem letzten.
+ */
+const PING_JITTER_MIN = 0.6;
+const PING_JITTER_SPAN = 1;
+/** Ein Fahrzeug, das lange nichts gemeldet hat, springt nicht um die ganze Pause. */
+const MAX_ELAPSED_S = 30;
+
+type PingClock = { lastMs: number; dueMs: number };
+
+const pingClocks = new Map<number, PingClock>();
+
+function nextPingDelayMs() {
+    return (
+        config.pingIntervalMs *
+        (PING_JITTER_MIN + Math.random() * PING_JITTER_SPAN)
+    );
+}
+
+function duePings(rows: DrivingVehicle[], nowMs: number): Ping[] {
+    const due: Ping[] = [];
+
+    for (const vehicle of rows) {
+        const clock = pingClocks.get(vehicle.id);
+
+        if (!clock) {
+            // Neu im Blick: Phase streuen, damit nicht alle gleichzeitig melden.
+            pingClocks.set(vehicle.id, {
+                lastMs: nowMs,
+                dueMs: nowMs + Math.random() * config.pingIntervalMs,
+            });
+            continue;
         }
 
-        const focused = stmt(SELECT_DRIVING_BY_IDS).all(
-            JSON.stringify(focusIds),
-        ) as DrivingVehicle[];
-        const runnable = focused.filter((vehicle) =>
-            isCompanySimRunning(vehicle.company_id),
-        );
+        if (nowMs < clock.dueMs) {
+            continue;
+        }
 
-        return writePatches(takeBatch(runnable, limit));
+        due.push({
+            vehicle,
+            elapsedS: Math.min(MAX_ELAPSED_S, (nowMs - clock.lastMs) / 1000),
+        });
+        clock.lastMs = nowMs;
+        clock.dueMs = nowMs + nextPingDelayMs();
+    }
+
+    if (pingClocks.size > rows.length * 2 + 100) {
+        const driving = new Set(rows.map((vehicle) => vehicle.id));
+
+        for (const id of pingClocks.keys()) {
+            if (!driving.has(id)) {
+                pingClocks.delete(id);
+            }
+        }
+    }
+
+    return due;
+}
+
+export class TelemetryModel {
+    /**
+     * Ein Durchlauf des Simulators: jedes fahrende Fahrzeug, dessen nächster
+     * Ping fällig ist, schreibt genau einen Punkt. Mit `onlyIds` melden genau
+     * diese Fahrzeuge sofort, mit der nominellen Pingzeit (Tests).
+     */
+    static tickDrivingVehicles(
+        onlyIds?: number[],
+        limit = config.telemetryBatchSize,
+        nowMs = Date.now(),
+    ): TickedPatch[] {
+        const rows = (
+            stmt(SELECT_DRIVING).all(
+                onlyIds ? JSON.stringify(onlyIds) : null,
+            ) as DrivingVehicle[]
+        ).filter((vehicle) => isCompanySimRunning(vehicle.company_id));
+        const pings: Ping[] = onlyIds
+            ? rows.map((vehicle) => ({
+                  vehicle,
+                  elapsedS: SIM_PING_SECONDS,
+              }))
+            : duePings(rows, nowMs);
+
+        return writePatches(takeBatch(pings, limit));
     }
 
     /**

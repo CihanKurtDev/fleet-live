@@ -724,6 +724,78 @@ function enforceOneCurrentVehiclePerDriver(database: DatabaseSync) {
             WHERE rn = 1
         )
     `);
+
+    // Wer hier den Fahrer verliert, darf nicht auf Fahrt bleiben.
+    demoteDrivingWithoutDriver(database);
+}
+
+/**
+ * Ein Fahrzeug fährt nie ohne Fahrer. Setzt jedes `DRIVING` ohne aktuellen
+ * Fahrer auf `IDLE` und beendet, was an der Fahrt hängt: offene Fahrt zu,
+ * letztes Tempo 0, offenes Tempo-Ereignis zu. Nur SQL, damit es in jedem
+ * Schritt der Migration läuft (die Fahrt wird nicht eingedickt). Ohne solche
+ * Fahrzeuge tut es nichts; es läuft bei jedem Start als Sicherung.
+ */
+function demoteDrivingWithoutDriver(database: DatabaseSync) {
+    const names = columnNames(database, "vehicles");
+
+    if (!names.has("current_driver_id")) {
+        return;
+    }
+
+    const ids = (
+        database
+            .prepare(
+                `SELECT id FROM vehicles
+                 WHERE status = 'DRIVING' AND current_driver_id IS NULL`,
+            )
+            .all() as Array<{ id: number }>
+    ).map((row) => row.id);
+
+    if (ids.length === 0) {
+        return;
+    }
+
+    const json = JSON.stringify(ids);
+    const among = "IN (SELECT value FROM json_each(?))";
+
+    if (tableExists(database, "telemetry") && names.has("last_telemetry_id")) {
+        database
+            .prepare(
+                `UPDATE telemetry SET speed = 0
+                 WHERE id IN (
+                     SELECT last_telemetry_id FROM vehicles
+                     WHERE id ${among} AND last_telemetry_id IS NOT NULL
+                 )`,
+            )
+            .run(json);
+    }
+
+    if (tableExists(database, "trips")) {
+        database
+            .prepare(
+                `UPDATE trips SET ended_at = CURRENT_TIMESTAMP
+                 WHERE ended_at IS NULL AND vehicle_id ${among}`,
+            )
+            .run(json);
+    }
+
+    if (
+        tableExists(database, "alerts") &&
+        columnNames(database, "alerts").has("ended_at")
+    ) {
+        database
+            .prepare(
+                `UPDATE alerts SET ended_at = CURRENT_TIMESTAMP
+                 WHERE type = 'SPEEDING' AND ended_at IS NULL
+                   AND vehicle_id ${among}`,
+            )
+            .run(json);
+    }
+
+    database
+        .prepare(`UPDATE vehicles SET status = 'IDLE' WHERE id ${among}`)
+        .run(json);
 }
 
 /**

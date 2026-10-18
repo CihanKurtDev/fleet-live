@@ -54,8 +54,14 @@ export class ExceptionEventModel {
                 companyId: patch.company_id,
                 atMs: nowMs,
             });
-            AlertModel.endOpenType(patch.id, "OFFLINE", sqliteFromMs(nowMs));
         }
+
+        // Ein Statement für den ganzen Tick statt eines je Fahrzeug.
+        AlertModel.endOpenTypeForVehicles(
+            patches.map((patch) => patch.id),
+            "OFFLINE",
+            sqliteFromMs(nowMs),
+        );
 
         return [...notify];
     }

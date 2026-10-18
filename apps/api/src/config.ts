@@ -21,15 +21,18 @@ const environmentSchema = z.object({
     /** Kommaseparierte Liste oder "*" für alle Origins. */
     CORS_ORIGIN: z.string().min(1).default("*"),
 
-    /** Intervall des Telemetrie-Simulators. 0 schaltet ihn ab. */
-    TELEMETRY_TICK_MS: z.coerce.number().int().min(0).default(400),
+    /** Wie oft der Simulator nachsieht, welche Fahrzeuge einen Ping fällig haben. 0 schaltet ihn ab. */
+    TELEMETRY_TICK_MS: z.coerce.number().int().min(0).default(1000),
 
     /**
-     * Obergrenze der Fahrzeuge, die ein Tick schreibt.
-     * Greift auf die Union der Connection-Focus-Ids, nicht als
-     * Fallback wenn niemand zuguckt.
+     * Mittlerer Abstand zwischen zwei Pings eines Fahrzeugs (jedes streut
+     * zwischen 60 und 160 %). Echte Tracker melden sich in dieser Größenordnung;
+     * die Karte animiert von Ping zu Ping, die Datenbank bekommt einen Punkt je Ping.
      */
-    TELEMETRY_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(32),
+    PING_INTERVAL_MS: z.coerce.number().int().min(1000).default(5000),
+
+    /** Obergrenze der Pings, die ein Durchlauf des Simulators schreibt. */
+    TELEMETRY_BATCH_SIZE: z.coerce.number().int().min(1).max(5000).default(3000),
 
     /**
      * Rolling Window: so viele Telemetriepunkte bleiben pro Fahrzeug.
@@ -116,6 +119,7 @@ export const config = {
             ? "*"
             : env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
     telemetryTickMs: env.TELEMETRY_TICK_MS,
+    pingIntervalMs: env.PING_INTERVAL_MS,
     telemetryBatchSize: env.TELEMETRY_BATCH_SIZE,
     telemetryKeepPerVehicle: env.TELEMETRY_KEEP_PER_VEHICLE,
     tripRetentionDays: env.TRIP_RETENTION_DAYS,

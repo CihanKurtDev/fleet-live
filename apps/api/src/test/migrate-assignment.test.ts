@@ -149,6 +149,74 @@ describe("assignment schema migrate", () => {
         database.close();
     });
 
+    it("leaves no vehicle on a trip without a driver when it takes a second vehicle from a driver", () => {
+        const database = oldVehiclesDb();
+
+        // Ada fährt zwei Fahrzeuge zugleich (alter Bestand), ein drittes hat nie einen Fahrer.
+        database.exec(`
+            INSERT INTO vehicles (id, company_id, driver_id, license_plate, driver_name, status)
+            VALUES (2, 1, 1, 'K-AB 2', 'Ada', 'DRIVING'),
+                   (3, 1, NULL, 'K-AB 3', NULL, 'DRIVING'),
+                   (4, 1, NULL, 'K-AB 4', NULL, 'IDLE');
+            INSERT INTO telemetry (vehicle_id, latitude, longitude, speed)
+            VALUES (2, 50.9, 6.9, 70), (3, 50.9, 6.9, 90);
+            INSERT INTO trips (vehicle_id) VALUES (1), (2), (3);
+            INSERT INTO alerts (vehicle_id, type, severity, message)
+            VALUES (2, 'SPEEDING', 'HIGH', 'zu schnell'),
+                   (1, 'SPEEDING', 'HIGH', 'zu schnell');
+        `);
+
+        migrate(database);
+
+        const vehicle = (id: number) =>
+            database
+                .prepare(
+                    `SELECT v.status, v.current_driver_id,
+                            (SELECT COUNT(*) FROM trips t WHERE t.vehicle_id = v.id AND t.ended_at IS NULL) AS open_trips,
+                            (SELECT speed FROM telemetry t WHERE t.id = v.last_telemetry_id) AS speed,
+                            (SELECT COUNT(*) FROM alerts a WHERE a.vehicle_id = v.id AND a.type = 'SPEEDING' AND a.ended_at IS NULL) AS open_speeding
+                     FROM vehicles v WHERE v.id = ?`,
+                )
+                .get(id) as {
+                status: string;
+                current_driver_id: number | null;
+                open_trips: number;
+                speed: number | null;
+                open_speeding: number;
+            };
+
+        // Das erste bleibt Adas aktuelles Fahrzeug und fährt weiter.
+        assert.equal(vehicle(1).status, "DRIVING");
+        assert.equal(vehicle(1).current_driver_id, 1);
+        assert.equal(vehicle(1).open_trips, 1);
+        assert.equal(vehicle(1).speed, 40);
+        assert.equal(vehicle(1).open_speeding, 1);
+
+        // Wer den Fahrer verliert oder nie einen hatte, steht danach still.
+        for (const id of [2, 3]) {
+            assert.equal(vehicle(id).status, "IDLE", `vehicle ${id}`);
+            assert.equal(vehicle(id).open_trips, 0, `vehicle ${id}`);
+            assert.equal(vehicle(id).speed, 0, `vehicle ${id}`);
+            assert.equal(vehicle(id).open_speeding, 0, `vehicle ${id}`);
+        }
+
+        assert.equal(vehicle(4).status, "IDLE");
+
+        const left = database
+            .prepare(
+                `SELECT COUNT(*) AS n FROM vehicles
+                 WHERE status = 'DRIVING' AND current_driver_id IS NULL`,
+            )
+            .get() as { n: number };
+        assert.equal(left.n, 0);
+
+        // Ein zweiter Lauf (jeder Start) ändert nichts mehr.
+        migrate(database);
+        assert.equal(vehicle(1).status, "DRIVING");
+        assert.equal(vehicle(2).status, "IDLE");
+        database.close();
+    });
+
     it("renames a leftover vehicles_v14 after a crashed rebuild", () => {
         const database = new DatabaseSync(":memory:");
         database.exec(`

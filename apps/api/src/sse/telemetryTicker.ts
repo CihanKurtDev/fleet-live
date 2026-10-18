@@ -3,7 +3,7 @@ import { TelemetryModel } from "../models/telemetry.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { SiteModel } from "../models/site.model";
-import { broadcast, getFocusUnion } from "./hub";
+import { broadcast } from "./hub";
 import type { TelemetryPatch } from "@fleet-live/shared";
 
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -39,6 +39,11 @@ export function isTelemetryTickerRunning(): boolean {
     return timer !== undefined;
 }
 
+/**
+ * Der Simulator spielt Geräte: jedes Fahrzeug auf Fahrt meldet sich in seinem
+ * eigenen Takt (`PING_INTERVAL_MS`), unabhängig davon, ob jemand zusieht. Der
+ * Stream liefert die Pings nur an die Verbindungen, die das Fahrzeug im Fokus haben.
+ */
 export function startTelemetryTicker(ms: number) {
     intervalMs = ms;
 
@@ -48,11 +53,7 @@ export function startTelemetryTicker(ms: number) {
 
     timer = setInterval(() => {
         try {
-            const focusIds = getFocusUnion();
-            const patches =
-                focusIds.length === 0
-                    ? []
-                    : TelemetryModel.tickDrivingVehicles(focusIds);
+            const patches = TelemetryModel.tickDrivingVehicles();
             const notifyCompanies = new Set<number>([
                 ...SpeedingEventModel.applyPatches(patches),
                 ...ExceptionEventModel.applyPatches(patches),
@@ -60,6 +61,10 @@ export function startTelemetryTicker(ms: number) {
             ]);
 
             for (const companyId of ExceptionEventModel.applySilence()) {
+                notifyCompanies.add(companyId);
+            }
+
+            for (const companyId of SpeedingEventModel.endStale()) {
                 notifyCompanies.add(companyId);
             }
 
@@ -72,8 +77,7 @@ export function startTelemetryTicker(ms: number) {
             if (patches.length > 0) {
                 logger.debug(
                     {
-                        focusedVehicles: focusIds.length,
-                        patches: patches.length,
+                        pings: patches.length,
                         changedCompanies: notifyCompanies.size,
                     },
                     "telemetry tick completed",

@@ -13,6 +13,11 @@ import { sqliteFromMs } from "../lib/sqlTime";
 
 const trackers = new Map<number, SpeedingTracker>();
 
+/** Ohne Tick endet ein offenes Tempo-Ereignis nach dieser Zeit von selbst. */
+export const SPEEDING_STALE_MS = 60_000;
+const lastTickMs = new Map<number, number>();
+const startedAtMs = Date.now();
+
 function parseCreatedAtMs(createdAt: string): number {
     const parsed = Date.parse(`${createdAt}Z`);
     return Number.isNaN(parsed) ? Date.now() : parsed;
@@ -158,6 +163,7 @@ export class SpeedingEventModel {
         const notify = new Set<number>();
 
         for (const patch of patches) {
+            lastTickMs.set(patch.id, nowMs);
             const result = tickOne(
                 patch.id,
                 patch.speed,
@@ -175,11 +181,35 @@ export class SpeedingEventModel {
         return [...notify];
     }
 
+    /**
+     * Beendet offene Ereignisse, deren Fahrzeug seit `SPEEDING_STALE_MS`
+     * keinen Tick bekommen hat (nicht im Fokus, Prozess neu gestartet).
+     * Sonst blieben sie für immer „läuft“. Gibt die betroffenen Firmen zurück.
+     */
+    static endStale(nowMs = Date.now()): number[] {
+        const notify = new Set<number>();
+
+        for (const row of AlertModel.listOpenSpeeding()) {
+            const seen = lastTickMs.get(row.vehicle_id) ?? startedAtMs;
+
+            if (nowMs - seen < SPEEDING_STALE_MS) {
+                continue;
+            }
+
+            AlertModel.endSpeeding(row.id, sqliteFromMs(seen));
+            trackers.delete(row.vehicle_id);
+            notify.add(row.company_id);
+        }
+
+        return [...notify];
+    }
+
     static endForVehicle(vehicleId: number, nowMs = Date.now()): void {
         tickOne(vehicleId, 0, "IDLE", nowMs, null);
     }
 
     static resetForTests() {
         trackers.clear();
+        lastTickMs.clear();
     }
 }

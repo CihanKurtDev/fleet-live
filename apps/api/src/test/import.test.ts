@@ -1,5 +1,7 @@
 import "./env";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import type { ImportPreviewRow } from "@fleet-live/shared";
 import { db } from "../db/database";
@@ -47,6 +49,176 @@ afterEach(() => {
     VehicleModel.resetForTests();
     UserModel.resetForTests();
     resetImportPreviewStoreForTests();
+});
+
+describe("the example files that ship with the app", () => {
+    const publicDir = join(__dirname, "../../../web/public");
+    const driving = () =>
+        db
+            .prepare(
+                `SELECT v.license_plate AS plate, v.status, v.current_driver_id AS driver,
+                        (SELECT COUNT(*) FROM trips t WHERE t.vehicle_id = v.id AND t.ended_at IS NULL) AS open_trips
+                 FROM vehicles v ORDER BY v.license_plate`,
+            )
+            .all() as Array<{
+            plate: string;
+            status: string;
+            driver: number | null;
+            open_trips: number;
+        }>;
+
+    for (const [name, payload] of [
+        [
+            "import-beispiel.csv",
+            (file: Buffer) => ({ csv: file.toString("utf8") }),
+        ],
+        [
+            "import-beispiel.xlsx",
+            (file: Buffer) => ({ xlsx: file.toString("base64") }),
+        ],
+    ] as const) {
+        it(`${name} previews cleanly and commits without a vehicle on a trip without a driver`, async () => {
+            const { agent } = await loginAs(1);
+            const file = readFileSync(join(publicDir, name));
+            const preview = await agent
+                .post("/api/import/preview")
+                .send(payload(file))
+                .expect(200);
+
+            assert.equal(preview.body.data.outcome.can_commit, true);
+
+            const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+            assert.ok(rows.length >= 4, `rows: ${rows.length}`);
+
+            const commit = await agent
+                .post("/api/import/commit")
+                .send({ preview_id: preview.body.data.preview_id })
+                .expect(200);
+
+            assert.equal(commit.body.data.failed_rows, 0);
+            assert.ok(commit.body.data.created_vehicles >= 4);
+
+            const vehicles = driving();
+            const onTrip = vehicles.filter((vehicle) => vehicle.status === "DRIVING");
+
+            assert.ok(onTrip.length >= 1, "the example has a vehicle that drives");
+
+            for (const vehicle of onTrip) {
+                assert.notEqual(vehicle.driver, null, `${vehicle.plate} drives without a driver`);
+                assert.equal(vehicle.open_trips, 1, vehicle.plate);
+            }
+
+            for (const vehicle of vehicles) {
+                if (vehicle.status !== "DRIVING") {
+                    assert.equal(vehicle.open_trips, 0, `${vehicle.plate} is not driving`);
+                }
+            }
+        });
+    }
+});
+
+describe("a vehicle only drives with a driver (import)", () => {
+    const CSV = `Kennzeichen;Tank;Status;Fahrer
+B-DRV 1;80;Unterwegs;Mit Fahrer
+B-DRV 2;80;Unterwegs;
+B-DRV 3;80;Standby;
+`;
+
+    it("warns in the preview and imports a driverless DRIVING row as IDLE", async () => {
+        const { agent } = await loginAs(1);
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ csv: CSV })
+            .expect(200);
+
+        const rows = await fetchPreviewRows(agent, preview.body.data.preview_id);
+        const warning = (plate: string) =>
+            rows
+                .find((row) => row.license_plate === plate)
+                ?.issues.find((issue) => issue.code === "DRIVING_STATUS");
+
+        assert.match(warning("B-DRV 1")?.message ?? "", /aktuellen Fahrer/);
+        assert.match(warning("B-DRV 2")?.message ?? "", /als IDLE importiert/);
+        assert.equal(warning("B-DRV 3"), undefined);
+
+        await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        const byPlate = (plate: string) =>
+            db
+                .prepare(
+                    `SELECT status, current_driver_id,
+                            (SELECT COUNT(*) FROM trips t WHERE t.vehicle_id = v.id AND t.ended_at IS NULL) AS open_trips
+                     FROM vehicles v WHERE license_plate = ?`,
+                )
+                .get(plate) as {
+                status: string;
+                current_driver_id: number | null;
+                open_trips: number;
+            };
+
+        const withDriver = byPlate("B-DRV 1");
+        const withoutDriver = byPlate("B-DRV 2");
+
+        assert.equal(withDriver.status, "DRIVING");
+        assert.notEqual(withDriver.current_driver_id, null);
+        assert.equal(withDriver.open_trips, 1);
+        assert.equal(withoutDriver.status, "IDLE");
+        assert.equal(withoutDriver.current_driver_id, null);
+        // Die Fahrt, die der Import für DRIVING geöffnet hatte, ist wieder zu.
+        assert.equal(withoutDriver.open_trips, 0);
+        assert.equal(byPlate("B-DRV 3").status, "IDLE");
+
+        const ghosts = db
+            .prepare(
+                `SELECT COUNT(*) AS c FROM vehicles
+                 WHERE status = 'DRIVING' AND current_driver_id IS NULL`,
+            )
+            .get() as { c: number };
+        assert.equal(ghosts.c, 0);
+    });
+
+    it("keeps DRIVING when the Aktuell sheet gives the vehicle a driver", async () => {
+        const { agent } = await loginAs(1);
+        const xlsx = buildXlsxWorkbook([
+            {
+                name: "Fahrzeuge",
+                rows: [
+                    ["Kennzeichen", "Tank", "Status"],
+                    ["B-DRV 4", "80", "Unterwegs"],
+                ],
+            },
+            { name: "Fahrer", rows: [["Name"], ["Clara Lang"]] },
+            {
+                name: "Eignung",
+                rows: [["Fahrer", "Kennzeichen"], ["Clara Lang", "B-DRV 4"]],
+            },
+            {
+                name: "Aktuell",
+                rows: [["Fahrer", "Kennzeichen"], ["Clara Lang", "B-DRV 4"]],
+            },
+        ]).toString("base64");
+
+        const preview = await agent
+            .post("/api/import/preview")
+            .send({ xlsx })
+            .expect(200);
+        await agent
+            .post("/api/import/commit")
+            .send({ preview_id: preview.body.data.preview_id })
+            .expect(200);
+
+        const vehicle = db
+            .prepare(
+                `SELECT status, current_driver_id FROM vehicles WHERE license_plate = 'B-DRV 4'`,
+            )
+            .get() as { status: string; current_driver_id: number | null };
+
+        assert.equal(vehicle.status, "DRIVING");
+        assert.notEqual(vehicle.current_driver_id, null);
+    });
 });
 
 describe("POST /api/import/preview", () => {
@@ -1063,10 +1235,11 @@ B-NEW 999;50;Standby
         assert.equal(munich.status, 201);
         assert.equal(cologne.status, 201);
 
-        const csv = `Kennzeichen;Status;Depot
-M-IMP 1;Unterwegs;München Hof
-K-IMP 1;Unterwegs;Köln Hof
-M-IMP 2;Standby;München Hof
+        // Wer unterwegs ist, hat einen Fahrer; Standby braucht keinen.
+        const csv = `Kennzeichen;Status;Depot;Fahrer
+M-IMP 1;Unterwegs;München Hof;Fahrer München
+K-IMP 1;Unterwegs;Köln Hof;Fahrer Köln
+M-IMP 2;Standby;München Hof;
 `;
         const preview = await agent
             .post("/api/import/preview")
