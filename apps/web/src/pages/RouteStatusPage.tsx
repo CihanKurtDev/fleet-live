@@ -1,24 +1,32 @@
 import { Link, isRouteErrorResponse, useRouteError } from "react-router";
 import { Button } from "../components/ui/Button/Button";
+import { usePageTitle } from "../hooks/usePageTitle";
 import styles from "./RouteStatusPage.module.scss";
 
-export const NotFoundPage = () => (
-    <section className={styles.page}>
-        <h1 className={styles.title}>Seite nicht gefunden</h1>
-        <p className={styles.message}>
-            Die aufgerufene Seite gibt es nicht oder sie wurde verschoben.
-        </p>
-        <div className={styles.actions}>
-            <Link className={styles.link} to="/">
-                Zur Schicht
-            </Link>
-        </div>
-    </section>
-);
+export const NotFoundPage = () => {
+    usePageTitle("Seite nicht gefunden");
+
+    return (
+        <section className={styles.page}>
+            <h1 className={styles.title}>Seite nicht gefunden</h1>
+            <p className={styles.message}>
+                Die aufgerufene Seite gibt es nicht oder sie wurde verschoben.
+            </p>
+            <div className={styles.actions}>
+                <Link className={styles.link} to="/">
+                    Zur Schicht
+                </Link>
+            </div>
+        </section>
+    );
+};
 
 export const RouteErrorPage = () => {
     const error = useRouteError();
     const notFound = isRouteErrorResponse(error) && error.status === 404;
+    usePageTitle(
+        notFound ? "Seite nicht gefunden" : "Seite konnte nicht geladen werden",
+    );
 
     return (
         <section className={styles.page} role="alert">

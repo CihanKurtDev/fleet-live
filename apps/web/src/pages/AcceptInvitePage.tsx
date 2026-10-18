@@ -5,9 +5,11 @@ import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Input } from "../components/ui/Input/Input";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import styles from "./LoginPage.module.scss";
 
 export const AcceptInvitePage = () => {
+    usePageTitle("Einladung annehmen");
     const [params] = useSearchParams();
     const token = params.get("token") ?? "";
     const navigate = useNavigate();

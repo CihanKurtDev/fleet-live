@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { verifyEmail } from "../api/auth";
 import { ApiError } from "../api/client";
+import { usePageTitle } from "../hooks/usePageTitle";
 import styles from "./LoginPage.module.scss";
 
 export const VerifyEmailPage = () => {
+    usePageTitle("E-Mail bestätigen");
     const [params] = useSearchParams();
     const token = params.get("token") ?? "";
     const [message, setMessage] = useState(

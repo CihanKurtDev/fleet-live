@@ -257,6 +257,28 @@ a.kpi:focus-visible {
         font-size: 44px;
     }
 
+    /* The buttons would leave the title 72 px: they move under it. */
+    .headAction {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-self: start;
+    }
+
+    .headGrid > .subtitle {
+        grid-row: 3;
+    }
+
+    .headSteps {
+        grid-row: 4;
+    }
+
+    /* Phones have the height: a label or hint wraps instead of being cut. */
+    .kpiLabel,
+    .kpiHint {
+        text-overflow: clip;
+        white-space: normal;
+    }
+
     .subtitle {
         max-width: 34rem;
         font-size: 13px;

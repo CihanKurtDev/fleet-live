@@ -25,6 +25,7 @@ import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
 import { Table } from "../components/ui/Table/Table";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import type { TableColumn } from "../types/table";
 import authForm from "./LoginPage.module.scss";
 import styles from "./AccountPage.module.scss";
@@ -51,6 +52,7 @@ const RoleOptions = () => (
 );
 
 export const AccountPage = () => {
+    usePageTitle("Konto");
     const { user, setUser } = useAuth();
     const { hash } = useLocation();
     const [members, setMembers] = useState<Member[]>([]);

@@ -7,6 +7,7 @@ import {
 } from "@fleet-live/shared";
 
 import { useDueList } from "../../hooks/useDueList";
+import { usePageTitle } from "../../hooks/usePageTitle";
 import { useDueListQuery } from "../../hooks/useDueListQuery";
 import { Input } from "../ui/Input/Input";
 import { KpiTiles, type KpiTileTone } from "../ui/KpiTiles/KpiTiles";
@@ -25,6 +26,7 @@ const STATE_TILES: Array<{ id: DueListState; hint: string; tone: KpiTileTone }> 
 
 /** Deadlines grouped by kind, with the rule of each kind beside the list. */
 export const DueBoard = () => {
+    usePageTitle("Fristen");
     const { query, apiQuery, tableState, setSearch, setFilter, setKind, setPage, setLimit } =
         useDueListQuery();
     const [reloadKey, setReloadKey] = useState(0);

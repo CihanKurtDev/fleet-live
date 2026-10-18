@@ -35,6 +35,7 @@ import { Table } from "../components/ui/Table/Table";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { ImportPreviewStep } from "../components/vehicles/ImportPreviewStep";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useVehicles } from "../context/vehiclesContext";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { importRunColumns } from "../components/vehicles/importRunConfig";
@@ -231,6 +232,7 @@ function stepState(
 }
 
 export const ImportPage = () => {
+    usePageTitle("Bestand importieren");
     const { user } = useAuth();
     const navigate = useNavigate();
     const { refetchLists } = useVehicles();

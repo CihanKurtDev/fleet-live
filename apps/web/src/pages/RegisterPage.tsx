@@ -4,9 +4,11 @@ import { registerAccount } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Input } from "../components/ui/Input/Input";
+import { usePageTitle } from "../hooks/usePageTitle";
 import styles from "./LoginPage.module.scss";
 
 export const RegisterPage = () => {
+    usePageTitle("Firma registrieren");
     const [companyName, setCompanyName] = useState("");
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");

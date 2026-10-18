@@ -17,6 +17,7 @@ import { buttonClass } from "../components/ui/Button/buttonClass";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { useAuth } from "../hooks/useAuth";
 import { useBriefing } from "../hooks/useBriefing";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { formatCount } from "../utils/formatCount";
 import styles from "./BriefingPage.module.scss";
 import band from "../styles/pageBand.module.scss";
@@ -94,7 +95,9 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
             {tiles.map((tile) => {
                 const body = (
                     <>
-                        <span className={styles.kpiLabel}>{tile.label}</span>
+                        <span className={styles.kpiLabel} title={tile.label}>
+                            {tile.label}
+                        </span>
                         <span
                             key={counts[tile.key]}
                             className={styles.kpiValue}
@@ -102,7 +105,9 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
                             {formatCount(counts[tile.key])}
                         </span>
                         {tile.hint ? (
-                            <span className={styles.kpiHint}>{tile.hint}</span>
+                            <span className={styles.kpiHint} title={tile.hint}>
+                                {tile.hint}
+                            </span>
                         ) : null}
                     </>
                 );
@@ -191,12 +196,16 @@ const DueKpis = ({
                         to={tile.to}
                         viewTransition
                     >
-                        <span className={styles.kpiLabel}>{tile.label}</span>
+                        <span className={styles.kpiLabel} title={tile.label}>
+                            {tile.label}
+                        </span>
                         <span key={tile.value} className={styles.kpiValue}>
                             {formatCount(tile.value)}
                         </span>
                         {tile.hint ? (
-                            <span className={styles.kpiHint}>{tile.hint}</span>
+                            <span className={styles.kpiHint} title={tile.hint}>
+                                {tile.hint}
+                            </span>
                         ) : null}
                     </Link>
                 );
@@ -252,6 +261,7 @@ const BriefingBody = ({
 );
 
 export const BriefingPage = () => {
+    usePageTitle("Schicht");
     const { data, isLoading, error, retry } = useBriefing();
     const { user } = useAuth();
     const canWrite = user?.role === "dispatcher";

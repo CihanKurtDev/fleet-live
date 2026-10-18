@@ -12,6 +12,7 @@ import { Button } from "../components/ui/Button/Button";
 import { Checkbox } from "../components/ui/Checkbox/Checkbox";
 import { Input } from "../components/ui/Input/Input";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import styles from "./LoginPage.module.scss";
 
 const loginRedirectPath = (location: {
@@ -47,6 +48,7 @@ const ssoHint = (value: string | null) => {
 };
 
 export const LoginPage = () => {
+    usePageTitle("Anmelden");
     const navigate = useNavigate();
     const location = useLocation();
     const [searchParams] = useSearchParams();

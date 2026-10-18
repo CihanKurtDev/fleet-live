@@ -22,6 +22,7 @@ import { Button } from "../Button/Button";
 import { Checkbox } from "../Checkbox/Checkbox";
 import { Input } from "../Input/Input";
 import { TablePagination } from "../Table/TablePagination";
+import { usePageTitle } from "../../../hooks/usePageTitle";
 import styles from "./ListPage.module.scss";
 
 interface ListPageProps {
@@ -63,6 +64,7 @@ export const ListPageHeader = ({
     actions,
 }: ListPageHeaderProps) => {
     const noticeRef = useRef<HTMLParagraphElement>(null);
+    usePageTitle(title);
 
     // Each new confirmation rises in; the live region itself stays in place.
     useEffect(() => {

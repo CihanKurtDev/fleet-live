@@ -56,6 +56,7 @@ import {
 import { useVehicles } from "../context/vehiclesContext";
 import { useAlertList } from "../hooks/useAlertList";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useBriefing } from "../hooks/useBriefing";
 import { useFleetPageQuery } from "../hooks/useFleetPageQuery";
 import { useFleetPositions } from "../hooks/useFleetPositions";
@@ -104,6 +105,7 @@ const sortSites = (sites: Site[]) =>
     );
 
 export const FleetPage = () => {
+    usePageTitle("Flottenkarte");
     const navigate = useNavigate();
     const { user } = useAuth();
     const { listEpoch, streamConnection, lastTelemetryAt } = useVehicles();

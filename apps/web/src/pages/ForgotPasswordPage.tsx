@@ -4,9 +4,11 @@ import { forgotPassword } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Input } from "../components/ui/Input/Input";
+import { usePageTitle } from "../hooks/usePageTitle";
 import styles from "./LoginPage.module.scss";
 
 export const ForgotPasswordPage = () => {
+    usePageTitle("Passwort vergessen");
     const [email, setEmail] = useState("");
     const [message, setMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
