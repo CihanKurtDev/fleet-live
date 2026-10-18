@@ -423,6 +423,7 @@ export const VehicleAssignmentPanel = ({
                 open={createOpen}
                 onClose={() => setCreateOpen(false)}
                 title="Neuen Fahrer anlegen"
+                guardUnsaved
             >
                 <DriverCreateForm
                     onCancel={() => setCreateOpen(false)}

@@ -1,5 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+    useEffect,
+    useRef,
+    useState,
+    type KeyboardEvent,
+    type ReactNode,
+} from "react";
 import { skipMotion } from "../../../hooks/usePresence";
+import { Button } from "../Button/Button";
 import styles from "./Modal.module.scss";
 
 interface ModalProps {
@@ -8,6 +15,12 @@ interface ModalProps {
     title: string;
     children: ReactNode;
     size?: "md" | "lg";
+    /**
+     * Forms: once a field was changed, closing with Escape, the backdrop or
+     * the × asks before the input is thrown away. Buttons inside the
+     * content (Abbrechen, a finished save) close without asking.
+     */
+    guardUnsaved?: boolean;
 }
 
 // Fallback if animationend never fires (hidden tab, animations disabled).
@@ -19,14 +32,89 @@ export const Modal = ({
     title,
     children,
     size = "md",
+    guardUnsaved = false,
 }: ModalProps) => {
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const confirmRef = useRef<HTMLDivElement>(null);
+    const askerRef = useRef<HTMLElement | null>(null);
+    // A click closes only if the press began on the backdrop too: a text
+    // selection dragged out of a field ends there and must not close.
+    const pressedBackdrop = useRef(false);
     // Keeps the content on screen while the dialog plays its closing animation.
     const [rendered, setRendered] = useState(open);
+    const [dirty, setDirty] = useState(false);
+    const [asking, setAsking] = useState(false);
 
     if (open && !rendered) {
         setRendered(true);
     }
+
+    if (!open && (dirty || asking)) {
+        setDirty(false);
+        setAsking(false);
+    }
+
+    const askToDiscard = () => {
+        askerRef.current =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : document.body;
+        setAsking(true);
+    };
+
+    const requestClose = () => {
+        if (guardUnsaved && dirty) {
+            askToDiscard();
+            return;
+        }
+
+        onClose();
+    };
+
+    const discard = () => {
+        setAsking(false);
+        setDirty(false);
+        onClose();
+    };
+
+    // The × and the backdrop ask; Escape answers the question with "no".
+    const handleDismissKey = (event: KeyboardEvent<HTMLDialogElement>) => {
+        if (event.key !== "Escape") {
+            return;
+        }
+
+        if (asking) {
+            event.preventDefault();
+            event.stopPropagation();
+            setAsking(false);
+        } else if (guardUnsaved && dirty) {
+            event.preventDefault();
+            event.stopPropagation();
+            askToDiscard();
+        }
+    };
+
+    useEffect(() => {
+        if (asking) {
+            confirmRef.current
+                ?.querySelector<HTMLElement>("[data-autofocus]")
+                ?.focus();
+            return;
+        }
+
+        // Back to the field that had focus; a click on the backdrop leaves
+        // focus on the dialog itself, then the first field takes it.
+        const back = askerRef.current;
+        askerRef.current = null;
+
+        if (back) {
+            const body = dialogRef.current?.querySelector("[data-modal-body]");
+            (body?.contains(back)
+                ? back
+                : body?.querySelector<HTMLElement>("input, select, textarea")
+            )?.focus();
+        }
+    }, [asking]);
 
     const instant = skipMotion();
     const closing = !open && rendered && !instant;
@@ -108,15 +196,29 @@ export const Modal = ({
             aria-label={title}
             // Escape stays the native close (a selection mode may take it
             // first by cancelling the event), so it closes without the fade.
+            onKeyDown={handleDismissKey}
             onClose={() => {
                 if (open) {
                     onClose();
                 }
             }}
+            onPointerDown={(event) => {
+                pressedBackdrop.current = event.target === dialogRef.current;
+            }}
+            onInput={() => {
+                if (guardUnsaved && !dirty) {
+                    setDirty(true);
+                }
+            }}
             onClick={(event) => {
                 // Ein Klick auf den Backdrop trifft das dialog-Element selbst.
-                if (event.target === dialogRef.current) {
-                    onClose();
+                const onBackdrop =
+                    event.target === dialogRef.current &&
+                    pressedBackdrop.current;
+                pressedBackdrop.current = false;
+
+                if (onBackdrop) {
+                    requestClose();
                 }
             }}
         >
@@ -129,7 +231,7 @@ export const Modal = ({
                             type="button"
                             className={styles.close}
                             aria-label="Schließen"
-                            onClick={onClose}
+                            onClick={requestClose}
                         >
                             <svg
                                 viewBox="0 0 24 24"
@@ -146,9 +248,49 @@ export const Modal = ({
                         </button>
                     </header>
 
-                    <div className={styles.body} data-modal-body>
+                    {/* Hidden, not unmounted: the form keeps its input. */}
+                    <div className={styles.body} data-modal-body hidden={asking}>
                         {children}
                     </div>
+
+                    {asking && (
+                        <div
+                            ref={confirmRef}
+                            className={`${styles.body} ${styles.confirm}`}
+                            role="group"
+                            aria-label="Eingaben verwerfen?"
+                        >
+                            <div className={styles.confirmBody}>
+                                <p>
+                                    <strong>Eingaben verwerfen?</strong>
+                                </p>
+                                <p>
+                                    Was du hier eingetragen hast, ist noch nicht
+                                    gespeichert.
+                                </p>
+                            </div>
+                            <div className={styles.confirmActions}>
+                                {/* The safe choice gets the first focus. */}
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    size="md"
+                                    onClick={() => setAsking(false)}
+                                    data-autofocus
+                                >
+                                    Weiter bearbeiten
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="danger"
+                                    size="md"
+                                    onClick={discard}
+                                >
+                                    Verwerfen
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </dialog>

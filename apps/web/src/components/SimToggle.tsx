@@ -78,7 +78,6 @@ export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
                 fullWidth={fullWidth}
                 disabled={isBusy}
                 onClick={toggle}
-                aria-pressed={sim.running}
                 title={
                     sim.running
                         ? "Pausiert die Simulation dieser Firma. Positionen bleiben stehen. Nach etwa 15 Sekunden ohne Meldung entsteht eine Warnung für Fahrzeuge, die gerade liefen."

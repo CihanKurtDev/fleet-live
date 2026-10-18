@@ -122,7 +122,12 @@ export const DeadlineEditDialog = ({
     };
 
     return (
-        <Modal open={item !== null} onClose={onClose} title={title}>
+        <Modal
+            open={item !== null}
+            onClose={onClose}
+            title={title}
+            guardUnsaved
+        >
             {error && (
                 <RetryMessage
                     message={error}

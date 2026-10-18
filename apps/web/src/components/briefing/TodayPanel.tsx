@@ -121,7 +121,8 @@ export const TodayPanel = () => {
     };
 
     const onRowKey = (event: KeyboardEvent, item: TodayItem) => {
-        if (event.key === "Enter") {
+        // Enter on a row button belongs to that button.
+        if (event.key === "Enter" && event.target === event.currentTarget) {
             event.preventDefault();
             open(item);
         }

@@ -67,6 +67,7 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
     const [placement, setPlacement] = useState<Placement | null>(null);
     const [wantsFocus, setWantsFocus] = useState(false);
     const nextRef = useRef<HTMLButtonElement>(null);
+    const cardRef = useRef<HTMLDivElement>(null);
     const titleId = useId();
     const tip = index === null ? null : (tips[index] ?? null);
 
@@ -144,7 +145,15 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
         }
 
         const onKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
+            // An Escape meant for a menu or dialog (focus is inside it) is
+            // not an answer to the tip.
+            const active = document.activeElement;
+            const elsewhere =
+                active !== null &&
+                active !== document.body &&
+                !cardRef.current?.contains(active);
+
+            if (event.key === "Escape" && !elsewhere) {
                 if (seenKey) {
                     writeFlag(seenKey);
                 }
@@ -174,6 +183,7 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
                 aria-hidden="true"
             />
             <div
+                ref={cardRef}
                 className={styles.card}
                 style={{ ...placement.card, width: Math.min(CARD_WIDTH, window.innerWidth - EDGE * 2) }}
                 role="dialog"

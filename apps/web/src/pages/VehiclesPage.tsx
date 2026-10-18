@@ -76,6 +76,7 @@ export const VehiclesPage = () => {
                 open={isCreateOpen}
                 onClose={() => setIsCreateOpen(false)}
                 title="Fahrzeug anlegen"
+                guardUnsaved
             >
                 <VehicleForm
                     submitLabel="Anlegen"

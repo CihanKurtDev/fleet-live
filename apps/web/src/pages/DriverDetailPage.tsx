@@ -284,6 +284,7 @@ export const DriverDetailPage = () => {
                 open={canWrite && isEditing}
                 onClose={() => setIsEditing(false)}
                 title="Fahrer bearbeiten"
+                guardUnsaved
             >
                 <DriverEditForm
                     driver={driver}

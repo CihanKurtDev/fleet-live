@@ -177,6 +177,21 @@ describe("Heute dran", () => {
         ).toBeInTheDocument();
     });
 
+    it("keeps Enter on a row button for the button", async () => {
+        renderPanel();
+
+        const row = await screen.findByRole("link", { name: /K-FUNK 1/ });
+        fireEvent.keyDown(within(row).getByRole("button", { name: "Erledigen" }), {
+            key: "Enter",
+        });
+
+        expect(screen.queryByText("Fahrzeugseite")).toBeNull();
+
+        // Enter on the row itself still opens the record.
+        fireEvent.keyDown(row, { key: "Enter" });
+        expect(await screen.findByText("Fahrzeugseite")).toBeInTheDocument();
+    });
+
     it("opens the record on a row click", async () => {
         renderPanel();
 

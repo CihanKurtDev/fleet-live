@@ -74,7 +74,13 @@ const TableRowComponent = <RowType,>({
             className={className}
             onClick={interactive ? handleRowClick : undefined}
             onKeyDown={(event) => {
-                if (!interactive || isEditing || !onClick) {
+                // Enter on a row button belongs to that button.
+                if (
+                    !interactive ||
+                    isEditing ||
+                    !onClick ||
+                    event.target !== event.currentTarget
+                ) {
                     return;
                 }
 

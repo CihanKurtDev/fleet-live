@@ -701,6 +701,7 @@ export const VehicleDetailPage = () => {
                 open={canWrite && isEditingMaster}
                 onClose={() => setIsEditingMaster(false)}
                 title="Stammdaten"
+                guardUnsaved
             >
                 <VehicleForm
                     focusField={masterField}

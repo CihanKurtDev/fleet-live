@@ -58,6 +58,7 @@ export const DriversPage = () => {
                 open={isCreateOpen}
                 onClose={() => setIsCreateOpen(false)}
                 title="Fahrer anlegen"
+                guardUnsaved
             >
                 <DriverCreateForm
                     onCancel={() => setIsCreateOpen(false)}
