@@ -21,12 +21,24 @@ export const markerStroke = () => (prefersDark() ? "#0b0f16" : "#ffffff");
 /**
  * Vehicles are small dots in their status colour without an outline, like
  * the landing page. The selected one gets the yellow marking as a ring.
+ * `grouped` marks the members of the group that was just opened with a thin
+ * ring in the text colour, so they stand out among the dots that opened with
+ * them. Not yellow: around a 4 px dot a yellow ring reads as the dot's colour,
+ * and yellow is Standby, so an opened group of driving vehicles looked parked.
  */
-export const markerStyle = (status: VehicleStatus, selected: boolean) => ({
-    radius: selected ? 7 : 4,
-    color: selected ? themeColor("--accent-fill", "#ffc24b") : markerStroke(),
-    weight: selected ? 3 : 1,
-    opacity: selected ? 1 : 0.6,
+export const markerStyle = (
+    status: VehicleStatus,
+    selected: boolean,
+    grouped = false,
+) => ({
+    radius: selected ? 7 : grouped ? 5 : 4,
+    color: selected
+        ? themeColor("--accent-fill", "#ffc24b")
+        : grouped
+          ? themeColor("--text-h", "#eef1f7")
+          : markerStroke(),
+    weight: selected ? 3 : grouped ? 1.5 : 1,
+    opacity: selected || grouped ? 1 : 0.6,
     fillColor: vehicleStatusColor(status),
     fillOpacity: 1,
 });
@@ -65,6 +77,7 @@ export const addRouteLines = (map: L.Map, routes: SimRouteLine[]) => {
         const pane = map.createPane(paneName);
         pane.style.zIndex = "390";
         pane.style.pointerEvents = "none";
+        pane.style.transition = "opacity 180ms ease-out";
     }
 
     const renderer = L.svg({ pane: paneName });
@@ -90,11 +103,40 @@ export const addRouteLines = (map: L.Map, routes: SimRouteLine[]) => {
                 opacity: routeOpacity(map.getZoom()),
             }),
         );
-    map.on("zoomend", restyle);
+    /*
+     * While the map zooms, Leaflet scales the drawn lines with it. Over one
+     * level that is fine; over several (a flight) a 5 px road became a wide
+     * blurred band. The lines step out once the zoom has moved a whole level
+     * and come back, redrawn, when it ends.
+     */
+    const pane = map.getPane(paneName)!;
+    let zoomFrom = map.getZoom();
+    const onZoomStart = () => {
+        zoomFrom = map.getZoom();
+    };
+    // A flight reports every step (`zoom`); a wheel or button zoom announces
+    // its target before the animation (`zoomanim`).
+    const onZoom = (event: L.LeafletEvent) => {
+        const target = (event as L.ZoomAnimEvent).zoom ?? map.getZoom();
+
+        if (Math.abs(target - zoomFrom) >= 1) {
+            pane.style.opacity = "0";
+        }
+    };
+    const onZoomEnd = () => {
+        restyle();
+        pane.style.opacity = "";
+    };
+    map.on("zoomstart", onZoomStart);
+    map.on("zoom zoomanim", onZoom);
+    map.on("zoomend", onZoomEnd);
 
     return {
         remove: () => {
-            map.off("zoomend", restyle);
+            map.off("zoomstart", onZoomStart);
+            map.off("zoom zoomanim", onZoom);
+            map.off("zoomend", onZoomEnd);
+            pane.style.opacity = "";
             group.remove();
         },
         restyle,

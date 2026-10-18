@@ -29,7 +29,6 @@ export const vehicleFilters: Array<
     { id: "idle", displayText: "Standby" },
     { id: "offline", displayText: "Kein Signal" },
     { id: "in_depot", displayText: "Im Depot" },
-    { id: "driving_unassigned", displayText: "Fährt ohne Fahrer" },
 ];
 
 type VehicleFilterOption = {
@@ -54,11 +53,6 @@ export const vehicleTileFilters: VehicleFilterOption[] = [
 export const vehicleMoreFilters: VehicleFilterOption[] = [
     { id: "unassigned", label: "Kein Fahrer", count: "unassigned" },
     { id: "in_depot", label: "Im Depot", count: "in_depot" },
-    {
-        id: "driving_unassigned",
-        label: "Fährt ohne Fahrer",
-        count: "driving_unassigned",
-    },
 ];
 
 function warningTypes(row: Vehicle): AlertType[] {

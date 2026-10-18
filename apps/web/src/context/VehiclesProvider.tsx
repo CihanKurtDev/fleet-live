@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import type {
-    TelemetryPatch,
-    Vehicle,
-    VehicleFieldErrors,
-    VehicleInput,
+import {
+    STREAM_FOCUS_MAX_IDS,
+    type TelemetryPatch,
+    type Vehicle,
+    type VehicleFieldErrors,
+    type VehicleInput,
 } from "@fleet-live/shared";
 import { ApiError } from "../api/client";
 import {
@@ -111,7 +112,8 @@ export const VehiclesProvider = ({
             }
 
             const keys = Object.keys(next);
-            const maxOverrides = 300;
+            // So viele Fahrzeuge kann der Fokus live halten; weniger würde die ältesten verwerfen.
+            const maxOverrides = STREAM_FOCUS_MAX_IDS;
 
             if (keys.length > maxOverrides) {
                 const overflow = keys.length - maxOverrides;
@@ -177,9 +179,25 @@ export const VehiclesProvider = ({
 
     const deleteVehicles = useCallback(
         async (ids: number[]) => {
-            await Promise.all(ids.map((id) => deleteVehicleRequest(id)));
-            forgetVehicles(ids);
+            // Jedes Fahrzeug für sich: eines, das unterwegs ist (409), hält die übrigen nicht auf.
+            const results = await Promise.allSettled(
+                ids.map((id) => deleteVehicleRequest(id)),
+            );
+            const deleted = ids.filter(
+                (_, index) => results[index]?.status === "fulfilled",
+            );
+
+            forgetVehicles(deleted);
             refetchLists();
+
+            const failed = results.find(
+                (result): result is PromiseRejectedResult =>
+                    result.status === "rejected",
+            );
+
+            if (failed) {
+                throw failed.reason;
+            }
         },
         [refetchLists],
     );

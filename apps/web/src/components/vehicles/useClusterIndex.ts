@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLatestRef } from "../../hooks/useLatestRef";
 import {
     clusterIndexDelay,
     createFleetClusterIndex,
@@ -9,18 +10,22 @@ import {
 /**
  * Ein Index pro Datenstand. Neue Fahrzeug-IDs bauen ihn sofort.
  * Laufende Positions-Patches bauen ihn höchstens einmal pro Wartezeit,
- * nicht bei jedem Tick.
+ * nicht bei jedem Patch. `current` setzt beim Bauen die Positionen ein, an
+ * denen die Fahrzeuge gerade gezeigt werden (nicht die letzte Meldung), damit
+ * die Gruppen mit den Punkten mitfahren.
  */
 export function useClusterIndex(
     points: readonly ClusterPoint[],
+    current: (points: readonly ClusterPoint[]) => readonly ClusterPoint[] = (
+        latest,
+    ) => latest,
 ): FleetClusterIndex {
     const ids = useMemo(() => points.map((point) => point.id), [points]);
     const idsRef = useRef(ids);
-    const pointsRef = useRef(points);
+    const pointsRef = useLatestRef(points);
+    const currentRef = useLatestRef(current);
     const timerRef = useRef<number | undefined>(undefined);
     const [source, setSource] = useState(points);
-
-    pointsRef.current = points;
 
     useEffect(() => {
         const delay = clusterIndexDelay(idsRef.current, ids);
@@ -31,7 +36,7 @@ export function useClusterIndex(
                 window.clearTimeout(timerRef.current);
                 timerRef.current = undefined;
             }
-            setSource(pointsRef.current);
+            setSource(currentRef.current(pointsRef.current));
             return;
         }
 
@@ -41,9 +46,9 @@ export function useClusterIndex(
 
         timerRef.current = window.setTimeout(() => {
             timerRef.current = undefined;
-            setSource(pointsRef.current);
+            setSource(currentRef.current(pointsRef.current));
         }, delay);
-    }, [ids, points]);
+    }, [ids, points, currentRef, pointsRef]);
 
     useEffect(
         () => () => {

@@ -34,18 +34,28 @@ export const themeColor = (name: string, fallback: string) =>
 const createBasemap = (dark: boolean): TilePair => {
     const baseUrl = dark ? DARK_BASE : LIGHT_BASE;
     const labelUrl = dark ? DARK_LABELS : LIGHT_LABELS;
+    /*
+     * During a flight over several zoom levels (a group or a search hit) the
+     * map would ask for tiles at every level it passes and drop the old ones
+     * before the new ones arrive: the map went black for a moment. Without
+     * loading while zooming, the old tiles stay (scaled) until the flight
+     * ends; a wider buffer keeps neighbours for a short pan.
+     */
+    const calm = { updateWhenZooming: false, keepBuffer: 4 } as const;
     // The classes tint the grey basemap into the app's blue (leafletMap.module.scss).
     const base = L.tileLayer(baseUrl, {
         attribution: ATTRIBUTION,
         maxNativeZoom: 16,
         maxZoom: 18,
         className: "fl-tiles-base",
+        ...calm,
     });
     const labels = L.tileLayer(labelUrl, {
         minZoom: LABEL_MIN_ZOOM,
         maxNativeZoom: 16,
         maxZoom: 18,
         className: "fl-tiles-labels",
+        ...calm,
     });
 
     return { base, labels };

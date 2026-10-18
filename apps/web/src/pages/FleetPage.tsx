@@ -135,9 +135,9 @@ export const FleetPage = () => {
         retry,
         snapshotLength,
     } = useFleetPositions({
-        bbox,
         filter: statusFromFilter(filter) ? undefined : filter,
         drivers,
+        pinnedId: selectedId,
     });
     const briefing = useBriefing();
     const [eventType, setEventType] = useState<AlertType | null>(null);

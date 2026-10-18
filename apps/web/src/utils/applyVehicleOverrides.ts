@@ -27,6 +27,14 @@ export const applyVehicleOverrides = <T extends { id: number }>(
             return row;
         }
 
+        // A reload can be newer than what was streamed earlier (the vehicle
+        // was not watched for a while): the older report must not win.
+        const rowAt = (row as { recorded_at?: string | null }).recorded_at;
+
+        if (patch.recorded_at && rowAt && patch.recorded_at < rowAt) {
+            return row;
+        }
+
         let next: T | null = null;
 
         for (const key of OVERRIDE_KEYS) {

@@ -2,7 +2,7 @@
  * Lokales Clustering für die Flottenkarte.
  *
  * Der Client lädt den Firmenbestand einmal (bis zum Positions-Limit) und
- * clustert ihn bis Zoom 16. Eine Stufe weiter sind es einzelne Marker. Schwenken ruft nur
+ * clustert ihn bis Zoom 14. Eine Stufe weiter sind es einzelne Marker. Schwenken ruft nur
  * `clustersFromIndex` auf. Den Index neu bauen, wenn sich die Fahrzeug-IDs
  * ändern (`clusterIndexDelay` ist dann 0). Ändern sich nur Koordinaten,
  * entsteht höchstens ein Index pro `CLUSTER_INDEX_DEBOUNCE_MS`.
@@ -18,14 +18,21 @@ const FLEET_CLUSTER_RADIUS_PX = 60;
 /**
  * Letzte Stufe, auf der Supercluster noch Gruppen bildet.
  * Die Karte zoomt eine Stufe weiter, damit daraus einzelne Marker werden.
+ * Ab Zoom 15 (Maßstabsbalken etwa 200 m) sind es einzelne Punkte; bei 16 wären
+ * es 100 m, bei 17 nur noch 50 m, das ist für die kleinsten Gruppen zu nah.
  */
-export const FLEET_CLUSTER_MAX_ZOOM = 16;
+export const FLEET_CLUSTER_MAX_ZOOM = 14;
 /** Hülle unter dieser Diagonale öffnet die Liste, die Marker liegen aufeinander. */
 const FLEET_CLUSTER_LIST_SPAN_M = 25;
 /** Gleicher Rand wie `fitBounds`, damit die Entscheidung zur Karte passt. */
 export const FLEET_CLUSTER_FIT_PADDING_PX = 48;
-/** Laufende Fahrt: höchstens ein neuer Index in diesem Abstand. */
-export const CLUSTER_INDEX_DEBOUNCE_MS = 4_000;
+/**
+ * Laufende Fahrt: höchstens ein neuer Index in diesem Abstand. Er wird aus den
+ * gezeigten (nicht den gemeldeten) Positionen gebaut; bei einer Sekunde ist der
+ * Schritt einer Gruppe klein und sie gleitet gleichmäßig statt alle paar
+ * Sekunden zu springen.
+ */
+export const CLUSTER_INDEX_DEBOUNCE_MS = 1_000;
 
 export type ClusterPoint = {
     id: number;
@@ -39,7 +46,14 @@ export type StatusCounts = Record<VehicleStatus, number>;
 export type FleetCluster =
     | {
           kind: "cluster";
+          /** Supercluster id: valid only for the index that made it. */
           id: number;
+          /**
+           * Stays the same for the same group when the index is rebuilt from
+           * moved positions (the lowest vehicle id in it), so its symbol is
+           * kept and glides instead of being replaced.
+           */
+          anchor: number;
           latitude: number;
           longitude: number;
           count: number;
@@ -65,8 +79,15 @@ type PointProps = {
     lng: number;
 };
 
-type ClusterAgg = {
-    counts: StatusCounts;
+/**
+ * Flach, ohne verschachteltes Objekt: Supercluster kopiert die Werte einer
+ * Teil-Gruppe beim Zusammenfassen nur flach. Ein `counts`-Objekt darin wäre
+ * von mehreren Gruppen geteilt und würde bei `reduce` bei allen mitwachsen
+ * (die Ringe zeigten dann die Verteilung der ganzen Flotte).
+ */
+type ClusterAgg = StatusCounts & {
+    /** Lowest vehicle id in the group: it names the group across index rebuilds. */
+    minId: number;
     minLat: number;
     maxLat: number;
     minLng: number;
@@ -163,11 +184,10 @@ export function clusterOpen(input: {
 }
 
 function pointAggregate(props: PointProps): ClusterAgg {
-    const counts = emptyStatusCounts();
-    counts[props.status] = 1;
-
     return {
-        counts,
+        ...emptyStatusCounts(),
+        [props.status]: 1,
+        minId: props.id,
         minLat: props.lat,
         maxLat: props.lat,
         minLng: props.lng,
@@ -177,9 +197,10 @@ function pointAggregate(props: PointProps): ClusterAgg {
 
 function mergeAggregate(accumulated: ClusterAgg, props: ClusterAgg) {
     for (const status of VEHICLE_STATUSES) {
-        accumulated.counts[status] += props.counts[status];
+        accumulated[status] += props[status];
     }
 
+    accumulated.minId = Math.min(accumulated.minId, props.minId);
     accumulated.minLat = Math.min(accumulated.minLat, props.minLat);
     accumulated.maxLat = Math.max(accumulated.maxLat, props.maxLat);
     accumulated.minLng = Math.min(accumulated.minLng, props.minLng);
@@ -261,10 +282,16 @@ export function clustersFromIndex(
             clusters.push({
                 kind: "cluster",
                 id: props.cluster_id,
+                anchor: props.minId,
                 latitude,
                 longitude,
                 count: props.point_count,
-                counts: { ...props.counts },
+                counts: {
+                    IDLE: props.IDLE,
+                    DRIVING: props.DRIVING,
+                    STOPPED: props.STOPPED,
+                    OFFLINE: props.OFFLINE,
+                },
                 bounds: {
                     west: props.minLng,
                     south: props.minLat,

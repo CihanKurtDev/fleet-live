@@ -3,7 +3,6 @@ import {
     STREAM_FOCUS_MAX_IDS,
     type FleetDensityCell,
     type FleetPosition,
-    type GeoBBox,
     type VehicleFilterId,
 } from "@fleet-live/shared";
 
@@ -15,20 +14,20 @@ import {
 } from "../api/telemetryFocus";
 import { listVehiclePositions } from "../api/vehicles";
 import { useVehicles } from "../context/vehiclesContext";
-import { isInsideBBox } from "../components/vehicles/clusterFleet";
 import { applyVehicleOverrides } from "../utils/applyVehicleOverrides";
 import { useRetryTrigger } from "./useRetryTrigger";
 
 type FleetPositionsQueryInput = {
-    bbox: GeoBBox | null;
     filter?: VehicleFilterId;
     drivers: string[];
+    /** Gewähltes Fahrzeug: bekommt Live-Daten, auch über der Fokus-Grenze. */
+    pinnedId?: number | null;
 };
 
 export const useFleetPositions = ({
-    bbox,
     filter,
     drivers,
+    pinnedId = null,
 }: FleetPositionsQueryInput) => {
     const { listEpoch, vehicleOverrides } = useVehicles();
     const { retryKey, retry } = useRetryTrigger();
@@ -113,17 +112,25 @@ export const useFleetPositions = ({
         [snapshot, vehicleOverrides],
     );
 
-    const drivingFocusKey = vehicles
+    // Alle fahrenden Fahrzeuge, nicht nur die im Ausschnitt: sie bewegen sich
+    // auch, wenn sie in einer Gruppe stecken oder gerade außerhalb liegen. Ein
+    // Fahrzeug, das erst beim Heranzoomen einen Fokus bekäme, hätte dann eine
+    // alte Position und spränge.
+    const drivingIds = vehicles
         .filter(
             (vehicle) =>
                 vehicle.status === "DRIVING" &&
                 vehicle.has_position &&
                 vehicle.latitude !== null &&
-                vehicle.longitude !== null &&
-                (bbox === null ||
-                    isInsideBBox(vehicle.latitude, vehicle.longitude, bbox)),
+                vehicle.longitude !== null,
         )
-        .map((vehicle) => vehicle.id)
+        .map((vehicle) => vehicle.id);
+    // Das gewählte Fahrzeug steht vorn, damit der Schnitt es nie abwirft.
+    const drivingFocusKey = (
+        pinnedId !== null && drivingIds.includes(pinnedId)
+            ? [pinnedId, ...drivingIds.filter((id) => id !== pinnedId)]
+            : drivingIds
+    )
         .slice(0, STREAM_FOCUS_MAX_IDS)
         .join(",");
 
