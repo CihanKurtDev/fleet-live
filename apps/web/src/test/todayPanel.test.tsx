@@ -65,7 +65,6 @@ const response: TodayResponse = {
     meta: {
         counts: {
             deadline_overdue: 12,
-            driving_unassigned: 0,
             driver_talk: 1,
             offline: 3,
             low_fuel: 0,

@@ -19,13 +19,6 @@ function seedTasks() {
         hu_due_on: "2020-01-01",
         uvv_due_on: "2099-01-01",
     });
-    VehicleModel.create({
-        license_plate: "K-OHNE 1",
-        company_id: 1,
-        status: "DRIVING",
-        hu_due_on: "2099-01-01",
-        uvv_due_on: "2099-01-01",
-    });
     const silent = VehicleModel.create({
         license_plate: "K-FUNK 1",
         company_id: 1,
@@ -92,11 +85,10 @@ describe("GET /api/today", () => {
         assert.equal(today.status, 200);
         const { counts, total } = today.body.meta;
 
-        const [overdue, soon, unassigned, talk, offline, lowFuel] =
+        const [overdue, soon, talk, offline, lowFuel] =
             await Promise.all([
                 api.get("/api/due?state=overdue"),
                 api.get("/api/due?state=soon"),
-                api.get("/api/vehicles?filter=driving_unassigned"),
                 api.get("/api/drivers?min_open_warnings=5"),
                 api.get("/api/alerts?filter=open&type=OFFLINE"),
                 api.get("/api/vehicles?filter=low_fuel"),
@@ -104,8 +96,6 @@ describe("GET /api/today", () => {
 
         assert.equal(counts.deadline_overdue, overdue.body.meta.total);
         assert.equal(counts.deadline_soon, soon.body.meta.total);
-        assert.equal(counts.driving_unassigned, unassigned.body.meta.total);
-        assert.equal(counts.driving_unassigned, 1);
         assert.equal(counts.driver_talk, talk.body.meta.total);
         assert.equal(counts.driver_talk, 1);
         assert.equal(counts.offline, offline.body.meta.total);
@@ -119,10 +109,7 @@ describe("GET /api/today", () => {
                 0,
             ),
         );
-        assert.equal(
-            unassigned.body.meta.counts.driving_unassigned,
-            counts.driving_unassigned,
-        );
+        assert.equal("driving_unassigned" in counts, false);
     });
 
     it("lists the most urgent kind first and leaves other companies out", async () => {
@@ -139,7 +126,6 @@ describe("GET /api/today", () => {
         assert.deepEqual([...order].sort((a, b) => a - b), order);
         assert.equal(kinds[0], "deadline_overdue");
         for (const kind of [
-            "driving_unassigned",
             "driver_talk",
             "offline",
             "low_fuel",
@@ -169,12 +155,14 @@ describe("GET /api/today", () => {
             });
         }
 
-        const response = await api.get("/api/today?limit=5");
+        // Vier Arten haben Aufgaben (überfällig, Gespräch, Funk, Tank): bei vier
+        // Plätzen bekommt jede genau einen, obwohl Fristen allein 9 Zeilen hätten.
+        const response = await api.get("/api/today?limit=4");
         const kinds = new Set(
             response.body.data.map((item: { kind: string }) => item.kind),
         );
 
-        assert.equal(response.body.data.length, 5);
-        assert.equal(kinds.size, 5);
+        assert.equal(response.body.data.length, 4);
+        assert.equal(kinds.size, 4);
     });
 });

@@ -4,6 +4,7 @@ import { BadRequestError } from "../lib/errors";
 import { sessionCompany } from "../lib/http";
 import { VehicleModel } from "../models/vehicle.model";
 import { logger } from "../logger";
+import { openSseWriter } from "../sse/compression";
 import {
     replay,
     setConnectionFocus,
@@ -18,34 +19,39 @@ export function streamEvents(req: Request, res: Response) {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
+    // Brotli oder gzip, wenn der Browser es annimmt; jedes Ereignis wird sofort
+    // durchgespült (siehe sse/compression.ts), der allgemeine Middleware ist
+    // für diesen Strom ausgenommen.
+    const writer = openSseWriter(res, req.headers["accept-encoding"]);
     res.flushHeaders();
 
-    res.write("retry: 3000\n\n");
-
-    const connectionId = subscribe(res, companyId);
+    const connectionId = subscribe(writer, companyId);
     logger.info(
         { companyId, connectionId },
         "sse connection opened",
     );
-    res.write(
-        `event: connected\ndata: ${JSON.stringify({ connection_id: connectionId })}\n\n`,
+    // In einem Zug: so kommt es bei jedem Client als ein Stück an, mit und ohne Kompression.
+    writer.write(
+        `retry: 3000\n\nevent: connected\ndata: ${JSON.stringify({ connection_id: connectionId })}\n\n`,
     );
 
     const rawId = req.headers["last-event-id"];
     const lastEventId =
         typeof rawId === "string" ? Number(rawId) : Number.NaN;
 
-    replay(res, Number.isFinite(lastEventId) ? lastEventId : 0);
+    replay(writer, Number.isFinite(lastEventId) ? lastEventId : 0);
 
     const heartbeat = setInterval(() => {
-        res.write("event: heartbeat\ndata: {}\n\n");
+        writer.write("event: heartbeat\ndata: {}\n\n");
     }, 15_000);
 
     heartbeat.unref?.();
 
     const onClose = () => {
         clearInterval(heartbeat);
-        unsubscribe(res);
+        unsubscribe(writer);
+        // Gibt den Kompressor frei; für die unkomprimierte Antwort ist es harmlos.
+        writer.end();
         logger.info(
             { companyId, connectionId },
             "sse connection closed",

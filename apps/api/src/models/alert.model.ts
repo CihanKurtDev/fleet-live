@@ -69,6 +69,14 @@ const UPDATE_SPEEDING = `
       AND ended_at IS NULL
 `;
 
+const SELECT_ALL_OPEN_SPEEDING = `
+    SELECT a.id AS id, a.vehicle_id AS vehicle_id, v.company_id AS company_id
+    FROM alerts a
+    JOIN vehicles v ON v.id = a.vehicle_id
+    WHERE a.type = 'SPEEDING'
+      AND a.ended_at IS NULL
+`;
+
 const END_SPEEDING = `
     UPDATE alerts
     SET ended_at = ?
@@ -112,6 +120,14 @@ const END_OPEN_TYPE = `
     WHERE vehicle_id = ?
       AND type = ?
       AND ended_at IS NULL
+`;
+
+const END_OPEN_TYPE_FOR_VEHICLES = `
+    UPDATE alerts
+    SET ended_at = ?
+    WHERE type = ?
+      AND ended_at IS NULL
+      AND vehicle_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
 `;
 
 const RESOLVE = `
@@ -476,6 +492,18 @@ export class AlertModel {
         );
     }
 
+    static listOpenSpeeding(): Array<{
+        id: number;
+        vehicle_id: number;
+        company_id: number;
+    }> {
+        return stmt(SELECT_ALL_OPEN_SPEEDING).all() as Array<{
+            id: number;
+            vehicle_id: number;
+            company_id: number;
+        }>;
+    }
+
     static endSpeeding(id: number, endedAt: string): void {
         stmt(END_SPEEDING).run(endedAt, id);
     }
@@ -527,6 +555,24 @@ export class AlertModel {
         );
 
         return { id: Number(result.lastInsertRowid), opened: true };
+    }
+
+    /** Wie `endOpenType` für viele Fahrzeuge in einer Anweisung (ein Tick). */
+    static endOpenTypeForVehicles(
+        vehicleIds: number[],
+        type: AlertType,
+        endedAt: string,
+    ): number {
+        if (vehicleIds.length === 0) {
+            return 0;
+        }
+
+        const result = stmt(END_OPEN_TYPE_FOR_VEHICLES).run(
+            endedAt,
+            type,
+            JSON.stringify(vehicleIds),
+        );
+        return Number(result.changes);
     }
 
     static endOpenType(

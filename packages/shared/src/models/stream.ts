@@ -1,11 +1,19 @@
 import { z } from "zod";
 
 import {
-    telemetryPatchesSchema,
+    expandTelemetryPatches,
+    telemetryWirePatchesSchema,
     type TelemetryPatch,
 } from "./telemetry";
 
-export const STREAM_FOCUS_MAX_IDS = 150;
+/**
+ * Ein Tick kostet den Server rund 0,1 ms pro Fahrzeug (gemessen auf der Dev-DB
+ * im echten Server: 2.811 Fahrzeuge in ~290 ms bei 400 ms Takt, 5 Minuten lang
+ * stabil, jeder weitere Zuschauer ~1,5 ms). Bei 3.000 bleiben etwa 25 % Puffer;
+ * im Browser wuchs die Bildzeit bis ~3.200 Patches pro Takt nicht. Läuft ein Tick
+ * länger als sein Takt, werden die Fahrzeuge langsamer.
+ */
+export const STREAM_FOCUS_MAX_IDS = 3000;
 
 /** Typprüfung; die Connection cappt danach auf STREAM_FOCUS_MAX_IDS. */
 
@@ -21,7 +29,7 @@ export const streamFocusSchema = z.object({
                 .positive("Fahrzeug-IDs müssen größer als 0 sein."),
             { error: "ids muss ein Array von Zahlen sein." },
         )
-        .max(500, "Zu viele Fahrzeug-IDs."),
+        .max(STREAM_FOCUS_MAX_IDS, "Zu viele Fahrzeug-IDs."),
 });
 
 export type StreamFocusInput = z.infer<typeof streamFocusSchema>;
@@ -47,7 +55,7 @@ export function parseStreamConnected(input: unknown): StreamConnected | null {
 
 /** SSE `telemetry` — Batch live Patches; ungültige Payloads → `null`. */
 export function parseTelemetryPatches(input: unknown): TelemetryPatch[] | null {
-    const parsed = telemetryPatchesSchema.safeParse(input);
+    const parsed = telemetryWirePatchesSchema.safeParse(input);
 
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? expandTelemetryPatches(parsed.data) : null;
 }

@@ -21,3 +21,13 @@ paths:
 - Reload after resizing the emulated viewport: the emulator does not fire `resize` events.
 - Vite on Windows sometimes misses a file change. If the browser shows old code, `touch` the file and reload.
 - Settings changed while testing go back to their old value before you finish; say so in the report.
+
+## Before reporting a visible change
+
+Check it yourself; the user should never find a plain miss.
+
+- Both schemes (header switch or colour emulation), 1440×900 and 375 px, as dispatcher and as viewer.
+- Click like a person: the `computer` tool on the real controls, with short waits, not only DOM calls.
+- Alignment is the drawn letters, not the boxes: compare ink centres (canvas `measureText` plus a `Range` on the text) and icon centres against their container. Display caps and 14 px text never share one baseline in a bar; centre them.
+- An animation counts only when it ran: `document.getAnimations()` shows the `::view-transition-*` or element animations, and `transition.ready` resolved. A hidden pane (`document.visibilityState === "hidden"`, e.g. under an emulated viewport) skips view transitions silently; test those with the `desktop` preset.
+- „Nicht geprüft“ in a report is for what the tools cannot reach (another browser, a real phone), not for a scheme or a size.

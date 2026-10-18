@@ -25,7 +25,6 @@ export const LiveBand = ({
 }) => {
     const { streamConnection } = useVehicles();
     const { vehicles, densityCells, mode } = useFleetPositions({
-        bbox: null,
         drivers: NO_DRIVERS,
     });
     const [sites, setSites] = useState<Site[]>([]);

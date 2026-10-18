@@ -8,10 +8,16 @@ import {
     type MapPoint,
 } from "../components/vehicles/mapGeometry";
 
-/** Sim-Tick ist 400 ms; kürzere Deltas sind doppelte React-Updates, keine echten Ticks. */
-const MIN_TICK_S = 0.2;
-const MAX_TICK_S = 1.2;
-const DEFAULT_TICK_S = 0.4;
+/**
+ * Ein Fahrzeug meldet sich alle paar Sekunden (Simulator wie echtes Gerät). Das
+ * Marker-Tempo ist die Strecke des Pings geteilt durch die Zeit, die er brauchte;
+ * kürzere Deltas sind doppelte React-Updates, längere eine verpasste Meldung.
+ */
+const MIN_TICK_S = 0.5;
+const MAX_TICK_S = 20;
+const DEFAULT_TICK_S = 5;
+/** Der Marker braucht etwas länger als der übliche Abstand: eine späte Meldung lässt ihn nicht stehen. */
+const SLIDE_LEAD = 1.25;
 /** Tab-Resume darf nicht die ganze Warteschlange in einem Frame ablaufen. */
 const MAX_FRAME_S = 0.05;
 const VERTEX_EPS_M = 0.05;
@@ -176,7 +182,10 @@ export const useMarkerSlide = () => {
                 ? DEFAULT_TICK_S
                 : (now - lastAppendAtRef.current) / 1000;
         const dt = Math.min(MAX_TICK_S, Math.max(MIN_TICK_S, elapsed));
-        speedMpsRef.current = blendSpeed(speedMpsRef.current, meters / dt);
+        speedMpsRef.current = blendSpeed(
+            speedMpsRef.current,
+            meters / (dt * SLIDE_LEAD),
+        );
         lastAppendAtRef.current = now;
     };
 

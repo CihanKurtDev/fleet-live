@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-    FleetDensityCell,
-    FleetPosition,
-    GeoBBox,
-    VehicleStatus,
+import {
+    decodePolyline,
+    type FleetDensityCell,
+    type FleetPosition,
+    type GeoBBox,
+    type VehicleStatus,
 } from "@fleet-live/shared";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+import { useVehicles } from "../../context/vehiclesContext";
 import { useLatestRef } from "../../hooks/useLatestRef";
 import { formatCount } from "../../utils/formatCount";
 import type { DepotDraft } from "./depotDraft";
@@ -21,17 +23,17 @@ import {
 } from "./fleetMapStyle";
 import { createThemedMap, themeColor } from "./leafletMap";
 import {
-    CLUSTER_INDEX_DEBOUNCE_MS,
     FLEET_CLUSTER_FIT_PADDING_PX,
     FLEET_CLUSTER_MAX_ZOOM,
     clusterMemberIds,
     clusterOpen,
-    clustersFromIndex,
     isInsideBBox,
     type FleetCluster,
     type StatusCounts,
 } from "./clusterFleet";
 import { useClusterIndex } from "./useClusterIndex";
+import { PositionTweens, type RoadPoint } from "./positionTween";
+import { SmoothDot, SmoothMarker } from "./smoothMarkers";
 import {
     MAP_STATUS_LEGEND,
     vehicleStatusColor,
@@ -39,11 +41,13 @@ import {
 } from "./vehicleStatus";
 import styles from "./leafletMap.module.scss";
 
-
 const GERMANY_CENTER: L.LatLngTuple = [51.16, 10.45];
 /** Pane for depot names: above the rings, below the vehicle markers. */
 const DEPOT_LABEL_PANE = "fl-depot-labels";
 const METERS_PER_DEGREE_LAT = 111_320;
+/** Smallest on-screen depot ring in px (radius); the circle itself is metres. */
+const DEPOT_MIN_RING_PX = 14;
+
 /** Largest group symbol in px (`clusterIconSize`); depot names keep clear of it. */
 const CLUSTER_ICON_MAX = 48;
 const GERMANY_ZOOM = 6;
@@ -59,41 +63,54 @@ const MAP_VEHICLE_LIST_LIMIT = 100;
 
 type Box = { left: number; right: number; top: number; bottom: number };
 
-/** A dot or group symbol travelling from where it is to its new place. */
-type Glide = {
-    from: L.LatLng;
-    to: L.LatLng;
-    start: number;
-    duration: number;
-};
-
-type Glides = Map<L.Marker | L.CircleMarker, Glide>;
-
 type MarkerRecord = {
     marker: L.CircleMarker;
     status: VehicleStatus;
     selected: boolean;
-    latitude: number;
-    longitude: number;
-    /** When the last report arrived; the next glide takes that long. */
-    reportedAt: number;
+    /** Member of the group that was opened last (drawn with a ring). */
+    grouped: boolean;
+    /** Drawn at its final position; the frame loop leaves it alone until it moves again. */
+    settled: boolean;
+    /** A dot that just came out of a group starts at the group's symbol and eases out. */
+    ease: Shift | null;
+};
+
+/** Where a symbol starts, relative to where it belongs, and when it started. */
+type Shift = { lat: number; lng: number; start: number };
+
+/**
+ * A symbol that is going away (a group that split or merged, a dot that went
+ * into a group). It stays for a moment, slides towards what replaces it and
+ * fades, so a zoom changes the picture continuously instead of swapping it.
+ */
+type Leaving = {
+    marker: L.Marker | L.CircleMarker;
+    from: L.LatLng;
+    start: number;
+    members: number[];
+    /** What replaces it, found once the new symbols exist. */
+    target: { kind: "cluster" | "vehicle"; key: number } | null;
 };
 
 /*
- * A dot glides to each new report over the time the previous report took,
- * so it arrives about when the next one comes in and keeps moving instead of
- * jumping. A longer gap than the limit is not motion any more: it jumps.
- * Group symbols move when the index is rebuilt (every few seconds while
- * vehicles drive), so they get a longer limit.
+ * Vehicles report every few seconds. Where a vehicle is shown at any moment
+ * comes from `PositionTweens` (one report behind, always on its way): dots are
+ * drawn at that position every frame, the group index is built from it (about
+ * once a second), a group symbol rides at the middle of its members' shown
+ * positions, and the camera that follows the selected vehicle pans over the
+ * same stretch in the same time.
  */
 const GLIDE_MIN_MS = 250;
-const DOT_GLIDE = { ms: 3_000, px: 400 };
-/*
- * A rebuilt index can hand a group id to a group somewhere else; a symbol
- * that would travel further than its own size is that other group and
- * jumps, so it never flies across the map under the pointer.
+/** A click on a vehicle zooms to here (the scale bar shows 3 km), never out. */
+const VEHICLE_CLICK_ZOOM = 11;
+const VEHICLE_FLIGHT_MS = 800;
+/**
+ * When the index is rebuilt a group may gain or lose a member and its middle
+ * shifts; the symbol eases over that shift instead of jumping.
  */
-const CLUSTER_GLIDE = { ms: CLUSTER_INDEX_DEBOUNCE_MS + 2_000, px: 48 };
+const CLUSTER_EASE_MS = 600;
+/** Groups splitting or merging, dots leaving or joining one. */
+const TRANSITION_MS = 450;
 /**
  * A group with vehicles on the road is framed with this much room around each
  * of them: the simulator runs in time-lapse and covers well over 100 m per
@@ -105,52 +122,19 @@ const VEHICLE_HIT_TOLERANCE_PX = 6;
 
 const roundCoord = (value: number) => Math.round(value * 10_000) / 10_000;
 
+
 type ClusterMarkerRecord = {
     marker: L.Marker;
+    /** The group's id in the current index (changes when the index is rebuilt). */
+    clusterId: number;
     signature: string;
-    latitude: number;
-    longitude: number;
-    reportedAt: number;
+    /** Vehicles in the group, as of the last index; the symbol rides at their middle. */
+    members: number[];
+    /** The shift left over from the last rebuild, easing out. */
+    ease: Shift | null;
+    /** When it appeared (it fades in); null once it is fully there. */
+    born: number | null;
 };
-
-/**
- * Moves a layer to `to`: a glide over `gap` ms while the hop is on screen,
- * otherwise (reduced motion, a long gap, off screen) at once.
- */
-function moveLayer(
-    map: L.Map,
-    glides: Glides,
-    layer: L.Marker | L.CircleMarker,
-    to: L.LatLng,
-    gap: number,
-    limit: { ms: number; px: number },
-    run: () => void,
-) {
-    const from = layer.getLatLng();
-    const seen = map.getBounds().pad(0.5);
-    const hop = map
-        .latLngToContainerPoint(from)
-        .distanceTo(map.latLngToContainerPoint(to));
-
-    if (
-        prefersReducedMotion() ||
-        gap > limit.ms ||
-        hop > limit.px ||
-        (!seen.contains(from) && !seen.contains(to))
-    ) {
-        glides.delete(layer);
-        layer.setLatLng(to);
-        return;
-    }
-
-    glides.set(layer, {
-        from,
-        to,
-        start: performance.now(),
-        duration: Math.max(GLIDE_MIN_MS, gap),
-    });
-    run();
-}
 
 function clusterGradient(counts: StatusCounts): string {
     const total = MAP_STATUS_LEGEND.reduce(
@@ -180,7 +164,9 @@ function clusterGradient(counts: StatusCounts): string {
     return `conic-gradient(${stops.join(",")})`;
 }
 
-function clusterSignature(item: Extract<FleetCluster, { kind: "cluster" }>): string {
+function clusterSignature(
+    item: Extract<FleetCluster, { kind: "cluster" }>,
+): string {
     return MAP_STATUS_LEGEND.map((status) => item.counts[status]).join(":");
 }
 
@@ -203,7 +189,10 @@ function clusterIcon(
     });
 }
 
-function clusterCaption(item: Extract<FleetCluster, { kind: "cluster" }>, label: string): string {
+function clusterCaption(
+    item: Extract<FleetCluster, { kind: "cluster" }>,
+    label: string,
+): string {
     const noun = item.count === 1 ? "Fahrzeug" : "Fahrzeuge";
     const offline = item.counts.OFFLINE;
 
@@ -220,7 +209,6 @@ const boundsToBBox = (bounds: L.LatLngBounds): GeoBBox => ({
     east: roundCoord(Math.min(180, bounds.getEast())),
     north: roundCoord(Math.min(90, bounds.getNorth())),
 });
-
 
 const hasMapPosition = (
     vehicle: FleetPosition,
@@ -308,6 +296,14 @@ export const FleetMap = ({
         null,
     );
     const [stackIds, setStackIds] = useState<number[] | null>(null);
+    /**
+     * Members of the group that was opened last. A flight can open the
+     * neighbours too (the zoom is too close for the group alone); the ring
+     * shows which dots belong to the clicked group. It ends when the user
+     * zooms back out past where the group was, or opens another group.
+     */
+    const [groupIds, setGroupIds] = useState<ReadonlySet<number> | null>(null);
+    const groupZoomRef = useRef<number | null>(null);
     const [listOpen, setListOpen] = useState(false);
     const inViewVehicles = useMemo(
         () =>
@@ -344,12 +340,19 @@ export const FleetMap = ({
     const declutterRef = useRef<() => void>(() => undefined);
     /** Starts the frame loop that moves gliding dots. */
     const glideRef = useRef<() => void>(() => undefined);
-    const glidesRef = useRef<Glides>(new Map());
+    /** Where each vehicle is shown right now (see PositionTweens). */
+    const tweensRef = useRef(new PositionTweens());
+    const { subscribeTripPath } = useVehicles();
+    const leavingRef = useRef<Leaving[]>([]);
     /**
      * The selected vehicle stays in the middle while it drives, until the user
      * drags or zooms; selecting it again resumes (like the detail map).
      */
-    const followRef = useRef({ on: false, at: 0, lat: NaN, lng: NaN });
+    const followRef = useRef({ on: false, lat: NaN, lng: NaN });
+    /** Set by a click on a vehicle (dot or list row): the next follow step zooms in. */
+    const zoomOnSelectRef = useRef(false);
+    /** Until then a flight to the clicked vehicle runs; follow pans would cut it short. */
+    const flyUntilRef = useRef(0);
     /**
      * The selected vehicle once more as a DOM symbol above the groups, so a
      * group driving over it never takes the click (dots are on the canvas,
@@ -370,9 +373,7 @@ export const FleetMap = ({
     const vehiclesRef = useLatestRef(vehicles);
     const lastDepotFocusRef = useRef("");
     const listedVehicles =
-        inViewVehicles.length <= MAP_VEHICLE_LIST_LIMIT
-            ? inViewVehicles
-            : [];
+        inViewVehicles.length <= MAP_VEHICLE_LIST_LIMIT ? inViewVehicles : [];
     // The selected vehicle never hides in a group: it is drawn on its own,
     // with its ring, at every zoom.
     const clusterPoints = useMemo(
@@ -395,12 +396,36 @@ export const FleetMap = ({
         () => vehicles.find((vehicle) => vehicle.id === selectedId) ?? null,
         [selectedId, vehicles],
     );
-    const clusterIndex = useClusterIndex(clusterPoints);
+    const clusterIndex = useClusterIndex(clusterPoints, (latest) => {
+        const now = performance.now();
+
+        return latest.map((point) => {
+            const shown = tweensRef.current.at(point.id, now);
+
+            return shown
+                ? { ...point, latitude: shown.lat, longitude: shown.lng }
+                : point;
+        });
+    });
     const clusters = useMemo((): FleetCluster[] => {
         if (!view || mode !== "positions") {
             return [];
         }
-        const shown = clustersFromIndex(clusterIndex, view.bbox, view.zoom);
+        // Grouping is switched off: every vehicle in view is its own dot.
+        // To bring groups back, use `clustersFromIndex(clusterIndex, view.bbox, view.zoom)`
+        // from ./clusterFleet here.
+        const shown: FleetCluster[] = inViewVehicles.flatMap((vehicle) =>
+            hasMapPosition(vehicle) && vehicle.id !== selectedVehicle?.id
+                ? [
+                      {
+                          kind: "vehicle" as const,
+                          id: vehicle.id,
+                          latitude: vehicle.latitude,
+                          longitude: vehicle.longitude,
+                      },
+                  ]
+                : [],
+        );
         return selectedVehicle && hasMapPosition(selectedVehicle)
             ? [
                   ...shown,
@@ -412,7 +437,7 @@ export const FleetMap = ({
                   },
               ]
             : shown;
-    }, [clusterIndex, mode, selectedVehicle, view]);
+    }, [inViewVehicles, mode, selectedVehicle, view]);
     const clusterIndexRef = useRef(clusterIndex);
     const clustersRef = useRef(clusters);
     clusterIndexRef.current = clusterIndex;
@@ -434,7 +459,11 @@ export const FleetMap = ({
         listedVehicles.some((vehicle) => vehicle.id === selectedId);
 
     useEffect(() => {
-        if (view === null || stackIds === null || stackZoomRef.current === null) {
+        if (
+            view === null ||
+            stackIds === null ||
+            stackZoomRef.current === null
+        ) {
             return;
         }
 
@@ -443,6 +472,21 @@ export const FleetMap = ({
             setStackIds(null);
         }
     }, [stackIds, view]);
+
+    useEffect(() => {
+        if (
+            view === null ||
+            groupIds === null ||
+            groupZoomRef.current === null
+        ) {
+            return;
+        }
+
+        if (view.zoom < groupZoomRef.current - 0.5) {
+            groupZoomRef.current = null;
+            setGroupIds(null);
+        }
+    }, [groupIds, view]);
 
     useEffect(() => {
         if (selectedInSideList) {
@@ -544,27 +588,190 @@ export const FleetMap = ({
             ignoreView = false;
         });
 
-        const glides = glidesRef.current;
         let glideFrame = 0;
+        /*
+         * While the map zooms, Leaflet keeps the drawn layers at the old scale
+         * and stretches them; moving a dot then draws it at the new scale into
+         * the stretched canvas, and for a moment the vehicles ran beside the
+         * road (a second chain of dots). Dots wait until the zoom has ended
+         * and then jump to where they are by then.
+         */
+        let zooming = false;
+        /*
+         * Over a whole zoom level or more (a flight to a clicked vehicle) the
+         * stretched canvas blew the dots up to big blobs under the selected
+         * symbol, which Leaflet keeps at its size. The dots step out for the
+         * flight and come back, drawn at the new scale, when it ends.
+         */
+        const dotLayer = (canvas as unknown as { _container?: HTMLElement })
+            ._container;
+        if (dotLayer) {
+            dotLayer.style.transition = "opacity 180ms ease-out";
+        }
+        let zoomFrom = map.getZoom();
+        const onZoomStart = () => {
+            zooming = true;
+            zoomFrom = map.getZoom();
+        };
+        // A flight reports every step (`zoom`); a wheel or button zoom
+        // announces its target before the animation (`zoomanim`).
+        const onZoomStep = (event: L.LeafletEvent) => {
+            const target = (event as L.ZoomAnimEvent).zoom ?? map.getZoom();
+
+            if (dotLayer && Math.abs(target - zoomFrom) >= 1) {
+                // Hard cut: a fade would show the stretched dots while it runs.
+                dotLayer.style.transition = "none";
+                dotLayer.style.opacity = "0";
+            }
+        };
+        const onZoomEnd = () => {
+            zooming = false;
+            if (dotLayer) {
+                dotLayer.style.transition = "opacity 180ms ease-out";
+                dotLayer.style.opacity = "";
+            }
+            for (const entry of markersRef.current.values()) {
+                entry.settled = false;
+            }
+            glideRef.current();
+        };
+        map.on("zoomstart", onZoomStart);
+        map.on("zoom zoomanim", onZoomStep);
+        map.on("zoomend", onZoomEnd);
         const glideStep = (now: number) => {
             glideFrame = 0;
             let moving = false;
 
-            for (const [layer, glide] of glides) {
-                if (!map.hasLayer(layer)) {
-                    glides.delete(layer);
+            if (zooming) {
+                glideFrame = requestAnimationFrame(glideStep);
+                return;
+            }
+
+            const tweens = tweensRef.current;
+
+            // A group rides at the middle of its members as they are shown now.
+            for (const entry of clusterMarkersRef.current.values()) {
+                const centre = tweens.centre(entry.members, now);
+
+                if (!centre) {
                     continue;
                 }
 
-                const t = Math.min(1, (now - glide.start) / glide.duration);
-                layer.setLatLng([
-                    glide.from.lat + (glide.to.lat - glide.from.lat) * t,
-                    glide.from.lng + (glide.to.lng - glide.from.lng) * t,
-                ]);
+                let lat = centre.lat;
+                let lng = centre.lng;
 
-                if (t >= 1) {
-                    glides.delete(layer);
-                } else {
+                if (entry.ease) {
+                    const left =
+                        1 -
+                        Math.min(1, (now - entry.ease.start) / CLUSTER_EASE_MS);
+
+                    if (left > 0) {
+                        // Quadratic ease-out: the shift fades fast at first, gently at the end.
+                        lat += entry.ease.lat * left * left;
+                        lng += entry.ease.lng * left * left;
+                        moving = true;
+                    } else {
+                        entry.ease = null;
+                    }
+                }
+
+                entry.marker.setLatLng([lat, lng]);
+
+                if (entry.born !== null) {
+                    const age = (now - entry.born) / TRANSITION_MS;
+
+                    entry.marker.setOpacity(Math.min(1, age));
+
+                    if (age >= 1) {
+                        entry.born = null;
+                    } else {
+                        moving = true;
+                    }
+                }
+
+                if (!centre.done) {
+                    moving = true;
+                }
+            }
+
+            for (const [id, entry] of markersRef.current) {
+                const shown = tweens.at(id, now);
+
+                if (!shown) {
+                    continue;
+                }
+
+                let lat = shown.lat;
+                let lng = shown.lng;
+                let easing = false;
+
+                if (entry.ease) {
+                    const left =
+                        1 -
+                        Math.min(1, (now - entry.ease.start) / TRANSITION_MS);
+
+                    if (left > 0) {
+                        lat += entry.ease.lat * left * left;
+                        lng += entry.ease.lng * left * left;
+                        easing = true;
+                    } else {
+                        entry.ease = null;
+                    }
+                }
+
+                if (shown.done && entry.settled && !easing) {
+                    continue;
+                }
+
+                entry.marker.setLatLng([lat, lng]);
+                entry.settled = shown.done && !easing;
+
+                if (!shown.done || easing) {
+                    moving = true;
+                }
+            }
+
+            // Symbols that are going away slide towards what replaces them and fade.
+            const leaving = leavingRef.current;
+
+            if (leaving.length > 0) {
+                const kept: Leaving[] = [];
+
+                for (const item of leaving) {
+                    const age = (now - item.start) / TRANSITION_MS;
+                    const to = item.target
+                        ? (item.target.kind === "cluster"
+                              ? clusterMarkersRef.current.get(item.target.key)
+                              : markersRef.current.get(item.target.key)
+                          )?.marker.getLatLng()
+                        : undefined;
+
+                    if (age >= 1) {
+                        item.marker.remove();
+                        continue;
+                    }
+
+                    const p = age * age * (3 - 2 * age);
+
+                    item.marker.setLatLng(
+                        to
+                            ? [
+                                  item.from.lat + (to.lat - item.from.lat) * p,
+                                  item.from.lng + (to.lng - item.from.lng) * p,
+                              ]
+                            : item.from,
+                    );
+
+                    if (item.marker instanceof L.Marker) {
+                        item.marker.setOpacity(1 - age);
+                    }
+
+                    kept.push(item);
+                }
+
+                leavingRef.current = kept;
+
+                if (kept.length > 0) {
                     moving = true;
                 }
             }
@@ -596,7 +803,9 @@ export const FleetMap = ({
             routeLines?.restyle();
             const stroke = markerStroke();
             for (const entry of markersRef.current.values()) {
-                entry.marker.setStyle(markerStyle(entry.status, entry.selected));
+                entry.marker.setStyle(
+                    markerStyle(entry.status, entry.selected, entry.grouped),
+                );
             }
             for (const marker of densityMarkersRef.current) {
                 marker.setStyle({ color: stroke });
@@ -608,7 +817,6 @@ export const FleetMap = ({
         return () => {
             cancelAnimationFrame(glideFrame);
             glideRef.current = () => undefined;
-            glides.clear();
             routesGone = true;
             routeLines?.remove();
             resizeObserver.disconnect();
@@ -617,6 +825,9 @@ export const FleetMap = ({
             }
             map.off("moveend", onUserView);
             map.off("dragstart", stopFollow);
+            map.off("zoomstart", onZoomStart);
+            map.off("zoom zoomanim", onZoomStep);
+            map.off("zoomend", onZoomEnd);
             L.DomEvent.off(container, "wheel dblclick", stopFollow);
             zoomButtons?.removeEventListener("click", stopFollow);
             map.off("moveend", publishView);
@@ -628,6 +839,10 @@ export const FleetMap = ({
                 entry.marker.remove();
             }
             clusterMarkersRef.current.clear();
+            for (const item of leavingRef.current) {
+                item.marker.remove();
+            }
+            leavingRef.current = [];
             for (const marker of densityMarkersRef.current) {
                 marker.remove();
             }
@@ -638,6 +853,106 @@ export const FleetMap = ({
             canvasRef.current = null;
         };
     }, [onBoundsChangeRef]);
+
+    /** Where each vehicle's group symbol is drawn right now (for symbols that come out of it). */
+    const groupSpots = () => {
+        const spots = new Map<number, L.LatLng>();
+
+        for (const record of clusterMarkersRef.current.values()) {
+            const at = record.marker.getLatLng();
+
+            for (const id of record.members) {
+                spots.set(id, at);
+            }
+        }
+
+        return spots;
+    };
+
+    /*
+     * The road points each report brings (`path_delta`), kept until the report
+     * itself reaches the map, so a dot glides along the road and not across
+     * bends. The stream calls this before the report is rendered; a suffix is
+     * relative to the last report (the point the vehicle is heading to now).
+     */
+    const roadRef = useRef(new Map<number, { points: RoadPoint[]; newTrip: boolean }>());
+
+    useEffect(
+        () =>
+            subscribeTripPath((id, delta, reset) => {
+                const decoded = decodePolyline(delta);
+                const pending = roadRef.current.get(id);
+                // Two reports before the map rendered: the second continues the first.
+                const from = reset
+                    ? undefined
+                    : (pending?.points[pending.points.length - 1] ??
+                      tweensRef.current.heading(id));
+
+                if (!reset && !from) {
+                    return;
+                }
+
+                // The chain is built on the 5-decimal grid of the stored path.
+                const baseLat = from ? Math.round(from.lat * 1e5) / 1e5 : 0;
+                const baseLng = from ? Math.round(from.lng * 1e5) / 1e5 : 0;
+                const points = decoded.map((point) => ({
+                    lat: baseLat + point.lat,
+                    lng: baseLng + point.lng,
+                }));
+
+                roadRef.current.set(
+                    id,
+                    pending && !reset
+                        ? {
+                              points: [...pending.points, ...points],
+                              newTrip: pending.newTrip,
+                          }
+                        : { points, newTrip: reset },
+                );
+            }),
+        [subscribeTripPath],
+    );
+
+    // Every report starts the stretch its vehicle is shown on. Declared before
+    // the effects that draw, so they see the new stretch.
+    useEffect(() => {
+        const tweens = tweensRef.current;
+        const now = performance.now();
+        const jump = prefersReducedMotion();
+        const ids = new Set<number>();
+        const roads = roadRef.current;
+
+        for (const vehicle of vehicles) {
+            if (!hasMapPosition(vehicle)) {
+                continue;
+            }
+
+            ids.add(vehicle.id);
+            const road = roads.get(vehicle.id);
+            roads.delete(vehicle.id);
+
+            if (
+                tweens.report(
+                    vehicle.id,
+                    vehicle.latitude,
+                    vehicle.longitude,
+                    now,
+                    jump,
+                    road?.points,
+                    road?.newTrip,
+                )
+            ) {
+                const entry = markersRef.current.get(vehicle.id);
+
+                if (entry) {
+                    entry.settled = false;
+                }
+            }
+        }
+
+        tweens.retain(ids);
+        glideRef.current();
+    }, [vehicles]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -672,12 +987,16 @@ export const FleetMap = ({
 
             seen.add(vehicle.id);
             const existing = markers.get(vehicle.id);
-            const at = L.latLng(vehicle.latitude, vehicle.longitude);
+            const shown = tweensRef.current.at(vehicle.id, performance.now());
+            const at = shown
+                ? L.latLng(shown.lat, shown.lng)
+                : L.latLng(vehicle.latitude, vehicle.longitude);
             const selected = vehicle.id === selectedId;
+            const grouped = groupIds?.has(vehicle.id) ?? false;
 
             if (!existing) {
-                const marker = L.circleMarker(at, {
-                    ...markerStyle(vehicle.status, selected),
+                const marker = new SmoothDot(at, {
+                    ...markerStyle(vehicle.status, selected, grouped),
                     renderer: canvas,
                 });
                 marker.bindTooltip(markerTooltip(vehicle), {
@@ -688,53 +1007,63 @@ export const FleetMap = ({
                     L.DomEvent.stopPropagation(event);
                     ignoreMapClickRef.current = true;
                     followRef.current.on = true;
+                    zoomOnSelectRef.current = true;
                     onSelectRef.current(vehicle.id);
                 });
                 marker.addTo(map);
+                // A dot that comes out of a group starts at the group's symbol.
+                const from = !prefersReducedMotion()
+                    ? groupSpots().get(vehicle.id)
+                    : undefined;
                 markers.set(vehicle.id, {
                     marker,
                     status: vehicle.status,
                     selected,
-                    latitude: vehicle.latitude,
-                    longitude: vehicle.longitude,
-                    reportedAt: performance.now(),
+                    grouped,
+                    settled: shown?.done ?? true,
+                    ease: from
+                        ? {
+                              lat: from.lat - at.lat,
+                              lng: from.lng - at.lng,
+                              start: performance.now(),
+                          }
+                        : null,
                 });
+                glideRef.current();
                 continue;
             }
 
             if (
-                existing.latitude !== vehicle.latitude ||
-                existing.longitude !== vehicle.longitude
-            ) {
-                const now = performance.now();
-                moveLayer(
-                    map,
-                    glidesRef.current,
-                    existing.marker,
-                    at,
-                    now - existing.reportedAt,
-                    DOT_GLIDE,
-                    glideRef.current,
-                );
-                existing.latitude = vehicle.latitude;
-                existing.longitude = vehicle.longitude;
-                existing.reportedAt = now;
-            }
-
-            if (
                 existing.status !== vehicle.status ||
-                existing.selected !== selected
+                existing.selected !== selected ||
+                existing.grouped !== grouped
             ) {
-                existing.marker.setStyle(markerStyle(vehicle.status, selected));
+                existing.marker.setStyle(
+                    markerStyle(vehicle.status, selected, grouped),
+                );
                 existing.marker.setTooltipContent(markerTooltip(vehicle));
                 existing.status = vehicle.status;
                 existing.selected = selected;
+                existing.grouped = grouped;
             }
         }
 
         for (const [id, entry] of markers) {
             if (!seen.has(id)) {
-                entry.marker.remove();
+                // A dot that goes into a group slides to it (the group effect
+                // finds which one) instead of vanishing.
+                if (prefersReducedMotion() || id === selectedId) {
+                    entry.marker.remove();
+                } else {
+                    leavingRef.current.push({
+                        marker: entry.marker,
+                        from: entry.marker.getLatLng(),
+                        start: performance.now(),
+                        members: [id],
+                        target: null,
+                    });
+                    glideRef.current();
+                }
                 markers.delete(id);
             }
         }
@@ -750,7 +1079,7 @@ export const FleetMap = ({
         }
         if (dot && selectedId !== null && !selectedMarkerRef.current) {
             const id = selectedId;
-            const marker = L.marker(dot.marker.getLatLng(), {
+            const marker = new SmoothMarker(dot.marker.getLatLng(), {
                 icon: L.divIcon({
                     className: styles.selectedDot,
                     iconSize: [17, 17],
@@ -763,6 +1092,8 @@ export const FleetMap = ({
                 L.DomEvent.stopPropagation(event);
                 ignoreMapClickRef.current = true;
                 followRef.current.on = true;
+                zoomOnSelectRef.current = true;
+                followRef.current.lat = NaN;
                 onSelectRef.current(id);
             });
             marker.addTo(map);
@@ -771,7 +1102,7 @@ export const FleetMap = ({
         syncSelectedMarker();
 
         declutterRef.current();
-    }, [clusters, mode, onSelectRef, selectedId, vehicles]);
+    }, [clusters, groupIds, mode, onSelectRef, selectedId, vehicles]);
 
     useEffect(
         () => () => {
@@ -844,6 +1175,10 @@ export const FleetMap = ({
             const zoomDelta = Math.abs(open.zoom - map.getZoom());
             followRef.current.on = false;
 
+            // Mark the opened group's members; the neighbours that open with them stay plain.
+            groupZoomRef.current = map.getZoom();
+            setGroupIds(new Set(members));
+
             stackZoomRef.current = map.getZoom();
             if (open.list) {
                 setStackIds(members);
@@ -863,37 +1198,41 @@ export const FleetMap = ({
         };
 
         const seen = new Set<number>();
+        // Where each vehicle's old group symbol is, before this update changes them.
+        const spots = groupSpots();
 
         for (const item of clusters) {
             if (item.kind !== "cluster") {
                 continue;
             }
 
-            seen.add(item.id);
+            seen.add(item.anchor);
             const label = formatCount(item.count);
             const caption = clusterCaption(item, label);
             const signature = `${clusterSignature(item)}:${label}`;
-            const existing = markers.get(item.id);
+            const existing = markers.get(item.anchor);
+
+            const members = clusterMemberIds(clusterIndexRef.current, item.id);
+            const now = performance.now();
+            const centre = tweensRef.current.centre(members, now);
 
             if (existing) {
-                if (
-                    existing.latitude !== item.latitude ||
-                    existing.longitude !== item.longitude
-                ) {
-                    const now = performance.now();
-                    moveLayer(
-                        map,
-                        glidesRef.current,
-                        existing.marker,
-                        L.latLng(item.latitude, item.longitude),
-                        now - existing.reportedAt,
-                        CLUSTER_GLIDE,
-                        glideRef.current,
-                    );
-                    existing.latitude = item.latitude;
-                    existing.longitude = item.longitude;
-                    existing.reportedAt = now;
-                }
+                // The index was rebuilt: the same group has a new id and may
+                // have gained or lost a vehicle. Its symbol keeps riding at
+                // the middle of its members; the shift that makes eases out.
+                const before = existing.marker.getLatLng();
+
+                existing.clusterId = item.id;
+                existing.members = members;
+                existing.ease =
+                    centre && !prefersReducedMotion()
+                        ? {
+                              lat: before.lat - centre.lat,
+                              lng: before.lng - centre.lng,
+                              start: now,
+                          }
+                        : null;
+                glideRef.current();
 
                 if (existing.signature !== signature) {
                     existing.marker.setIcon(clusterIcon(item, label));
@@ -907,10 +1246,20 @@ export const FleetMap = ({
                 continue;
             }
 
-            const marker = L.marker([item.latitude, item.longitude], {
-                icon: clusterIcon(item, label),
-                zIndexOffset: 600,
-            });
+            // A new group that comes out of an old one (a zoom split it)
+            // starts at the old symbol and fades in while it moves out.
+            const still = prefersReducedMotion();
+            const origin = still
+                ? undefined
+                : members.map((id) => spots.get(id)).find(Boolean);
+            const marker = new SmoothMarker(
+                [centre?.lat ?? item.latitude, centre?.lng ?? item.longitude],
+                {
+                    icon: clusterIcon(item, label),
+                    zIndexOffset: 600,
+                    opacity: still ? 1 : 0,
+                },
+            );
             marker.bindTooltip(caption, {
                 direction: "top",
                 offset: [0, -clusterIconSize(item.count) / 2],
@@ -918,26 +1267,89 @@ export const FleetMap = ({
             marker.on("click", (event) => {
                 L.DomEvent.stopPropagation(event);
                 ignoreMapClickRef.current = true;
-                openCluster(item.id);
+                const record = markers.get(item.anchor);
+
+                if (record) {
+                    openCluster(record.clusterId);
+                }
             });
             marker.on("add", () => {
                 marker.getElement()?.setAttribute("aria-label", caption);
             });
             marker.addTo(map);
-            markers.set(item.id, {
+            markers.set(item.anchor, {
                 marker,
+                clusterId: item.id,
                 signature,
-                latitude: item.latitude,
-                longitude: item.longitude,
-                reportedAt: performance.now(),
+                members,
+                ease:
+                    origin && centre
+                        ? {
+                              lat: origin.lat - centre.lat,
+                              lng: origin.lng - centre.lng,
+                              start: now,
+                          }
+                        : null,
+                born: still ? null : now,
             });
+            glideRef.current();
         }
 
         for (const [id, entry] of markers) {
             if (!seen.has(id)) {
-                entry.marker.remove();
+                // A group that split or merged slides towards what replaces
+                // it and fades; it is not swapped in one frame.
+                if (prefersReducedMotion()) {
+                    entry.marker.remove();
+                } else {
+                    leavingRef.current.push({
+                        marker: entry.marker,
+                        from: entry.marker.getLatLng(),
+                        start: performance.now(),
+                        members: entry.members,
+                        target: null,
+                    });
+                }
                 markers.delete(id);
             }
+        }
+
+        // Find what replaces each symbol that is going away: the group that
+        // now holds its vehicles, else the dot one of them became.
+        if (leavingRef.current.some((item) => item.target === null)) {
+            const groupOf = new Map<number, number>();
+
+            for (const [anchor, record] of markers) {
+                for (const id of record.members) {
+                    groupOf.set(id, anchor);
+                }
+            }
+
+            leavingRef.current = leavingRef.current.map((item): Leaving => {
+                if (item.target) {
+                    return item;
+                }
+
+                const anchor = item.members
+                    .map((id) => groupOf.get(id))
+                    .find((key) => key !== undefined);
+                const dotId = item.members.find((id) =>
+                    markersRef.current.has(id),
+                );
+
+                if (anchor !== undefined) {
+                    return {
+                        ...item,
+                        target: { kind: "cluster", key: anchor },
+                    };
+                }
+
+                return dotId !== undefined
+                    ? { ...item, target: { kind: "vehicle", key: dotId } }
+                    : item;
+            });
+
+            glideRef.current();
         }
 
         declutterRef.current();
@@ -957,17 +1369,14 @@ export const FleetMap = ({
         }
 
         densityMarkersRef.current = densityCells.map((cell) => {
-            const marker = L.circleMarker(
-                [cell.latitude, cell.longitude],
-                {
-                    radius: Math.min(32, 8 + Math.sqrt(cell.total) * 1.4),
-                    color: vehicleStatusColor(densityStatus(cell)),
-                    weight: 1.5,
-                    fillColor: vehicleStatusColor(densityStatus(cell)),
-                    fillOpacity: 0.28,
-                    renderer: canvas,
-                },
-            );
+            const marker = L.circleMarker([cell.latitude, cell.longitude], {
+                radius: Math.min(32, 8 + Math.sqrt(cell.total) * 1.4),
+                color: vehicleStatusColor(densityStatus(cell)),
+                weight: 1.5,
+                fillColor: vehicleStatusColor(densityStatus(cell)),
+                fillOpacity: 0.28,
+                renderer: canvas,
+            });
             marker.bindTooltip(densityTooltip(cell), {
                 direction: "top",
                 offset: [0, -12],
@@ -989,14 +1398,14 @@ export const FleetMap = ({
     useEffect(() => {
         followRef.current = {
             on: selectedId !== null,
-            at: performance.now(),
             lat: NaN,
             lng: NaN,
         };
     }, [selectedId]);
 
-    // Pans with the selected vehicle over the same time its dot glides, so
-    // the dot stays in the middle and the map moves evenly underneath.
+    // Pans to where the selected vehicle is heading, over the stretch its dot
+    // is gliding on (the same start and the same time), so the dot stays in
+    // the middle and the map moves evenly underneath.
     useEffect(() => {
         const map = mapRef.current;
         const follow = followRef.current;
@@ -1007,27 +1416,55 @@ export const FleetMap = ({
 
         const vehicle = vehicles.find((item) => item.id === selectedId);
 
+        // A click on a vehicle brings it close: the 3 km scale, or nearer if
+        // the map already is. The follow pans wait until the flight is over.
+        if (zoomOnSelectRef.current && vehicle && hasMapPosition(vehicle)) {
+            zoomOnSelectRef.current = false;
+            const heading = tweensRef.current.heading(vehicle.id);
+            const zoom = Math.max(map.getZoom(), VEHICLE_CLICK_ZOOM);
+            const target: L.LatLngExpression = heading
+                ? [heading.lat, heading.lng]
+                : [vehicle.latitude, vehicle.longitude];
+
+            follow.lat = vehicle.latitude;
+            follow.lng = vehicle.longitude;
+
+            if (prefersReducedMotion()) {
+                map.setView(target, zoom, { animate: false });
+            } else {
+                flyUntilRef.current = performance.now() + VEHICLE_FLIGHT_MS;
+                map.flyTo(target, zoom, {
+                    duration: VEHICLE_FLIGHT_MS / 1000,
+                });
+            }
+            return;
+        }
+
         if (
             !vehicle ||
             !hasMapPosition(vehicle) ||
             vehicle.status !== "DRIVING" ||
-            (vehicle.latitude === follow.lat && vehicle.longitude === follow.lng)
+            performance.now() < flyUntilRef.current ||
+            (vehicle.latitude === follow.lat &&
+                vehicle.longitude === follow.lng)
         ) {
             return;
         }
 
-        const now = performance.now();
-        const gap = now - follow.at;
-        follow.at = now;
+        const heading = tweensRef.current.heading(vehicle.id);
+        const ms = heading?.ms ?? 0;
+
         follow.lat = vehicle.latitude;
         follow.lng = vehicle.longitude;
         map.panTo(
-            [vehicle.latitude, vehicle.longitude],
-            prefersReducedMotion() || gap > DOT_GLIDE.ms
+            heading
+                ? [heading.lat, heading.lng]
+                : [vehicle.latitude, vehicle.longitude],
+            prefersReducedMotion() || ms <= 0
                 ? { animate: false }
                 : {
                       animate: true,
-                      duration: Math.max(GLIDE_MIN_MS, gap) / 1000,
+                      duration: Math.max(GLIDE_MIN_MS, ms) / 1000,
                       easeLinearity: 1,
                       noMoveStart: true,
                   },
@@ -1122,7 +1559,11 @@ export const FleetMap = ({
          * Just above the ring, but never closer to the centre than half the
          * largest group symbol, so a group in the depot never covers the name.
          */
-        const labelAt = (latitude: number, longitude: number, radius: number) => {
+        const labelAt = (
+            latitude: number,
+            longitude: number,
+            radius: number,
+        ) => {
             const centre = map.latLngToLayerPoint([latitude, longitude]);
             const edge = map.latLngToLayerPoint([
                 latitude + radius / METERS_PER_DEGREE_LAT,
@@ -1135,7 +1576,24 @@ export const FleetMap = ({
             label: L.Tooltip;
             circle: L.Circle;
         }> = [];
+        const rings: Array<{ marker: L.CircleMarker; circle: L.Circle }> = [];
+        const showRings = () => {
+            for (const { marker, circle } of rings) {
+                const at = circle.getLatLng();
+                const centre = map.latLngToLayerPoint(at);
+                const edge = map.latLngToLayerPoint([
+                    at.lat + circle.getRadius() / METERS_PER_DEGREE_LAT,
+                    at.lng,
+                ]);
+                const small = centre.y - edge.y < DEPOT_MIN_RING_PX;
+                marker.setStyle({ opacity: small ? 1 : 0 });
+                marker
+                    .getElement()
+                    ?.setAttribute("pointer-events", small ? "auto" : "none");
+            }
+        };
         const replace = () => {
+            showRings();
             for (const { label, circle } of placed) {
                 const at = circle.getLatLng();
                 label.setLatLng(labelAt(at.lat, at.lng, circle.getRadius()));
@@ -1237,10 +1695,7 @@ export const FleetMap = ({
         };
 
         for (const depot of depots) {
-            const shown =
-                draft?.id === depot.id
-                    ? draft
-                    : depot;
+            const shown = draft?.id === depot.id ? draft : depot;
             const circle = L.circle([shown.latitude, shown.longitude], {
                 radius: shown.radius_m,
                 ...depotStyle(selectedDepotId === depot.id),
@@ -1268,6 +1723,32 @@ export const FleetMap = ({
                 onSelectDepotRef.current?.(depot.id);
             });
             circle.addTo(group);
+
+            /*
+             * Zoomed out the real circle (1–2 km) is under a pixel. A ring of
+             * fixed size marks the place until the circle is bigger than it.
+             */
+            const marker = L.circleMarker([shown.latitude, shown.longitude], {
+                radius: DEPOT_MIN_RING_PX,
+                ...depotStyle(selectedDepotId === depot.id),
+                fill: false,
+                weight: 2,
+            });
+            marker.on("click", (event) => {
+                L.DomEvent.stopPropagation(event);
+                ignoreMapClickRef.current = true;
+                const hit = vehicleAt(event.containerPoint);
+                if (hit !== null) {
+                    onSelectRef.current(hit);
+                    return;
+                }
+                if (lockDepotSelection) {
+                    return;
+                }
+                onSelectDepotRef.current?.(depot.id);
+            });
+            marker.addTo(group);
+            rings.push({ marker, circle });
 
             if (canEditDepots && draft?.id === depot.id) {
                 drawHandle(
@@ -1302,10 +1783,17 @@ export const FleetMap = ({
                 placed.push({ label, circle });
             }
             if (canEditDepots) {
-                drawHandle("new", draft.latitude, draft.longitude, circle, label);
+                drawHandle(
+                    "new",
+                    draft.latitude,
+                    draft.longitude,
+                    circle,
+                    label,
+                );
             }
         }
 
+        showRings();
         declutter();
 
         return () => {
@@ -1428,7 +1916,11 @@ export const FleetMap = ({
                                             ? "true"
                                             : undefined
                                     }
-                                    onClick={() => onSelect(vehicle.id)}
+                                    onClick={() => {
+                                        zoomOnSelectRef.current = true;
+                                        followRef.current.on = true;
+                                        onSelect(vehicle.id);
+                                    }}
                                 >
                                     <span>{vehicle.license_plate}</span>
                                     <span className={styles.who}>
@@ -1447,9 +1939,7 @@ export const FleetMap = ({
                 <details
                     className={styles.vehicleList}
                     open={listOpen}
-                    onToggle={(event) =>
-                        setListOpen(event.currentTarget.open)
-                    }
+                    onToggle={(event) => setListOpen(event.currentTarget.open)}
                 >
                     <summary>
                         Fahrzeugliste ({formatCount(listedVehicles.length)})
@@ -1464,7 +1954,11 @@ export const FleetMap = ({
                                             ? "true"
                                             : undefined
                                     }
-                                    onClick={() => onSelect(vehicle.id)}
+                                    onClick={() => {
+                                        zoomOnSelectRef.current = true;
+                                        followRef.current.on = true;
+                                        onSelect(vehicle.id);
+                                    }}
                                 >
                                     <span>{vehicle.license_plate}</span>
                                     <span>

@@ -19,7 +19,12 @@ import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
-import { BadRequestError, NotFoundError, ValidationError } from "../lib/errors";
+import {
+    BadRequestError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+} from "../lib/errors";
 import {
     notifyVehiclesChanged,
     parseId as parseRouteId,
@@ -142,6 +147,26 @@ function syncTrip(
     TripModel.pruneClosedForCompany(companyId);
 
     return VehicleModel.getById(id, companyId) ?? updated;
+}
+
+const NEEDS_DRIVER_MESSAGE =
+    "Ein Fahrzeug braucht einen aktuellen Fahrer, bevor es auf Fahrt gehen kann. Erst den Fahrer zuweisen, dann den Status setzen.";
+
+/**
+ * Ein Fahrzeug fährt nie ohne Fahrer. Der Status `DRIVING` ist nur mit einem
+ * aktuellen Fahrer möglich; ohne ihn würde die Fahrt offen bleiben, ohne dass
+ * die Simulation das Fahrzeug bewegt. Ein Fahrer lässt sich während der Fahrt
+ * ohnehin nicht entfernen (`DriverModel`), damit gilt die Regel in beide Richtungen.
+ */
+function assertDriverForDriving(
+    status: VehicleStatus | undefined,
+    currentDriverId: number | null | undefined,
+) {
+    if (status === "DRIVING" && (currentDriverId ?? null) === null) {
+        throw new ConflictError(NEEDS_DRIVER_MESSAGE, {
+            status: NEEDS_DRIVER_MESSAGE,
+        });
+    }
 }
 
 function syncExceptions(vehicle: Vehicle, companyId: number): Vehicle {
@@ -269,6 +294,9 @@ export function createVehicle(req: Request, res: Response) {
     const { license_plate, fuel_level, status } =
         trimStrings(input);
 
+    // Ein neues Fahrzeug hat noch keinen Fahrer, `DRIVING` ist hier nie gültig.
+    assertDriverForDriving(status, null);
+
     const vehicle = VehicleModel.create({
         license_plate: license_plate!,
         fuel_level,
@@ -304,6 +332,11 @@ export function replaceVehicle(req: Request, res: Response) {
 
     const companyId = sessionCompany(req);
     const previous = VehicleModel.getById(id, companyId);
+
+    if (previous) {
+        assertDriverForDriving(input.status, previous.current_driver_id);
+    }
+
     const vehicle = VehicleModel.replace(
         id,
         trimStrings(input) as VehicleInput,
@@ -339,6 +372,14 @@ export function updateVehicle(req: Request, res: Response) {
 
     const companyId = sessionCompany(req);
     const previous = VehicleModel.getById(id, companyId);
+
+    if (previous) {
+        assertDriverForDriving(
+            input.status ?? previous.status,
+            previous.current_driver_id,
+        );
+    }
+
     const vehicle = VehicleModel.update(id, trimStrings(input), companyId);
 
     if (!vehicle) {
@@ -357,6 +398,15 @@ export function updateVehicle(req: Request, res: Response) {
 export function deleteVehicle(req: Request, res: Response) {
     const id = parseId(req.params.id);
     const companyId = sessionCompany(req);
+    const vehicle = VehicleModel.getById(id, companyId);
+
+    // Wie beim Fahrer: Was gerade unterwegs ist, wird nicht gelöscht.
+    if (vehicle?.status === "DRIVING") {
+        const message = `${vehicle.license_plate} ist unterwegs. Das Fahrzeug lässt sich erst nach der Fahrt löschen.`;
+
+        throw new ConflictError(message, { vehicle_id: message });
+    }
+
     const deleted = VehicleModel.delete(id, companyId);
 
     if (!deleted) {

@@ -16,9 +16,11 @@ import {
     CITY_LIMIT_KMH,
     HIGHWAY_LIMIT_KMH,
     SIM_OVERSPEED_EVERY,
+    SIM_PING_SECONDS,
     SIM_ROUTES,
     TIME_SCALE,
     haversineMeters,
+    nextSimTick,
     resetSimProgress,
     seedSimProgress,
     speedLimitKmh,
@@ -28,10 +30,14 @@ import { broadcast, closeAllSseClients } from "../sse/hub";
 import { resetSimControlForTests, setCompanySimRunning } from "../lib/simControl";
 import { sqliteDaysAgo, nowSqlite } from "../lib/sqlTime";
 import { config } from "../config";
-import { insertAlert, loginAs, seedFleet } from "./helpers";
+import { giveCurrentDriver, insertAlert, loginAs, seedFleet } from "./helpers";
 
 let api: ReturnType<typeof request.agent>;
 let sessionCookie = "";
+
+/** Pings, die ein Fahrzeug braucht, um `seconds` Straße im Zeitraffer 20 zurückzulegen. */
+const pingsFor = (seconds: number) =>
+    Math.ceil(seconds / TIME_SCALE / SIM_PING_SECONDS);
 
 function parseSseEvents(
     text: string,
@@ -1064,6 +1070,8 @@ describe("vehicle mutations", () => {
 
         const id = created.body.id;
 
+        await giveCurrentDriver(api, id, "Edit Fahrer");
+
         const replaced = await api.put(`/api/vehicles/${id}`).send({
             license_plate: "K-ED 2",
             driver_name: "Neuer Fahrer",
@@ -1109,13 +1117,162 @@ describe("vehicle mutations", () => {
         assert.equal(missing.status, 404);
     });
 
+    it("no longer knows a filter for driving without a driver", async () => {
+        const response = await api
+            .get("/api/vehicles")
+            .query({ filter: "driving_unassigned" });
+
+        assert.equal(response.status, 400);
+    });
+
+    describe("a vehicle only drives with a driver", () => {
+        const needsDriver =
+            "Ein Fahrzeug braucht einen aktuellen Fahrer, bevor es auf Fahrt gehen kann. Erst den Fahrer zuweisen, dann den Status setzen.";
+
+        const driversWithoutCurrent = () =>
+            db
+                .prepare(
+                    `SELECT COUNT(*) AS c FROM vehicles
+                     WHERE status = 'DRIVING' AND current_driver_id IS NULL`,
+                )
+                .get() as { c: number };
+
+        it("rejects a new vehicle that starts as DRIVING and creates nothing", async () => {
+            const response = await api.post("/api/vehicles").send({
+                license_plate: "K-NODRV 1",
+                status: "DRIVING",
+            });
+
+            assert.equal(response.status, 409);
+            assert.equal(response.body.code, "CONFLICT");
+            assert.equal(response.body.fields.status, needsDriver);
+
+            const list = await api
+                .get("/api/vehicles")
+                .query({ search: "K-NODRV" });
+            assert.equal(list.body.data.length, 0);
+            assert.equal(driversWithoutCurrent().c, 0);
+        });
+
+        it("rejects PATCH and PUT to DRIVING while no driver is current, and leaves the status", async () => {
+            const created = await api.post("/api/vehicles").send({
+                license_plate: "K-NODRV 2",
+                status: "IDLE",
+            });
+            const id = created.body.id as number;
+
+            const patched = await api
+                .patch(`/api/vehicles/${id}`)
+                .send({ status: "DRIVING" });
+            assert.equal(patched.status, 409);
+            assert.equal(patched.body.fields.status, needsDriver);
+
+            const replaced = await api.put(`/api/vehicles/${id}`).send({
+                license_plate: "K-NODRV 2",
+                fuel_level: 50,
+                status: "DRIVING",
+            });
+            assert.equal(replaced.status, 409);
+
+            const after = await api.get(`/api/vehicles/${id}`);
+            assert.equal(after.body.status, "IDLE");
+            assert.equal(driversWithoutCurrent().c, 0);
+        });
+
+        it("still rejects it when a driver is only eligible, not current", async () => {
+            const created = await api.post("/api/vehicles").send({
+                license_plate: "K-NODRV 3",
+                status: "IDLE",
+            });
+            const id = created.body.id as number;
+            const driver = await api.post("/api/drivers").send({ name: "Nur Frei" });
+
+            await api
+                .post(`/api/drivers/${driver.body.data.id}/vehicles`)
+                .send({ vehicle_id: id });
+
+            const patched = await api
+                .patch(`/api/vehicles/${id}`)
+                .send({ status: "DRIVING" });
+
+            assert.equal(patched.status, 409);
+        });
+
+        it("does not delete a vehicle that is on a trip", async () => {
+            const created = await api.post("/api/vehicles").send({
+                license_plate: "K-NODRV 5",
+                status: "IDLE",
+            });
+            const id = created.body.id as number;
+
+            await giveCurrentDriver(api, id, "Unterwegs");
+            await api.patch(`/api/vehicles/${id}`).send({ status: "DRIVING" });
+
+            const blocked = await api.delete(`/api/vehicles/${id}`);
+            assert.equal(blocked.status, 409);
+            assert.match(blocked.body.error, /unterwegs/);
+            assert.equal((await api.get(`/api/vehicles/${id}`)).status, 200);
+
+            await api.patch(`/api/vehicles/${id}`).send({ status: "IDLE" });
+            assert.equal((await api.delete(`/api/vehicles/${id}`)).status, 204);
+        });
+
+        it("allows it with a current driver, and then keeps the driver until the trip ends", async () => {
+            const created = await api.post("/api/vehicles").send({
+                license_plate: "K-NODRV 4",
+                status: "IDLE",
+            });
+            const id = created.body.id as number;
+            const driverId = await giveCurrentDriver(api, id, "Fährt Los");
+
+            const started = await api
+                .patch(`/api/vehicles/${id}`)
+                .send({ status: "DRIVING" });
+            assert.equal(started.status, 200);
+            assert.equal(started.body.status, "DRIVING");
+            assert.equal(started.body.current_driver_id, driverId);
+
+            // Andere Felder ändern geht weiter, der Status bleibt DRIVING.
+            const renamed = await api
+                .patch(`/api/vehicles/${id}`)
+                .send({ cost_center: "K-100" });
+            assert.equal(renamed.status, 200);
+
+            // Der Fahrer lässt sich während der Fahrt nicht entfernen.
+            const unassigned = await api
+                .patch(`/api/drivers/${driverId}/current-vehicle`)
+                .send({ vehicle_id: null });
+            assert.equal(unassigned.status, 409);
+            const removed = await api.delete(`/api/drivers/${driverId}`);
+            assert.equal(removed.status, 409);
+
+            assert.equal(driversWithoutCurrent().c, 0);
+
+            // Nach der Fahrt ist es wieder möglich.
+            const stopped = await api
+                .patch(`/api/vehicles/${id}`)
+                .send({ status: "IDLE" });
+            assert.equal(stopped.status, 200);
+            const freed = await api
+                .patch(`/api/drivers/${driverId}/current-vehicle`)
+                .send({ vehicle_id: null });
+            assert.equal(freed.status, 200);
+        });
+    });
+
     it("keeps measured fuel while the vehicle stays driving", async () => {
         const created = await api.post("/api/vehicles").send({
             license_plate: "K-FU 9",
             fuel_level: 55,
-            status: "DRIVING",
+            status: "IDLE",
         });
         const id = created.body.id as number;
+
+        await giveCurrentDriver(api, id, "Tank Fahrer");
+        const started = await api
+            .patch(`/api/vehicles/${id}`)
+            .send({ status: "DRIVING" });
+        assert.equal(started.status, 200);
 
         const replaced = await api.put(`/api/vehicles/${id}`).send({
             license_plate: "K-FU 9",
@@ -1745,8 +1902,8 @@ describe("telemetry route simulation", () => {
         let farthest = 0;
         let lastDistance = 0;
 
-        // 80 ticks at the old time-lapse of 20: the same road distance.
-        for (let index = 0; index < (80 * 20) / TIME_SCALE; index += 1) {
+        // 640 s of road at the old time-lapse of 20 (80 ticks of 0.4 s), in pings.
+        for (let index = 0; index < pingsFor(640); index += 1) {
             const [patch] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
             assert.ok(patch);
             lastDistance = haversineMeters(origin, {
@@ -1899,6 +2056,85 @@ describe("telemetry route simulation", () => {
 
         assert.equal(patches.length, 1);
         assert.equal(patches[0]?.id, current.id);
+    });
+
+    it("pings every driving vehicle on its own clock, with or without a viewer", () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SIM 7A",
+            driver_name: "Eigener Takt",
+            status: "DRIVING",
+        });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.5);
+        const ours = (patches: Array<{ id: number }>) =>
+            patches.filter((patch) => patch.id === vehicle.id);
+        const t0 = Date.now();
+        const every = config.pingIntervalMs;
+
+        // Erster Blick: nur die Uhr wird gestellt, noch kein Ping.
+        assert.equal(
+            ours(TelemetryModel.tickDrivingVehicles(undefined, 3000, t0)).length,
+            0,
+        );
+
+        // Nie später als 160 % des Intervalls ohne Ping, nie zweimal im selben Moment.
+        let pings = 0;
+        let last = t0;
+        let longestGap = 0;
+
+        for (let ms = 1000; ms <= every * 20; ms += 1000) {
+            const now = t0 + ms;
+            const [patch] = ours(
+                TelemetryModel.tickDrivingVehicles(undefined, 3000, now),
+            );
+
+            if (patch) {
+                pings += 1;
+                longestGap = Math.max(longestGap, now - last);
+                last = now;
+            }
+        }
+
+        // 20 Intervalle ≈ 20 Pings (60–160 % im Schnitt 110 % → 18 ± 4).
+        assert.ok(pings >= 10 && pings <= 30, `pings: ${pings}`);
+        assert.ok(longestGap <= every * 1.6 + 1000, `gap: ${longestGap}`);
+    });
+
+    it("spreads vehicles that start on one spot along their road instead of a convoy", () => {
+        resetSimProgress();
+        const start = { lat: 50.9375, lng: 6.9603 };
+        const ids = [900_001, 900_002, 900_003, 900_004, 900_005, 900_006];
+        const first = ids.map((id) => nextSimTick(id, start, 80));
+        const metersApart = first.flatMap((a, i) =>
+            first.slice(i + 1).map((b) => haversineMeters(a, b)),
+        );
+
+        // Those that stood alone stay; the others go into the gaps.
+        assert.ok(first.some((tick) => !tick.relocated));
+        assert.ok(first.some((tick) => tick.relocated));
+        assert.ok(
+            Math.min(...metersApart) > 1_000,
+            `closest pair ${Math.round(Math.min(...metersApart))} m`,
+        );
+    });
+
+    it("moves a vehicle by the time since its last ping", () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SIM 7B",
+            driver_name: "Echte Zeit",
+            status: "DRIVING",
+        });
+        const origin = { lat: 50.9375, lng: 6.9603 };
+        const distanceAfter = (elapsedS: number) => {
+            seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.5);
+
+            return nextSimTick(vehicle.id, origin, 100, elapsedS).meters;
+        };
+
+        // Doppelte Zeit, doppelte Meter (das Tempo schwankt nur um ±3).
+        const short = distanceAfter(3);
+        const long = distanceAfter(6);
+
+        assert.ok(long > short * 1.5, `${long} vs ${short}`);
     });
 });
 
@@ -2209,8 +2445,8 @@ describe("GET /api/vehicles/:id/trips/latest", () => {
         });
         seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.2);
 
-        // 60 ticks at the old time-lapse of 20: the same road distance.
-        const ticks = (60 * 20) / TIME_SCALE;
+        // 480 s of road at the old time-lapse of 20 (60 ticks of 0.4 s), in pings.
+        const ticks = pingsFor(480);
         for (let index = 0; index < ticks; index += 1) {
             TelemetryModel.tickDrivingVehicles([vehicle.id]);
         }

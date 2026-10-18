@@ -61,6 +61,9 @@ export type {
 
 export {
     TELEMETRY_HISTORY_LIMITS,
+    WIRE_COORDINATE_DECIMALS,
+    compactTelemetryPatches,
+    expandTelemetryPatches,
     parseTelemetryHistoryQuery,
     telemetryHistoryQuerySchema,
     telemetryPatchSchema,

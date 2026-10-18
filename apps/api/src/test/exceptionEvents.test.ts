@@ -10,7 +10,7 @@ import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { setCompanySimRunning, resetSimControlForTests } from "../lib/simControl";
-import { loginAs } from "./helpers";
+import { giveCurrentDriver, loginAs } from "./helpers";
 
 function drivingPatch(
     vehicleId: number,
@@ -81,15 +81,22 @@ describe("no live LOW_FUEL ticker", () => {
         assert.deepEqual(detail.body.open_alert_types, []);
     });
 
-    it("does not open LOW_FUEL when a driving vehicle is created below the threshold", async () => {
-        const response = await api.post("/api/vehicles").send({
+    it("does not open LOW_FUEL when a vehicle with a driver starts driving below the threshold", async () => {
+        const created = await api.post("/api/vehicles").send({
             license_plate: "K-FU 3",
-            driver_name: "Neu",
             fuel_level: 10,
-            status: "DRIVING",
+            status: "IDLE",
         });
 
-        assert.equal(response.status, 201);
+        assert.equal(created.status, 201);
+        await giveCurrentDriver(api, created.body.id, "Neu");
+
+        const response = await api
+            .patch(`/api/vehicles/${created.body.id}`)
+            .send({ status: "DRIVING" });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.body.status, "DRIVING");
         assert.equal(response.body.active_alerts, 0);
 
         const inbox = await openInbox(api, "LOW_FUEL");
@@ -149,6 +156,54 @@ describe("live OFFLINE", () => {
 
         const inbox = await openInbox(api, "OFFLINE");
         assert.equal(inbox.body.data.length, 0);
+    });
+
+    it("ends OFFLINE only for the vehicles that report in one tick", async () => {
+        const [first, second, silent] = ["K-OF 7", "K-OF 8", "K-OF 9"].map(
+            (plate) =>
+                VehicleModel.create({
+                    license_plate: plate,
+                    driver_name: "Funk",
+                    company_id: 1,
+                    status: "DRIVING",
+                    fuel_level: 80,
+                }),
+        );
+        const start = 3_000_000;
+
+        for (const vehicle of [first!, second!, silent!]) {
+            drivingPatch(vehicle.id, 1, 80, start);
+        }
+
+        setCompanySimRunning(1, false);
+        ExceptionEventModel.applySilence(start + OFFLINE_AFTER_MS);
+        setCompanySimRunning(1, true);
+
+        ExceptionEventModel.applyPatches(
+            [first!, second!].map((vehicle) => ({
+                id: vehicle.id,
+                company_id: 1,
+                speed: 40,
+                speed_limit_kmh: 50,
+                latitude: 50.9,
+                longitude: 6.9,
+                recorded_at: "2026-01-01 00:00:00",
+                fuel_level: 80,
+            })),
+            start + OFFLINE_AFTER_MS + 400,
+        );
+
+        const rows = await openInbox(api, "OFFLINE");
+        const endedByPlate = new Map<string, unknown>(
+            rows.body.data.map((row: { license_plate: string; ended_at: unknown }) => [
+                row.license_plate,
+                row.ended_at,
+            ]),
+        );
+
+        assert.equal(typeof endedByPlate.get("K-OF 7"), "string");
+        assert.equal(typeof endedByPlate.get("K-OF 8"), "string");
+        assert.equal(endedByPlate.get("K-OF 9"), null);
     });
 
     it("opens OFFLINE when status is set to OFFLINE", async () => {

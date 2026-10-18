@@ -32,6 +32,92 @@ function countOf(clusters: FleetCluster[]): number {
     );
 }
 
+describe("cluster status counts", () => {
+    /**
+     * Ein dichtes Depot ohne Fahrer unterwegs, drumherum Fahrende auf den
+     * Straßen: jede Gruppe muss die Status ihrer eigenen Mitglieder zählen,
+     * auf jeder Zoomstufe, auch wenn sie aus Teil-Gruppen entsteht.
+     */
+    const fleet = () => {
+        const points: ClusterPoint[] = [];
+        let id = 1;
+        const statuses: VehicleStatus[] = ["IDLE", "IDLE", "STOPPED", "OFFLINE"];
+
+        for (let index = 0; index < 600; index += 1) {
+            points.push(
+                at(
+                    id++,
+                    50.89 + ((index * 17) % 41) * 0.0001,
+                    6.905 + ((index * 29) % 41) * 0.0001,
+                    statuses[index % statuses.length],
+                ),
+            );
+        }
+
+        for (let index = 0; index < 400; index += 1) {
+            points.push(
+                at(
+                    id++,
+                    50.95 + (index % 80) * 0.004,
+                    6.95 + Math.floor(index / 80) * 0.03 + (index % 7) * 0.002,
+                    "DRIVING",
+                ),
+            );
+        }
+
+        return points;
+    };
+
+    it("counts exactly the statuses of its own members on every zoom level", () => {
+        const points = fleet();
+        const status = new Map(points.map((point) => [point.id, point.status]));
+        const index = createFleetClusterIndex(points);
+        const world: GeoBBox = { west: -180, south: -85, east: 180, north: 85 };
+
+        for (let zoom = 0; zoom <= FLEET_CLUSTER_MAX_ZOOM + 1; zoom += 1) {
+            for (const cluster of clustersFromIndex(index, world, zoom)) {
+                if (cluster.kind !== "cluster") {
+                    continue;
+                }
+
+                const truth = { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0 };
+
+                for (const memberId of clusterMemberIds(index, cluster.id)) {
+                    truth[status.get(memberId)!] += 1;
+                }
+
+                expect(cluster.counts, `zoom ${zoom}, cluster ${cluster.id}`).toEqual(
+                    truth,
+                );
+                expect(
+                    Object.values(cluster.counts).reduce((sum, n) => sum + n, 0),
+                ).toBe(cluster.count);
+            }
+        }
+    });
+
+    it("does not count the driving vehicles near a depot into the depot group", () => {
+        const points = fleet();
+        const index = createFleetClusterIndex(points);
+        const world: GeoBBox = { west: -180, south: -85, east: 180, north: 85 };
+
+        // Auf jeder Stufe bleibt eine Gruppe nur dann „ohne Fahrt“, wenn kein
+        // Mitglied fährt; die Zählung darf dafür keine Fahrt dazuerfinden.
+        for (let zoom = 0; zoom <= FLEET_CLUSTER_MAX_ZOOM; zoom += 1) {
+            for (const cluster of clustersFromIndex(index, world, zoom)) {
+                if (cluster.kind !== "cluster") {
+                    continue;
+                }
+
+                const members = clusterMemberIds(index, cluster.id);
+                const driving = members.filter((memberId) => memberId > 600).length;
+
+                expect(cluster.counts.DRIVING).toBe(driving);
+            }
+        }
+    });
+});
+
 describe("clusterFleet", () => {
     const piled = [
         at(1, 50.94, 6.96, "DRIVING"),
@@ -72,7 +158,7 @@ describe("clusterFleet", () => {
             ).toEqual({ zoom: FLEET_CLUSTER_MAX_ZOOM + 1, list: true });
         }
 
-        const high = clustersFromIndex(index, cologneBox, 16);
+        const high = clustersFromIndex(index, cologneBox, FLEET_CLUSTER_MAX_ZOOM);
 
         expect(countOf(high)).toBe(4);
         expect(high).toHaveLength(1);
@@ -148,11 +234,11 @@ describe("clusterFleet", () => {
         );
     });
 
-    it("rebuilds immediately when ids change and waits several seconds on coordinate updates", () => {
+    it("rebuilds immediately when ids change and at most about once a second on coordinate updates", () => {
         expect(clusterIndexDelay([1, 2], [1, 2])).toBe(
             CLUSTER_INDEX_DEBOUNCE_MS,
         );
-        expect(CLUSTER_INDEX_DEBOUNCE_MS).toBeGreaterThanOrEqual(3_000);
+        expect(CLUSTER_INDEX_DEBOUNCE_MS).toBeGreaterThanOrEqual(1_000);
         expect(clusterIndexDelay([1, 2], [1, 3])).toBe(0);
         expect(clusterIndexDelay([1], [1, 2])).toBe(0);
     });

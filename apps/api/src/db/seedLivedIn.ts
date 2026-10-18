@@ -592,8 +592,8 @@ export function seedLivedIn(database: DatabaseSync) {
             );
         }
 
-        const openOffline = mainVehicles.filter((row) => row.status === "OFFLINE");
-        for (const vehicle of take(openOffline, Math.min(18, openOffline.length))) {
+        // Jedes Fahrzeug ohne Signal hat seine offene Funk-Warnung (wie `ExceptionEventModel`).
+        for (const vehicle of vehicles.filter((row) => row.status === "OFFLINE")) {
             insertTyped(vehicle.id, "OFFLINE", stampInMonth(lastMonth, rng, 2), true);
         }
 

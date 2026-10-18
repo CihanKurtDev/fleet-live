@@ -274,7 +274,8 @@ function seedLarge() {
                 }
             }
 
-            if (i % 10 === 0) {
+            // Wer kein Signal hat, hat immer die offene Funk-Warnung (die Regel der App).
+            if (i % 10 === 0 || status === "OFFLINE") {
                 const alert = demoAlert(status, fuel);
                 if (alert) {
                     insertAlert.run(

@@ -69,7 +69,12 @@ export function createApp() {
         }),
     );
     app.use((req, res, next) => {
-        const limit = req.path.startsWith("/api/import") ? "32mb" : "16kb";
+        // Die Fokus-Liste trägt bis zu STREAM_FOCUS_MAX_IDS Zahlen (~6 Byte je ID).
+        const limit = req.path.startsWith("/api/import")
+            ? "32mb"
+            : req.path === "/api/stream/focus"
+              ? "64kb"
+              : "16kb";
         express.json({ limit })(req, res, next);
     });
     app.use((req, res, next) => {

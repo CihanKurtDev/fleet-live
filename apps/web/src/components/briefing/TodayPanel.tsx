@@ -34,12 +34,6 @@ const KIND: Record<
         to: "/fristen?state=overdue",
         tone: "critical",
     },
-    driving_unassigned: {
-        tag: "Ohne Fahrer",
-        chip: "Fährt ohne Fahrer",
-        to: "/vehicles?filter=driving_unassigned",
-        tone: "warning",
-    },
     driver_talk: {
         tag: "Gespräch",
         chip: "Gespräch führen",
@@ -84,8 +78,6 @@ const reason = (item: TodayItem): string => {
             }
             return `${label} · ${item.kind === "deadline_overdue" ? "seit" : "am"} ${formatDue(item.due_on)}`;
         }
-        case "driving_unassigned":
-            return "Auf Fahrt ohne zugewiesenen Fahrer";
         case "driver_talk":
             return `${item.open_warnings ?? 0} offene Tempo-Warnungen`;
         case "offline":

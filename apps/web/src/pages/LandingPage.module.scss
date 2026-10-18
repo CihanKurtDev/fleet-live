@@ -2,6 +2,21 @@
  * Public start page. Dark by design in both colour schemes, like the
  * Leitstelle prototype; it uses the app's fonts and motion tokens.
  */
+/*
+ * The section links in the bar glide to their anchor instead of jumping. The
+ * page scrolls inside main, so main gets the smooth scroll while it holds
+ * this page; reduced motion keeps the jump.
+ */
+:global(main):has(> .page) {
+    scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :global(main):has(> .page) {
+        scroll-behavior: auto;
+    }
+}
+
 .page {
     --l-asphalt: #0f131b;
     --l-asphalt-2: #151b26;

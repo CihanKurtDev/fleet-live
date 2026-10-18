@@ -100,15 +100,6 @@ export class TodayModel {
             .filter((row) => row.state === "soon")
             .sort(byDueDate);
 
-        const drivingUnassigned = VehicleModel.list(
-            parseVehicleListQuery({
-                filter: "driving_unassigned",
-                sort: "license_plate",
-                dir: "asc",
-                limit,
-            }),
-            companyId,
-        );
         const talk = DriverModel.list(
             parseDriverListQuery({
                 min_open_warnings: DRIVER_TALK_MIN_OPEN_WARNINGS,
@@ -142,13 +133,6 @@ export class TodayModel {
             deadline_overdue: overdue
                 .slice(0, limit)
                 .map((row, index) => deadlineItem("deadline_overdue", row, index)),
-            driving_unassigned: drivingUnassigned.data.map((vehicle) => ({
-                ...emptyItem,
-                kind: "driving_unassigned",
-                key: `driving_unassigned:${vehicle.id}`,
-                vehicle_id: vehicle.id,
-                subject: vehicle.license_plate,
-            })),
             driver_talk: talk.data.map((driver) => ({
                 ...emptyItem,
                 kind: "driver_talk",
@@ -182,7 +166,6 @@ export class TodayModel {
 
         const counts: TodayCounts = {
             deadline_overdue: overdue.length,
-            driving_unassigned: drivingUnassigned.meta.total,
             driver_talk: talk.meta.total,
             offline: offline.meta.total,
             low_fuel: lowFuel.meta.total,

@@ -49,7 +49,6 @@ const mockSignals = ({
                 idle: 0,
                 offline: 0,
                 in_depot: 0,
-                driving_unassigned: 0,
             },
         },
     });

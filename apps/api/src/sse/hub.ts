@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { Response } from "express";
-import { STREAM_FOCUS_MAX_IDS } from "@fleet-live/shared";
+import type { SseWriter } from "./compression";
+import {
+    STREAM_FOCUS_MAX_IDS,
+    compactTelemetryPatches,
+} from "@fleet-live/shared";
 
 type SseEvent = {
     id: number;
@@ -9,10 +12,23 @@ type SseEvent = {
     companyId: number;
 };
 
+type PendingPatch = { id: number; path_delta?: string; path_reset?: true } & Record<
+    string,
+    unknown
+>;
+
 type Client = {
-    res: Response;
+    res: SseWriter;
     focusIds: number[];
     companyId: number;
+    /**
+     * Neueste Werte je Fahrzeug, solange der Socket des Zuschauers voll ist.
+     * Ein langsamer Zuschauer bekommt dann einen zusammengefassten Tick statt
+     * einer wachsenden Warteschlange im Speicher des Servers.
+     */
+    pending: Map<number, PendingPatch>;
+    pendingEventId: number;
+    waitingForDrain: boolean;
 };
 
 const MAX_BUFFER = 64;
@@ -21,7 +37,14 @@ const buffer: SseEvent[] = [];
 let nextId = 1;
 
 function formatSse(event: SseEvent): string {
-    return `id: ${event.id}\nevent: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`;
+    // Telemetrie geht gekürzt auf den Draht (Koordinaten gerundet, gleiches
+    // `recorded_at` nur einmal); der Browser stellt es in `parseTelemetryPatches` wieder her.
+    const data =
+        event.event === "telemetry" && Array.isArray(event.data)
+            ? compactTelemetryPatches(event.data)
+            : event.data;
+
+    return `id: ${event.id}\nevent: ${event.event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 function sanitizeIds(ids: number[]): number[] {
@@ -81,6 +104,49 @@ function payloadForClient(
     return { ...event, data: patches };
 }
 
+/**
+ * Fasst einen Patch mit dem schon wartenden desselben Fahrzeugs zusammen:
+ * Position, Tempo usw. gelten wie im neuesten, der Verlauf wird verlustfrei
+ * verlängert. `path_delta` ist eine Kette relativ zum letzten Punkt (wie
+ * `path = path || ?` in SQL), aufeinanderfolgende Stücke lassen sich also
+ * aneinanderhängen. Ein `path_reset` beginnt eine neue Fahrt; was davor
+ * wartete, gehört zur alten und entfällt.
+ */
+function mergePending(pending: Map<number, PendingPatch>, patch: PendingPatch) {
+    const earlier = pending.get(patch.id);
+    const { path_delta: delta, path_reset: reset, ...latest } = patch;
+    const pathDelta = reset
+        ? delta
+        : `${earlier?.path_delta ?? ""}${delta ?? ""}` || undefined;
+    const pathReset = reset ? true : earlier?.path_reset;
+
+    pending.set(patch.id, {
+        ...latest,
+        id: patch.id,
+        ...(pathDelta ? { path_delta: pathDelta } : {}),
+        ...(pathReset ? { path_reset: true as const } : {}),
+    });
+}
+
+function flushPending(client: Client) {
+    client.waitingForDrain = false;
+
+    if (client.pending.size === 0) {
+        return;
+    }
+
+    const data = [...client.pending.values()];
+    client.pending.clear();
+    client.res.write(
+        formatSse({
+            id: client.pendingEventId,
+            event: "telemetry",
+            data,
+            companyId: client.companyId,
+        }),
+    );
+}
+
 function writeToClient(client: Client, event: SseEvent) {
     const payload = payloadForClient(event, client);
 
@@ -88,14 +154,30 @@ function writeToClient(client: Client, event: SseEvent) {
         return;
     }
 
-    const ok = client.res.write(formatSse(payload));
+    // Der Socket nimmt nichts mehr an: Telemetrie wartet zusammengefasst, bis
+    // er wieder frei ist. Kleine Ereignisse (Listen neu laden) gehen sofort.
+    if (
+        event.event === "telemetry" &&
+        (client.res.writableNeedDrain || client.pending.size > 0)
+    ) {
+        for (const patch of payload.data as PendingPatch[]) {
+            mergePending(client.pending, patch);
+        }
 
-    if (!ok) {
-        client.res.once("drain", () => undefined);
+        client.pendingEventId = event.id;
+
+        if (!client.waitingForDrain) {
+            client.waitingForDrain = true;
+            client.res.once("drain", () => flushPending(client));
+        }
+
+        return;
     }
+
+    client.res.write(formatSse(payload));
 }
 
-function findClient(res: Response): Client | undefined {
+function findClient(res: SseWriter): Client | undefined {
     for (const client of clients.values()) {
         if (client.res === res) {
             return client;
@@ -122,13 +204,20 @@ export function broadcast(
     }
 }
 
-export function subscribe(res: Response, companyId: number): string {
+export function subscribe(res: SseWriter, companyId: number): string {
     const connectionId = randomUUID();
-    clients.set(connectionId, { res, focusIds: [], companyId });
+    clients.set(connectionId, {
+        res,
+        focusIds: [],
+        companyId,
+        pending: new Map(),
+        pendingEventId: 0,
+        waitingForDrain: false,
+    });
     return connectionId;
 }
 
-export function replay(res: Response, lastEventId: number) {
+export function replay(res: SseWriter, lastEventId: number) {
     if (lastEventId <= 0) {
         return;
     }
@@ -146,7 +235,7 @@ export function replay(res: Response, lastEventId: number) {
     }
 }
 
-export function unsubscribe(res: Response) {
+export function unsubscribe(res: SseWriter) {
     for (const [connectionId, client] of clients) {
         if (client.res === res) {
             clients.delete(connectionId);
@@ -169,24 +258,6 @@ export function setConnectionFocus(
     const unique = sanitizeIds(ids);
     client.focusIds = unique;
     return unique.length;
-}
-
-export function getFocusUnion(): number[] {
-    const seen = new Set<number>();
-    const ids: number[] = [];
-
-    for (const client of clients.values()) {
-        for (const id of client.focusIds) {
-            if (seen.has(id)) {
-                continue;
-            }
-
-            seen.add(id);
-            ids.push(id);
-        }
-    }
-
-    return ids;
 }
 
 export function closeAllSseClients() {

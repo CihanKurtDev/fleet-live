@@ -774,7 +774,7 @@ function buildVehiclePreviewRows(
                 level: "warning",
                 code: "DRIVING_STATUS",
                 message:
-                    "Status DRIVING öffnet eine Fahrt. Für den Import ist IDLE empfohlen.",
+                    "Status DRIVING braucht einen aktuellen Fahrer (Spalte Fahrer oder Blatt Aktuell). Ohne ihn wird das Fahrzeug als IDLE importiert. Für den Import ist IDLE empfohlen.",
             });
         }
 
@@ -1647,6 +1647,8 @@ export class ImportModel {
                 const lookup = loadCompanyImportLookup(companyId);
                 const plateIds = new Map<string, number>();
                 const initialPoints: InitialTelemetryPoint[] = [];
+                /** Fahrzeuge, die die Datei auf DRIVING setzt; sie brauchen am Ende einen Fahrer. */
+                const wantsDriving = new Set<number>();
 
                 const rememberPlate = (plate: string, id: number) => {
                     plateIds.set(plate.toLowerCase(), id);
@@ -1831,6 +1833,7 @@ export class ImportModel {
                                         status,
                                         companyId,
                                     );
+                                    wantsDriving.add(created.id);
                                 }
 
                                 queueStart(created.id, false);
@@ -1883,6 +1886,9 @@ export class ImportModel {
                                     status,
                                     companyId,
                                 );
+                                if (status === "DRIVING") {
+                                    wantsDriving.add(vehicleId);
+                                }
                                 queueStart(
                                     vehicleId,
                                     previous?.latitude != null &&
@@ -1971,7 +1977,35 @@ export class ImportModel {
                     }
                 }
 
-                TelemetryModel.insertInitialBatch(initialPoints);
+                // Ein Fahrzeug fährt nie ohne Fahrer. Hat nach allen Blättern (Fahrer, Eignung,
+                // Aktuell) keiner das Fahrzeug übernommen, kommt es als IDLE in den Bestand;
+                // die Vorschau hat darauf hingewiesen (DRIVING_STATUS).
+                const idled = new Set<number>();
+
+                for (const vehicleId of wantsDriving) {
+                    const vehicle = VehicleModel.getById(vehicleId, companyId);
+
+                    if (
+                        vehicle?.status === "DRIVING" &&
+                        vehicle.current_driver_id === null
+                    ) {
+                        VehicleModel.update(
+                            vehicleId,
+                            { status: "IDLE" },
+                            companyId,
+                        );
+                        syncTripOnImport(vehicleId, "DRIVING", "IDLE", companyId);
+                        idled.add(vehicleId);
+                    }
+                }
+
+                TelemetryModel.insertInitialBatch(
+                    initialPoints.map((point) =>
+                        idled.has(point.vehicleId)
+                            ? { ...point, speed: 0 }
+                            : point,
+                    ),
+                );
 
                 insertImportRun({
                     companyId,

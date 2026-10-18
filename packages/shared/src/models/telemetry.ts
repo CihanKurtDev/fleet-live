@@ -38,6 +38,85 @@ export type TelemetryPatch = z.infer<typeof telemetryPatchSchema>;
 export const telemetryPatchesSchema = z.array(telemetryPatchSchema);
 
 /**
+ * Auf dem Draht dürfen Patches `recorded_at` weglassen, wenn es dem des
+ * vorigen Patches im selben Ereignis gleicht (alle Fahrzeuge eines Ticks
+ * teilen es). Der erste Patch trägt es immer.
+ */
+export const telemetryWirePatchesSchema = z.array(
+    telemetryPatchSchema.extend({ recorded_at: z.string().optional() }),
+);
+
+/**
+ * Nachkommastellen von Breiten- und Längengrad auf dem Draht: 6 Stellen sind
+ * etwa 0,1 m, feiner als der Streckenverlauf (Precision 5, etwa 1 m) und als
+ * die Positionsliste (5 Stellen).
+ */
+export const WIRE_COORDINATE_DECIMALS = 6;
+
+const WIRE_COORDINATE_FACTOR = 10 ** WIRE_COORDINATE_DECIMALS;
+
+const roundWireCoordinate = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value)
+        ? Math.round(value * WIRE_COORDINATE_FACTOR) / WIRE_COORDINATE_FACTOR
+        : value;
+
+/**
+ * Kürzt die Patches eines Ereignisses für den Draht: Koordinaten auf
+ * `WIRE_COORDINATE_DECIMALS`, `recorded_at` nur wo es sich ändert. Die Umkehr
+ * ist `expandTelemetryPatches` (bis auf die Rundung verlustfrei).
+ */
+export function compactTelemetryPatches<T extends object>(patches: readonly T[]): object[] {
+    let previous: unknown;
+
+    return patches.map((patch, index) => {
+        const { recorded_at: recordedAt, ...rest } = patch as T & {
+            recorded_at?: unknown;
+        };
+        const shortened: Record<string, unknown> = { ...rest };
+
+        if ("latitude" in shortened) {
+            shortened.latitude = roundWireCoordinate(shortened.latitude);
+        }
+
+        if ("longitude" in shortened) {
+            shortened.longitude = roundWireCoordinate(shortened.longitude);
+        }
+
+        const repeated = index > 0 && recordedAt === previous;
+        previous = recordedAt;
+
+        if (recordedAt === undefined || repeated) {
+            return shortened;
+        }
+
+        // Feldreihenfolge wie im vollen Patch (id zuerst, dann die Werte).
+        return { ...shortened, recorded_at: recordedAt };
+    });
+}
+
+/** Setzt ausgelassene `recorded_at` aus dem vorigen Patch ein; sonst `null`. */
+export function expandTelemetryPatches(
+    wire: ReadonlyArray<Omit<TelemetryPatch, "recorded_at"> & { recorded_at?: string }>,
+): TelemetryPatch[] | null {
+    const patches: TelemetryPatch[] = [];
+    let current: string | undefined;
+
+    for (const patch of wire) {
+        if (patch.recorded_at !== undefined) {
+            current = patch.recorded_at;
+        }
+
+        if (current === undefined) {
+            return null;
+        }
+
+        patches.push({ ...patch, recorded_at: current });
+    }
+
+    return patches;
+}
+
+/**
  * Ein Rohpunkt aus dem kurzen Live-Fenster.
  * Der dauerhafte Streckenverlauf steckt in `Trip.path`, nicht hier.
  */
