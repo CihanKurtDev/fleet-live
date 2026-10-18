@@ -37,7 +37,7 @@ export const alertTiles: AlertTileOption[] = [
     },
     {
         id: "LOW_FUEL",
-        label: "Wenig Tank",
+        label: "Tank-Warnung",
         tone: "warning",
         view: { filter: "open", type: "LOW_FUEL" },
     },

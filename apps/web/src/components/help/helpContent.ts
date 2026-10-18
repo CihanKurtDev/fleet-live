@@ -62,7 +62,7 @@ const PAGES: Record<string, HelpPage> = {
         items: [
             {
                 question: "Was bedeuten die Filter?",
-                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Auf Fahrt“, „Standby“ und „Kein Signal“ sind der gemeldete Status. Unter „Weitere Filter“: „Kein Fahrer“ (kein aktueller Fahrer) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
+                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Tempo jetzt“: eine Tempoüberschreitung läuft gerade. „Auf Fahrt“, „Standby“, „Feierabend“ und „Kein Signal“ sind der gemeldete Status und ergeben zusammen „Alle“. Unter „Weitere Filter“: „Kein Fahrer“ (kein aktueller Fahrer) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
             },
             {
                 question: "Warum ist das Tempo orange oder rot?",
@@ -117,9 +117,9 @@ const PAGES: Record<string, HelpPage> = {
             "Der Eingang für Warnungen der Firma. „Offen“ sind Warnungen, die noch niemand erledigt hat.",
         items: [
             {
-                question: "Was bedeuten Tempo, Funk und Wenig Tank?",
+                question: "Was bedeuten Tempo, Funk und Tank-Warnung?",
                 answer:
-                    "Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Funk: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Wenig Tank: mitgelieferte Verlaufsdaten; neu angelegt wird so ein Eintrag nicht. Den aktuellen Tankstand zeigt der Filter „Wenig Tank“ unter Fahrzeuge.",
+                    "Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Funk: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Tank-Warnung: mitgelieferte Verlaufsdaten; neu angelegt wird so ein Eintrag nicht. Den aktuellen Tankstand zeigt die Kachel „Wenig Tank“ unter Fahrzeuge, das sind andere Zahlen.",
             },
             {
                 question: "Was macht „Erledigen“?",

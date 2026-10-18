@@ -74,7 +74,9 @@ const listResponse = (data: Vehicle[]): VehicleListResponse => ({
             driving: 12,
             idle: 20,
             offline: 3,
+            stopped: 7,
             in_depot: 7,
+            speeding: 2,
         },
     },
 });
@@ -161,6 +163,34 @@ describe("Fahrzeuge list page", () => {
                 .getAllByRole("button")
                 .filter((tile) => tile.getAttribute("aria-pressed") === "true"),
         ).toHaveLength(1);
+    });
+
+    it("has a tile for every status, so the status tiles add up to Alle", async () => {
+        renderPage();
+        const tiles = await screen.findByRole("group", { name: "Status" });
+        const countOf = (label: string) =>
+            Number(
+                within(tiles)
+                    .getByRole("button", { name: new RegExp(`^${label}, \\d+$`) })
+                    .getAttribute("aria-label")
+                    ?.split(", ")[1],
+            );
+
+        const statuses = ["Auf Fahrt", "Standby", "Feierabend", "Kein Signal"];
+        expect(
+            statuses.reduce((sum, label) => sum + countOf(label), 0),
+        ).toBe(countOf("Alle"));
+        expect(countOf("Tempo jetzt")).toBe(2);
+
+        fireEvent.click(
+            within(tiles).getByRole("button", { name: "Feierabend, 7" }),
+        );
+        await waitFor(() => expect(lastQuery().filter).toBe("stopped"));
+
+        fireEvent.click(
+            within(tiles).getByRole("button", { name: "Tempo jetzt, 2" }),
+        );
+        await waitFor(() => expect(lastQuery().filter).toBe("speeding"));
     });
 
     it("keeps Kein Fahrer behind Weitere Filter", async () => {

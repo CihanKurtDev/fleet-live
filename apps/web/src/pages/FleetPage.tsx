@@ -63,9 +63,9 @@ import { useFleetPositions } from "../hooks/useFleetPositions";
 import { formatCount } from "../utils/formatCount";
 import styles from "./FleetPage.module.scss";
 
+/** Wenig Tank and Tempo jetzt are the two tiles above the map, not chips. */
 const fleetServerFilters = vehicleFilters.filter((item) =>
     item.id === "alerts" ||
-    item.id === "low_fuel" ||
     item.id === "unassigned" ||
     item.id === "in_depot",
 );
@@ -93,6 +93,10 @@ const statusFromFilter = (
 
     if (filter === "offline") {
         return "OFFLINE";
+    }
+
+    if (filter === "stopped") {
+        return "STOPPED";
     }
 
     return null;

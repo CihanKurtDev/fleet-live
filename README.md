@@ -174,7 +174,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` oder `{ vehicle_id: null }`, `dispatcher` |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
-`GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
+`GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `unassigned`, `driving`, `idle`, `stopped`, `offline`, `in_depot`, `speeding`).
 
 `GET /api/alerts` gibt Warnungen mit Kennzeichen und dem Fahrer zum Zeitpunkt des Öffnens (`driver_id` / `driver_name`). Dazu `ended_at` und `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Standardfilter `open` heißt `resolved_at IS NULL`. `ended_at` spielt dafür keine Rolle. `type` optional: `SPEEDING`, `LOW_FUEL`, `OFFLINE`. `meta.counts` ist `open` / `resolved` / `all` und ignoriert `type`. `meta.type_counts` hängt am Filter. `vehicle_id` oder `driver_id` optional, sonst 404 wenn fremd. Umbesetzung ändert alte Zeilen nicht.
 

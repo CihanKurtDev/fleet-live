@@ -2,7 +2,9 @@ import type { Alert, AlertType } from "@fleet-live/shared";
 
 export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
     SPEEDING: "Tempo",
-    LOW_FUEL: "Wenig Tank",
+    // "Wenig Tank" is the current reading on the vehicle pages (a count of
+    // vehicles); these are warnings from the seeded history.
+    LOW_FUEL: "Tank-Warnung",
     OFFLINE: "Funk",
 };
 

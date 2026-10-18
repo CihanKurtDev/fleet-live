@@ -28,23 +28,31 @@ export const vehicleFilters: Array<
     { id: "driving", displayText: "Auf Fahrt" },
     { id: "idle", displayText: "Standby" },
     { id: "offline", displayText: "Kein Signal" },
+    { id: "stopped", displayText: "Feierabend" },
     { id: "in_depot", displayText: "Im Depot" },
+    { id: "speeding", displayText: "Tempo jetzt" },
 ];
 
 type VehicleFilterOption = {
     /** `null` is "Alle". */
-    id: Exclude<VehicleFilterId, "speeding"> | null;
+    id: VehicleFilterId | null;
     label: string;
     count: keyof VehicleListCounts;
     tone?: KpiTileTone;
 };
 
-/** KPI tiles on `/vehicles`: the main filter, exactly one is pressed. */
+/**
+ * KPI tiles on `/vehicles`: the main filter. The four status tiles add up to
+ * "Alle". A filter from "Weitere Filter" replaces the tile filter, then no
+ * tile is pressed and the toolbar shows the active filter.
+ */
 export const vehicleTileFilters: VehicleFilterOption[] = [
     { id: null, label: "Alle", count: "all" },
     { id: "driving", label: "Auf Fahrt", count: "driving", tone: "positive" },
     { id: "idle", label: "Standby", count: "idle" },
+    { id: "stopped", label: "Feierabend", count: "stopped" },
     { id: "offline", label: "Kein Signal", count: "offline", tone: "critical" },
+    { id: "speeding", label: "Tempo jetzt", count: "speeding", tone: "critical" },
     { id: "alerts", label: "Mit Warnung", count: "alerts", tone: "critical" },
     { id: "low_fuel", label: "Wenig Tank", count: "low_fuel", tone: "warning" },
 ];
