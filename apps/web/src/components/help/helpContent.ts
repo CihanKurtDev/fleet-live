@@ -56,6 +56,7 @@ const PAGES: Record<string, HelpPage> = {
     },
     vehicles: {
         id: "vehicles",
+        tips: "vehicles",
         title: "Fahrzeuge",
         intro:
             "Alle Fahrzeuge der Firma mit Status, Tankstand, Tempo und offenen Warnungen. Ein Klick auf eine Zeile öffnet das Fahrzeug.",
@@ -84,6 +85,7 @@ const PAGES: Record<string, HelpPage> = {
     },
     fleet: {
         id: "fleet",
+        tips: "fleet",
         title: "Karte",
         intro:
             "Die letzte bekannte Position jedes Fahrzeugs der Firma. Fahrzeuge auf Fahrt bewegen sich live, solange sie im Ausschnitt sind.",
@@ -112,6 +114,7 @@ const PAGES: Record<string, HelpPage> = {
     },
     alerts: {
         id: "alerts",
+        tips: "alerts",
         title: "Warnungen",
         intro:
             "Der Eingang für Warnungen der Firma. „Offen“ sind Warnungen, die noch niemand erledigt hat.",
@@ -164,6 +167,7 @@ const PAGES: Record<string, HelpPage> = {
     },
     drivers: {
         id: "drivers",
+        tips: "drivers",
         title: "Fahrer",
         intro:
             "Alle Fahrer der Firma, oben die mit den meisten offenen Warnungen. Ein Klick öffnet den Fahrer.",

@@ -117,6 +117,8 @@ type KpiTilesProps = {
      * `strip` keeps one row that scrolls sideways (list pages).
      */
     phoneLayout?: "grid" | "strip";
+    /** `data-tip` anchor of the page tips. */
+    tip?: string;
 };
 
 /**
@@ -128,6 +130,7 @@ export const KpiTiles = ({
     tiles,
     ariaLabel,
     phoneLayout = "grid",
+    tip,
 }: KpiTilesProps) => (
     <div
         className={
@@ -137,6 +140,7 @@ export const KpiTiles = ({
         }
         role="group"
         aria-label={ariaLabel}
+        data-tip={tip}
         style={
             {
                 "--tile-cols": tiles.length,

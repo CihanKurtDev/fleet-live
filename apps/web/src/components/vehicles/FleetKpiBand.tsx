@@ -13,5 +13,5 @@ type FleetKpiBandProps = {
 
 /** Lagezahlen über der Karte. Jede Kachel schaltet den passenden Kartenfilter. */
 export const FleetKpiBand = ({ tiles }: FleetKpiBandProps) => (
-    <KpiTiles tiles={tiles} ariaLabel="Lage" />
+    <KpiTiles tiles={tiles} ariaLabel="Lage" tip="fleet-tiles" />
 );

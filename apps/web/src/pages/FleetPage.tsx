@@ -18,6 +18,7 @@ import {
     listSites,
     updateSite,
 } from "../api/sites";
+import { PageTips } from "../components/help/PageTips";
 import { FleetEventFeed } from "../components/alerts/FleetEventFeed";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
@@ -606,6 +607,7 @@ export const FleetPage = () => {
 
     return (
         <section className={styles.page}>
+            <PageTips page="fleet" />
             <h1 className={styles.title}>Flottenkarte</h1>
             <div className={styles.kpis}>
                 <FleetKpiBand tiles={kpiTiles} />
@@ -624,6 +626,7 @@ export const FleetPage = () => {
                                 type="search"
                                 size="sm"
                                 className={styles.search}
+                                data-tip="fleet-search"
                                 placeholder="Kennzeichen oder Fahrer"
                                 aria-label="Kennzeichen oder Fahrer"
                                 aria-expanded={

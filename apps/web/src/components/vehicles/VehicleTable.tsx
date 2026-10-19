@@ -165,7 +165,12 @@ export const VehicleTable = ({
                 actions={actions}
             />
 
-            <KpiTiles ariaLabel="Status" phoneLayout="strip" tiles={tiles} />
+            <KpiTiles
+                ariaLabel="Status"
+                phoneLayout="strip"
+                tiles={tiles}
+                tip="list-tiles"
+            />
 
             <ListPanel label="Fahrzeugliste">
                 {selection.active ? (

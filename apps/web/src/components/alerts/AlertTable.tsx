@@ -224,7 +224,12 @@ export const AlertTable = ({
                 actions={canWrite ? <ExportButton kind="alerts" size="toolbar" /> : undefined}
             />
 
-            <KpiTiles ariaLabel="Status" phoneLayout="strip" tiles={tiles} />
+            <KpiTiles
+                ariaLabel="Status"
+                phoneLayout="strip"
+                tiles={tiles}
+                tip="list-tiles"
+            />
 
             <ListPanel label="Warnungsliste">
                 {selecting ? (

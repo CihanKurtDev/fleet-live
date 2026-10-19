@@ -17,6 +17,8 @@ type Placement = {
     above: boolean;
 };
 
+/** How long a tip waits for its element before it is skipped. */
+const TARGET_WAIT_MS = 5000;
 const CARD_WIDTH = 300;
 const CARD_HEIGHT_GUESS = 170;
 const GAP = 12;
@@ -103,6 +105,7 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
 
         let frame = 0;
         let last = "";
+        const startedAt = performance.now();
         // Measured every frame while the tip is open: content that loads later
         // (the first-steps line, charts) moves the target without a scroll or
         // resize event, and the ring must follow it.
@@ -110,6 +113,12 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
             const target = findTarget(tip.target);
 
             if (!target) {
+                // A list page draws its tiles only once the data is there.
+                if (performance.now() - startedAt < TARGET_WAIT_MS) {
+                    frame = requestAnimationFrame(measure);
+                    return;
+                }
+
                 setPlacement(null);
                 setIndex((current) =>
                     current === null || current + 1 >= tips.length

@@ -85,6 +85,7 @@ export const FleetDriverPicker = ({
             <button
                 type="button"
                 className={styles.trigger}
+                data-tip="fleet-drivers"
                 aria-haspopup="dialog"
                 aria-expanded={open}
                 aria-label={triggerLabel}

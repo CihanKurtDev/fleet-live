@@ -150,7 +150,12 @@ export const ListToolbar = ({
 }: ListToolbarProps) => (
     <div className={styles.toolbar}>
         {onStartSelection && (
-            <Button variant="secondary" size="toolbar" onClick={onStartSelection}>
+            <Button
+                variant="secondary"
+                size="toolbar"
+                data-tip="list-select"
+                onClick={onStartSelection}
+            >
                 Auswählen
             </Button>
         )}
@@ -160,6 +165,7 @@ export const ListToolbar = ({
                 type="search"
                 size="sm"
                 className={styles.search}
+                data-tip="list-search"
                 placeholder={search.placeholder}
                 aria-label={search.ariaLabel}
                 value={search.value}
