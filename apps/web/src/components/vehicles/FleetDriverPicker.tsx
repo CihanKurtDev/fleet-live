@@ -37,6 +37,7 @@ export const FleetDriverPicker = ({
         searching,
         searchPending,
         toggle,
+        selectAllMatches,
         apply,
     } = useFleetDriverFilter({
         selected,
@@ -168,14 +169,30 @@ export const FleetDriverPicker = ({
                         </div>
                     )}
                     <div className={styles.footer}>
-                        <Button
-                            variant="ghost"
-                            size="md"
-                            disabled={draft.length === 0}
-                            onClick={() => setDraft([])}
-                        >
-                            Auswahl aufheben
-                        </Button>
+                        <div className={styles.selectActions}>
+                            {searching && !searchPending && matched > 0 && (
+                                <Button
+                                    variant="secondary"
+                                    size="md"
+                                    disabled={draft.length >= FLEET_DRIVERS_MAX}
+                                    onClick={() => void selectAllMatches()}
+                                >
+                                    {matched > FLEET_DRIVERS_MAX
+                                        ? `Die ersten ${FLEET_DRIVERS_MAX} Treffer auswählen`
+                                        : matched === 1
+                                          ? "Treffer auswählen"
+                                          : `Alle ${formatCount(matched)} Treffer auswählen`}
+                                </Button>
+                            )}
+                            <Button
+                                variant="ghost"
+                                size="md"
+                                disabled={draft.length === 0}
+                                onClick={() => setDraft([])}
+                            >
+                                Auswahl aufheben
+                            </Button>
+                        </div>
                         <div className={styles.actions}>
                             <Button
                                 type="button"

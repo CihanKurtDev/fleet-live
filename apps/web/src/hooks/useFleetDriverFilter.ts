@@ -193,6 +193,40 @@ export const useFleetDriverFilter = ({
         });
     }, []);
 
+    /** Adds the first matches of the search (the first page, at most FLEET_DRIVERS_MAX in all). */
+    const selectAllMatches = useCallback(async () => {
+        if (debouncedQuery.length === 0) {
+            return;
+        }
+
+        try {
+            const response = await listFleetDrivers({
+                search: debouncedQuery,
+                page: 1,
+            });
+            setKnown((current) => mergeKnownDrivers(current, response.data));
+            setDraft((current) => {
+                const next = [...current];
+
+                for (const row of response.data) {
+                    if (next.length >= FLEET_DRIVERS_MAX) {
+                        break;
+                    }
+
+                    if (!next.includes(row.name)) {
+                        next.push(row.name);
+                    }
+                }
+
+                return next;
+            });
+        } catch (caught: unknown) {
+            if (!isAbortError(caught)) {
+                // The list stays as it is; the user can still tick rows.
+            }
+        }
+    }, [debouncedQuery]);
+
     const apply = useCallback(() => {
         onChange(draft);
         closeModal();
@@ -226,6 +260,7 @@ export const useFleetDriverFilter = ({
         searching,
         searchPending,
         toggle,
+        selectAllMatches,
         apply,
     };
 };
