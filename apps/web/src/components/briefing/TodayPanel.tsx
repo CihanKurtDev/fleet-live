@@ -45,7 +45,7 @@ const KIND: Record<
         tag: "Kein Signal",
         chip: "Kein Signal",
         to: "/alerts?type=OFFLINE",
-        tone: "neutral",
+        tone: "critical",
         tile: true,
     },
     low_fuel: {
