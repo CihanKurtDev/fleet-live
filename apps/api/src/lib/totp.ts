@@ -74,11 +74,20 @@ export function totpCode(secret: Buffer, at = Date.now()): string {
     return hotp(secret, counter);
 }
 
-export function verifyTotp(secret: Buffer, code: string, at = Date.now()): boolean {
+/**
+ * The time step a code belongs to (this one or a neighbour), or `null` when
+ * the code is wrong. A caller that must accept a code only once keeps the
+ * last step it accepted and requires a larger one.
+ */
+export function totpStep(
+    secret: Buffer,
+    code: string,
+    at = Date.now(),
+): number | null {
     const normalized = code.replace(/\s/g, "");
 
     if (!/^\d{6}$/.test(normalized)) {
-        return false;
+        return null;
     }
 
     const counter = Math.floor(at / 1000 / STEP_SECONDS);
@@ -88,11 +97,15 @@ export function verifyTotp(secret: Buffer, code: string, at = Date.now()): boole
         const expected = Buffer.from(hotp(secret, counter + drift));
 
         if (expected.length === given.length && timingSafeEqual(expected, given)) {
-            return true;
+            return counter + drift;
         }
     }
 
-    return false;
+    return null;
+}
+
+export function verifyTotp(secret: Buffer, code: string, at = Date.now()): boolean {
+    return totpStep(secret, code, at) !== null;
 }
 
 export function otpauthUrl(email: string, secret: Buffer): string {

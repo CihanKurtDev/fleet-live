@@ -1104,6 +1104,11 @@ function ensureSessionPersistent(database: DatabaseSync) {
     addColumn(database, "sessions", "persistent", "INTEGER NOT NULL DEFAULT 0");
 }
 
+/** Last accepted TOTP time step: a code counts once. */
+function ensureTotpLastStep(database: DatabaseSync) {
+    addColumn(database, "users", "totp_last_step", "INTEGER");
+}
+
 function addColumn(
     database: DatabaseSync,
     table: string,
@@ -1545,6 +1550,7 @@ export function migrate(database: DatabaseSync) {
     ensureSiteDefault(database);
     ensureAccountIndexes(database);
     ensureSessionPersistent(database);
+    ensureTotpLastStep(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.
     syncLowFuelAlerts(database);

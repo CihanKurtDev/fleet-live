@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified_at TEXT,
     totp_secret TEXT,
     totp_enabled INTEGER NOT NULL DEFAULT 0,
+    totp_last_step INTEGER,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
