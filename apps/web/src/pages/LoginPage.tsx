@@ -269,7 +269,11 @@ export const LoginPage = () => {
                                     {...fieldAria("login-email", emailError)}
                                     onChange={(event) => setEmail(event.target.value)}
                                 />
-                                <FieldError fieldId="login-email" className={styles.error}>
+                                <FieldError
+                                    fieldId="login-email"
+                                    className={styles.error}
+                                    announce={false}
+                                >
                                     {emailError}
                                 </FieldError>
                             </div>
@@ -290,7 +294,11 @@ export const LoginPage = () => {
                                         setPassword(event.target.value)
                                     }
                                 />
-                                <FieldError fieldId="login-password" className={styles.error}>
+                                <FieldError
+                                    fieldId="login-password"
+                                    className={styles.error}
+                                    announce={false}
+                                >
                                     {passwordError}
                                 </FieldError>
                             </div>
