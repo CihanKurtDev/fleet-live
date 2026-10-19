@@ -34,6 +34,7 @@ import { Modal } from "../components/ui/Modal/Modal";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useDriver } from "../hooks/useDriver";
 import { useDueSettings } from "../hooks/useDueSettings";
 import { useVehicle } from "../hooks/useVehicle";
@@ -62,6 +63,7 @@ export const DriverDetailPage = () => {
             ? driver.current_vehicle.id
             : null;
     const { vehicle: drivingVehicle } = useVehicle(currentVehicleId);
+    usePageTitle(driver?.name ?? (notFound ? "Fahrer nicht gefunden" : null));
 
     if (isLoading && !driver) {
         return (
@@ -284,6 +286,7 @@ export const DriverDetailPage = () => {
                 open={canWrite && isEditing}
                 onClose={() => setIsEditing(false)}
                 title="Fahrer bearbeiten"
+                guardUnsaved
             >
                 <DriverEditForm
                     driver={driver}

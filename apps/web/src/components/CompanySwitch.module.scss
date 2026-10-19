@@ -15,19 +15,6 @@
 
 .select {
     max-width: 220px;
-    height: var(--control-sm);
-    padding: 0 8px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-    color: var(--text-h);
-    font: inherit;
-    font-size: 12px;
-
-    &:focus-visible {
-        outline: var(--focus-width) solid var(--focus-ring);
-        outline-offset: 2px;
-    }
 }
 
 /* Drawer on phones: the select takes the drawer width. */
@@ -37,8 +24,6 @@
     .select {
         max-width: none;
         width: 100%;
-        height: var(--control-md);
-        font-size: 14px;
     }
 
     .error {

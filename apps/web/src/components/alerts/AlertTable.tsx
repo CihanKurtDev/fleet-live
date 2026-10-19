@@ -1,5 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import { serializeAlertListQuery, type Alert } from "@fleet-live/shared";
+import {
+    isSelfClosingAlertType,
+    serializeAlertListQuery,
+    type Alert,
+} from "@fleet-live/shared";
 
 import { resolveAlerts } from "../../api/alerts";
 import { ApiError } from "../../api/client";
@@ -33,6 +37,7 @@ import {
     activeAlertTile,
     alertTileCount,
     alertTiles,
+    canResolveByHand,
 } from "./alertTableConfig";
 import { useAlertResolveColumn } from "./useAlertResolveColumn";
 import { useOpenTypeCounts } from "./useOpenTypeCounts";
@@ -81,9 +86,14 @@ export const AlertTable = ({
         setPage,
     } = useServerTable<Alert>({ listQuery, listResult });
 
-    const selectable = canWrite && query.filter !== "resolved";
+    // Nothing to select on Erledigt, nor on Wenig Tank and Kein Signal (they close
+    // themselves).
+    const selectable =
+        canWrite &&
+        query.filter !== "resolved" &&
+        !(query.type && isSelfClosingAlertType(query.type));
     const openRows = useMemo(
-        () => paginatedRows.filter((row) => row.resolved_at === null),
+        () => paginatedRows.filter(canResolveByHand),
         [paginatedRows],
     );
     const rowKeys = useMemo(() => openRows.map((row) => row.id), [openRows]);
@@ -214,7 +224,12 @@ export const AlertTable = ({
                 actions={canWrite ? <ExportButton kind="alerts" size="toolbar" /> : undefined}
             />
 
-            <KpiTiles ariaLabel="Status" phoneLayout="strip" tiles={tiles} />
+            <KpiTiles
+                ariaLabel="Status"
+                phoneLayout="strip"
+                tiles={tiles}
+                tip="list-tiles"
+            />
 
             <ListPanel label="Warnungsliste">
                 {selecting ? (
@@ -269,7 +284,7 @@ export const AlertTable = ({
                         selectionMode={selecting}
                         selectedRows={selection.selectedIds}
                         onSelectRow={(key) => selection.toggle(Number(key))}
-                        isRowSelectable={(alert) => alert.resolved_at === null}
+                        isRowSelectable={canResolveByHand}
                         getRowSelectLabel={(alert) =>
                             `Warnung ${alert.license_plate}, ${formatTimestamp(alert.created_at)} auswählen`
                         }

@@ -2,7 +2,7 @@ import type { DueKind, DueKindCounts } from "@fleet-live/shared";
 
 import { formatCount } from "../../utils/formatCount";
 import { DueSettingsFields } from "./DueSettingsFields";
-import { DUE_GROUPS, dueBasis, dueRuleText } from "./dueView";
+import { dueKindOptions } from "./dueView";
 import styles from "./DueBoard.module.scss";
 
 interface DueRailProps {
@@ -21,37 +21,21 @@ export const DueRail = ({
     onKind,
     onSaved,
 }: DueRailProps) => {
-    const kinds: Array<{
-        id: DueKind | null;
-        label: string;
-        count?: number;
-        rule: string | null;
-    }> = [
-        { id: null, label: "Alle", count: counts?.all, rule: null },
-        ...DUE_GROUPS.map((group) => {
-            const basis = dueBasis(group.kind);
-
-            return {
-                id: group.kind,
-                label: group.title,
-                count: counts?.[group.kind],
-                rule:
-                    dueRuleText(group.kind, checkMonths) +
-                    (basis ? ` Grundlage: ${basis}.` : ""),
-            };
-        }),
-    ];
+    const kinds = dueKindOptions(counts, checkMonths);
 
     return (
         <aside className={styles.rail} aria-label="Filter und Regeln">
             <section data-tip="due-kinds">
-                <h2 className={styles.railTitle}>Art und Regel</h2>
+                <h2 className={styles.railTitle}>
+                    <span className={styles.titleKinds}>Art und Regel</span>
+                    <span className={styles.titleRule}>Regel</span>
+                </h2>
                 <ul className={styles.kindList}>
                     {kinds.map((kind) => {
                         const active = activeKind === kind.id;
 
                         return (
-                            <li key={kind.id ?? "all"}>
+                            <li key={kind.id ?? "all"} data-active={active}>
                                 <button
                                     type="button"
                                     className={[

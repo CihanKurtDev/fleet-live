@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router";
 
 import { AlertTable } from "../components/alerts/AlertTable";
+import { PageTips } from "../components/help/PageTips";
 import { useAuth } from "../hooks/useAuth";
 import { rememberVehicle } from "../api/vehicleCache";
 import { setTelemetryFocus } from "../api/telemetryFocus";
@@ -13,6 +14,7 @@ export const AlertsPage = () => {
     const location = useLocation();
 
     return (
+        <>
         <AlertTable
             canWrite={canWrite}
             onSelectAlert={(alert) => {
@@ -31,5 +33,7 @@ export const AlertsPage = () => {
                 });
             }}
         />
+        <PageTips page="alerts" />
+        </>
     );
 };

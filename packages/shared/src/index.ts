@@ -14,6 +14,8 @@ export {
     FUEL_LEVEL_MIN,
     LICENSE_PLATE_MAX,
     VEHICLE_STATUSES,
+    VEHICLE_STATUS_FILTER,
+    VEHICLE_STATUS_LABELS,
     VEHICLE_TYPES,
     VEHICLE_TYPE_LABELS,
     VIN_LENGTH,
@@ -109,6 +111,7 @@ export {
     ALERT_BULK_MAX_IDS,
     ALERT_FILTERS,
     ALERT_SEVERITIES,
+    ALERT_RETENTION_DAYS,
     ALERT_SORT_KEYS,
     ALERT_TYPES,
     alertBulkPatchSchema,
@@ -122,6 +125,7 @@ export {
     isAlertType,
     isLowFuelAlertDetails,
     isLowFuelLevel,
+    isSelfClosingAlertType,
     isSpeedingAlertDetails,
     LOW_FUEL_CRITICAL_PERCENT,
     LOW_FUEL_THRESHOLD_PERCENT,
@@ -130,7 +134,9 @@ export {
     parseAlertBulkPatch,
     parseAlertListQuery,
     parseAlertPatch,
+    SELF_CLOSING_ALERT_TYPES,
     serializeAlertListQuery,
+    SPEEDING_OPEN_DAYS,
 } from "./models/alert";
 
 export type { Site, SiteInput, SiteListResponse, SitePatch } from "./models/site";

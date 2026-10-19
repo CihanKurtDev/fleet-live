@@ -25,13 +25,18 @@ export const ChartCard = ({
     <section className={`${styles.card} ${className ?? ""}`.trim()}>
         <p className={styles.kicker}>{kicker}</p>
         <h2 className={styles.title}>{title}</h2>
-        <p className={styles.lead}>{lead}</p>
+        {/* Lower windows cut the text to one line; the title gives all of it. */}
+        <p className={styles.lead} title={lead}>
+            {lead}
+        </p>
         <div className={compact ? styles.chartCompact : styles.chart}>
             <ResponsiveContainer width="100%" height="100%">
                 {children}
             </ResponsiveContainer>
         </div>
         {footer}
-        <p className={styles.note}>{note}</p>
+        <p className={styles.note} title={note}>
+            {note}
+        </p>
     </section>
 );

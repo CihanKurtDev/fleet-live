@@ -23,7 +23,7 @@ const alert = (overrides: Partial<Alert> & { id: number }): Alert => ({
     driver_id: null,
     license_plate: `K-AB ${overrides.id}`,
     driver_name: null,
-    type: "OFFLINE",
+    type: "SPEEDING",
     severity: "MEDIUM",
     message: "Fahrzeug sendet kein Signal",
     details: null,
@@ -132,7 +132,7 @@ describe("alert list page", () => {
             name: "Tempo, 1",
         });
         expect(
-            within(tiles).getByRole("button", { name: "Funk, 2" }),
+            within(tiles).getByRole("button", { name: "Kein Signal, 2" }),
         ).toBeInTheDocument();
         expect(
             within(tiles).getByRole("button", { name: "Wenig Tank, 0" }),
@@ -191,7 +191,7 @@ describe("alert list page", () => {
         await screen.findByText("K-AB 1");
 
         expect(screen.getByText("Lisa Müller")).toBeInTheDocument();
-        expect(screen.getAllByText("Funk").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Kein Signal").length).toBeGreaterThan(0);
         expect(screen.queryByText("Schwere")).toBeNull();
         expect(
             screen.getByRole("button", { name: /^Zeitpunkt, absteigend/ }),
@@ -237,7 +237,7 @@ describe("alert list page", () => {
 
         expect(within(bar).getByText("2 ausgewählt")).toBeInTheDocument();
         expect(
-            within(bar).getByText("alle Funk · 2 Fahrzeuge"),
+            within(bar).getByText("alle Tempo · 2 Fahrzeuge"),
         ).toBeInTheDocument();
 
         const pageBox = within(bar).getByRole("checkbox", {
@@ -282,7 +282,7 @@ describe("alert list page", () => {
         expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
     });
 
-    it("selects every row on the page from the bar and ends with Fertig", async () => {
+    it("selects every row on the page from the bar and ends with Abbrechen", async () => {
         renderTable(true);
         await screen.findByText("K-AB 1");
         startSelection();
@@ -295,7 +295,7 @@ describe("alert list page", () => {
 
         expect(screen.getByText("3 ausgewählt")).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole("button", { name: "Fertig" }));
+        fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
 
         expect(screen.queryByText("3 ausgewählt")).toBeNull();
         expect(screen.queryAllByRole("checkbox")).toHaveLength(0);

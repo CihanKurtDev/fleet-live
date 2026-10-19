@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified_at TEXT,
     totp_secret TEXT,
     totp_enabled INTEGER NOT NULL DEFAULT 0,
+    totp_last_step INTEGER,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -222,6 +223,23 @@ CREATE TABLE IF NOT EXISTS trip_month_km (
     company_id INTEGER NOT NULL,
     month TEXT NOT NULL,
     distance_m REAL NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (company_id, month),
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE
+);
+
+-- Monatssummen der Warnungen pro Firma. Die Zeilen selbst werden nach
+-- ALERT_RETENTION_DAYS gelöscht; die Schicht-Diagramme lesen alte Monate hier.
+CREATE TABLE IF NOT EXISTS alert_month_stats (
+    company_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    speeding_drivers INTEGER NOT NULL DEFAULT 0,
+    speeding_events INTEGER NOT NULL DEFAULT 0,
+    speeding_high INTEGER NOT NULL DEFAULT 0,
+    low_fuel_vehicles INTEGER NOT NULL DEFAULT 0,
+    offline_vehicles INTEGER NOT NULL DEFAULT 0,
 
     PRIMARY KEY (company_id, month),
     FOREIGN KEY (company_id)

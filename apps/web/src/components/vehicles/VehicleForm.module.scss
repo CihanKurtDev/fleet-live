@@ -17,26 +17,6 @@
     }
 }
 
-.select {
-    width: 100%;
-    min-height: var(--control-md);
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
-    color: var(--text-h);
-    font: inherit;
-    font-size: 14px;
-
-    &:disabled {
-        opacity: 0.6;
-    }
-
-    &[aria-invalid="true"] {
-        border-color: var(--danger);
-    }
-}
-
 .hint {
     margin: 0;
     font-size: 12px;

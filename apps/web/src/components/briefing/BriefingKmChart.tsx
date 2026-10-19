@@ -81,6 +81,8 @@ export const BriefingKmChart = ({
     const highMax = yCeiling(
         series.map((row) => row.highShare),
         20,
+        5,
+        100,
     );
 
     return (

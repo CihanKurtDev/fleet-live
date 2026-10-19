@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 
 import { DriverCreateForm } from "../components/drivers/DriverCreateForm";
 import { DriverTable } from "../components/drivers/DriverTable";
+import { PageTips } from "../components/help/PageTips";
 import { Button } from "../components/ui/Button/Button";
 import { Modal } from "../components/ui/Modal/Modal";
 import { useVehicles } from "../context/vehiclesContext";
@@ -29,6 +30,7 @@ export const DriversPage = () => {
 
     return (
         <>
+            <PageTips page="drivers" />
             <DriverTable
                 canDelete={canWrite}
                 onDeleted={refetchLists}
@@ -58,6 +60,7 @@ export const DriversPage = () => {
                 open={isCreateOpen}
                 onClose={() => setIsCreateOpen(false)}
                 title="Fahrer anlegen"
+                guardUnsaved
             >
                 <DriverCreateForm
                     onCancel={() => setIsCreateOpen(false)}

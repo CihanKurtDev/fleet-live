@@ -2,6 +2,7 @@ import {
     INTERNAL_DUE_NOTICE,
     dueRule,
     type DueKind,
+    type DueKindCounts,
     type DueListItem,
     type DueRuleKind,
 } from "@fleet-live/shared";
@@ -22,6 +23,36 @@ export const DUE_GROUPS: readonly DueGroupDef[] = [
     { kind: "uvv", title: "UVV" },
     { kind: "licence_check", title: "Führerscheinkontrolle" },
 ];
+
+export type DueKindOption = {
+    /** `null` is "Alle". */
+    id: DueKind | null;
+    label: string;
+    count?: number;
+    rule: string | null;
+};
+
+/** The kind filter: "Alle" and each kind with its count and rule text. */
+export function dueKindOptions(
+    counts: DueKindCounts | undefined,
+    checkMonths: number,
+): DueKindOption[] {
+    return [
+        { id: null, label: "Alle", count: counts?.all, rule: null },
+        ...DUE_GROUPS.map((group) => {
+            const basis = dueBasis(group.kind);
+
+            return {
+                id: group.kind,
+                label: group.title,
+                count: counts?.[group.kind],
+                rule:
+                    dueRuleText(group.kind, checkMonths) +
+                    (basis ? ` Grundlage: ${basis}.` : ""),
+            };
+        }),
+    ];
+}
 
 const RULE_KIND_LABELS: Record<DueRuleKind, string> = {
     statutory: "gesetzliche Frist",

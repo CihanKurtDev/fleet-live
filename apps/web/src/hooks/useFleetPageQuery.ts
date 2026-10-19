@@ -40,6 +40,7 @@ export const useFleetPageQuery = () => {
 
         return parsed.success ? (parsed.data.drivers ?? []) : [];
     }, [driversKey]);
+    const driverSearch = (searchParams.get("driver_search") ?? "").slice(0, 100);
     const bboxRaw = searchParams.get("bbox");
     const bbox = useMemo(() => readBBox(bboxRaw), [bboxRaw]);
     const depotRaw = searchParams.get("depot");
@@ -94,8 +95,9 @@ export const useFleetPageQuery = () => {
             filter,
             search: debouncedSearch || undefined,
             drivers: drivers.length > 0 ? drivers : undefined,
+            driver_search: driverSearch || undefined,
         });
-    }, [bbox, debouncedSearch, drivers, filter, search, writeQuery]);
+    }, [bbox, debouncedSearch, driverSearch, drivers, filter, search, writeQuery]);
 
     const setFilter = useCallback(
         (next: VehicleFilterId | undefined) => {
@@ -104,9 +106,10 @@ export const useFleetPageQuery = () => {
                 filter: next,
                 search: search || undefined,
                 drivers: drivers.length > 0 ? drivers : undefined,
+                driver_search: driverSearch || undefined,
             });
         },
-        [bbox, drivers, search, writeQuery],
+        [bbox, driverSearch, drivers, search, writeQuery],
     );
 
     const setDrivers = useCallback(
@@ -116,6 +119,19 @@ export const useFleetPageQuery = () => {
                 filter,
                 search: search || undefined,
                 drivers: names.length > 0 ? names : undefined,
+            });
+        },
+        [bbox, filter, search, writeQuery],
+    );
+
+    /** A text instead of names: every driver or plate that contains it. */
+    const setDriverSearch = useCallback(
+        (text: string) => {
+            writeQuery({
+                bbox: bbox ?? undefined,
+                filter,
+                search: search || undefined,
+                driver_search: text.trim() || undefined,
             });
         },
         [bbox, filter, search, writeQuery],
@@ -132,9 +148,10 @@ export const useFleetPageQuery = () => {
                 filter,
                 search: search || undefined,
                 drivers: drivers.length > 0 ? drivers : undefined,
+                driver_search: driverSearch || undefined,
             });
         },
-        [bbox, drivers, filter, search, writeQuery],
+        [bbox, driverSearch, drivers, filter, search, writeQuery],
     );
 
     const setDepot = useCallback(
@@ -145,11 +162,12 @@ export const useFleetPageQuery = () => {
                     filter,
                     search: search || undefined,
                     drivers: drivers.length > 0 ? drivers : undefined,
+                    driver_search: driverSearch || undefined,
                 },
                 id,
             );
         },
-        [bbox, drivers, filter, search, writeQuery],
+        [bbox, driverSearch, drivers, filter, search, writeQuery],
     );
 
     const setVehicle = useCallback(
@@ -160,12 +178,13 @@ export const useFleetPageQuery = () => {
                     filter,
                     search: search || undefined,
                     drivers: drivers.length > 0 ? drivers : undefined,
+                    driver_search: driverSearch || undefined,
                 },
                 undefined,
                 id,
             );
         },
-        [bbox, drivers, filter, search, writeQuery],
+        [bbox, driverSearch, drivers, filter, search, writeQuery],
     );
 
     return {
@@ -173,6 +192,8 @@ export const useFleetPageQuery = () => {
         filter,
         search,
         drivers,
+        driverSearch,
+        setDriverSearch,
         depotId,
         vehicleId,
         setVehicle,

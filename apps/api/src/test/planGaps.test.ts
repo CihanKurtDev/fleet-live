@@ -392,10 +392,12 @@ describe("plan gaps: password and totp", () => {
             .send({ totp_required: false })
             .expect(200);
 
+        // The login above used this time step's code; a code counts once, so
+        // the next step's code is the one that turns the factor off.
         const disabled = await authed
             .post("/api/auth/totp/disable")
             .set("Cookie", session)
-            .send({ code: totpCode(base32Decode(secret)) });
+            .send({ code: totpCode(base32Decode(secret), Date.now() + 30_000) });
         assert.equal(disabled.status, 200);
         assert.equal(disabled.body.recovery_codes, undefined);
 

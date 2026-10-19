@@ -15,6 +15,9 @@
     border-radius: var(--radius);
     background: color-mix(in srgb, var(--accent-bg) 55%, var(--surface));
     text-align: left;
+    /* The band behind is one link to the map; this box is not part of it. */
+    pointer-events: auto;
+    cursor: default;
 }
 
 /* A label, not a section title: mono capitals like the tile labels. */

@@ -12,13 +12,12 @@ import type {
     VehicleListQuery,
     VehicleListResponse,
     VehicleSortKey,
-    VehicleFilterId,
 } from "@fleet-live/shared";
 import {
     ALERT_TYPES,
     FLEET_DRIVERS_LIST_LIMIT,
     FLEET_POSITIONS_MAX,
-    LOW_FUEL_THRESHOLD_PERCENT,
+    VEHICLE_FILTERS,
     isAlertType,
     storedHuMonth,
 } from "@fleet-live/shared";
@@ -28,6 +27,7 @@ import { SpeedingEventModel } from "./speedingEvent.model";
 import { ExceptionEventModel } from "./exceptionEvent.model";
 import { config } from "../config";
 import { stmt } from "../db/statements";
+import { VEHICLE_CONCEPT_SQL, conceptCountsSql } from "../db/vehicleConcepts";
 import { db } from "../db/database";
 import { pagedQuery } from "../lib/pagination";
 import { ConflictError, isUniqueConstraintError } from "../lib/errors";
@@ -70,21 +70,7 @@ const SORT_COLUMNS: Record<VehicleSortKey, string> = {
     uvv_due_on: "v.uvv_due_on",
 };
 
-const FILTER_SQL: Record<VehicleFilterId, string> = {
-    alerts: "v.active_alerts > 0",
-    low_fuel: `v.fuel_level < ${LOW_FUEL_THRESHOLD_PERCENT}`,
-    unassigned: "v.current_driver_id IS NULL",
-    driving: "v.status = 'DRIVING'",
-    idle: "v.status = 'IDLE'",
-    offline: "v.status = 'OFFLINE'",
-    in_depot: "v.depot_site_id IS NOT NULL",
-    speeding: `EXISTS (
-        SELECT 1 FROM alerts a
-        WHERE a.vehicle_id = v.id
-          AND a.type = 'SPEEDING'
-          AND a.ended_at IS NULL
-    )`,
-};
+const FILTER_SQL = VEHICLE_CONCEPT_SQL;
 
 const SPEEDING_OPEN_SQL = `${FILTER_SQL.speeding} AS speeding_open`;
 
@@ -191,13 +177,7 @@ const LIST_SEARCH_SQL = searchMatchSql("?", "?", "?");
 const FACET_SQL = `
     SELECT
         COUNT(*) AS all_count,
-        COALESCE(SUM(active_alerts > 0), 0) AS alerts,
-        COALESCE(SUM(fuel_level < ${LOW_FUEL_THRESHOLD_PERCENT}), 0) AS low_fuel,
-        COALESCE(SUM(current_driver_id IS NULL), 0) AS unassigned,
-        COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
-        COALESCE(SUM(status = 'IDLE'), 0) AS idle,
-        COALESCE(SUM(status = 'OFFLINE'), 0) AS offline,
-        COALESCE(SUM(depot_site_id IS NOT NULL), 0) AS in_depot
+        ${conceptCountsSql(VEHICLE_FILTERS)}
     FROM vehicles v
     WHERE v.company_id = ?
       AND ${LIST_SEARCH_SQL}
@@ -235,7 +215,9 @@ type FacetRow = {
     driving: number;
     idle: number;
     offline: number;
+    stopped: number;
     in_depot: number;
+    speeding: number;
 };
 
 function toLikePattern(search: string): string {
@@ -385,7 +367,9 @@ export class VehicleModel {
                     driving: Number(counts.driving),
                     idle: Number(counts.idle),
                     offline: Number(counts.offline),
+                    stopped: Number(counts.stopped),
                     in_depot: Number(counts.in_depot),
+                    speeding: Number(counts.speeding),
                 },
             },
         };
@@ -413,6 +397,15 @@ export class VehicleModel {
                     )
                 )`
                 : "";
+        // Suchtext statt Namensliste: aktueller Fahrer oder Kennzeichen.
+        const driverSearch = query.driver_search ?? "";
+        const driverSearchSql =
+            driverSearch.length > 0
+                ? `AND (
+                    lower(coalesce(v.driver_name, '')) LIKE ? ESCAPE '#'
+                    OR lower(v.license_plate) LIKE ? ESCAPE '#'
+                )`
+                : "";
         // `search` schränkt diese Antwort nicht ein. Die Karte sucht im
         // geladenen Bestand und blendet die übrigen Fahrzeuge nicht aus.
         const activeBbox = query.bbox;
@@ -424,11 +417,15 @@ export class VehicleModel {
             WHERE v.company_id = ?
               ${filterSql}
               ${driverSql}
+              ${driverSearchSql}
         `;
         const matchParams = [
             companyId,
             ...selectedDrivers,
             ...selectedDrivers,
+            ...(driverSearch.length > 0
+                ? [toLikePattern(driverSearch), toLikePattern(driverSearch)]
+                : []),
         ];
         const bboxParams = activeBbox
             ? [
@@ -590,10 +587,10 @@ export class VehicleModel {
                 AVG(t.latitude) AS latitude,
                 AVG(t.longitude) AS longitude,
                 COUNT(*) AS total,
-                SUM(CASE WHEN v.status = 'IDLE' THEN 1 ELSE 0 END) AS idle_count,
-                SUM(CASE WHEN v.status = 'DRIVING' THEN 1 ELSE 0 END) AS driving_count,
-                SUM(CASE WHEN v.status = 'STOPPED' THEN 1 ELSE 0 END) AS stopped_count,
-                SUM(CASE WHEN v.status = 'OFFLINE' THEN 1 ELSE 0 END) AS offline_count
+                SUM(${VEHICLE_CONCEPT_SQL.idle}) AS idle_count,
+                SUM(${VEHICLE_CONCEPT_SQL.driving}) AS driving_count,
+                SUM(${VEHICLE_CONCEPT_SQL.stopped}) AS stopped_count,
+                SUM(${VEHICLE_CONCEPT_SQL.offline}) AS offline_count
             ${positionedFrom}
             GROUP BY cell_x, cell_y
             ORDER BY cell_y, cell_x

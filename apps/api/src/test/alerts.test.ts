@@ -435,10 +435,16 @@ describe("PATCH /api/alerts (bulk)", () => {
             driver_name: "Bulk Zwei",
             company_id: 1,
         });
-        const a = insertAlert(first.id, { type: "OFFLINE" });
-        const b = insertAlert(first.id, { type: "LOW_FUEL" });
+        const a = insertAlert(first.id, {
+            type: "SPEEDING",
+            ended_at: "2026-01-01 00:00:00",
+        });
+        const b = insertAlert(first.id, { type: "SPEEDING" });
         const c = insertAlert(second.id, { type: "SPEEDING" });
-        const untouched = insertAlert(second.id, { type: "LOW_FUEL" });
+        const untouched = insertAlert(second.id, {
+            type: "SPEEDING",
+            ended_at: "2026-01-01 00:00:00",
+        });
 
         const response = await api
             .patch("/api/alerts")
@@ -468,7 +474,7 @@ describe("PATCH /api/alerts (bulk)", () => {
             resolved_at: "2026-01-01 00:00:00",
             ended_at: "2026-01-01 00:00:00",
         });
-        const open = insertAlert(vehicle.id, { type: "LOW_FUEL" });
+        const open = insertAlert(vehicle.id, { type: "SPEEDING" });
 
         const first = await api
             .patch("/api/alerts")
@@ -588,7 +594,7 @@ describe("PATCH /api/alerts (bulk)", () => {
         // Beendete, aber nicht erledigte Zeilen: nur eine offene pro Typ.
         const ids = Array.from({ length: 100 }, () =>
             insertAlert(vehicle.id, {
-                type: "LOW_FUEL",
+                type: "SPEEDING",
                 ended_at: "2026-01-01 00:00:00",
             }),
         );

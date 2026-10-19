@@ -56,13 +56,14 @@ const PAGES: Record<string, HelpPage> = {
     },
     vehicles: {
         id: "vehicles",
+        tips: "vehicles",
         title: "Fahrzeuge",
         intro:
             "Alle Fahrzeuge der Firma mit Status, Tankstand, Tempo und offenen Warnungen. Ein Klick auf eine Zeile öffnet das Fahrzeug.",
         items: [
             {
                 question: "Was bedeuten die Filter?",
-                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Auf Fahrt“, „Standby“ und „Kein Signal“ sind der gemeldete Status. Unter „Weitere Filter“: „Kein Fahrer“ (kein aktueller Fahrer) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
+                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Tempo jetzt“: eine Tempoüberschreitung läuft gerade. „Auf Fahrt“, „Standby“, „Feierabend“ und „Kein Signal“ sind der gemeldete Status und ergeben zusammen „Alle“. Unter „Weitere Filter“: „Kein Fahrer“ (kein aktueller Fahrer) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
             },
             {
                 question: "Warum ist das Tempo orange oder rot?",
@@ -84,6 +85,7 @@ const PAGES: Record<string, HelpPage> = {
     },
     fleet: {
         id: "fleet",
+        tips: "fleet",
         title: "Karte",
         intro:
             "Die letzte bekannte Position jedes Fahrzeugs der Firma. Fahrzeuge auf Fahrt bewegen sich live, solange sie im Ausschnitt sind.",
@@ -112,19 +114,19 @@ const PAGES: Record<string, HelpPage> = {
     },
     alerts: {
         id: "alerts",
+        tips: "alerts",
         title: "Warnungen",
         intro:
             "Der Eingang für Warnungen der Firma. „Offen“ sind Warnungen, die noch niemand erledigt hat.",
         items: [
             {
-                question: "Was bedeuten Tempo, Funk und Wenig Tank?",
-                answer:
-                    "Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Funk: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Wenig Tank: mitgelieferte Verlaufsdaten; neu angelegt wird so ein Eintrag nicht. Den aktuellen Tankstand zeigt der Filter „Wenig Tank“ unter Fahrzeuge.",
+                question: "Was bedeuten Tempo, Kein Signal und Wenig Tank?",
+                answer: `Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Kein Signal: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Die Warnung geht von selbst weg, sobald das Fahrzeug wieder meldet. Wenig Tank: der Tankstand liegt unter ${LOW_FUEL_THRESHOLD_PERCENT} %. Die Warnung geht von selbst weg, sobald der Tank wieder darüber liegt. Es sind dieselben Fahrzeuge wie bei „Wenig Tank“ unter Fahrzeuge.`,
             },
             {
                 question: "Was macht „Erledigen“?",
                 answer:
-                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher.",
+                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. „Wenig Tank“ und „Kein Signal“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist bzw. das Fahrzeug wieder meldet. Eine beendete Tempo-Warnung, die niemand erledigt, wird nach 7 Tagen Verlauf und steht dann unter „Erledigt“. Erledigte Warnungen bleiben 90 Tage sichtbar, die Monatszahlen der Diagramme bleiben.",
             },
             {
                 question: "Wohin führt eine Zeile?",
@@ -165,6 +167,7 @@ const PAGES: Record<string, HelpPage> = {
     },
     drivers: {
         id: "drivers",
+        tips: "drivers",
         title: "Fahrer",
         intro:
             "Alle Fahrer der Firma, oben die mit den meisten offenen Warnungen. Ein Klick öffnet den Fahrer.",
@@ -172,7 +175,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was zählen „Verstöße“ und „Davon offen“?",
                 answer:
-                    "Verstöße sind alle Tempo-Warnungen des Fahrers, „Davon offen“ die noch nicht erledigten. Tank und Funk hängen am Fahrzeug, nicht am Fahrer.",
+                    "Verstöße sind alle Tempo-Warnungen des Fahrers, „Davon offen“ die noch nicht erledigten. Tank und Kein Signal hängen am Fahrzeug, nicht am Fahrer.",
             },
             {
                 question: "Wie lege ich einen Fahrer an?",
@@ -202,7 +205,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was steht unter „Hinweise“?",
                 answer:
-                    "Offene Hinweise zu Tank und Funk an diesem Fahrzeug. Tempo-Warnungen stehen unter Warnungen und am Fahrer.",
+                    "Offene Hinweise zu Tank und Kein Signal an diesem Fahrzeug. Tempo-Warnungen stehen unter Warnungen und am Fahrer.",
             },
             {
                 question: "Wo ändere ich HU, UVV oder den Stammstandort?",
@@ -231,7 +234,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was zählt unter „Verstöße“?",
                 answer:
-                    "Nur Tempo-Warnungen. Tank und Funk hängen am Fahrzeug.",
+                    "Nur Tempo-Warnungen. Tank und Kein Signal hängen am Fahrzeug.",
             },
         ],
     },

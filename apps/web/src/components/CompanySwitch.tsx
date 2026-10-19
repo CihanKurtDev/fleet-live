@@ -2,6 +2,7 @@ import { useState } from "react";
 import { switchCompany } from "../api/auth";
 import { useAuth } from "../hooks/useAuth";
 import styles from "./CompanySwitch.module.scss";
+import { Select } from "./ui/Select/Select";
 
 export const CompanySwitch = ({ fullWidth = false }: { fullWidth?: boolean }) => {
     const { user, setUser } = useAuth();
@@ -17,8 +18,9 @@ export const CompanySwitch = ({ fullWidth = false }: { fullWidth?: boolean }) =>
                 fullWidth ? `${styles.field} ${styles.fullWidth}` : styles.field
             }
         >
-            <select
+            <Select
                 className={styles.select}
+                size={fullWidth ? "md" : "sm"}
                 aria-label="Firma"
                 value={user.company_id}
                 onChange={async (event) => {
@@ -43,7 +45,7 @@ export const CompanySwitch = ({ fullWidth = false }: { fullWidth?: boolean }) =>
                         {membership.company_name}
                     </option>
                 ))}
-            </select>
+            </Select>
             {switchError && (
                 <span className={styles.error} role="alert">
                     {switchError}

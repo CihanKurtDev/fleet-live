@@ -38,6 +38,7 @@ import { Modal } from "../components/ui/Modal/Modal";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { useVehicles } from "../context/vehiclesContext";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useVehicle } from "../hooks/useVehicle";
 import {
     formatIsoDate,
@@ -320,6 +321,10 @@ export const VehicleDetailPage = () => {
     const openTrailMeters = useMemo(
         () => (openPath ? pathLength(toLatLngs(trail)) : null),
         [openPath, trail],
+    );
+
+    usePageTitle(
+        vehicle?.license_plate ?? (notFound ? "Fahrzeug nicht gefunden" : null),
     );
 
     if (isLoading) {
@@ -701,6 +706,7 @@ export const VehicleDetailPage = () => {
                 open={canWrite && isEditingMaster}
                 onClose={() => setIsEditingMaster(false)}
                 title="Stammdaten"
+                guardUnsaved
             >
                 <VehicleForm
                     focusField={masterField}

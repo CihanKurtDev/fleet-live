@@ -68,6 +68,7 @@ import { DriverModel } from "./driver.model";
 import { VehicleModel } from "./vehicle.model";
 import { stmt } from "../db/statements";
 import { db, withTransaction } from "../db/database";
+import { syncStateAlerts } from "../db/stateAlerts";
 import { pagedQuery } from "../lib/pagination";
 import { TripModel } from "./trip.model";
 import {
@@ -2047,6 +2048,8 @@ export class ImportModel {
             );
         }
 
+        // The file may have set tank levels: their low-fuel warnings follow.
+        syncStateAlerts(db, { companyId });
         deleteImportPreview(previewId);
         return result;
     }

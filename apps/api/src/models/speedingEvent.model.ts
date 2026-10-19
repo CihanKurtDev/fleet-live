@@ -33,7 +33,12 @@ function hydrate(vehicleId: number): SpeedingTracker | undefined {
     return {
         phase: "open",
         alertId: open.id,
-        startedAtMs: parseCreatedAtMs(open.created_at),
+        // A warning that carries earlier overshoots of its trip starts this
+        // one now; counting from its creation would count the pauses too.
+        startedAtMs:
+            open.details?.carried_duration_s !== undefined
+                ? Date.now()
+                : parseCreatedAtMs(open.created_at),
         maxSpeed: open.maxSpeed,
         writtenMaxSpeed: open.details?.max_speed_kmh,
         writtenDurationS: open.details?.duration_s,

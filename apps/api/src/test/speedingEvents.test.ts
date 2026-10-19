@@ -13,6 +13,7 @@ import {
     SpeedingEventModel,
 } from "../models/speedingEvent.model";
 import { stepSpeeding } from "../lib/speeding";
+import { TripModel } from "../models/trip.model";
 import { loginAs } from "./helpers";
 
 const TICK_MS = 400;
@@ -315,5 +316,86 @@ describe("SPEEDING events", () => {
         const response = await api.get("/api/alerts").query({ filter: "all" });
         assert.equal(response.body.data.length, 1);
         assert.equal(response.body.data[0].vehicle_id, mine.id);
+    });
+});
+
+describe("one SPEEDING warning per trip", () => {
+    const episode = (vehicleId: number, start: number, speed: number, seconds: number) => {
+        patchAt(vehicleId, 1, speed, start);
+        patchAt(vehicleId, 1, speed, start + SPEEDING_OPEN_AFTER_MS);
+        patchAt(vehicleId, 1, speed, start + seconds * 1000);
+        const below = start + seconds * 1000 + TICK_MS;
+        patchAt(vehicleId, 1, CITY_LIMIT, below);
+        patchAt(vehicleId, 1, CITY_LIMIT, below + SPEEDING_HYSTERESIS_MS);
+
+        return below + SPEEDING_HYSTERESIS_MS;
+    };
+
+    it("joins later overshoots of the same trip into the one warning", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 20",
+            driver_name: "Dauerfahrt",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+
+        const afterFirst = episode(vehicle.id, 6_000_000, OVER_CITY, 10);
+        const afterSecond = episode(vehicle.id, afterFirst + 120_000, HIGH_OVER_CITY, 20);
+        episode(vehicle.id, afterSecond + 120_000, OVER_CITY, 12);
+
+        const all = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(all.body.data.length, 1, "one row for the whole trip");
+
+        const alert = all.body.data[0];
+        assert.equal(alert.details.event_count, 3);
+        assert.equal(alert.details.max_speed_kmh, HIGH_OVER_CITY);
+        assert.equal(alert.severity, "HIGH");
+        assert.ok(alert.details.duration_s >= 10 + 20 + 12, `duration ${alert.details.duration_s}`);
+        assert.match(alert.message, /3-mal/);
+        assert.equal(typeof alert.ended_at, "string");
+        assert.equal(alert.resolved_at, null);
+    });
+
+    it("starts a new warning on the next trip", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 21",
+            driver_name: "Zwei Fahrten",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+        const end = episode(vehicle.id, 6_000_000, OVER_CITY, 10);
+
+        TripModel.close(vehicle.id, "1970-01-02 00:00:00");
+        TripModel.open(vehicle.id, "1970-01-03 00:00:00");
+        episode(vehicle.id, end + 120_000, OVER_CITY, 10);
+
+        const all = await api.get("/api/alerts").query({ filter: "all" });
+        // The second episode lies before the new trip began in clock time, so it
+        // cannot join the first warning: two rows.
+        assert.equal(all.body.data.length, 2);
+    });
+
+    it("does not join an overshoot that was already resolved", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 22",
+            driver_name: "Erledigt",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+        const end = episode(vehicle.id, 6_000_000, OVER_CITY, 10);
+
+        const first = await api.get("/api/alerts").query({ filter: "all" });
+        const resolved = await api
+            .patch(`/api/alerts/${first.body.data[0].id}`)
+            .send({ resolved: true });
+        assert.equal(resolved.status, 200);
+
+        episode(vehicle.id, end + 120_000, OVER_CITY, 10);
+
+        const all = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(all.body.data.length, 2);
     });
 });

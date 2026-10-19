@@ -22,6 +22,7 @@ import { Button } from "../Button/Button";
 import { Checkbox } from "../Checkbox/Checkbox";
 import { Input } from "../Input/Input";
 import { TablePagination } from "../Table/TablePagination";
+import { usePageTitle } from "../../../hooks/usePageTitle";
 import styles from "./ListPage.module.scss";
 
 interface ListPageProps {
@@ -63,6 +64,7 @@ export const ListPageHeader = ({
     actions,
 }: ListPageHeaderProps) => {
     const noticeRef = useRef<HTMLParagraphElement>(null);
+    usePageTitle(title);
 
     // Each new confirmation rises in; the live region itself stays in place.
     useEffect(() => {
@@ -148,7 +150,12 @@ export const ListToolbar = ({
 }: ListToolbarProps) => (
     <div className={styles.toolbar}>
         {onStartSelection && (
-            <Button variant="secondary" size="toolbar" onClick={onStartSelection}>
+            <Button
+                variant="secondary"
+                size="toolbar"
+                data-tip="list-select"
+                onClick={onStartSelection}
+            >
                 Auswählen
             </Button>
         )}
@@ -158,6 +165,7 @@ export const ListToolbar = ({
                 type="search"
                 size="sm"
                 className={styles.search}
+                data-tip="list-search"
                 placeholder={search.placeholder}
                 aria-label={search.ariaLabel}
                 value={search.value}
@@ -184,7 +192,7 @@ interface SelectionBarProps {
     summary?: ReactNode;
     /** Bulk actions, e.g. `<Button variant="dangerOutline" size="toolbar">`. */
     actions?: ReactNode;
-    /** "Fertig" and Escape: leave selection mode. */
+    /** "Abbrechen" and Escape: leave selection mode. */
     onDone: () => void;
 }
 
@@ -237,7 +245,7 @@ export const SelectionBar = ({
             <div className={styles.selectionActions}>
                 {actions}
                 <Button variant="secondary" size="toolbar" onClick={onDone}>
-                    Fertig
+                    Abbrechen
                 </Button>
             </div>
         </div>

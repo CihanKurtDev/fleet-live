@@ -79,6 +79,15 @@ const environmentSchema = z.object({
     MICROSOFT_CLIENT_SECRET: z.string().default(""),
 });
 
+// No silent default: a process started without NODE_ENV would run in
+// development mode (no rate limits, no origin check, readable error stacks).
+if (process.env.NODE_ENV === undefined) {
+    console.error(
+        "Invalid environment configuration:\n  NODE_ENV: nicht gesetzt. Setze development, test oder production (lokal: apps/api/dev.env, die Skripte laden sie).",
+    );
+    process.exit(1);
+}
+
 const parsed = environmentSchema.safeParse(process.env);
 
 if (!parsed.success) {

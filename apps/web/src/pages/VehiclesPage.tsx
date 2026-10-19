@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import type { VehicleInput } from "@fleet-live/shared";
 
+import { PageTips } from "../components/help/PageTips";
 import { VehicleTable } from "../components/vehicles/VehicleTable";
 import { ExportMenu } from "../components/export/ExportMenu";
 import { VehicleForm } from "../components/vehicles/VehicleForm";
@@ -36,6 +37,7 @@ export const VehiclesPage = () => {
 
     return (
         <>
+            <PageTips page="vehicles" />
             <VehicleTable
                 pageNotice={notice}
                 onDeleteVehicles={canWrite ? deleteVehicles : undefined}
@@ -76,6 +78,7 @@ export const VehiclesPage = () => {
                 open={isCreateOpen}
                 onClose={() => setIsCreateOpen(false)}
                 title="Fahrzeug anlegen"
+                guardUnsaved
             >
                 <VehicleForm
                     submitLabel="Anlegen"

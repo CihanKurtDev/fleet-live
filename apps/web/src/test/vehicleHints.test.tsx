@@ -1,24 +1,13 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
-import type { Alert, AlertListResponse, Vehicle } from "@fleet-live/shared";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import type { Vehicle } from "@fleet-live/shared";
+import { MemoryRouter } from "react-router";
+import { describe, expect, it } from "vitest";
 
 import { VehicleHintsPanel } from "../components/alerts/VehicleHintsPanel";
-import {
-    VehiclesContext,
-    type VehiclesContextValue,
-} from "../context/vehiclesContext";
-import { renderAuth } from "./renderAuth";
 
-vi.mock("../api/alerts", () => ({
-    listAlerts: vi.fn(),
-    resolveAlert: vi.fn(),
-}));
-
-import { listAlerts, resolveAlert } from "../api/alerts";
-
-const vehicle: Vehicle = {
+const vehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({
     id: 3,
-    license_plate: "K-FUNK 3",
+    license_plate: "K-SIG 3",
     driver_name: "Lisa Müller",
     fuel_level: 60,
     status: "DRIVING",
@@ -36,79 +25,49 @@ const vehicle: Vehicle = {
     speed: 80,
     speed_limit_kmh: 120,
     recorded_at: "2026-10-17 09:00:00",
-    active_alerts: 1,
+    active_alerts: 0,
     speeding_open: false,
-    open_alert_types: ["OFFLINE"],
+    open_alert_types: [],
     created_at: "2026-10-01 08:00:00",
     current_driver_id: 7,
-};
-
-const offline = (overrides: Partial<Alert>): Alert => ({
-    id: 9,
-    vehicle_id: 3,
-    driver_id: 7,
-    license_plate: "K-FUNK 3",
-    driver_name: "Lisa Müller",
-    type: "OFFLINE",
-    severity: "MEDIUM",
-    message: "Kein Signal",
-    details: null,
-    created_at: "2026-10-16 12:54:00",
-    ended_at: null,
-    resolved_at: null,
     ...overrides,
 });
 
-const page = (data: Alert[]) =>
-    ({
-        data,
-        meta: { page: 1, limit: 10, total: data.length, pageCount: 1 },
-    }) as unknown as AlertListResponse;
-
-const vehicles = {
-    listEpoch: 0,
-    vehicleOverrides: {},
-    streamConnection: "live",
-    lastTelemetryAt: null,
-    refetchLists: vi.fn(),
-    createVehicle: vi.fn(),
-    updateVehicle: vi.fn(),
-    deleteVehicles: vi.fn(),
-    subscribeTripPath: vi.fn(() => () => undefined),
-} satisfies VehiclesContextValue;
-
-const renderHints = () =>
-    renderAuth(
-        <VehiclesContext.Provider value={vehicles}>
-            <VehicleHintsPanel vehicle={vehicle} canWrite />
-        </VehiclesContext.Provider>,
+const renderHints = (v: Vehicle, canWrite = true) =>
+    render(
+        <MemoryRouter>
+            <VehicleHintsPanel vehicle={v} canWrite={canWrite} />
+        </MemoryRouter>,
     );
 
-beforeEach(() => {
-    vi.mocked(listAlerts).mockReset();
-    vi.mocked(resolveAlert).mockReset();
-    vi.mocked(resolveAlert).mockResolvedValue({} as never);
-});
-
-describe("Hinweise: kein Signal", () => {
-    it("says when the signal came back and still lets the warning be resolved", async () => {
-        vi.mocked(listAlerts).mockResolvedValue(
-            page([offline({ ended_at: "2026-10-16 17:20:00" })]),
+describe("Hinweise: Kein Signal", () => {
+    it("shows it while the vehicle has no signal, with a link to its warning and no button", () => {
+        renderHints(
+            vehicle({ status: "OFFLINE", open_alert_types: ["OFFLINE"], active_alerts: 1 }),
         );
-        renderHints();
 
-        expect(
-            await screen.findByText(/Kein Signal · beendet/),
-        ).toBeInTheDocument();
-        fireEvent.click(screen.getByRole("button", { name: "Erledigen" }));
-        await waitFor(() => expect(resolveAlert).toHaveBeenCalledWith(9));
+        expect(screen.getByText("Meldet sich nicht.")).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: "Zu den Warnungen" })).toHaveAttribute(
+            "href",
+            "/alerts?vehicle_id=3&type=OFFLINE",
+        );
+        // The warning closes itself when the vehicle reports again.
+        expect(screen.queryByRole("button", { name: "Erledigen" })).toBeNull();
     });
 
-    it("shows a running warning without an end", async () => {
-        vi.mocked(listAlerts).mockResolvedValue(page([offline({})]));
-        renderHints();
+    it("shows nothing when the vehicle reports", () => {
+        renderHints(vehicle());
 
-        expect(await screen.findByText("Kein Signal")).toBeInTheDocument();
-        expect(screen.queryByText(/beendet/)).toBeNull();
+        expect(screen.getByText("Keine offenen Hinweise.")).toBeInTheDocument();
+        expect(screen.queryByText("Meldet sich nicht.")).toBeNull();
+    });
+
+    it("shows low fuel next to it", () => {
+        renderHints(
+            vehicle({ status: "OFFLINE", open_alert_types: ["OFFLINE"], fuel_level: 4 }),
+        );
+
+        expect(screen.getByText("Meldet sich nicht.")).toBeInTheDocument();
+        expect(screen.getByText(/Tank bei 4 %/)).toBeInTheDocument();
     });
 });

@@ -1,0 +1,61 @@
+.select {
+    box-sizing: border-box;
+    margin: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background-color: var(--bg);
+    /* Our own arrow, the same everywhere; mid grey reads on both schemes. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%237d879b' stroke-width='1.6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    appearance: none;
+
+    font: inherit;
+    color: var(--text-h);
+    cursor: pointer;
+    text-overflow: ellipsis;
+
+    transition:
+        border-color var(--dur-1) var(--ease-out),
+        box-shadow var(--dur-2) var(--ease-out),
+        background-color var(--dur-2) var(--ease-out);
+
+    &:hover:not(:disabled, :focus) {
+        border-color: var(--text-muted);
+    }
+
+    /* Same focus as Input: the border takes the ring colour, a soft halo grows. */
+    &:focus {
+        outline: none;
+        border-color: var(--focus-ring);
+        box-shadow:
+            0 0 0 1px var(--focus-ring),
+            0 0 0 4px color-mix(in srgb, var(--focus-ring) 18%, transparent);
+    }
+
+    &[aria-invalid="true"] {
+        border-color: var(--danger);
+    }
+
+    &:disabled {
+        background-color: var(--code-bg);
+        color: var(--text);
+        cursor: not-allowed;
+    }
+}
+
+.sm {
+    height: var(--control-sm);
+    padding: 0 30px 0 12px;
+    font-size: 13px;
+}
+
+.md {
+    height: var(--control-md);
+    padding: 0 32px 0 10px;
+    font-size: 14px;
+}
+
+.fullWidth {
+    width: 100%;
+}

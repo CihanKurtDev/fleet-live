@@ -59,7 +59,12 @@ import {
     type MailDelivery,
 } from "../lib/mailer";
 import { openSession } from "../lib/openSession";
-import { hashPassword, needsRehash, verifyPassword } from "../lib/password";
+import {
+    hashPasswordAsync,
+    needsRehash,
+    spendPasswordTime,
+    verifyPasswordAsync,
+} from "../lib/password";
 import { seal } from "../lib/secretBox";
 import { open as openSecret } from "../lib/secretBox";
 import {
@@ -68,8 +73,14 @@ import {
     newRecoveryCode,
     otpauthUrl,
     randomTotpSecret,
+    totpStep,
     verifyTotp,
 } from "../lib/totp";
+import {
+    clearTotpFailures,
+    recordTotpFailure,
+    tooManyTotpFailures,
+} from "../lib/totpAttempts";
 
 const INVALID_LINK = "Der Link ist ungültig oder abgelaufen.";
 
@@ -165,19 +176,26 @@ export function verifyEmail(req: Request, res: Response) {
     res.status(204).end();
 }
 
-export function login(req: Request, res: Response) {
+export async function login(req: Request, res: Response) {
     const input = parseLoginInput(req.body);
     const user = UserModel.findByEmail(input.email);
 
-    if (
-        !user?.password_hash ||
-        !verifyPassword(input.password, user.password_hash)
-    ) {
+    if (!user?.password_hash) {
+        // The same wait as for a wrong password, so the answer does not
+        // tell whether the email has an account.
+        await spendPasswordTime(input.password);
+        throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
+    }
+
+    if (!(await verifyPasswordAsync(input.password, user.password_hash))) {
         throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
     }
 
     if (needsRehash(user.password_hash)) {
-        UserModel.setPasswordHash(user.id, hashPassword(input.password));
+        UserModel.setPasswordHash(
+            user.id,
+            await hashPasswordAsync(input.password),
+        );
     }
 
     if (!user.email_verified_at) {
@@ -298,7 +316,7 @@ export function resetPasswordHandler(req: Request, res: Response) {
     res.status(204).end();
 }
 
-export function changePassword(req: Request, res: Response) {
+export async function changePassword(req: Request, res: Response) {
     if (!req.user) {
         throw new UnauthorizedError();
     }
@@ -306,13 +324,16 @@ export function changePassword(req: Request, res: Response) {
     const input = parseChangePasswordInput(req.body);
     const user = UserModel.getById(req.user.id);
 
-    if (!user?.password_hash || !verifyPassword(input.current_password, user.password_hash)) {
+    if (
+        !user?.password_hash ||
+        !(await verifyPasswordAsync(input.current_password, user.password_hash))
+    ) {
         throw new ValidationError("Aktuelles Passwort ist falsch.", {
             current_password: "Aktuelles Passwort ist falsch.",
         });
     }
 
-    UserModel.setPasswordHash(user.id, hashPassword(input.password));
+    UserModel.setPasswordHash(user.id, await hashPasswordAsync(input.password));
     const token = readCookie(req.headers.cookie, SESSION_COOKIE);
 
     if (token) {
@@ -514,10 +535,18 @@ export function patchSecurity(req: Request, res: Response) {
     res.json(publicSecurity(req.user.company_id));
 }
 
+/** Wrong codes one login step accepts before it is used up. */
+const MAX_STEP_FAILURES = 5;
+
+const TOTP_LOCKED_MESSAGE =
+    "Zu viele falsche Codes. Bitte später erneut versuchen.";
+
 type ChallengePayload = {
+    /** The step was issued to set up a second factor, not to ask for one. */
     enroll?: boolean;
     remember?: boolean;
     secret?: string;
+    failures?: number;
 };
 
 function challengePayload(raw: string | null): ChallengePayload {
@@ -551,6 +580,13 @@ export function setupTotp(req: Request, res: Response) {
         }
 
         const payload = challengePayload(row.payload);
+
+        // Only a step that was issued for setting up a second factor may
+        // choose one. A step that asks for the existing factor never replaces it.
+        if (payload.enroll !== true || user.totp_enabled === 1) {
+            throw new ForbiddenError("Zwei-Faktor ist schon eingerichtet.");
+        }
+
         payload.secret = encoded;
         AuthTokenModel.setPayload(row.id, JSON.stringify(payload));
         res.json({
@@ -576,6 +612,28 @@ export function setupTotp(req: Request, res: Response) {
         otpauth_url: otpauthUrl(req.user.email, secret),
         setup_token: setupToken,
     });
+}
+
+/**
+ * The code of the account's own authenticator, once per time step: a code
+ * that was already accepted (or an older one) is wrong.
+ */
+function acceptTotpCode(
+    user: { id: number; totp_secret: string | null; totp_last_step: number | null },
+    code: string,
+): boolean {
+    if (!user.totp_secret) {
+        return false;
+    }
+
+    const step = totpStep(base32Decode(openSecret(user.totp_secret)), code);
+
+    if (step === null || (user.totp_last_step !== null && step <= user.totp_last_step)) {
+        return false;
+    }
+
+    UserModel.setTotpLastStep(user.id, step);
+    return true;
 }
 
 function enableTotp(userId: number, encodedSecret: string, code: string): string[] {
@@ -610,20 +668,47 @@ export function confirmTotp(req: Request, res: Response) {
         const payload = challengePayload(row.payload);
         let recovery: string[] | undefined;
 
-        if (payload.secret) {
-            recovery = enableTotp(user.id, payload.secret, input.code);
-        } else if (
-            user.totp_enabled === 1 &&
-            user.totp_secret &&
-            verifyTotp(base32Decode(openSecret(user.totp_secret)), input.code)
-        ) {
-            recovery = undefined;
-        } else if (consumeRecoveryCode(user.id, input.code)) {
-            recovery = undefined;
-        } else {
-            throw new UnauthorizedError("Code ist falsch.");
+        if (tooManyTotpFailures(user.id)) {
+            throw new AppError(429, "TOTP_RATE_LIMITED", TOTP_LOCKED_MESSAGE);
         }
 
+        // The secret of the step is used only to set up a factor the account
+        // does not have yet; otherwise the code is checked against the stored one.
+        const enrolling = payload.enroll === true && user.totp_enabled !== 1;
+
+        try {
+            if (enrolling && payload.secret) {
+                recovery = enableTotp(user.id, payload.secret, input.code);
+            } else if (
+                user.totp_enabled === 1 &&
+                acceptTotpCode(user, input.code)
+            ) {
+                recovery = undefined;
+            } else if (!enrolling && consumeRecoveryCode(user.id, input.code)) {
+                recovery = undefined;
+            } else {
+                throw new UnauthorizedError("Code ist falsch.");
+            }
+        } catch (error) {
+            // A wrong code counts against this step and against the account.
+            recordTotpFailure(user.id);
+            const failures = (payload.failures ?? 0) + 1;
+
+            if (failures >= MAX_STEP_FAILURES) {
+                AuthTokenModel.consume(row.id);
+                throw new UnauthorizedError(
+                    "Zu viele falsche Codes. Melde dich neu an.",
+                );
+            }
+
+            AuthTokenModel.setPayload(
+                row.id,
+                JSON.stringify({ ...payload, failures }),
+            );
+            throw error;
+        }
+
+        clearTotpFailures(user.id);
         AuthTokenModel.consume(row.id);
         const auth = openSession(
             req,
@@ -674,15 +759,21 @@ export function disableTotp(req: Request, res: Response) {
 
     const user = UserModel.getById(req.user.id);
 
-    if (
-        !user?.totp_secret ||
-        !verifyTotp(base32Decode(openSecret(user.totp_secret)), input.code)
-    ) {
+    if (user && tooManyTotpFailures(user.id)) {
+        throw new AppError(429, "TOTP_RATE_LIMITED", TOTP_LOCKED_MESSAGE);
+    }
+
+    if (!user?.totp_secret || !acceptTotpCode(user, input.code)) {
+        if (user) {
+            recordTotpFailure(user.id);
+        }
+
         throw new ValidationError("Code ist falsch.", {
             code: "Code ist falsch.",
         });
     }
 
+    clearTotpFailures(user.id);
     UserModel.setTotp(user.id, null, false);
     replaceRecoveryCodes(user.id, []);
     res.json(authUserFor(user.id, req.user.company_id));

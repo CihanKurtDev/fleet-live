@@ -8,6 +8,29 @@ import {
     isUniqueConstraintError,
 } from "../lib/errors";
 
+/** A body that is not JSON or too large is the sender's mistake, not a server error. */
+function bodyParserError(err: unknown): AppError | undefined {
+    const type = (err as { type?: unknown } | null)?.type;
+
+    if (type === "entity.parse.failed") {
+        return new AppError(
+            400,
+            "BAD_REQUEST",
+            "Der Anfrage-Text ist kein gültiges JSON.",
+        );
+    }
+
+    if (type === "entity.too.large") {
+        return new AppError(
+            413,
+            "PAYLOAD_TOO_LARGE",
+            "Der Anfrage-Text ist zu groß.",
+        );
+    }
+
+    return undefined;
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     if (res.headersSent) {
         next(err);
@@ -19,7 +42,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
             ? err
             : isUniqueConstraintError(err)
               ? new ConflictError()
-              : err;
+              : bodyParserError(err) ?? err;
 
     if (error instanceof AppError) {
         res.status(error.status).json({

@@ -17,6 +17,8 @@ type Placement = {
     above: boolean;
 };
 
+/** How long a tip waits for its element before it is skipped. */
+const TARGET_WAIT_MS = 5000;
 const CARD_WIDTH = 300;
 const CARD_HEIGHT_GUESS = 170;
 const GAP = 12;
@@ -50,8 +52,11 @@ function placeNear(target: Element): Placement {
     };
 }
 
+/** The first element of that name that is shown (a hidden one has no box). */
 const findTarget = (name: string) =>
-    document.querySelector(`[data-tip="${name}"]`);
+    [...document.querySelectorAll(`[data-tip="${name}"]`)].find(
+        (element) => element.checkVisibility?.() ?? true,
+    ) ?? null;
 
 /**
  * Short coach marks for one page. They show once per person; the help drawer
@@ -67,6 +72,7 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
     const [placement, setPlacement] = useState<Placement | null>(null);
     const [wantsFocus, setWantsFocus] = useState(false);
     const nextRef = useRef<HTMLButtonElement>(null);
+    const cardRef = useRef<HTMLDivElement>(null);
     const titleId = useId();
     const tip = index === null ? null : (tips[index] ?? null);
 
@@ -99,6 +105,7 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
 
         let frame = 0;
         let last = "";
+        const startedAt = performance.now();
         // Measured every frame while the tip is open: content that loads later
         // (the first-steps line, charts) moves the target without a scroll or
         // resize event, and the ring must follow it.
@@ -106,6 +113,12 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
             const target = findTarget(tip.target);
 
             if (!target) {
+                // A list page draws its tiles only once the data is there.
+                if (performance.now() - startedAt < TARGET_WAIT_MS) {
+                    frame = requestAnimationFrame(measure);
+                    return;
+                }
+
                 setPlacement(null);
                 setIndex((current) =>
                     current === null || current + 1 >= tips.length
@@ -144,7 +157,15 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
         }
 
         const onKey = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
+            // An Escape meant for a menu or dialog (focus is inside it) is
+            // not an answer to the tip.
+            const active = document.activeElement;
+            const elsewhere =
+                active !== null &&
+                active !== document.body &&
+                !cardRef.current?.contains(active);
+
+            if (event.key === "Escape" && !elsewhere) {
                 if (seenKey) {
                     writeFlag(seenKey);
                 }
@@ -174,6 +195,7 @@ export const PageTips = ({ page }: { page: TipPageId }) => {
                 aria-hidden="true"
             />
             <div
+                ref={cardRef}
                 className={styles.card}
                 style={{ ...placement.card, width: Math.min(CARD_WIDTH, window.innerWidth - EDGE * 2) }}
                 role="dialog"

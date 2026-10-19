@@ -21,15 +21,38 @@ const INVARIANTS: Array<[string, string]> = [
          WHERE t.ended_at IS NULL AND v.status <> 'DRIVING'`,
     ],
     [
-        "ein Fahrzeug ohne Signal hat eine offene Funk-Warnung",
+        "ein Fahrzeug ohne Signal hat eine offene Kein-Signal-Warnung",
         `SELECT COUNT(*) AS c FROM vehicles v WHERE v.status = 'OFFLINE'
            AND NOT EXISTS (SELECT 1 FROM alerts a WHERE a.vehicle_id = v.id
                            AND a.type = 'OFFLINE' AND a.ended_at IS NULL)`,
     ],
     [
-        "eine offene Funk-Warnung gehört zu einem Fahrzeug ohne Signal",
+        "eine offene Kein-Signal-Warnung gehört zu einem Fahrzeug ohne Signal",
         `SELECT COUNT(*) AS c FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id
          WHERE a.type = 'OFFLINE' AND a.ended_at IS NULL AND v.status <> 'OFFLINE'`,
+    ],
+    [
+        "ein Fahrzeug unter der Tank-Schwelle hat genau eine offene Tank-Warnung",
+        `SELECT COUNT(*) AS c FROM vehicles v WHERE v.fuel_level < 15
+           AND (SELECT COUNT(*) FROM alerts a WHERE a.vehicle_id = v.id
+                AND a.type = 'LOW_FUEL' AND a.resolved_at IS NULL) <> 1`,
+    ],
+    [
+        "eine offene Tank-Warnung gehört zu einem Fahrzeug unter der Schwelle",
+        `SELECT COUNT(*) AS c FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id
+         WHERE a.type = 'LOW_FUEL' AND a.resolved_at IS NULL AND v.fuel_level >= 15`,
+    ],
+    [
+        "eine beendete Funk- oder Tank-Warnung ist auch erledigt",
+        `SELECT COUNT(*) AS c FROM alerts
+         WHERE type IN ('OFFLINE', 'LOW_FUEL')
+           AND ended_at IS NOT NULL AND resolved_at IS NULL`,
+    ],
+    [
+        "ein beendetes Tempo-Ereignis steht höchstens 7 Tage bei den offenen",
+        `SELECT COUNT(*) AS c FROM alerts
+         WHERE type = 'SPEEDING' AND resolved_at IS NULL
+           AND ended_at IS NOT NULL AND ended_at <= datetime('now', '-7 days')`,
     ],
     [
         "ein offenes Tempo-Ereignis gibt es nur bei einem Fahrzeug auf Fahrt",

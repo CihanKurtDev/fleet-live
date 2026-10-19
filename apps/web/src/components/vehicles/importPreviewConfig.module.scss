@@ -1,28 +1,6 @@
 .select {
-    box-sizing: border-box;
     width: 100%;
     max-width: 11rem;
-    height: var(--control-sm);
-    margin: 0;
-    padding: 0 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
-    font: inherit;
-    font-size: 13px;
-    color: var(--text-h);
-
-    &:focus {
-        outline: none;
-        border-color: var(--focus-ring);
-        box-shadow: 0 0 0 1px var(--focus-ring);
-    }
-
-    &:disabled {
-        background: var(--code-bg);
-        color: var(--text);
-        cursor: not-allowed;
-    }
 }
 
 .driverName {

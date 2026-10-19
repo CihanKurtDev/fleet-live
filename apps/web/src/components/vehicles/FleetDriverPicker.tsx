@@ -6,16 +6,22 @@ import { Button } from "../ui/Button/Button";
 import { Checkbox } from "../ui/Checkbox/Checkbox";
 import { Input } from "../ui/Input/Input";
 import { Modal } from "../ui/Modal/Modal";
+import { TablePagination } from "../ui/Table/TablePagination";
 import styles from "./FleetDriverPicker.module.scss";
 
 type FleetDriverPickerProps = {
     selected: string[];
     onChange: (names: string[]) => void;
+    /** Text filter that stands for every matching driver ("" = none). */
+    searchText?: string;
+    onSearchText?: (text: string) => void;
 };
 
 export const FleetDriverPicker = ({
     selected,
     onChange,
+    searchText = "",
+    onSearchText = () => undefined,
 }: FleetDriverPickerProps) => {
     const {
         open,
@@ -36,26 +42,36 @@ export const FleetDriverPicker = ({
         searching,
         searchPending,
         toggle,
+        applySearchText,
         apply,
     } = useFleetDriverFilter({
         selected,
         onChange,
+        searchText,
+        onSearchText,
     });
 
     const label =
-        selected.length === 0
+        searchText.length > 0
+            ? `Suche „${searchText}“`
+            : selected.length === 0
             ? "Fahrer filtern"
             : selected.length === 1
               ? selected[0]
               : `${formatCount(selected.length)} Fahrer`;
     const triggerLabel =
-        selected.length === 0
+        searchText.length > 0
+            ? `Fahrer: Suche „${searchText}“`
+            : selected.length === 0
             ? "Fahrer filtern"
             : selected.length === 1
               ? `Fahrer: ${selected[0]}`
               : `${formatCount(selected.length)} Fahrer ausgewählt`;
+    // Turning a page keeps the old rows, the count and the pager on screen until
+    // the next page is there; only a first search shows "Suche…".
+    const firstSearch = searchPending && matched === 0;
     const summary = searching
-        ? searchPending
+        ? firstSearch
             ? "Suche…"
             : `${formatCount(matched)} Treffer`
         : draft.length > 0
@@ -69,10 +85,11 @@ export const FleetDriverPicker = ({
             <button
                 type="button"
                 className={styles.trigger}
+                data-tip="fleet-drivers"
                 aria-haspopup="dialog"
                 aria-expanded={open}
                 aria-label={triggerLabel}
-                data-filled={selected.length > 0 ? "true" : undefined}
+                data-filled={selected.length > 0 || searchText.length > 0 ? "true" : undefined}
                 onClick={openModal}
             >
                 <span className={styles.triggerText}>{label}</span>
@@ -155,41 +172,43 @@ export const FleetDriverPicker = ({
                             Liste auswählen.
                         </p>
                     )}
+                    {searching && !firstSearch && pageCount > 1 && (
+                        <div className={styles.pager}>
+                            <TablePagination
+                                compact
+                                page={page}
+                                pageCount={pageCount}
+                                total={matched}
+                                disabled={searchPending}
+                                onPageChange={setPage}
+                            />
+                        </div>
+                    )}
                     <div className={styles.footer}>
-                        <Button
-                            variant="ghost"
-                            size="md"
-                            disabled={draft.length === 0}
-                            onClick={() => setDraft([])}
-                        >
-                            Auswahl aufheben
-                        </Button>
-                        {searching && !searchPending && pageCount > 1 && (
-                            <div className={styles.pager}>
+                        <div className={styles.selectActions}>
+                            {searching && !firstSearch && matched > 0 && (
                                 <Button
-                                    type="button"
                                     variant="secondary"
-                                    size="sm"
-                                    disabled={page <= 1}
-                                    onClick={() => setPage(page - 1)}
+                                    size="md"
+                                    onClick={applySearchText}
                                 >
-                                    Zurück
+                                    {matched === 1
+                                        ? "Treffer filtern"
+                                        : `Alle ${formatCount(matched)} Treffer filtern`}
                                 </Button>
-                                <span>
-                                    Seite {formatCount(page)} von{" "}
-                                    {formatCount(pageCount)}
-                                </span>
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={page >= pageCount}
-                                    onClick={() => setPage(page + 1)}
-                                >
-                                    Weiter
-                                </Button>
-                            </div>
-                        )}
+                            )}
+                            <Button
+                                variant="ghost"
+                                size="md"
+                                disabled={draft.length === 0 && searchText.length === 0}
+                                onClick={() => {
+                                    setDraft([]);
+                                    onSearchText("");
+                                }}
+                            >
+                                Auswahl aufheben
+                            </Button>
+                        </div>
                         <div className={styles.actions}>
                             <Button
                                 type="button"

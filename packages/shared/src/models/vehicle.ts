@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AlertType } from "./alert";
+import type { VehicleFilterId } from "./vehicleQuery";
 
 export const VEHICLE_STATUSES = [
     "IDLE",
@@ -9,6 +10,22 @@ export const VEHICLE_STATUSES = [
 ] as const;
 
 export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
+
+/** What each status is called everywhere: lists, tiles, map, export. */
+export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
+    DRIVING: "Auf Fahrt",
+    IDLE: "Standby",
+    STOPPED: "Feierabend",
+    OFFLINE: "Kein Signal",
+};
+
+/** The list filter (and count) that selects exactly the vehicles of a status. */
+export const VEHICLE_STATUS_FILTER = {
+    DRIVING: "driving",
+    IDLE: "idle",
+    STOPPED: "stopped",
+    OFFLINE: "offline",
+} as const satisfies Record<VehicleStatus, VehicleFilterId>;
 
 export const VEHICLE_TYPES = [
     "TRUCK",

@@ -3,11 +3,11 @@ import {
     type TelemetryPatch,
     type VehicleStatus,
 } from "@fleet-live/shared";
+import { db } from "../db/database";
+import { OFFLINE_MESSAGE, syncStateAlerts } from "../db/stateAlerts";
 import { isCompanySimRunning } from "../lib/simControl";
 import { sqliteFromMs } from "../lib/sqlTime";
 import { AlertModel } from "./alert.model";
-
-const OFFLINE_MESSAGE = "Fahrzeug sendet kein Signal.";
 
 type LastReport = {
     companyId: number;
@@ -39,7 +39,8 @@ function applyOfflineStatus(
 /**
  * Live OFFLINE aus dem Ticker bzw. Fahrzeug-Write.
  * SPEEDING bleibt in `SpeedingEventModel` (8 s-Maschine).
- * Tankstand ist kein Live-Ticker — nur `vehicles.fuel_level` in der UI.
+ * Tank: `fuel_level` ändert sich nur durch Schreiben (Fahrzeug, Import),
+ * nicht im Ticker; dort folgt die Tank-Warnung (`syncFuel`).
  */
 export class ExceptionEventModel {
     /** Fahrzeuge mit frischem Tick: OFFLINE endet (Signal ist da). */
@@ -100,12 +101,20 @@ export class ExceptionEventModel {
         return [...notify];
     }
 
-    /** Create/Update: Status `OFFLINE` öffnet bzw. beendet Funk-Warnung. */
+    /** Create/Update: Status `OFFLINE` öffnet bzw. beendet Kein-Signal-Warnung. */
     static syncVehicle(input: {
         id: number;
         status: VehicleStatus;
     }, nowMs = Date.now()): void {
         applyOfflineStatus(input.id, input.status, nowMs);
+    }
+
+    /**
+     * Create/Update: unter `LOW_FUEL_THRESHOLD_PERCENT` öffnet die Tank-
+     * Warnung, ab der Schwelle verschwindet sie (siehe `syncStateAlerts`).
+     */
+    static syncFuel(vehicleId: number, nowMs = Date.now()): void {
+        syncStateAlerts(db, { vehicleId }, sqliteFromMs(nowMs));
     }
 
     static resetForTests() {

@@ -1,15 +1,10 @@
-import type { VehicleStatus } from "@fleet-live/shared";
+import { VEHICLE_STATUS_LABELS, type VehicleStatus } from "@fleet-live/shared";
 import { isDarkTheme } from "../../utils/theme";
 
 /**
  * Der Status beschreibt, was das Fahrzeug meldet — er ist keine Eingabe.
+ * Die Namen stehen in `@fleet-live/shared` (`VEHICLE_STATUS_LABELS`).
  */
-const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
-    DRIVING: "Auf Fahrt",
-    IDLE: "Standby",
-    STOPPED: "Feierabend",
-    OFFLINE: "Kein Signal",
-};
 
 /** Farben für Marker, Spur und Legende — gleiche Semantik wie die Labels. */
 const VEHICLE_STATUS_COLORS: Record<VehicleStatus, string> = {

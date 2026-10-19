@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { json, Router } from "express";
 import {
     commitImport,
     getImportProfile,
@@ -12,6 +12,9 @@ import {
 import { requireDispatcher } from "../middleware/requireDispatcher";
 
 const router = Router();
+
+// Dispatchers only, then the body: an import file is up to 32 MB of JSON.
+router.use(requireDispatcher, json({ limit: "32mb" }));
 
 router.post("/preview", requireDispatcher, previewImport);
 router.get("/preview/:previewId/rows", requireDispatcher, listPreviewRows);

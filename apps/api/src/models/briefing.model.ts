@@ -1,5 +1,4 @@
 import {
-    LOW_FUEL_THRESHOLD_PERCENT,
     briefingMonthKeys,
     dueCounts,
     resolveDueSettings,
@@ -8,29 +7,28 @@ import {
     type BriefingResponse,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
+import { conceptCountsSql } from "../db/vehicleConcepts";
 import { CompanyModel } from "./company.model";
 import { DueModel } from "./due.model";
 
-type StatusCountRow = {
-    driving: number;
-    idle: number;
-    offline: number;
-};
+/** What Schicht counts about vehicles; each is one concept in `db/vehicleConcepts.ts`. */
+const BRIEFING_VEHICLE_CONCEPTS = [
+    "driving",
+    "idle",
+    "stopped",
+    "offline",
+    "low_fuel",
+    "in_depot",
+    "speeding",
+] as const;
+
+type VehicleCountRow = Record<
+    "driving" | "idle" | "stopped" | "offline" | "low_fuel" | "in_depot" | "speeding",
+    number
+>;
 
 type OpenCountRow = {
     open_count: number;
-};
-
-type LowFuelCountRow = {
-    low_fuel_count: number;
-};
-
-type InDepotCountRow = {
-    in_depot_count: number;
-};
-
-type SpeedingCountRow = {
-    speeding_count: number;
 };
 
 type RosterRow = {
@@ -112,6 +110,18 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
         `,
     ).all(companyId, from, until) as AlertMonthRow[];
 
+    // Months whose old warnings were deleted keep their sums here.
+    const storedRows = stmt(
+        `
+        SELECT month, speeding_drivers, speeding_events, speeding_high,
+               low_fuel_vehicles, offline_vehicles
+        FROM alert_month_stats
+        WHERE company_id = ?
+          AND month >= ?
+          AND month <= ?
+        `,
+    ).all(companyId, firstMonth, lastMonth) as AlertMonthRow[];
+
     const kmRows = stmt(
         `
         SELECT month, distance_m
@@ -134,7 +144,7 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
     ).get(companyId, lastMonth) as OpenKmRow;
 
     const alertsByMonth = new Map(
-        alertRows.map((row) => [row.month, row] as const),
+        [...alertRows, ...storedRows].map((row) => [row.month, row] as const),
     );
     const kmByMonth = new Map(
         kmRows.map((row) => [row.month, Number(row.distance_m)] as const),
@@ -168,16 +178,15 @@ const dueForCompany = (companyId: number) =>
 
 export class BriefingModel {
     static forCompany(companyId: number): BriefingResponse {
-        const status = stmt(
+        // The same predicates as the vehicle list and the fleet map.
+        const vehicles = stmt(
             `
             SELECT
-                COALESCE(SUM(status = 'DRIVING'), 0) AS driving,
-                COALESCE(SUM(status = 'IDLE'), 0) AS idle,
-                COALESCE(SUM(status = 'OFFLINE'), 0) AS offline
-            FROM vehicles
-            WHERE company_id = ?
+                ${conceptCountsSql(BRIEFING_VEHICLE_CONCEPTS)}
+            FROM vehicles v
+            WHERE v.company_id = ?
             `,
-        ).get(companyId) as StatusCountRow;
+        ).get(companyId) as VehicleCountRow;
 
         const open = stmt(
             `
@@ -189,46 +198,15 @@ export class BriefingModel {
             `,
         ).get(companyId) as OpenCountRow;
 
-        const lowFuel = stmt(
-            `
-            SELECT COUNT(*) AS low_fuel_count
-            FROM vehicles
-            WHERE company_id = ?
-              AND fuel_level < ?
-            `,
-        ).get(companyId, LOW_FUEL_THRESHOLD_PERCENT) as LowFuelCountRow;
-
-        const inDepot = stmt(
-            `
-            SELECT COUNT(*) AS in_depot_count
-            FROM vehicles
-            WHERE company_id = ?
-              AND depot_site_id IS NOT NULL
-            `,
-        ).get(companyId) as InDepotCountRow;
-
-        const speeding = stmt(
-            `
-            SELECT COUNT(*) AS speeding_count
-            FROM vehicles v
-            WHERE v.company_id = ?
-              AND EXISTS (
-                  SELECT 1 FROM alerts a
-                  WHERE a.vehicle_id = v.id
-                    AND a.type = 'SPEEDING'
-                    AND a.ended_at IS NULL
-              )
-            `,
-        ).get(companyId) as SpeedingCountRow;
-
         const counts: BriefingCounts = {
             open: Number(open.open_count),
-            offline: Number(status.offline),
-            driving: Number(status.driving),
-            idle: Number(status.idle),
-            low_fuel: Number(lowFuel.low_fuel_count),
-            in_depot: Number(inDepot.in_depot_count),
-            speeding: Number(speeding.speeding_count),
+            offline: Number(vehicles.offline),
+            driving: Number(vehicles.driving),
+            idle: Number(vehicles.idle),
+            stopped: Number(vehicles.stopped),
+            low_fuel: Number(vehicles.low_fuel),
+            in_depot: Number(vehicles.in_depot),
+            speeding: Number(vehicles.speeding),
         };
 
         return {

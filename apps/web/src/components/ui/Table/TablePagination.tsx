@@ -2,6 +2,7 @@ import { useId } from "react";
 import { formatCount } from "../../../utils/formatCount";
 import { getPageWindow } from "../../../utils/getPageWindow";
 import styles from "./TablePagination.module.scss";
+import { Select } from "../Select/Select";
 
 const LIMIT_OPTIONS = [10, 25, 50, 100] as const;
 
@@ -204,9 +205,9 @@ export const TablePagination = ({
     return (
         <div className={styles.pagination}>
             <div className={styles.limit}>
-                <select
+                <Select
                     id={limitSelectId}
-                    className={styles.limitSelect}
+                    size="sm"
                     value={limit}
                     disabled={disabled || onLimitChange === undefined}
                     onChange={(event) =>
@@ -220,7 +221,7 @@ export const TablePagination = ({
                             {option}
                         </option>
                     ))}
-                </select>
+                </Select>
 
                 <label htmlFor={limitSelectId}>
                     pro Seite

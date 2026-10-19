@@ -18,6 +18,7 @@ import {
     listSites,
     updateSite,
 } from "../api/sites";
+import { PageTips } from "../components/help/PageTips";
 import { FleetEventFeed } from "../components/alerts/FleetEventFeed";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
@@ -56,15 +57,16 @@ import {
 import { useVehicles } from "../context/vehiclesContext";
 import { useAlertList } from "../hooks/useAlertList";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useBriefing } from "../hooks/useBriefing";
 import { useFleetPageQuery } from "../hooks/useFleetPageQuery";
 import { useFleetPositions } from "../hooks/useFleetPositions";
 import { formatCount } from "../utils/formatCount";
 import styles from "./FleetPage.module.scss";
 
+/** Wenig Tank and Tempo jetzt are the two tiles above the map, not chips. */
 const fleetServerFilters = vehicleFilters.filter((item) =>
     item.id === "alerts" ||
-    item.id === "low_fuel" ||
     item.id === "unassigned" ||
     item.id === "in_depot",
 );
@@ -94,6 +96,10 @@ const statusFromFilter = (
         return "OFFLINE";
     }
 
+    if (filter === "stopped") {
+        return "STOPPED";
+    }
+
     return null;
 };
 
@@ -104,6 +110,7 @@ const sortSites = (sites: Site[]) =>
     );
 
 export const FleetPage = () => {
+    usePageTitle("Flottenkarte");
     const navigate = useNavigate();
     const { user } = useAuth();
     const { listEpoch, streamConnection, lastTelemetryAt } = useVehicles();
@@ -112,6 +119,8 @@ export const FleetPage = () => {
         bbox,
         filter,
         drivers,
+        driverSearch,
+        setDriverSearch,
         depotId,
         searchDraft,
         setSearchDraft,
@@ -137,6 +146,7 @@ export const FleetPage = () => {
     } = useFleetPositions({
         filter: statusFromFilter(filter) ? undefined : filter,
         drivers,
+        driverSearch,
         pinnedId: selectedId,
     });
     const briefing = useBriefing();
@@ -306,7 +316,8 @@ export const FleetPage = () => {
         rowCount: mode === "density" ? total : vehicles.length,
         positionedCount,
         inViewCount,
-        hasNarrowingFilter: filter !== undefined || drivers.length > 0,
+        hasNarrowingFilter:
+            filter !== undefined || drivers.length > 0 || driverSearch.length > 0,
     });
     const fleetPath = `/fleet${queryString ? `?${queryString}` : ""}`;
     const draftDirty = draft !== null && isDepotDraftDirty(draft, sites);
@@ -596,6 +607,7 @@ export const FleetPage = () => {
 
     return (
         <section className={styles.page}>
+            <PageTips page="fleet" />
             <h1 className={styles.title}>Flottenkarte</h1>
             <div className={styles.kpis}>
                 <FleetKpiBand tiles={kpiTiles} />
@@ -614,6 +626,7 @@ export const FleetPage = () => {
                                 type="search"
                                 size="sm"
                                 className={styles.search}
+                                data-tip="fleet-search"
                                 placeholder="Kennzeichen oder Fahrer"
                                 aria-label="Kennzeichen oder Fahrer"
                                 aria-expanded={
@@ -682,6 +695,8 @@ export const FleetPage = () => {
                         <FleetDriverPicker
                             selected={drivers}
                             onChange={setDrivers}
+                            searchText={driverSearch}
+                            onSearchText={setDriverSearch}
                         />
 
                         <TableFilterBar

@@ -4,9 +4,11 @@ import { resetPassword } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Input } from "../components/ui/Input/Input";
+import { usePageTitle } from "../hooks/usePageTitle";
 import styles from "./LoginPage.module.scss";
 
 export const ResetPasswordPage = () => {
+    usePageTitle("Neues Passwort");
     const [params] = useSearchParams();
     const token = params.get("token") ?? "";
     const [password, setPassword] = useState("");

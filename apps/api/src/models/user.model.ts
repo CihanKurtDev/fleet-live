@@ -2,6 +2,7 @@ import type { UserRole } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 import { hashPassword } from "../lib/password";
+import { resetTotpAttemptsForTests } from "../lib/totpAttempts";
 
 export type UserRecord = {
     id: number;
@@ -11,16 +12,20 @@ export type UserRecord = {
     email_verified_at: string | null;
     totp_secret: string | null;
     totp_enabled: number;
+    /** Last accepted TOTP time step; a code counts once. */
+    totp_last_step: number | null;
 };
 
 const SELECT_BY_EMAIL = `
-    SELECT id, name, email, password_hash, email_verified_at, totp_secret, totp_enabled
+    SELECT id, name, email, password_hash, email_verified_at, totp_secret, totp_enabled,
+           totp_last_step
     FROM users
     WHERE email = ?
 `;
 
 const SELECT_BY_ID = `
-    SELECT id, name, email, password_hash, email_verified_at, totp_secret, totp_enabled
+    SELECT id, name, email, password_hash, email_verified_at, totp_secret, totp_enabled,
+           totp_last_step
     FROM users
     WHERE id = ?
 `;
@@ -96,12 +101,18 @@ export const UserModel = {
     },
 
     setTotp(id: number, secret: string | null, enabled: boolean) {
+        // A new secret starts its own sequence of time steps.
         stmt(
-            "UPDATE users SET totp_secret = ?, totp_enabled = ? WHERE id = ?",
+            "UPDATE users SET totp_secret = ?, totp_enabled = ?, totp_last_step = NULL WHERE id = ?",
         ).run(secret, enabled ? 1 : 0, id);
     },
 
+    setTotpLastStep(id: number, step: number) {
+        stmt("UPDATE users SET totp_last_step = ? WHERE id = ?").run(step, id);
+    },
+
     resetForTests() {
+        resetTotpAttemptsForTests();
         db.exec("DELETE FROM import_runs");
         db.exec("DELETE FROM sso_identities");
         db.exec("DELETE FROM totp_recovery_codes");

@@ -79,9 +79,9 @@ Was die App heute kann, und was als Nächstes kommt.
 ## Jetzt
 
 * Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt
-* Niedriger Tankstand aus der aktuellen Messung, plus geseedete Warnungshistorie
-* Funk-Ausfall, wenn ein Fahrzeug verstummt oder offline gemeldet ist
-* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Funk
+* Niedriger Tankstand (unter 15 %) ist eine Warnung, die von selbst verschwindet, sobald getankt ist
+* Kein Signal, wenn ein Fahrzeug verstummt oder offline gemeldet ist
+* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Kein Signal
 * Schichtüberblick auf der Startseite, offene Warnungen in der Navigation
 * Flottenkarte mit Dichtezellen und Kennzeichen-Sprung, Fahrspur am Fahrzeug, Fahrer, Firmen-Login
 * Fahrtarchiv am Fahrzeug: alte Fahrten durchblättern, abgeschlossene Strecke auf der Karte
@@ -174,7 +174,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` oder `{ vehicle_id: null }`, `dispatcher` |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
-`GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `driving`, `offline`).
+`GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `unassigned`, `driving`, `idle`, `stopped`, `offline`, `in_depot`, `speeding`).
 
 `GET /api/alerts` gibt Warnungen mit Kennzeichen und dem Fahrer zum Zeitpunkt des Öffnens (`driver_id` / `driver_name`). Dazu `ended_at` und `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Standardfilter `open` heißt `resolved_at IS NULL`. `ended_at` spielt dafür keine Rolle. `type` optional: `SPEEDING`, `LOW_FUEL`, `OFFLINE`. `meta.counts` ist `open` / `resolved` / `all` und ignoriert `type`. `meta.type_counts` hängt am Filter. `vehicle_id` oder `driver_id` optional, sonst 404 wenn fremd. Umbesetzung ändert alte Zeilen nicht.
 
@@ -240,7 +240,7 @@ Ohne Session landet man auf `/login`. Danach ist `/` die Startseite.
 
 ## Schichtüberblick
 
-Oben die Kennzahlen: offene Warnungen, Funk-Ausfall, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
+Oben die Kennzahlen: offene Warnungen, Kein Signal, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
 
 ## Fahrzeugliste
 
@@ -296,13 +296,13 @@ Drei Schichten, eine Tabelle `alerts`.
 
 * **Indikator.** `speedBand` und `speeding_open`. Orange über `speed_limit_kmh` ohne offenes Event. Rot, solange SPEEDING `ended_at` null hat. Nur bei `DRIVING`. Nach Event-Ende ist die Zelle wieder normal, auch wenn die Inbox-Zeile noch offen ist.
 * **Warnung.** `resolved_at IS NULL`. Warnungen `/alerts`. Dispatcher quittiert per `PATCH`. `ended_at` ist nicht dasselbe wie erledigt.
-* **Verstoßhistorie.** SPEEDING-Zeilen, auch erledigte, gezählt pro Snapshot-Fahrer auf `/drivers`. Tank und Funk bleiben am Fahrzeug. `resolved_at` heißt gesehen, nicht „war nie“.
+* **Verstoßhistorie.** SPEEDING-Zeilen, auch erledigte, gezählt pro Snapshot-Fahrer auf `/drivers`. Tank und Kein Signal bleiben am Fahrzeug. `resolved_at` heißt gesehen, nicht „war nie“.
 
 `alerts` hängt an `vehicle_id`. Zugriff über `alert → vehicle → company`. `driver_id` wird beim Öffnen aus `vehicles.current_driver_id` kopiert und danach nicht mehr angefasst. `active_alerts` ist der offene Zähler am Fahrzeug und im Listenfilter.
 
 `GET /api/alerts` ist die Inbox. Standard `filter=open`. Optional `type`, `vehicle_id`, `driver_id`. `PATCH` mit `{ resolved: true }` schließt (`dispatcher`). Zweites Schließen ist egal. Viewer lesen. Nach dem Close kommt `vehicles-changed`.
 
-Ticker SPEEDING: 8 s am Stück über dem Sim-Limit (`speedLimitKmh`, Stadt 50 / Autobahn 120). Eine offene Zeile pro Fahrzeug. `details` mit Limit, Max, Dauer. 2 s Hysterese oder raus aus `DRIVING` setzt `ended_at`. Jedes achte simulierte Fahrzeug darf über dem Limit fahren. OFFLINE nach 15 s ohne Ticks bei pausierter Sim, oder Status `OFFLINE`. Niedriger Tank ist Messung und Filter. LOW_FUEL in der Inbox kommt aus dem Seed. Eine offene Zeile pro Fahrzeug und Typ. Anzeige: `formatAlertEvent`. Fahrernamen gehen nach `/drivers/:id`. Klick auf die Warnung öffnet das Fahrzeug.
+Ticker SPEEDING: 8 s am Stück über dem Sim-Limit (`speedLimitKmh`, Stadt 50 / Autobahn 120). Eine offene Zeile pro Fahrzeug. `details` mit Limit, Max, Dauer. 2 s Hysterese oder raus aus `DRIVING` setzt `ended_at`. Jedes achte simulierte Fahrzeug darf über dem Limit fahren. OFFLINE nach 15 s ohne Ticks bei pausierter Sim, oder Status `OFFLINE`; die Zeile schließt sich selbst (`ended_at` und `resolved_at`), sobald das Fahrzeug wieder meldet, kein Erledigen von Hand. Ein beendetes SPEEDING, das niemand erledigt hat, wird nach 7 Tagen erledigt (`resolved_at` = `ended_at` + 7 Tage) und ist dann Verlauf. Erledigte Warnungen werden 90 Tage nach dem Erledigen gelöscht; die Monatssummen für die Schicht-Diagramme stehen vorher in `alert_month_stats`. Niedriger Tank ist Messung, Filter und Warnung: unter 15 % hat das Fahrzeug eine offene LOW_FUEL-Zeile, über 15 % verschwindet sie von selbst (kein Erledigen von Hand). Sie folgt dem Schreiben von `fuel_level` (Fahrzeug anlegen/ändern, Import) und gleicht beim Start alte Zeilen an. Eine offene Zeile pro Fahrzeug und Typ. Anzeige: `formatAlertEvent`. Fahrernamen gehen nach `/drivers/:id`. Klick auf die Warnung öffnet das Fahrzeug.
 
 Live-Speed sitzt in der Telemetrie. Die Polyline hat keinen Speed pro Punkt.
 
@@ -397,8 +397,8 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
 | `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
 | `LOG_LEVEL` | `info` | |
-| `NODE_ENV` | `development` | API-Pauschallimit nur in Produktion. Login-Limit auch in der Entwicklung |
-| `ALLOW_DEMO_ACCOUNTS` | `false` | Für Demo-Seed unter `NODE_ENV=production` auf `true` setzen |
+| `NODE_ENV` | keiner, muss gesetzt sein | `development`, `test` oder `production`. Ohne Wert startet der Prozess nicht. Lokal setzt `apps/api/dev.env` (von den npm-Skripten geladen) `development`. API-Pauschallimit nur in Produktion. Login-Limit auch in der Entwicklung |
+| `ALLOW_DEMO_ACCOUNTS` | `false` | Legt beim Start die Demo-Konten mit bekanntem Passwort an (nur außerhalb von Produktion) und erlaubt sie unter `NODE_ENV=production`. Lokal in `apps/api/dev.env` auf `true` |
 | `SMTP_URL` | leer | Nodemailer-URL, z. B. `smtp://user:pass@localhost:1025`. Ohne Wert: Link nur im Server-Log. Produktion ohne Wert: `503` |
 | `MAIL_FROM` | `fleet-live <noreply@localhost>` | Absender |
 | `WEB_ORIGIN` | `http://localhost:5173` | Origin der UI. Mail-Links und OIDC-Redirects. Vite bindet fest Port 5173 |

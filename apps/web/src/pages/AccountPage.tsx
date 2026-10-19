@@ -25,9 +25,11 @@ import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
 import { Table } from "../components/ui/Table/Table";
 import { useAuth } from "../hooks/useAuth";
+import { usePageTitle } from "../hooks/usePageTitle";
 import type { TableColumn } from "../types/table";
 import authForm from "./LoginPage.module.scss";
 import styles from "./AccountPage.module.scss";
+import { Select } from "../components/ui/Select/Select";
 
 /** Bereich im URL-Hash, z. B. `/konto#team`. */
 type SectionId = "passwort" | "zwei-faktor" | "team" | "firmen-login" | "firmen";
@@ -51,6 +53,7 @@ const RoleOptions = () => (
 );
 
 export const AccountPage = () => {
+    usePageTitle("Konto");
     const { user, setUser } = useAuth();
     const { hash } = useLocation();
     const [members, setMembers] = useState<Member[]>([]);
@@ -353,8 +356,9 @@ export const AccountPage = () => {
             displayText: "Rolle",
             width: "170px",
             render: (role, { row }) => (
-                <select
-                    className={`${styles.roleSelect} ${styles.roleSelectSm}`}
+                <Select
+                    size="sm"
+                    fullWidth
                     aria-label={`Rolle von ${row.name}`}
                     value={role}
                     onChange={(event) =>
@@ -362,7 +366,7 @@ export const AccountPage = () => {
                     }
                 >
                     <RoleOptions />
-                </select>
+                </Select>
             ),
         },
         {
@@ -634,9 +638,10 @@ export const AccountPage = () => {
                                         </div>
                                         <div className={authForm.field}>
                                             <label htmlFor="invite-role">Rolle</label>
-                                            <select
+                                            <Select
                                                 id="invite-role"
-                                                className={styles.roleSelect}
+                                                size="md"
+                                                fullWidth
                                                 value={inviteRole}
                                                 onChange={(event) =>
                                                     setInviteRole(
@@ -645,7 +650,7 @@ export const AccountPage = () => {
                                                 }
                                             >
                                                 <RoleOptions />
-                                            </select>
+                                            </Select>
                                         </div>
                                         <Button type="submit" size="md">
                                             Einladen

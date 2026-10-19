@@ -7,7 +7,6 @@ import {
     type TodayKind,
 } from "@fleet-live/shared";
 
-import { resolveAlert } from "../../api/alerts";
 import { useAuth } from "../../hooks/useAuth";
 import { useBoundHeight } from "../../hooks/useBoundHeight";
 import { useToday } from "../../hooks/useToday";
@@ -26,37 +25,42 @@ type Tone = "critical" | "warning" | "neutral";
 
 const KIND: Record<
     TodayKind,
-    { tag: string; chip: string; to: string; tone: Tone }
+    { tag: string; chip: string; to: string; tone: Tone; tile: boolean }
 > = {
     deadline_overdue: {
         tag: "Überfällig",
         chip: "Fristen überfällig",
         to: "/fristen?state=overdue",
         tone: "critical",
+        tile: true,
     },
     driver_talk: {
         tag: "Gespräch",
         chip: "Gespräch führen",
         to: "/drivers?min_open_warnings=5",
         tone: "warning",
+        tile: false,
     },
     offline: {
         tag: "Kein Signal",
         chip: "Kein Signal",
         to: "/alerts?type=OFFLINE",
         tone: "neutral",
+        tile: true,
     },
     low_fuel: {
         tag: "Wenig Tank",
         chip: "Wenig Tank",
-        to: "/vehicles?filter=low_fuel",
+        to: "/alerts?type=LOW_FUEL",
         tone: "warning",
+        tile: true,
     },
     deadline_soon: {
         tag: "Bald fällig",
         chip: "Fristen bald fällig",
         to: "/fristen?state=soon",
         tone: "warning",
+        tile: false,
     },
 };
 
@@ -89,8 +93,9 @@ const reason = (item: TodayItem): string => {
 
 /**
  * "Heute dran" on Schicht: the most urgent tasks across the fleet, one row
- * each, with one next step. The chips above count every task of a kind and
- * open the list that shows exactly those.
+ * each, with one next step. The chips above count every task of a kind that
+ * has no tile on the page and open the list that shows exactly those; the
+ * others (Überfällig, Kein Signal, Wenig Tank) are counted by their tile.
  */
 export const TodayPanel = () => {
     const { user } = useAuth();
@@ -101,7 +106,6 @@ export const TodayPanel = () => {
     const limit = height > 0 ? Math.max(1, Math.floor(height / ROW_HEIGHT)) : 6;
     const { data, error, reload } = useToday(limit);
     const [editing, setEditing] = useState<TodayItem | null>(null);
-    const [busyAlert, setBusyAlert] = useState<number | null>(null);
     const [notice, setNotice] = useState("");
 
     const soonLabel = data ? dueSoonLabel(data.meta.lead_days) : "Bald";
@@ -121,30 +125,10 @@ export const TodayPanel = () => {
     };
 
     const onRowKey = (event: KeyboardEvent, item: TodayItem) => {
-        if (event.key === "Enter") {
+        // Enter on a row button belongs to that button.
+        if (event.key === "Enter" && event.target === event.currentTarget) {
             event.preventDefault();
             open(item);
-        }
-    };
-
-    const resolveOffline = async (item: TodayItem) => {
-        if (item.alert_id === null) {
-            return;
-        }
-
-        setBusyAlert(item.alert_id);
-        try {
-            await resolveAlert(item.alert_id);
-            setNotice(`Warnung für ${item.subject} erledigt.`);
-            reload();
-        } catch (caught: unknown) {
-            setNotice(
-                caught instanceof Error
-                    ? caught.message
-                    : "Warnung konnte nicht erledigt werden.",
-            );
-        } finally {
-            setBusyAlert(null);
         }
     };
 
@@ -169,23 +153,6 @@ export const TodayPanel = () => {
             );
         }
 
-        if (item.kind === "offline") {
-            return (
-                <Button
-                    variant="secondary"
-                    size="row"
-                    busy={busyAlert === item.alert_id}
-                    busyLabel="Erledigen…"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        void resolveOffline(item);
-                    }}
-                >
-                    Erledigen
-                </Button>
-            );
-        }
-
         return null;
     };
 
@@ -203,7 +170,9 @@ export const TodayPanel = () => {
 
             {data && (
                 <div className={styles.kinds}>
-                    {TODAY_KINDS.filter((kind) => data.meta.counts[kind] > 0).map(
+                    {TODAY_KINDS.filter(
+                        (kind) => !KIND[kind].tile && data.meta.counts[kind] > 0,
+                    ).map(
                         (kind) => (
                             <Link
                                 key={kind}

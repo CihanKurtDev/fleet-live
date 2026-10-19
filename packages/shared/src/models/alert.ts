@@ -23,7 +23,13 @@ export type AlertPageLimit = (typeof VEHICLE_PAGE_LIMITS)[number];
 export type SpeedingAlertDetails = {
     limit_kmh: number;
     max_speed_kmh: number;
+    /** Zeit über dem Limit, alle Überschreitungen der Fahrt zusammen. */
     duration_s: number;
+    /** Wie oft das Fahrzeug auf dieser Fahrt über das Limit kam. Fehlt = einmal. */
+    event_count?: number;
+    /** Stand der früheren Überschreitungen dieser Fahrt (Server). */
+    carried_duration_s?: number;
+    carried_max_kmh?: number;
 };
 
 export type LowFuelAlertDetails = {
@@ -47,6 +53,26 @@ export const LOW_FUEL_CRITICAL_PERCENT = 5;
  * Simulation schreibt die nur bei Focus.
  */
 export const OFFLINE_AFTER_MS = 15_000;
+
+/**
+ * Warnungen, die einen Zustand melden und sich selbst schließen, sobald der
+ * Zustand vorbei ist (Tank wieder über der Schwelle, Signal wieder da). Man
+ * erledigt sie nicht von Hand.
+ */
+export const SELF_CLOSING_ALERT_TYPES = ["LOW_FUEL", "OFFLINE"] as const;
+
+export function isSelfClosingAlertType(type: string): boolean {
+    return (SELF_CLOSING_ALERT_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * Ein beendetes Tempo-Ereignis, das so lange niemand erledigt hat, gilt danach
+ * als Verlauf und steht nicht mehr bei den offenen Warnungen.
+ */
+export const SPEEDING_OPEN_DAYS = 7;
+
+/** Erledigte Warnungen werden so viele Tage nach dem Erledigen gelöscht; die Monatssummen bleiben. */
+export const ALERT_RETENTION_DAYS = 90;
 
 /**
  * Eine Warnung hängt am Fahrzeug. `driver_id` ist der Fahrer zum
@@ -133,7 +159,12 @@ export function formatAlertEvent(
     alert: Pick<Alert, "type" | "message" | "details">,
 ): string {
     if (alert.type === "SPEEDING" && isSpeedingAlertDetails(alert.details)) {
-        return `${Math.round(alert.details.max_speed_kmh)} km/h bei Limit ${Math.round(alert.details.limit_kmh)} · ${formatAlertDuration(alert.details.duration_s)}`;
+        const times =
+            (alert.details.event_count ?? 1) > 1
+                ? ` · ${alert.details.event_count}-mal`
+                : "";
+
+        return `${Math.round(alert.details.max_speed_kmh)} km/h bei Limit ${Math.round(alert.details.limit_kmh)} · ${formatAlertDuration(alert.details.duration_s)}${times}`;
     }
 
     if (alert.type === "LOW_FUEL" && isLowFuelAlertDetails(alert.details)) {

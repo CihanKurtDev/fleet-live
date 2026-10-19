@@ -192,7 +192,12 @@ export const DriverTable = ({
                 actions={actions}
             />
 
-            <KpiTiles ariaLabel="Filter" phoneLayout="strip" tiles={tiles} />
+            <KpiTiles
+                ariaLabel="Filter"
+                phoneLayout="strip"
+                tiles={tiles}
+                tip="list-tiles"
+            />
 
             <ListPanel label="Fahrerliste">
                 {selection.active ? (

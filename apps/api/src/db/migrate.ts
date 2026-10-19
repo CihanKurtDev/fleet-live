@@ -1,7 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import { isValidIsoDate } from "@fleet-live/shared";
+import { pruneResolvedAlerts } from "./alertRetention";
+import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
 
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 22;
 
 type TableColumn = {
     name: string;
@@ -1103,6 +1105,11 @@ function ensureSessionPersistent(database: DatabaseSync) {
     addColumn(database, "sessions", "persistent", "INTEGER NOT NULL DEFAULT 0");
 }
 
+/** Last accepted TOTP time step: a code counts once. */
+function ensureTotpLastStep(database: DatabaseSync) {
+    addColumn(database, "users", "totp_last_step", "INTEGER");
+}
+
 function addColumn(
     database: DatabaseSync,
     table: string,
@@ -1246,6 +1253,17 @@ function shortenHuToMonth(database: DatabaseSync) {
 
 function migrateToV21(database: DatabaseSync) {
     ensureDueReminderColumns(database);
+}
+
+/**
+ * Sessions store the hash of their token from now on. Rows written before
+ * hold the token itself and would never match: remove them, everyone signs
+ * in once.
+ */
+function migrateToV22(database: DatabaseSync) {
+    if (tableExists(database, "sessions")) {
+        database.exec("DELETE FROM sessions");
+    }
 }
 
 /**
@@ -1525,6 +1543,10 @@ export function migrate(database: DatabaseSync) {
         migrateToV21(database);
     }
 
+    if (currentVersion < 22) {
+        migrateToV22(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -1544,7 +1566,12 @@ export function migrate(database: DatabaseSync) {
     ensureSiteDefault(database);
     ensureAccountIndexes(database);
     ensureSessionPersistent(database);
+    ensureTotpLastStep(database);
     applyMaintenanceTriggers(database);
+    // After the triggers, so `active_alerts` follows the rows it writes.
+    syncStateAlerts(database);
+    archiveStaleSpeeding(database);
+    pruneResolvedAlerts(database);
 
     if (currentVersion < SCHEMA_VERSION) {
         database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);

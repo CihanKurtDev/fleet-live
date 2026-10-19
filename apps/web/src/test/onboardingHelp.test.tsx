@@ -48,7 +48,9 @@ const mockSignals = ({
                 driving: 0,
                 idle: 0,
                 offline: 0,
+                stopped: 0,
                 in_depot: 0,
+                speeding: 0,
             },
         },
     });
@@ -328,5 +330,26 @@ describe("page tips", () => {
         expect(
             await screen.findByRole("dialog", { name: "Kachel = Filter" }),
         ).toBeInTheDocument();
+    });
+
+    it("ignores an Escape that belongs to something else with focus", async () => {
+        renderAuth(
+            <>
+                <FristenTargets />
+                <button type="button">Menü</button>
+            </>,
+            { user: authUser() },
+        );
+        await screen.findByRole("dialog", { name: "Kachel = Filter" });
+
+        screen.getByRole("button", { name: "Menü" }).focus();
+        fireEvent.keyDown(document, { key: "Escape" });
+        expect(
+            screen.getByRole("dialog", { name: "Kachel = Filter" }),
+        ).toBeInTheDocument();
+
+        screen.getByRole("button", { name: "Menü" }).blur();
+        fireEvent.keyDown(document, { key: "Escape" });
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 });

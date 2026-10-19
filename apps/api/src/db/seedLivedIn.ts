@@ -12,6 +12,7 @@ import {
     dropMaintenanceTriggers,
 } from "./migrate";
 import { upsertDevAccounts } from "./devAccounts";
+import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
 import {
     assignDepotSitesFromTelemetry,
     assignHomeSites,
@@ -628,6 +629,9 @@ export function seedLivedIn(database: DatabaseSync) {
     }
 
     applyMaintenanceTriggers(database);
+    // The random LOW_FUEL history above is replaced by what the tanks say.
+    syncStateAlerts(database);
+    archiveStaleSpeeding(database);
     database.exec("ANALYZE");
     database.exec("VACUUM");
 

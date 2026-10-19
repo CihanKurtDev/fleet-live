@@ -7,7 +7,7 @@ import { useVehicles } from "../../context/vehiclesContext";
 import type { TableColumn } from "../../types/table";
 import { formatTimestamp } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
-import { alertColumns } from "./alertTableConfig";
+import { alertColumns, canResolveByHand } from "./alertTableConfig";
 import styles from "./alertTableConfig.module.scss";
 
 /**
@@ -59,7 +59,8 @@ export const useAlertResolveColumn = (
                     );
                 }
 
-                if (!canWrite || selectionMode) {
+                // The tank warning closes itself when the tank is filled.
+                if (!canWrite || selectionMode || !canResolveByHand(row)) {
                     return null;
                 }
 

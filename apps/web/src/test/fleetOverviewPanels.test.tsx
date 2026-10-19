@@ -176,7 +176,7 @@ describe("FleetEventFeed", () => {
         expect(rows[0]).toHaveTextContent(
             "138 km/h bei Limit 100 · läuft · Lisa Müller",
         );
-        expect(rows[1]).toHaveTextContent("Funk · B-FP 0083");
+        expect(rows[1]).toHaveTextContent("Kein Signal · B-FP 0083");
         expect(rows[1]).toHaveTextContent("Fahrzeug sendet kein Signal.");
         expect(
             screen.getByRole("link", { name: "Zu den Warnungen" }),
@@ -194,7 +194,7 @@ describe("FleetEventFeed", () => {
             within(chips).queryByRole("button", { name: "Tank" }),
         ).not.toBeInTheDocument();
 
-        fireEvent.click(within(chips).getByRole("button", { name: "Funk" }));
+        fireEvent.click(within(chips).getByRole("button", { name: "Kein Signal" }));
         expect(props.onTypeChange).toHaveBeenCalledWith("OFFLINE");
 
         fireEvent.click(screen.getByText("HB-HV 0007"));

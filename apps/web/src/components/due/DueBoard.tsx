@@ -7,11 +7,14 @@ import {
 } from "@fleet-live/shared";
 
 import { useDueList } from "../../hooks/useDueList";
+import { usePageTitle } from "../../hooks/usePageTitle";
 import { useDueListQuery } from "../../hooks/useDueListQuery";
 import { Input } from "../ui/Input/Input";
 import { KpiTiles, type KpiTileTone } from "../ui/KpiTiles/KpiTiles";
 import { RetryMessage } from "../ui/RetryMessage";
 import { DueFullList, DueOverview } from "./DueLists";
+import { DueKindChips } from "./DueKindChips";
+import { dueKindOptions } from "./dueView";
 import { DueRail } from "./DueRail";
 import { dueSoonLabel } from "./dueLabels";
 import styles from "./DueBoard.module.scss";
@@ -25,6 +28,7 @@ const STATE_TILES: Array<{ id: DueListState; hint: string; tone: KpiTileTone }> 
 
 /** Deadlines grouped by kind, with the rule of each kind beside the list. */
 export const DueBoard = () => {
+    usePageTitle("Fristen");
     const { query, apiQuery, tableState, setSearch, setFilter, setKind, setPage, setLimit } =
         useDueListQuery();
     const [reloadKey, setReloadKey] = useState(0);
@@ -83,6 +87,12 @@ export const DueBoard = () => {
             {summary.error && (
                 <RetryMessage message={summary.error} onRetry={reload} />
             )}
+
+            <DueKindChips
+                kinds={dueKindOptions(meta?.kind_counts, checkMonths)}
+                activeKind={activeKind}
+                onKind={(kind) => setKind(kind)}
+            />
 
             <div className={styles.body}>
                 <DueRail

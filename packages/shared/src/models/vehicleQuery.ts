@@ -22,6 +22,8 @@ export const VEHICLE_FILTERS = [
     "driving",
     "idle",
     "offline",
+    /** Status `STOPPED`, auf der Liste „Feierabend“. */
+    "stopped",
     "in_depot",
     /** Laufende Tempoüberschreitung (`speeding_open`). */
     "speeding",
@@ -88,7 +90,9 @@ export type VehicleListCounts = {
     driving: number;
     idle: number;
     offline: number;
+    stopped: number;
     in_depot: number;
+    speeding: number;
 };
 
 export type VehicleListMeta = {

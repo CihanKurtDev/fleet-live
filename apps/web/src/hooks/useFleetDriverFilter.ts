@@ -31,11 +31,16 @@ const mergeKnownDrivers = (
 type UseFleetDriverFilterArgs = {
     selected: string[];
     onChange: (names: string[]) => void;
+    /** The active text filter (`driver_search`), "" when there is none. */
+    searchText: string;
+    onSearchText: (text: string) => void;
 };
 
 export const useFleetDriverFilter = ({
     selected,
     onChange,
+    searchText,
+    onSearchText,
 }: UseFleetDriverFilterArgs) => {
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState<string[]>([]);
@@ -166,11 +171,11 @@ export const useFleetDriverFilter = ({
 
     const openModal = useCallback(() => {
         setDraft(selected);
-        setQuery("");
+        setQuery(searchText);
         setHits([]);
         setPage(1);
         setOpen(true);
-    }, [selected]);
+    }, [searchText, selected]);
 
     const closeModal = useCallback(() => {
         setOpen(false);
@@ -193,10 +198,28 @@ export const useFleetDriverFilter = ({
         });
     }, []);
 
+    /** Filters by the text of the search: every match, no list of names. */
+    const applySearchText = useCallback(() => {
+        const text = query.trim();
+
+        if (text.length === 0) {
+            return;
+        }
+
+        onSearchText(text);
+        closeModal();
+    }, [closeModal, onSearchText, query]);
+
     const apply = useCallback(() => {
+        // Ticked names replace a text filter; with none ticked the text stays.
+        if (draft.length === 0 && searchText.length > 0 && selected.length === 0) {
+            closeModal();
+            return;
+        }
+
         onChange(draft);
         closeModal();
-    }, [closeModal, draft, onChange]);
+    }, [closeModal, draft, onChange, searchText, selected.length]);
 
     const searching = query.trim().length > 0;
     const searchPending =
@@ -226,6 +249,7 @@ export const useFleetDriverFilter = ({
         searching,
         searchPending,
         toggle,
+        applySearchText,
         apply,
     };
 };

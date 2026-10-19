@@ -117,9 +117,15 @@ export const firstKmMonth = (series: KmMonth[]) => {
     return index > 0 ? series[index]?.month : undefined;
 };
 
-export const yCeiling = (values: number[], min = 8, step = 5) => {
+/** Axis top: the peak plus 15 %, rounded up, but never above `cap` (100 for a share). */
+export const yCeiling = (
+    values: number[],
+    min = 8,
+    step = 5,
+    cap = Number.POSITIVE_INFINITY,
+) => {
     const peak = Math.max(min, ...values, 0);
-    return Math.ceil((peak * 1.15) / step) * step;
+    return Math.min(cap, Math.ceil((peak * 1.15) / step) * step);
 };
 
 export const historyYear = (history: BriefingHistoryMonth[]) => {

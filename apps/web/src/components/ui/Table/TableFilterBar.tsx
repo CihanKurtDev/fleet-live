@@ -1,6 +1,7 @@
 import type { TableFilter } from "../../../types/table";
 import { formatCount } from "../../../utils/formatCount";
 import styles from "./TableFilterBar.module.scss";
+import { Select } from "../Select/Select";
 
 interface TableFilterBarProps<RowType> {
     filters: Array<TableFilter<RowType> & { count?: number }>;
@@ -37,7 +38,7 @@ export const TableFilterBar = <RowType,>({
             {groupLabel && <p className={styles.groupLabel}>{groupLabel}</p>}
             <label className={styles.mobileSelect}>
                 <span>{groupLabel ?? "Status"}</span>
-                <select
+                <Select
                     aria-label={ariaLabel}
                     value={activeFilterId ?? ""}
                     onChange={(event) =>
@@ -53,7 +54,7 @@ export const TableFilterBar = <RowType,>({
                                 : ""}
                         </option>
                     ))}
-                </select>
+                </Select>
             </label>
             <div className={styles.filterBar} role="group" aria-label={ariaLabel}>
                 {includeAll && (

@@ -4,7 +4,7 @@ import type { AlertListMeta } from "@fleet-live/shared";
 type TypeCounts = AlertListMeta["type_counts"];
 
 /**
- * `meta.type_counts` follows the status filter, but the Tempo, Funk and
+ * `meta.type_counts` follows the status filter, but the Tempo, Kein Signal and
  * Wenig Tank tiles always count open warnings. While the Erledigt tile is
  * active the last open numbers stay on the tiles.
  */

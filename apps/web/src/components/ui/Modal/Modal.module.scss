@@ -132,6 +132,10 @@
     scroll-padding-bottom: 72px;
 }
 
+.body[hidden] {
+    display: none;
+}
+
 .confirm {
     display: flex;
     flex-direction: column;

@@ -1,10 +1,11 @@
 import type { CSSProperties } from "react";
+import { Link } from "react-router";
 import { formatCount } from "../../../utils/formatCount";
 import styles from "./KpiTiles.module.scss";
 
 export type KpiTileTone = "neutral" | "positive" | "warning" | "critical";
 
-export type KpiTile = {
+type KpiTileBase = {
     key: string;
     /** Small uppercase label. */
     label: string;
@@ -13,19 +14,98 @@ export type KpiTile = {
     /** Optional line under the number. */
     hint?: string;
     tone?: KpiTileTone;
-    /** The tile's filter is active (`aria-pressed`). */
-    pressed: boolean;
     disabled?: boolean;
     /** Spoken name; defaults to "label, value". */
     ariaLabel?: string;
-    onToggle: () => void;
 };
+
+/**
+ * A tile is either a filter button (`pressed`, `onToggle`) or a link to the
+ * list its number counts (`to`); a link has no pressed state.
+ */
+export type KpiTile = KpiTileBase &
+    (
+        | {
+              /** The tile's filter is active (`aria-pressed`). */
+              pressed: boolean;
+              onToggle: () => void;
+              to?: undefined;
+          }
+        | { to: string; pressed?: undefined; onToggle?: undefined }
+    );
 
 const TONE_CLASS: Record<KpiTileTone, string | undefined> = {
     neutral: undefined,
     positive: styles.positive,
     warning: styles.warning,
     critical: styles.critical,
+};
+
+type KpiTileViewProps = {
+    tile: KpiTile;
+    /**
+     * `glass`: translucent with a blur, for tiles that lie over a map (Schicht).
+     * Its density comes from the `--kpi-*` custom properties of the group.
+     */
+    surface?: "panel" | "glass";
+};
+
+/** One tile; `KpiTiles` lays them out, Schicht lays out its own groups. */
+export const KpiTileView = ({ tile, surface = "panel" }: KpiTileViewProps) => {
+    const classes = [
+        styles.tile,
+        surface === "glass" ? styles.glass : undefined,
+        TONE_CLASS[tile.tone ?? "neutral"],
+        tile.pressed ? styles.pressed : undefined,
+    ]
+        .filter(Boolean)
+        .join(" ");
+    const value = tile.value === null ? "—" : formatCount(tile.value);
+    const label = tile.ariaLabel ?? `${tile.label}, ${value}`;
+    const body = (
+        <>
+            <span className={styles.label} title={tile.label}>
+                {tile.label}
+            </span>
+            <span key={value} className={styles.value}>
+                {value}
+            </span>
+            {/* Always one hint line, so every tile on every page has one height. */}
+            <span
+                className={styles.hint}
+                title={tile.hint}
+                aria-hidden={tile.hint ? undefined : true}
+            >
+                {tile.hint || " "}
+            </span>
+        </>
+    );
+
+    if (tile.to !== undefined) {
+        return (
+            <Link
+                className={classes}
+                to={tile.to}
+                aria-label={tile.ariaLabel}
+                viewTransition
+            >
+                {body}
+            </Link>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            className={classes}
+            aria-pressed={tile.pressed}
+            aria-label={label}
+            disabled={tile.disabled}
+            onClick={tile.onToggle}
+        >
+            {body}
+        </button>
+    );
 };
 
 type KpiTilesProps = {
@@ -37,6 +117,8 @@ type KpiTilesProps = {
      * `strip` keeps one row that scrolls sideways (list pages).
      */
     phoneLayout?: "grid" | "strip";
+    /** `data-tip` anchor of the page tips. */
+    tip?: string;
 };
 
 /**
@@ -48,6 +130,7 @@ export const KpiTiles = ({
     tiles,
     ariaLabel,
     phoneLayout = "grid",
+    tip,
 }: KpiTilesProps) => (
     <div
         className={
@@ -57,6 +140,7 @@ export const KpiTiles = ({
         }
         role="group"
         aria-label={ariaLabel}
+        data-tip={tip}
         style={
             {
                 "--tile-cols": tiles.length,
@@ -64,39 +148,8 @@ export const KpiTiles = ({
             } as CSSProperties
         }
     >
-        {tiles.map((tile) => {
-            const classes = [
-                styles.tile,
-                TONE_CLASS[tile.tone ?? "neutral"],
-                tile.pressed ? styles.pressed : undefined,
-            ]
-                .filter(Boolean)
-                .join(" ");
-            const value = tile.value === null ? "—" : formatCount(tile.value);
-
-            return (
-                <button
-                    key={tile.key}
-                    type="button"
-                    className={classes}
-                    aria-pressed={tile.pressed}
-                    aria-label={tile.ariaLabel ?? `${tile.label}, ${value}`}
-                    disabled={tile.disabled}
-                    onClick={tile.onToggle}
-                >
-                    <span className={styles.label}>{tile.label}</span>
-                    <span key={value} className={styles.value}>
-                        {value}
-                    </span>
-                    {/* Always one hint line, so every tile on every list page has one height. */}
-                    <span
-                        className={styles.hint}
-                        aria-hidden={tile.hint ? undefined : true}
-                    >
-                        {tile.hint || "\u00a0"}
-                    </span>
-                </button>
-            );
-        })}
+        {tiles.map((tile) => (
+            <KpiTileView key={tile.key} tile={tile} />
+        ))}
     </div>
 );

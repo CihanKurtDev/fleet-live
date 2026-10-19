@@ -69,12 +69,15 @@ export function createApp() {
         }),
     );
     app.use((req, res, next) => {
+        // Import files are read after the sign-in and role checks
+        // (routes/import.routes.ts), not for anyone who sends a body.
+        if (req.path.startsWith("/api/import")) {
+            next();
+            return;
+        }
+
         // Die Fokus-Liste trägt bis zu STREAM_FOCUS_MAX_IDS Zahlen (~6 Byte je ID).
-        const limit = req.path.startsWith("/api/import")
-            ? "32mb"
-            : req.path === "/api/stream/focus"
-              ? "64kb"
-              : "16kb";
+        const limit = req.path === "/api/stream/focus" ? "64kb" : "16kb";
         express.json({ limit })(req, res, next);
     });
     app.use((req, res, next) => {

@@ -1,5 +1,6 @@
 import type { AlertDetails, VehicleStatus, VehicleType } from "@fleet-live/shared";
 import {
+    VEHICLE_STATUS_LABELS,
     VEHICLE_TYPE_LABELS,
     formatAlertEvent,
     fuelLitersFromMeters,
@@ -9,17 +10,10 @@ import {
 import { stmt } from "../db/statements";
 import { toCsv } from "../lib/csv";
 
-const STATUS_LABELS: Record<VehicleStatus, string> = {
-    DRIVING: "Auf Fahrt",
-    IDLE: "Standby",
-    STOPPED: "Feierabend",
-    OFFLINE: "Kein Signal",
-};
-
 const ALERT_TYPE_LABELS = {
     SPEEDING: "Geschwindigkeit",
     LOW_FUEL: "Wenig Tank",
-    OFFLINE: "Funk",
+    OFFLINE: "Kein Signal",
 } as const;
 
 const ALERT_SEVERITY_LABELS = {
@@ -143,7 +137,7 @@ export class ExportModel {
             ...rows.map((row) => [
                 row.license_plate,
                 row.fuel_level === null ? "" : String(Math.round(row.fuel_level)),
-                STATUS_LABELS[row.status],
+                VEHICLE_STATUS_LABELS[row.status],
                 row.driver_name ?? "",
                 row.vin ?? "",
                 vehicleTypeLabel(row.vehicle_type),

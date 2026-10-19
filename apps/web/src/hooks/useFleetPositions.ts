@@ -20,6 +20,8 @@ import { useRetryTrigger } from "./useRetryTrigger";
 type FleetPositionsQueryInput = {
     filter?: VehicleFilterId;
     drivers: string[];
+    /** Text statt Namensliste (`driver_search`). */
+    driverSearch?: string;
     /** Gewähltes Fahrzeug: bekommt Live-Daten, auch über der Fokus-Grenze. */
     pinnedId?: number | null;
 };
@@ -27,6 +29,7 @@ type FleetPositionsQueryInput = {
 export const useFleetPositions = ({
     filter,
     drivers,
+    driverSearch = "",
     pinnedId = null,
 }: FleetPositionsQueryInput) => {
     const { listEpoch, vehicleOverrides } = useVehicles();
@@ -47,6 +50,7 @@ export const useFleetPositions = ({
     const requestKey = [
         filter ?? "",
         driversKey,
+        driverSearch,
         listEpoch,
         retryKey,
     ].join("\0");
@@ -67,6 +71,7 @@ export const useFleetPositions = ({
                     {
                         filter,
                         drivers,
+                        driver_search: driverSearch || undefined,
                     },
                     controller.signal,
                 ),
@@ -105,7 +110,7 @@ export const useFleetPositions = ({
             });
 
         return () => controller.abort();
-    }, [drivers, filter, listEpoch, retryKey]);
+    }, [drivers, driverSearch, filter, listEpoch, retryKey]);
 
     const vehicles = useMemo(
         () => applyVehicleOverrides(snapshot, vehicleOverrides),

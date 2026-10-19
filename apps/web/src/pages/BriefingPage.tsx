@@ -1,8 +1,9 @@
 import { Link } from "react-router";
-import type {
-    BriefingCounts,
-    BriefingData,
-    DueCounts,
+import {
+    VEHICLE_STATUS_LABELS,
+    type BriefingCounts,
+    type BriefingData,
+    type DueCounts,
 } from "@fleet-live/shared";
 import { ImportPrompt } from "../components/auth/ImportPrompt";
 
@@ -10,6 +11,7 @@ import { BriefingCharts } from "../components/briefing/BriefingCharts";
 import { FirstSteps } from "../components/briefing/FirstSteps";
 import { LiveBand } from "../components/briefing/LiveBand";
 import { TodayPanel } from "../components/briefing/TodayPanel";
+import { KpiTileView, type KpiTileTone } from "../components/ui/KpiTiles/KpiTiles";
 import { PageTips } from "../components/help/PageTips";
 import { dueSoonLabel } from "../components/due/dueLabels";
 import { ExportButton } from "../components/export/ExportButton";
@@ -17,6 +19,7 @@ import { buttonClass } from "../components/ui/Button/buttonClass";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { useAuth } from "../hooks/useAuth";
 import { useBriefing } from "../hooks/useBriefing";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { formatCount } from "../utils/formatCount";
 import styles from "./BriefingPage.module.scss";
 import band from "../styles/pageBand.module.scss";
@@ -45,8 +48,8 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         key: keyof BriefingCounts;
         label: string;
         hint?: string;
-        tone: "critical" | "warning" | "positive" | "neutral";
-        to?: string;
+        tone: KpiTileTone;
+        to: string;
     }> = [
         {
             key: "open",
@@ -57,20 +60,20 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         },
         {
             key: "offline",
-            label: "Kein Signal",
+            label: VEHICLE_STATUS_LABELS.OFFLINE,
             hint: "Fahrzeuge",
             tone: "critical",
-            to: "/vehicles?filter=offline",
+            to: "/alerts?type=OFFLINE",
         },
         {
             key: "driving",
-            label: "Auf Fahrt",
+            label: VEHICLE_STATUS_LABELS.DRIVING,
             tone: "positive",
             to: "/vehicles?filter=driving",
         },
         {
             key: "idle",
-            label: "Standby",
+            label: VEHICLE_STATUS_LABELS.IDLE,
             tone: "neutral",
             to: "/vehicles?filter=idle",
         },
@@ -78,7 +81,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
             key: "low_fuel",
             label: "Wenig Tank",
             tone: "warning",
-            to: "/vehicles?filter=low_fuel",
+            to: "/alerts?type=LOW_FUEL",
         },
         {
             key: "in_depot",
@@ -91,41 +94,20 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
 
     return (
         <div className={styles.kpis} data-tip="briefing-kpis">
-            {tiles.map((tile) => {
-                const body = (
-                    <>
-                        <span className={styles.kpiLabel}>{tile.label}</span>
-                        <span
-                            key={counts[tile.key]}
-                            className={styles.kpiValue}
-                        >
-                            {formatCount(counts[tile.key])}
-                        </span>
-                        {tile.hint ? (
-                            <span className={styles.kpiHint}>{tile.hint}</span>
-                        ) : null}
-                    </>
-                );
-
-                if (tile.to) {
-                    return (
-                        <Link
-                            key={tile.key}
-                            className={`${styles.kpi} ${styles[`kpi${tile.tone[0].toUpperCase()}${tile.tone.slice(1)}`]}`}
-                            to={tile.to}
-                            viewTransition
-                        >
-                            {body}
-                        </Link>
-                    );
-                }
-
-                return (
-                    <div key={tile.key} className={styles.kpi}>
-                        {body}
-                    </div>
-                );
-            })}
+            {tiles.map((tile) => (
+                <KpiTileView
+                    key={tile.key}
+                    surface="glass"
+                    tile={{
+                        key: tile.key,
+                        label: tile.label,
+                        value: counts[tile.key],
+                        hint: tile.hint,
+                        tone: tile.tone,
+                        to: tile.to,
+                    }}
+                />
+            ))}
         </div>
     );
 };
@@ -145,7 +127,7 @@ const DueKpis = ({
         label: string;
         value: number;
         hint?: string;
-        tone: "critical" | "warning" | "neutral";
+        tone: KpiTileTone;
         to: string;
     }> = [
         {
@@ -174,33 +156,20 @@ const DueKpis = ({
 
     return (
         <div className={styles.dueKpis} data-tip="briefing-due">
-            {tiles.map((tile) => {
-                const toneClass =
-                    tile.tone === "critical"
-                        ? styles.kpiCritical
-                        : tile.tone === "warning"
-                          ? styles.kpiWarning
-                          : undefined;
-
-                return (
-                    <Link
-                        key={tile.key}
-                        className={
-                            toneClass ? `${styles.kpi} ${toneClass}` : styles.kpi
-                        }
-                        to={tile.to}
-                        viewTransition
-                    >
-                        <span className={styles.kpiLabel}>{tile.label}</span>
-                        <span key={tile.value} className={styles.kpiValue}>
-                            {formatCount(tile.value)}
-                        </span>
-                        {tile.hint ? (
-                            <span className={styles.kpiHint}>{tile.hint}</span>
-                        ) : null}
-                    </Link>
-                );
-            })}
+            {tiles.map((tile) => (
+                <KpiTileView
+                    key={tile.key}
+                    surface="glass"
+                    tile={{
+                        key: tile.key,
+                        label: tile.label,
+                        value: tile.value,
+                        hint: tile.hint,
+                        tone: tile.tone,
+                        to: tile.to,
+                    }}
+                />
+            ))}
         </div>
     );
 };
@@ -252,6 +221,7 @@ const BriefingBody = ({
 );
 
 export const BriefingPage = () => {
+    usePageTitle("Schicht");
     const { data, isLoading, error, retry } = useBriefing();
     const { user } = useAuth();
     const canWrite = user?.role === "dispatcher";

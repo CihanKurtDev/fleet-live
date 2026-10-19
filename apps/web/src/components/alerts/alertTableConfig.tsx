@@ -1,5 +1,6 @@
 import {
     formatAlertEvent,
+    isSelfClosingAlertType,
     type Alert,
     type AlertFilterId,
     type AlertListMeta,
@@ -32,7 +33,8 @@ export const alertTiles: AlertTileOption[] = [
     },
     {
         id: "OFFLINE",
-        label: "Funk",
+        label: "Kein Signal",
+        tone: "critical",
         view: { filter: "open", type: "OFFLINE" },
     },
     {
@@ -47,6 +49,14 @@ export const alertTiles: AlertTileOption[] = [
         view: { filter: "resolved", type: null },
     },
 ];
+
+/**
+ * A dispatcher closes an open warning by hand, except the ones that follow a
+ * state (Wenig Tank, Kein Signal): they close themselves when the state is over.
+ */
+export const canResolveByHand = (
+    alert: Pick<Alert, "type" | "resolved_at">,
+) => alert.resolved_at === null && !isSelfClosingAlertType(alert.type);
 
 /** The tile that is pressed for the current query. */
 export const activeAlertTile = (

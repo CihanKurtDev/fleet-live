@@ -602,6 +602,45 @@ describe("GET /api/vehicles/positions", () => {
         assert.equal(list.body.data[0].speeding_open, true);
     });
 
+    it("lists Feierabend with its own filter and counts the status groups", async () => {
+        const make = (plate: string, status: "DRIVING" | "IDLE" | "STOPPED" | "OFFLINE") =>
+            VehicleModel.create({
+                license_plate: plate,
+                driver_name: status === "DRIVING" ? `Fahrer ${plate}` : undefined,
+                company_id: 1,
+                status,
+            });
+        const driving = make("K-FA 1", "DRIVING");
+        make("K-FA 2", "IDLE");
+        make("K-FA 3", "STOPPED");
+        make("K-FA 4", "STOPPED");
+        make("K-FA 5", "OFFLINE");
+        insertAlert(driving.id, { type: "SPEEDING" });
+
+        const stopped = await api.get("/api/vehicles").query({ filter: "stopped" });
+
+        assert.equal(stopped.status, 200);
+        assert.deepEqual(
+            stopped.body.data
+                .map((row: { license_plate: string }) => row.license_plate)
+                .sort(),
+            ["K-FA 3", "K-FA 4"],
+        );
+        const { counts } = stopped.body.meta;
+        assert.equal(counts.stopped, 2);
+        assert.equal(counts.speeding, 1);
+        // Every vehicle has one status: the groups add up to the whole fleet.
+        assert.equal(
+            counts.driving + counts.idle + counts.stopped + counts.offline,
+            counts.all,
+        );
+
+        const positions = await api
+            .get("/api/vehicles/positions")
+            .query({ filter: "stopped" });
+        assert.equal(positions.status, 200);
+    });
+
     it("rejects an invalid bbox and an unknown filter", async () => {
         const malformed = await api
             .get("/api/vehicles/positions")

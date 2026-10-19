@@ -408,26 +408,6 @@
     color: var(--text-h);
 }
 
-.select {
-    box-sizing: border-box;
-    width: 100%;
-    height: var(--control-md);
-    margin: 0;
-    padding: 0 10px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
-    font: inherit;
-    font-size: 14px;
-    color: var(--text-h);
-
-    &:focus {
-        outline: none;
-        border-color: var(--focus-ring);
-        box-shadow: 0 0 0 1px var(--focus-ring);
-    }
-}
-
 .tableWrap {
     flex: none;
     max-height: 22.5rem;
