@@ -126,11 +126,16 @@
     }
 }
 
+/* The tiles are `ui/KpiTiles` (glass); these groups set their density. */
 .kpis,
 .dueKpis {
     flex-shrink: 0;
     display: grid;
     gap: 8px;
+    --kpi-gap: 3px;
+    --kpi-min-h: 80px;
+    --kpi-pad: 9px 12px;
+    --kpi-value: 30px;
 }
 
 .kpis {
@@ -139,82 +144,6 @@
 
 .dueKpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.kpi {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-    min-height: 80px;
-    padding: 9px 12px;
-    box-sizing: border-box;
-
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: color-mix(in srgb, var(--surface) 86%, transparent);
-    backdrop-filter: blur(4px);
-    color: inherit;
-    text-decoration: none;
-    text-align: left;
-    transition:
-        border-color var(--dur-2) var(--ease-out),
-        background-color var(--dur-2) var(--ease-out),
-        transform var(--dur-2) var(--ease-spring);
-}
-
-a.kpi:hover {
-    border-color: var(--border-strong);
-    background: color-mix(in srgb, var(--code-bg) 92%, transparent);
-}
-
-a.kpi:active {
-    transform: scale(0.98);
-    transition-duration: 60ms;
-}
-
-a.kpi:focus-visible {
-    outline: var(--focus-width) solid var(--focus-ring);
-    outline-offset: 2px;
-}
-
-.kpiLabel {
-    overflow: hidden;
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: var(--text-muted);
-}
-
-/* Remounted when the count changes (key), so a new number glows briefly. */
-.kpiValue {
-    font-family: var(--heading);
-    font-size: 30px;
-    font-weight: 800;
-    line-height: 1.05;
-    color: var(--text-h);
-    font-variant-numeric: tabular-nums;
-    animation: value-flash var(--dur-4) var(--ease-out);
-}
-
-.kpiCritical .kpiValue {
-    color: var(--danger);
-}
-
-.kpiWarning .kpiValue {
-    color: var(--warning);
-}
-.kpiHint {
-    margin-top: auto;
-    overflow: hidden;
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-muted);
 }
 
 .statusLine {
@@ -231,13 +160,11 @@ a.kpi:focus-visible {
         font-size: 48px;
     }
 
-    .kpi {
-        min-height: 72px;
-        padding: 8px 12px;
-    }
-
-    .kpiValue {
-        font-size: 26px;
+    .kpis,
+    .dueKpis {
+        --kpi-min-h: 72px;
+        --kpi-pad: 8px 12px;
+        --kpi-value: 26px;
     }
 }
 
@@ -272,13 +199,6 @@ a.kpi:focus-visible {
         grid-row: 4;
     }
 
-    /* Phones have the height: a label or hint wraps instead of being cut. */
-    .kpiLabel,
-    .kpiHint {
-        text-overflow: clip;
-        white-space: normal;
-    }
-
     .subtitle {
         max-width: 34rem;
         font-size: 13px;
@@ -290,17 +210,14 @@ a.kpi:focus-visible {
         gap: 8px;
     }
 
-    .kpis > .kpi:first-child {
+    .kpis > :first-child {
         grid-column: 1 / -1;
     }
 
-    .kpi {
-        min-height: 72px;
-        padding: 8px 12px;
-    }
-
-    .kpiHint {
-        font-size: 11px;
+    .kpis,
+    .dueKpis {
+        --kpi-min-h: 72px;
+        --kpi-pad: 8px 12px;
     }
 }
 
@@ -347,12 +264,10 @@ a.kpi:focus-visible {
         font-size: 48px;
     }
 
-    .kpi {
-        min-height: 0;
-        padding: 7px 12px;
-    }
-
-    .kpiValue {
-        font-size: 26px;
+    .kpis,
+    .dueKpis {
+        --kpi-min-h: 0px;
+        --kpi-pad: 7px 12px;
+        --kpi-value: 26px;
     }
 }
