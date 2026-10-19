@@ -59,7 +59,12 @@ import {
     type MailDelivery,
 } from "../lib/mailer";
 import { openSession } from "../lib/openSession";
-import { hashPassword, needsRehash, verifyPassword } from "../lib/password";
+import {
+    hashPasswordAsync,
+    needsRehash,
+    spendPasswordTime,
+    verifyPasswordAsync,
+} from "../lib/password";
 import { seal } from "../lib/secretBox";
 import { open as openSecret } from "../lib/secretBox";
 import {
@@ -171,19 +176,26 @@ export function verifyEmail(req: Request, res: Response) {
     res.status(204).end();
 }
 
-export function login(req: Request, res: Response) {
+export async function login(req: Request, res: Response) {
     const input = parseLoginInput(req.body);
     const user = UserModel.findByEmail(input.email);
 
-    if (
-        !user?.password_hash ||
-        !verifyPassword(input.password, user.password_hash)
-    ) {
+    if (!user?.password_hash) {
+        // The same wait as for a wrong password, so the answer does not
+        // tell whether the email has an account.
+        await spendPasswordTime(input.password);
+        throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
+    }
+
+    if (!(await verifyPasswordAsync(input.password, user.password_hash))) {
         throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
     }
 
     if (needsRehash(user.password_hash)) {
-        UserModel.setPasswordHash(user.id, hashPassword(input.password));
+        UserModel.setPasswordHash(
+            user.id,
+            await hashPasswordAsync(input.password),
+        );
     }
 
     if (!user.email_verified_at) {
@@ -304,7 +316,7 @@ export function resetPasswordHandler(req: Request, res: Response) {
     res.status(204).end();
 }
 
-export function changePassword(req: Request, res: Response) {
+export async function changePassword(req: Request, res: Response) {
     if (!req.user) {
         throw new UnauthorizedError();
     }
@@ -312,13 +324,16 @@ export function changePassword(req: Request, res: Response) {
     const input = parseChangePasswordInput(req.body);
     const user = UserModel.getById(req.user.id);
 
-    if (!user?.password_hash || !verifyPassword(input.current_password, user.password_hash)) {
+    if (
+        !user?.password_hash ||
+        !(await verifyPasswordAsync(input.current_password, user.password_hash))
+    ) {
         throw new ValidationError("Aktuelles Passwort ist falsch.", {
             current_password: "Aktuelles Passwort ist falsch.",
         });
     }
 
-    UserModel.setPasswordHash(user.id, hashPassword(input.password));
+    UserModel.setPasswordHash(user.id, await hashPasswordAsync(input.password));
     const token = readCookie(req.headers.cookie, SESSION_COOKIE);
 
     if (token) {

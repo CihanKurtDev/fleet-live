@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { isValidIsoDate } from "@fleet-live/shared";
 import { syncLowFuelAlerts } from "./lowFuelAlerts";
 
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 22;
 
 type TableColumn = {
     name: string;
@@ -1255,6 +1255,17 @@ function migrateToV21(database: DatabaseSync) {
 }
 
 /**
+ * Sessions store the hash of their token from now on. Rows written before
+ * hold the token itself and would never match: remove them, everyone signs
+ * in once.
+ */
+function migrateToV22(database: DatabaseSync) {
+    if (tableExists(database, "sessions")) {
+        database.exec("DELETE FROM sessions");
+    }
+}
+
+/**
  * Rolle und Firma hängen an der Mitgliedschaft. Bestehende Nutzer bleiben
  * bestätigt, damit der Seed-Login ohne Mail weiter funktioniert.
  */
@@ -1529,6 +1540,10 @@ export function migrate(database: DatabaseSync) {
 
     if (currentVersion < 21) {
         migrateToV21(database);
+    }
+
+    if (currentVersion < 22) {
+        migrateToV22(database);
     }
 
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
