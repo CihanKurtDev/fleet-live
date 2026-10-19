@@ -22,6 +22,14 @@ Flottenleitstelle für Dispatcher. Schichtüberblick, Live-Karte, Fahrten, Fahre
 
 ![Fahrzeugdetail mit Live-Fahrt](docs/screenshots/vehicle-detail.png)
 
+### Fahrzeugliste
+
+![Fahrzeugliste mit Kacheln als Filter, Status, Tank und Hinweisen](docs/screenshots/vehicles.png)
+
+### Fristen
+
+![Fristen nach Art gruppiert, mit Regel und Einstellungen der Firma](docs/screenshots/fristen.png)
+
 ### Stammdatenimport
 
 ![Importvorschau mit Prüfung, Blättern und Zeilenaktionen](docs/screenshots/import-preview.png)
@@ -78,10 +86,12 @@ Was die App heute kann, und was als Nächstes kommt.
 
 ## Jetzt
 
-* Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt
+* Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt. Eine Warnung je Fahrt: weitere Überschreitungen derselben Fahrt zählen dazu (Anzahl, Höchsttempo, Summe der Dauer). Beendete, nicht erledigte Tempo-Warnungen werden nach 7 Tagen Verlauf
 * Niedriger Tankstand (unter 15 %) ist eine Warnung, die von selbst verschwindet, sobald getankt ist
-* Kein Signal, wenn ein Fahrzeug verstummt oder offline gemeldet ist
-* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Kein Signal
+* Kein Signal, wenn ein Fahrzeug verstummt oder offline gemeldet ist. Die Warnung schließt sich selbst, sobald es wieder meldet
+* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Kein Signal. Erledigte Warnungen werden nach 90 Tagen gelöscht, die Monatssummen der Schicht-Diagramme bleiben
+* Kurze Tipps auf Schicht, Fristen, Fahrzeuge, Warnungen, Fahrer und Karte (einmal je Person, über „?“ wieder abrufbar)
+* Fahrer-Filter auf der Karte: einzelne Fahrer wählen oder alle Treffer einer Suche filtern
 * Schichtüberblick auf der Startseite, offene Warnungen in der Navigation
 * Flottenkarte mit Dichtezellen und Kennzeichen-Sprung, Fahrspur am Fahrzeug, Fahrer, Firmen-Login
 * Fahrtarchiv am Fahrzeug: alte Fahrten durchblättern, abgeschlossene Strecke auf der Karte
@@ -101,7 +111,9 @@ Was die App heute kann, und was als Nächstes kommt.
 
 ## Als Nächstes
 
-* Läuft die Anmeldung mitten in der Sitzung ab, geht es zurück zur Anmeldung
+* Tempo-Warnungen älterer Fahrten, die noch einzeln in der Datenbank stehen, je Fahrt zusammenführen
+* Prüfung von Firmen-SSO und Einladungen durch eine zweite Stelle
+* Feierabend als Kachel auf der Schicht
 
 ---
 
@@ -252,7 +264,7 @@ Anlegen, bearbeiten, löschen. Status als Badge. Tank während der Fahrt nur les
 
 ## Flottenkarte
 
-`/fleet` lädt die Positionen der eigenen Firma einmal (bis 5000 Einzelpunkte) und clustert sie im Ausschnitt. Schwenken lädt nicht neu. Die Leiste zeigt, wie viele Fahrzeuge im Ausschnitt liegen, wie viele der Filter trifft und wie viele keine Position haben. Der Fahrer-Picker ist ein Filter, kein Muss. Über 5000 Treffer mit Position werden Dichtekreise. Ein Klick auf eine Gruppe zoomt heran; übereinanderliegende Fahrzeuge öffnen eine Liste. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (max. 150 im Fokus, bevorzugt im Ausschnitt). Spuren gibt es hier nicht, die liegen auf der Detailseite.
+`/fleet` lädt die Positionen der eigenen Firma einmal (bis 5000 Einzelpunkte) und clustert sie im Ausschnitt. Schwenken lädt nicht neu. Die Leiste zeigt, wie viele Fahrzeuge im Ausschnitt liegen, wie viele der Filter trifft und wie viele keine Position haben. Der Fahrer-Picker ist ein Filter, kein Muss. Über 5000 Treffer mit Position werden Dichtekreise. Ein Klick auf eine Gruppe zoomt heran; übereinanderliegende Fahrzeuge öffnen eine Liste. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (bis zu 3000 im Fokus, bevorzugt im Ausschnitt). Spuren gibt es hier nicht, die liegen auf der Detailseite.
 
 Tabellenkomponente: [apps/docs/table.md](apps/docs/table.md).
 
@@ -262,7 +274,7 @@ Tabellenkomponente: [apps/docs/table.md](apps/docs/table.md).
 
 Kurzer Puffer: Fahrzeug, Latitude, Longitude, Geschwindigkeit, `recorded_at`. Der letzte Punkt steckt im Fahrzeug-JSON. `GET /api/vehicles/:id/telemetry` gibt `{ data }` chronologisch. Das ist Marker und letzte Bewegung, nicht die Spur.
 
-Der Ticker schreibt nur für fokussierte `DRIVING`-Fahrzeuge, deren Firma die Sim laufen lässt. `connected` liefert `connection_id`. Die UI schickt `{ connection_id, ids }` (Liste plus Nachbarn, offenes Detail, fahrende auf der Flottenkarte). Jede Verbindung hat eigenen Fokus. Der Ticker nimmt die Vereinigung der laufenden Sims dieser Firma. Ohne Fokus passiert nichts. Patches nur an Verbindungen, die die ID fokussiert haben und zur Firma gehören. `vehicles-changed` nur an diese Firma.
+Der Simulator spielt Geräte: jedes `DRIVING`-Fahrzeug mit Fahrer, dessen Firma die Sim laufen lässt, meldet sich in einem eigenen, leicht schwankenden Takt (`PING_INTERVAL_MS`, Standard 5 s), ob jemand zusieht oder nicht. Der Ticker (`TELEMETRY_TICK_MS`) prüft nur, welche Meldungen fällig sind. `connected` liefert `connection_id`. Die UI schickt `{ connection_id, ids }` (Liste plus Nachbarn, offenes Detail, fahrende auf der Flottenkarte). Jede Verbindung hat eigenen Fokus. Der Fokus bestimmt nur, wer die Patches bekommt, nicht wer fährt. Patches nur an Verbindungen, die die ID fokussiert haben und zur Firma gehören. `vehicles-changed` nur an diese Firma.
 
 Pro Fahrzeug bleiben `TELEMETRY_KEEP_PER_VEHICLE` Rohzeilen (Standard 100). Das ist die Retention. Trip-Ende schreibt Speed 0 an der letzten Position.
 
@@ -302,7 +314,7 @@ Drei Schichten, eine Tabelle `alerts`.
 
 `GET /api/alerts` ist die Inbox. Standard `filter=open`. Optional `type`, `vehicle_id`, `driver_id`. `PATCH` mit `{ resolved: true }` schließt (`dispatcher`). Zweites Schließen ist egal. Viewer lesen. Nach dem Close kommt `vehicles-changed`.
 
-Ticker SPEEDING: 8 s am Stück über dem Sim-Limit (`speedLimitKmh`, Stadt 50 / Autobahn 120). Eine offene Zeile pro Fahrzeug. `details` mit Limit, Max, Dauer. 2 s Hysterese oder raus aus `DRIVING` setzt `ended_at`. Jedes achte simulierte Fahrzeug darf über dem Limit fahren. OFFLINE nach 15 s ohne Ticks bei pausierter Sim, oder Status `OFFLINE`; die Zeile schließt sich selbst (`ended_at` und `resolved_at`), sobald das Fahrzeug wieder meldet, kein Erledigen von Hand. Ein beendetes SPEEDING, das niemand erledigt hat, wird nach 7 Tagen erledigt (`resolved_at` = `ended_at` + 7 Tage) und ist dann Verlauf. Erledigte Warnungen werden 90 Tage nach dem Erledigen gelöscht; die Monatssummen für die Schicht-Diagramme stehen vorher in `alert_month_stats`. Niedriger Tank ist Messung, Filter und Warnung: unter 15 % hat das Fahrzeug eine offene LOW_FUEL-Zeile, über 15 % verschwindet sie von selbst (kein Erledigen von Hand). Sie folgt dem Schreiben von `fuel_level` (Fahrzeug anlegen/ändern, Import) und gleicht beim Start alte Zeilen an. Eine offene Zeile pro Fahrzeug und Typ. Anzeige: `formatAlertEvent`. Fahrernamen gehen nach `/drivers/:id`. Klick auf die Warnung öffnet das Fahrzeug.
+Ticker SPEEDING: 8 s am Stück über dem Sim-Limit (`speedLimitKmh`, Stadt 50 / Autobahn 120). Eine offene Zeile pro Fahrzeug, und eine Zeile je Fahrt: eine spätere Überschreitung derselben Fahrt öffnet die vorhandene, nicht erledigte Zeile wieder (`event_count`, höchstes Tempo, Summe der Dauer). `details` mit Limit, Max, Dauer. 2 s Hysterese oder raus aus `DRIVING` setzt `ended_at`. Jedes achte simulierte Fahrzeug darf über dem Limit fahren. OFFLINE nach 15 s ohne Ticks bei pausierter Sim, oder Status `OFFLINE`; die Zeile schließt sich selbst (`ended_at` und `resolved_at`), sobald das Fahrzeug wieder meldet, kein Erledigen von Hand. Ein beendetes SPEEDING, das niemand erledigt hat, wird nach 7 Tagen erledigt (`resolved_at` = `ended_at` + 7 Tage) und ist dann Verlauf. Erledigte Warnungen werden 90 Tage nach dem Erledigen gelöscht; die Monatssummen für die Schicht-Diagramme stehen vorher in `alert_month_stats`. Niedriger Tank ist Messung, Filter und Warnung: unter 15 % hat das Fahrzeug eine offene LOW_FUEL-Zeile, über 15 % verschwindet sie von selbst (kein Erledigen von Hand). Sie folgt dem Schreiben von `fuel_level` (Fahrzeug anlegen/ändern, Import) und gleicht beim Start alte Zeilen an. Eine offene Zeile pro Fahrzeug und Typ. Anzeige: `formatAlertEvent`. Fahrernamen gehen nach `/drivers/:id`. Klick auf die Warnung öffnet das Fahrzeug.
 
 Live-Speed sitzt in der Telemetrie. Die Polyline hat keinen Speed pro Punkt.
 
@@ -392,8 +404,9 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `PORT` | `3000` | |
 | `DATABASE_PATH` | `apps/api/data/fleetlive.db` | `:memory:` in Tests |
 | `CORS_ORIGIN` | `*` | Same origin über den Vite-Proxy |
-| `TELEMETRY_TICK_MS` | `400` | `0` schaltet den Simulator aus |
-| `TELEMETRY_BATCH_SIZE` | `3000` | Cap pro Tick über die Fokus-IDs |
+| `TELEMETRY_TICK_MS` | `1000` | Wie oft nach fälligen Meldungen gesucht wird. `0` schaltet den Simulator aus |
+| `PING_INTERVAL_MS` | `5000` | Abstand der Meldungen je Fahrzeug (60 bis 160 % davon) |
+| `TELEMETRY_BATCH_SIZE` | `3000` | Höchstens so viele Meldungen pro Tick |
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
 | `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
 | `LOG_LEVEL` | `info` | |
@@ -462,7 +475,7 @@ Controller validieren und mappen HTTP. Models führen SQL aus. Dünn gehalten.
 * Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Das Login-Limit gilt auch in der Entwicklung, Tests lassen es aus.
 * Abgelaufene Session: `GET /api/auth/me` und spätere `401`. Die UI räumt den Nutzer weg und geht nach `/login`. Falsches Passwort auf `POST /api/auth/login` zählt nicht als Session-Ende.
 * Sim-Pause liegt im Speicher. API-Neustart startet alle Firmen wieder.
-* Frontend-Tests nur für ein paar riskante Abläufe.
+* Frontend-Tests (Vitest) decken Seiten, Bausteine und die Kartenlogik ab; Leaflet selbst läuft nicht in jsdom und wird im Browser geprüft. Es gibt keine CI auf GitHub, `npm run verify` läuft lokal.
 * Logs für Request, SSE, Ticker und Import. Kein Metrik-Stack.
 
 ---
