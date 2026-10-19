@@ -109,6 +109,7 @@ export {
     ALERT_BULK_MAX_IDS,
     ALERT_FILTERS,
     ALERT_SEVERITIES,
+    ALERT_RETENTION_DAYS,
     ALERT_SORT_KEYS,
     ALERT_TYPES,
     alertBulkPatchSchema,

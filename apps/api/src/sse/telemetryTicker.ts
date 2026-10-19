@@ -1,4 +1,5 @@
 import { db } from "../db/database";
+import { pruneResolvedAlerts } from "../db/alertRetention";
 import { archiveStaleSpeeding } from "../db/stateAlerts";
 import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
@@ -12,7 +13,7 @@ let timer: ReturnType<typeof setInterval> | undefined;
 let intervalMs = 0;
 let lastArchive = 0;
 
-/** Ended speeding events that ran out of their open days are looked for this often. */
+/** Ended speeding events that ran out of their open days and resolved warnings past their retention are looked for this often. */
 const ARCHIVE_EVERY_MS = 10 * 60_000;
 
 function broadcastPatches(
@@ -80,6 +81,8 @@ export function startTelemetryTicker(ms: number) {
                 for (const companyId of archiveStaleSpeeding(db)) {
                     notifyCompanies.add(companyId);
                 }
+
+                pruneResolvedAlerts(db);
             }
 
             broadcastPatches(patches);

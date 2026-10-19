@@ -65,6 +65,9 @@ export function isSelfClosingAlertType(type: string): boolean {
  */
 export const SPEEDING_OPEN_DAYS = 7;
 
+/** Erledigte Warnungen werden so viele Tage nach dem Erledigen gelöscht; die Monatssummen bleiben. */
+export const ALERT_RETENTION_DAYS = 90;
+
 /**
  * Eine Warnung hängt am Fahrzeug. `driver_id` ist der Fahrer zum
  * Zeitpunkt des Open (Snapshot). `license_plate` kommt aus dem Join

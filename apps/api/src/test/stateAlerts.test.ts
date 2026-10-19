@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { db } from "../db/database";
+import { pruneResolvedAlerts } from "../db/alertRetention";
 import { archiveStaleSpeeding, syncStateAlerts } from "../db/stateAlerts";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { UserModel } from "../models/user.model";
@@ -195,5 +196,62 @@ describe("Tempo becomes history after seven days", () => {
         assert.equal(await open(), 1);
         archiveStaleSpeeding(db);
         assert.equal(await open(), 0);
+    });
+});
+
+describe("resolved warnings are deleted after 90 days", () => {
+    const history = async (month: string) => {
+        const response = await api.get("/api/briefing");
+        assert.equal(response.status, 200);
+
+        return (
+            response.body.data.history as Array<{ month: string } & Record<string, number>>
+        ).find((row) => row.month === month);
+    };
+
+    it("keeps the month sums of the Schicht charts, and everything not yet due", async () => {
+        const vehicle = make("K-RT 1");
+        const first = await api.post("/api/drivers").send({ name: "Fahrer RT 1" });
+        const second = await api.post("/api/drivers").send({ name: "Fahrer RT 2" });
+        const driverA = first.body.data.id as number;
+        const driverB = second.body.data.id as number;
+
+        const created = daysAgo(120);
+        const month = created.slice(0, 7);
+        const old = (input: Parameters<typeof insertAlert>[1]) =>
+            insertAlert(vehicle.id, {
+                created_at: created,
+                ended_at: daysAgo(119),
+                resolved_at: daysAgo(100),
+                ...input,
+            });
+
+        old({ type: "SPEEDING", severity: "HIGH", driver_id: driverA });
+        old({ type: "SPEEDING", severity: "MEDIUM", driver_id: driverA });
+        old({ type: "SPEEDING", severity: "MEDIUM", driver_id: driverB });
+        old({ type: "LOW_FUEL" });
+        old({ type: "OFFLINE" });
+        // Created long ago, resolved recently: not due yet.
+        const recentlyResolved = old({
+            type: "SPEEDING",
+            driver_id: driverA,
+            resolved_at: daysAgo(10),
+        });
+        // Created long ago, still open: never deleted.
+        const stillOpen = old({ type: "OFFLINE", resolved_at: null, ended_at: null });
+
+        const before = await history(month);
+        assert.equal(before?.speeding_events, 4);
+        assert.equal(before?.speeding_drivers, 2);
+        assert.equal(before?.speeding_high, 2);
+
+        assert.equal(pruneResolvedAlerts(db), 5);
+
+        const exists = (id: number) =>
+            db.prepare("SELECT 1 FROM alerts WHERE id = ?").get(id) !== undefined;
+        assert.ok(exists(recentlyResolved));
+        assert.ok(exists(stillOpen));
+        assert.deepEqual(await history(month), before);
+        assert.equal(pruneResolvedAlerts(db), 0);
     });
 });

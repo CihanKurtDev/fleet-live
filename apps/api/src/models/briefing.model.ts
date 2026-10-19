@@ -112,6 +112,18 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
         `,
     ).all(companyId, from, until) as AlertMonthRow[];
 
+    // Months whose old warnings were deleted keep their sums here.
+    const storedRows = stmt(
+        `
+        SELECT month, speeding_drivers, speeding_events, speeding_high,
+               low_fuel_vehicles, offline_vehicles
+        FROM alert_month_stats
+        WHERE company_id = ?
+          AND month >= ?
+          AND month <= ?
+        `,
+    ).all(companyId, firstMonth, lastMonth) as AlertMonthRow[];
+
     const kmRows = stmt(
         `
         SELECT month, distance_m
@@ -134,7 +146,7 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
     ).get(companyId, lastMonth) as OpenKmRow;
 
     const alertsByMonth = new Map(
-        alertRows.map((row) => [row.month, row] as const),
+        [...alertRows, ...storedRows].map((row) => [row.month, row] as const),
     );
     const kmByMonth = new Map(
         kmRows.map((row) => [row.month, Number(row.distance_m)] as const),
