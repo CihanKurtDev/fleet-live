@@ -24,6 +24,7 @@ import { fieldAria } from "../ui/FieldError/fieldAria";
 import { Input } from "../ui/Input/Input";
 import { NEW_VEHICLE_STATUS } from "./vehicleStatus";
 import styles from "./VehicleForm.module.scss";
+import { Select } from "../ui/Select/Select";
 
 /**
  * Stammdaten sind das, was ein Mensch pflegt. Status und Position meldet das
@@ -296,9 +297,10 @@ export const VehicleForm = ({
 
             <div className={styles.field}>
                 <label htmlFor={`${fieldId}-type`}>Fahrzeugtyp</label>
-                <select
+                <Select
                     id={`${fieldId}-type`}
-                    className={styles.select}
+                    size="md"
+                    fullWidth
                     value={values.vehicle_type}
                     disabled={readOnly}
                     onChange={(event) =>
@@ -315,7 +317,7 @@ export const VehicleForm = ({
                             {VEHICLE_TYPE_LABELS[type]}
                         </option>
                     ))}
-                </select>
+                </Select>
                 <FieldError fieldId={`${fieldId}-type`} className={styles.error}>
                     {errorFor("vehicle_type")}
                 </FieldError>
@@ -395,9 +397,10 @@ export const VehicleForm = ({
 
             <div className={styles.field}>
                 <label htmlFor={`${fieldId}-depot`}>Stammstandort</label>
-                <select
+                <Select
                     id={`${fieldId}-depot`}
-                    className={styles.select}
+                    size="md"
+                    fullWidth
                     value={values.home_site_id}
                     disabled={readOnly}
                     onChange={(event) =>
@@ -411,7 +414,7 @@ export const VehicleForm = ({
                             {site.name}
                         </option>
                     ))}
-                </select>
+                </Select>
                 <FieldError fieldId={`${fieldId}-depot`} className={styles.error}>
                     {errorFor("home_site_id")}
                 </FieldError>

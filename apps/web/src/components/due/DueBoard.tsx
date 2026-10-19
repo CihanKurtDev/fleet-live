@@ -13,6 +13,8 @@ import { Input } from "../ui/Input/Input";
 import { KpiTiles, type KpiTileTone } from "../ui/KpiTiles/KpiTiles";
 import { RetryMessage } from "../ui/RetryMessage";
 import { DueFullList, DueOverview } from "./DueLists";
+import { DueKindChips } from "./DueKindChips";
+import { dueKindOptions } from "./dueView";
 import { DueRail } from "./DueRail";
 import { dueSoonLabel } from "./dueLabels";
 import styles from "./DueBoard.module.scss";
@@ -85,6 +87,12 @@ export const DueBoard = () => {
             {summary.error && (
                 <RetryMessage message={summary.error} onRetry={reload} />
             )}
+
+            <DueKindChips
+                kinds={dueKindOptions(meta?.kind_counts, checkMonths)}
+                activeKind={activeKind}
+                onKind={(kind) => setKind(kind)}
+            />
 
             <div className={styles.body}>
                 <DueRail

@@ -42,6 +42,7 @@ import { importRunColumns } from "../components/vehicles/importRunConfig";
 import layout from "../styles/detailLayout.module.scss";
 import band from "../styles/pageBand.module.scss";
 import styles from "./ImportPage.module.scss";
+import { Select } from "../components/ui/Select/Select";
 
 type WizardStep = "upload" | "mapping" | "preview" | "result";
 
@@ -739,8 +740,9 @@ export const ImportPage = () => {
                                         <span className={styles.mappingLabel}>
                                             {column}
                                         </span>
-                                        <select
-                                            className={styles.select}
+                                        <Select
+                                            size="md"
+ fullWidth
                                             value={
                                                 sheetMappings[sheet.kind]?.[
                                                     column
@@ -772,7 +774,7 @@ export const ImportPage = () => {
                                                     </option>
                                                 ),
                                             )}
-                                        </select>
+                                        </Select>
                                     </label>
                                 ))}
                             </div>
@@ -796,8 +798,9 @@ export const ImportPage = () => {
                                     <span className={styles.mappingLabel}>
                                         „{raw}"
                                     </span>
-                                    <select
-                                        className={styles.select}
+                                    <Select
+                                        size="md"
+ fullWidth
                                         value={statusMapping[raw] ?? ""}
                                         onChange={(event) => {
                                             const value = event.target.value;
@@ -824,7 +827,7 @@ export const ImportPage = () => {
                                                 {vehicleStatusLabel(status)}
                                             </option>
                                         ))}
-                                    </select>
+                                    </Select>
                                 </label>
                             ))}
                         </div>

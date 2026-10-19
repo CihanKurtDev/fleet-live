@@ -26,26 +26,6 @@
     gap: 8px;
 }
 
-.limitSelect {
-    height: var(--control-sm);
-    padding: 0 6px;
-
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
-
-    font: inherit;
-    font-size: 14px;
-    color: var(--text-h);
-
-    cursor: pointer;
-
-    &:focus-visible {
-        outline: var(--focus-width) solid var(--focus-ring);
-        outline-offset: 2px;
-    }
-}
-
 .pages {
     display: flex;
     align-items: center;

@@ -11,6 +11,7 @@ import {
 import type { TableColumn } from "../../types/table";
 import { ImportPreviewStatusCell } from "./ImportPreviewStatusCell";
 import styles from "./importPreviewConfig.module.scss";
+import { Select } from "../ui/Select/Select";
 
 const ROW_ACTION_LABELS: Record<ImportRowAction, string> = {
     create: "Neu anlegen",
@@ -72,8 +73,9 @@ export const unifiedImportPreviewColumns = (
             const blocked = row.outcome.status === "blocked";
 
             return (
-                <select
+                <Select
                     className={styles.select}
+                    size="sm"
                     value={value}
                     disabled={blocked}
                     aria-label={`Aktion für ${IMPORT_SHEET_KIND_LABELS[row.sheet_kind]} Zeile ${row.row_index}`}
@@ -90,7 +92,7 @@ export const unifiedImportPreviewColumns = (
                             {ROW_ACTION_LABELS[option]}
                         </option>
                     ))}
-                </select>
+                </Select>
             );
         },
     },

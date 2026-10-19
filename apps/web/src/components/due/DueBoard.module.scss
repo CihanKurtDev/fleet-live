@@ -125,6 +125,15 @@
     color: var(--text);
 }
 
+/* The kind filter as chips: only where the rail sits below the list. */
+.chips {
+    display: none;
+}
+
+.titleRule {
+    display: none;
+}
+
 .legend {
     display: flex;
     flex-wrap: wrap;
@@ -392,6 +401,68 @@
 }
 
 @media (max-width: 1000px) {
+    .chips {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .chip {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--control-md);
+        padding: 0 14px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        color: var(--text-h);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+
+        &:focus-visible {
+            outline: var(--focus-width) solid var(--focus-ring);
+            outline-offset: 2px;
+        }
+    }
+
+    .chipActive {
+        border-color: var(--accent-fill);
+        background: var(--accent-fill);
+        color: var(--on-accent);
+        font-weight: 600;
+    }
+
+    .chipCount {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.8;
+    }
+
+    /* The kind buttons moved up to the chips; the rail keeps the rule of the
+       chosen kind, and nothing for "Alle". */
+    .kindButton,
+    .titleKinds {
+        display: none;
+    }
+
+    .titleRule {
+        display: inline;
+    }
+
+    .kindList li:not([data-active="true"]) {
+        display: none;
+    }
+
+    section[data-tip="due-kinds"]:not(:has(li[data-active="true"] .ruleText)) {
+        display: none;
+    }
+
     .body {
         grid-template-columns: minmax(0, 1fr);
     }
