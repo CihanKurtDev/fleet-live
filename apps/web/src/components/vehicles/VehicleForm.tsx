@@ -19,6 +19,8 @@ import { isAbortError } from "../../api/client";
 import { listSites } from "../../api/sites";
 import { Button } from "../ui/Button/Button";
 import { submitBusyLabel } from "../ui/Button/submitBusyLabel";
+import { FieldError } from "../ui/FieldError/FieldError";
+import { fieldAria } from "../ui/FieldError/fieldAria";
 import { Input } from "../ui/Input/Input";
 import { NEW_VEHICLE_STATUS } from "./vehicleStatus";
 import styles from "./VehicleForm.module.scss";
@@ -265,15 +267,11 @@ export const VehicleForm = ({
                             event.target.value,
                         )
                     }
-                    aria-invalid={
-                        errorFor("license_plate") !== undefined
-                    }
+                    {...fieldAria(`${fieldId}-plate`, errorFor("license_plate"))}
                 />
-                {errorFor("license_plate") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("license_plate")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-plate`} className={styles.error}>
+                    {errorFor("license_plate")}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -289,13 +287,11 @@ export const VehicleForm = ({
                     onChange={(event) =>
                         setField("vin", event.target.value)
                     }
-                    aria-invalid={errorFor("vin") !== undefined}
+                    {...fieldAria(`${fieldId}-vin`, errorFor("vin"))}
                 />
-                {errorFor("vin") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("vin")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-vin`} className={styles.error}>
+                    {errorFor("vin")}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -311,7 +307,7 @@ export const VehicleForm = ({
                             event.target.value as VehicleType | "",
                         )
                     }
-                    aria-invalid={errorFor("vehicle_type") !== undefined}
+                    {...fieldAria(`${fieldId}-type`, errorFor("vehicle_type"))}
                 >
                     <option value="">—</option>
                     {VEHICLE_TYPES.map((type) => (
@@ -320,11 +316,9 @@ export const VehicleForm = ({
                         </option>
                     ))}
                 </select>
-                {errorFor("vehicle_type") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("vehicle_type")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-type`} className={styles.error}>
+                    {errorFor("vehicle_type")}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -340,17 +334,14 @@ export const VehicleForm = ({
                     onChange={(event) =>
                         setField("hu_due_on", event.target.value)
                     }
-                    aria-invalid={errorFor("hu_due_on") !== undefined}
-                    aria-describedby={`${fieldId}-hu-reason`}
+                    {...fieldAria(`${fieldId}-hu`, errorFor("hu_due_on"), `${fieldId}-hu-reason`)}
                 />
                 <p className={styles.hint} id={`${fieldId}-hu-reason`}>
                     {dueExplanationText("hu", explainHuMonth(values.hu_due_on || null))}
                 </p>
-                {errorFor("hu_due_on") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("hu_due_on")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-hu`} className={styles.error}>
+                    {errorFor("hu_due_on")}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -366,13 +357,11 @@ export const VehicleForm = ({
                     onChange={(event) =>
                         setField("uvv_checked_on", event.target.value)
                     }
-                    aria-invalid={errorFor("uvv_checked_on") !== undefined}
+                    {...fieldAria(`${fieldId}-uvv-checked`, errorFor("uvv_checked_on"))}
                 />
-                {errorFor("uvv_checked_on") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("uvv_checked_on")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-uvv-checked`} className={styles.error}>
+                    {errorFor("uvv_checked_on")}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -387,8 +376,7 @@ export const VehicleForm = ({
                     onChange={(event) =>
                         setField("uvv_due_on", event.target.value)
                     }
-                    aria-invalid={errorFor("uvv_due_on") !== undefined}
-                    aria-describedby={`${fieldId}-uvv-reason`}
+                    {...fieldAria(`${fieldId}-uvv`, errorFor("uvv_due_on"), `${fieldId}-uvv-reason`)}
                 />
                 <p className={styles.hint} id={`${fieldId}-uvv-reason`}>
                     {dueExplanationText(
@@ -400,11 +388,9 @@ export const VehicleForm = ({
                         }),
                     )}
                 </p>
-                {errorFor("uvv_due_on") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("uvv_due_on")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-uvv`} className={styles.error}>
+                    {errorFor("uvv_due_on")}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -417,7 +403,7 @@ export const VehicleForm = ({
                     onChange={(event) =>
                         setField("home_site_id", event.target.value)
                     }
-                    aria-invalid={errorFor("home_site_id") !== undefined}
+                    {...fieldAria(`${fieldId}-depot`, errorFor("home_site_id"))}
                 >
                     <option value="">Kein Stammstandort</option>
                     {sites.map((site) => (
@@ -426,11 +412,9 @@ export const VehicleForm = ({
                         </option>
                     ))}
                 </select>
-                {errorFor("home_site_id") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("home_site_id")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-depot`} className={styles.error}>
+                    {errorFor("home_site_id")}
+                </FieldError>
                 {sitesError && (
                     <p className={styles.error} role="alert">
                         {sitesError}
@@ -451,13 +435,11 @@ export const VehicleForm = ({
                     onChange={(event) =>
                         setField("cost_center", event.target.value)
                     }
-                    aria-invalid={errorFor("cost_center") !== undefined}
+                    {...fieldAria(`${fieldId}-cost`, errorFor("cost_center"))}
                 />
-                {errorFor("cost_center") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("cost_center")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-cost`} className={styles.error}>
+                    {errorFor("cost_center")}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -479,12 +461,7 @@ export const VehicleForm = ({
                             event.target.value,
                         )
                     }
-                    aria-invalid={
-                        errorFor("fuel_level") !== undefined
-                    }
-                    aria-describedby={
-                        isFuelMeasured ? `${fieldId}-fuel-hint` : undefined
-                    }
+                    {...fieldAria(`${fieldId}-fuel`, errorFor("fuel_level"), isFuelMeasured ? `${fieldId}-fuel-hint` : undefined)}
                 />
                 {isFuelMeasured && (
                     <p className={styles.hint} id={`${fieldId}-fuel-hint`}>
@@ -492,11 +469,9 @@ export const VehicleForm = ({
                         pflegbar, sobald die Fahrt beendet ist.
                     </p>
                 )}
-                {errorFor("fuel_level") && (
-                    <p className={styles.error} role="alert">
-                        {errorFor("fuel_level")}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-fuel`} className={styles.error}>
+                    {errorFor("fuel_level")}
+                </FieldError>
             </div>
 
             {!readOnly && (

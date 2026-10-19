@@ -10,6 +10,8 @@ import { confirmTotp, discoverCompanySso, getSsoProviders, login, resendVerifica
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Checkbox } from "../components/ui/Checkbox/Checkbox";
+import { FieldError } from "../components/ui/FieldError/FieldError";
+import { fieldAria } from "../components/ui/FieldError/fieldAria";
 import { Input } from "../components/ui/Input/Input";
 import { useAuth } from "../hooks/useAuth";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -264,17 +266,12 @@ export const LoginPage = () => {
                                     autoFocus
                                     required
                                     value={email}
-                                    aria-invalid={Boolean(emailError)}
-                                    aria-describedby={
-                                        emailError ? "login-email-error" : undefined
-                                    }
+                                    {...fieldAria("login-email", emailError)}
                                     onChange={(event) => setEmail(event.target.value)}
                                 />
-                                {emailError && (
-                                    <p id="login-email-error" className={styles.error}>
-                                        {emailError}
-                                    </p>
-                                )}
+                                <FieldError fieldId="login-email" className={styles.error}>
+                                    {emailError}
+                                </FieldError>
                             </div>
                             <div className={styles.field}>
                                 <label htmlFor="login-password">Passwort</label>
@@ -288,14 +285,14 @@ export const LoginPage = () => {
                                     minLength={12}
                                     maxLength={128}
                                     value={password}
-                                    aria-invalid={Boolean(passwordError)}
+                                    {...fieldAria("login-password", passwordError)}
                                     onChange={(event) =>
                                         setPassword(event.target.value)
                                     }
                                 />
-                                {passwordError && (
-                                    <p className={styles.error}>{passwordError}</p>
-                                )}
+                                <FieldError fieldId="login-password" className={styles.error}>
+                                    {passwordError}
+                                </FieldError>
                             </div>
                             <label className={styles.remember}>
                                 <Checkbox

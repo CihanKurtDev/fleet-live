@@ -14,6 +14,8 @@ import { ApiError } from "../../api/client";
 import { updateDriver } from "../../api/drivers";
 import { useDueSettings } from "../../hooks/useDueSettings";
 import { Button } from "../ui/Button/Button";
+import { FieldError } from "../ui/FieldError/FieldError";
+import { fieldAria } from "../ui/FieldError/fieldAria";
 import { Input } from "../ui/Input/Input";
 import { submitBusyLabel } from "../ui/Button/submitBusyLabel";
 import styles from "../vehicles/VehicleForm.module.scss";
@@ -152,13 +154,11 @@ export const DriverEditForm = ({
                             form: undefined,
                         }));
                     }}
-                    aria-invalid={errors.name !== undefined}
+                    {...fieldAria(`${fieldId}-name`, errors.name)}
                 />
-                {errors.name && (
-                    <p className={styles.error} role="alert">
-                        {errors.name}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-name`} className={styles.error}>
+                    {errors.name}
+                </FieldError>
             </div>
 
             <div className={styles.field}>
@@ -179,13 +179,11 @@ export const DriverEditForm = ({
                             form: undefined,
                         }));
                     }}
-                    aria-invalid={errors.phone !== undefined}
+                    {...fieldAria(`${fieldId}-phone`, errors.phone)}
                 />
-                {errors.phone && (
-                    <p className={styles.error} role="alert">
-                        {errors.phone}
-                    </p>
-                )}
+                <FieldError fieldId={`${fieldId}-phone`} className={styles.error}>
+                    {errors.phone}
+                </FieldError>
             </div>
 
             <div className={styles.field}>

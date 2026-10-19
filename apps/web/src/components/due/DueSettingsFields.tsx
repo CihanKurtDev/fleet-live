@@ -9,6 +9,8 @@ import {
 import { ApiError } from "../../api/client";
 import { useAuth } from "../../hooks/useAuth";
 import { useDueSettings } from "../../hooks/useDueSettings";
+import { FieldError } from "../ui/FieldError/FieldError";
+import { fieldAria } from "../ui/FieldError/fieldAria";
 import { Input } from "../ui/Input/Input";
 import styles from "./DueBoard.module.scss";
 
@@ -142,7 +144,7 @@ export const DueSettingsFields = ({ onSaved }: DueSettingsFieldsProps) => {
                 inputMode="numeric"
                 className={styles.settingInput}
                 aria-label={ariaLabel}
-                aria-invalid={errors[name] !== null}
+                {...fieldAria(`due-${name}`, errors[name])}
                 aria-busy={saving === name}
                 value={name === "lead" ? values.lead : values.months}
                 onChange={(event) =>
@@ -156,11 +158,9 @@ export const DueSettingsFields = ({ onSaved }: DueSettingsFieldsProps) => {
                     }
                 }}
             />
-            {errors[name] && (
-                <p className={styles.fieldError} role="alert">
-                    {errors[name]}
-                </p>
-            )}
+            <FieldError fieldId={`due-${name}`} className={styles.fieldError}>
+                {errors[name]}
+            </FieldError>
         </div>
     );
 
