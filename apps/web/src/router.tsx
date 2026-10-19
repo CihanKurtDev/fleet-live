@@ -1,7 +1,7 @@
-import { createBrowserRouter, Outlet } from 'react-router';
+import { createBrowserRouter } from 'react-router';
 import App from './App';
-import layout from './styles/layout.module.scss';
 import { RequireAuth } from './components/RequireAuth';
+import { FullLayout, WideLayout } from './components/RouteLayouts';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { HomeRoute } from './pages/HomeRoute';
@@ -13,22 +13,6 @@ import {
     NotFoundPage,
     RouteErrorPage,
 } from './pages/RouteStatusPage';
-
-function WideLayout() {
-    return (
-        <div className={layout.wide}>
-            <Outlet />
-        </div>
-    );
-}
-
-function FullLayout() {
-    return (
-        <div className={layout.full} data-layout="full">
-            <Outlet />
-        </div>
-    );
-}
 
 export const router = createBrowserRouter([
     {

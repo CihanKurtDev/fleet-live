@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
     decodePolyline,
     type FleetDensityCell,
@@ -440,8 +440,11 @@ export const FleetMap = ({
     }, [inViewVehicles, mode, selectedVehicle, view]);
     const clusterIndexRef = useRef(clusterIndex);
     const clustersRef = useRef(clusters);
-    clusterIndexRef.current = clusterIndex;
-    clustersRef.current = clusters;
+    // Handlers read these; they follow the render before any other effect runs.
+    useLayoutEffect(() => {
+        clusterIndexRef.current = clusterIndex;
+        clustersRef.current = clusters;
+    }, [clusterIndex, clusters]);
     const stackVehicles = useMemo(() => {
         if (!stackIds || stackIds.length === 0) {
             return [];
@@ -488,11 +491,15 @@ export const FleetMap = ({
         }
     }, [groupIds, view]);
 
-    useEffect(() => {
+    // A vehicle that appears in the side list opens it (the user may close it again).
+    const [wasInSideList, setWasInSideList] = useState(selectedInSideList);
+    if (selectedInSideList !== wasInSideList) {
+        setWasInSideList(selectedInSideList);
+
         if (selectedInSideList) {
             setListOpen(true);
         }
-    }, [selectedInSideList]);
+    }
 
     useEffect(() => {
         if (selectedId === null) {
