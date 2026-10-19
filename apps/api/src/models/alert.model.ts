@@ -12,6 +12,7 @@ import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
 import { withTransaction } from "../db/database";
 import { SELF_CLOSING_TYPES_SQL } from "../db/stateAlerts";
 import { stmt } from "../db/statements";
+import { speedingSeverity } from "../lib/speeding";
 import { nowSqlite } from "../lib/sqlTime";
 import { pagedQuery } from "../lib/pagination";
 
@@ -48,6 +49,32 @@ const SELECT_OPEN_SPEEDING = `
       AND ended_at IS NULL
     LIMIT 1
 `;
+
+// One warning per trip: the latest unresolved one since the open trip began.
+const SELECT_TRIP_SPEEDING = `
+    SELECT a.id, a.details
+    FROM alerts a
+    WHERE a.vehicle_id = ?
+      AND a.type = 'SPEEDING'
+      AND a.resolved_at IS NULL
+      AND a.ended_at IS NOT NULL
+      AND a.created_at >= (
+          SELECT t.started_at FROM trips t
+          WHERE t.vehicle_id = a.vehicle_id AND t.ended_at IS NULL
+          ORDER BY t.started_at DESC LIMIT 1
+      )
+    ORDER BY a.created_at DESC
+    LIMIT 1
+`;
+
+const REOPEN_SPEEDING = `
+    UPDATE alerts
+    SET ended_at = NULL, severity = ?, message = ?, details = ?
+    WHERE id = ?
+      AND type = 'SPEEDING'
+`;
+
+const SELECT_DETAILS = `SELECT details FROM alerts WHERE id = ?`;
 
 const INSERT_SPEEDING = `
     INSERT INTO alerts (
@@ -476,6 +503,34 @@ export class AlertModel {
             return existing.id;
         }
 
+        // Same trip, already warned: the new overshoot joins that warning
+        // instead of making the 100th row of one drive.
+        const same = stmt(SELECT_TRIP_SPEEDING).get(input.vehicleId) as
+            | { id: number; details: string | null }
+            | undefined;
+        const before = same ? parseDetails(same.details) : null;
+
+        if (same && isSpeedingAlertDetails(before)) {
+            const total = before.duration_s;
+            const merged: SpeedingAlertDetails = {
+                limit_kmh: input.details.limit_kmh,
+                max_speed_kmh: Math.max(before.max_speed_kmh, input.details.max_speed_kmh),
+                duration_s: total + input.details.duration_s,
+                event_count: (before.event_count ?? 1) + 1,
+                carried_duration_s: total,
+                carried_max_kmh: before.max_speed_kmh,
+            };
+
+            stmt(REOPEN_SPEEDING).run(
+                speedingSeverity(merged.max_speed_kmh, merged.limit_kmh),
+                speedingMessage(merged),
+                speedingDetailsJson(merged),
+                same.id,
+            );
+
+            return same.id;
+        }
+
         const result = stmt(INSERT_SPEEDING).run(
             input.vehicleId,
             currentDriverId(input.vehicleId),
@@ -493,10 +548,32 @@ export class AlertModel {
         severity: "MEDIUM" | "HIGH",
         details: SpeedingAlertDetails,
     ): void {
+        // Add what earlier overshoots of this trip already counted.
+        const row = stmt(SELECT_DETAILS).get(id) as
+            | { details: string | null }
+            | undefined;
+        const current = row ? parseDetails(row.details) : null;
+        const carried = isSpeedingAlertDetails(current) ? current : null;
+        const merged: SpeedingAlertDetails = carried?.carried_duration_s !== undefined
+            ? {
+                  ...details,
+                  max_speed_kmh: Math.max(
+                      carried.carried_max_kmh ?? 0,
+                      details.max_speed_kmh,
+                  ),
+                  duration_s: carried.carried_duration_s + details.duration_s,
+                  event_count: carried.event_count,
+                  carried_duration_s: carried.carried_duration_s,
+                  carried_max_kmh: carried.carried_max_kmh,
+              }
+            : details;
+
         stmt(UPDATE_SPEEDING).run(
-            severity,
-            speedingMessage(details),
-            speedingDetailsJson(details),
+            carried?.carried_duration_s !== undefined
+                ? speedingSeverity(merged.max_speed_kmh, merged.limit_kmh)
+                : severity,
+            speedingMessage(merged),
+            speedingDetailsJson(merged),
             id,
         );
     }

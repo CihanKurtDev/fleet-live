@@ -23,7 +23,13 @@ export type AlertPageLimit = (typeof VEHICLE_PAGE_LIMITS)[number];
 export type SpeedingAlertDetails = {
     limit_kmh: number;
     max_speed_kmh: number;
+    /** Zeit über dem Limit, alle Überschreitungen der Fahrt zusammen. */
     duration_s: number;
+    /** Wie oft das Fahrzeug auf dieser Fahrt über das Limit kam. Fehlt = einmal. */
+    event_count?: number;
+    /** Stand der früheren Überschreitungen dieser Fahrt (Server). */
+    carried_duration_s?: number;
+    carried_max_kmh?: number;
 };
 
 export type LowFuelAlertDetails = {
@@ -153,7 +159,12 @@ export function formatAlertEvent(
     alert: Pick<Alert, "type" | "message" | "details">,
 ): string {
     if (alert.type === "SPEEDING" && isSpeedingAlertDetails(alert.details)) {
-        return `${Math.round(alert.details.max_speed_kmh)} km/h bei Limit ${Math.round(alert.details.limit_kmh)} · ${formatAlertDuration(alert.details.duration_s)}`;
+        const times =
+            (alert.details.event_count ?? 1) > 1
+                ? ` · ${alert.details.event_count}-mal`
+                : "";
+
+        return `${Math.round(alert.details.max_speed_kmh)} km/h bei Limit ${Math.round(alert.details.limit_kmh)} · ${formatAlertDuration(alert.details.duration_s)}${times}`;
     }
 
     if (alert.type === "LOW_FUEL" && isLowFuelAlertDetails(alert.details)) {
