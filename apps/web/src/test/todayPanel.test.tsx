@@ -11,14 +11,12 @@ import {
 import { authUser, renderAuth } from "./renderAuth";
 
 vi.mock("../api/today", () => ({ getToday: vi.fn() }));
-vi.mock("../api/alerts", () => ({ resolveAlert: vi.fn() }));
 vi.mock("../api/vehicles", () => ({ getVehicle: vi.fn() }));
 vi.mock("../api/drivers", () => ({ getDriver: vi.fn() }));
 vi.mock("../api/sites", () => ({
     listSites: vi.fn().mockResolvedValue({ data: [] }),
 }));
 
-import { resolveAlert } from "../api/alerts";
 import { getToday } from "../api/today";
 import { getVehicle } from "../api/vehicles";
 
@@ -120,30 +118,19 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
 beforeEach(() => {
     vi.mocked(getToday).mockReset();
     vi.mocked(getToday).mockResolvedValue(response);
-    vi.mocked(resolveAlert).mockReset();
-    vi.mocked(resolveAlert).mockResolvedValue({} as never);
 });
 
 describe("Heute dran", () => {
     it("links every count to the list that shows exactly those rows", async () => {
         renderPanel();
 
-        const overdue = await screen.findByRole("link", {
-            name: /12\s*Fristen überfällig/,
-        });
-        expect(overdue).toHaveAttribute("href", "/fristen?state=overdue");
         expect(
-            screen.getByRole("link", { name: /1\s*Gespräch führen/ }),
+            await screen.findByRole("link", { name: /1s*Gespräch führen/ }),
         ).toHaveAttribute("href", "/drivers?min_open_warnings=5");
-        expect(
-            screen.getByRole("link", { name: /3\s*Kein Signal/ }),
-        ).toHaveAttribute("href", "/alerts?type=OFFLINE");
-        // Kinds without tasks get no chip.
-        expect(screen.queryByRole("link", { name: /Wenig Tank/ })).toBeNull();
         expect(screen.getByText(/von 16 offenen Aufgaben/)).toBeInTheDocument();
     });
 
-    it("opens the inbox for a warning type, not the vehicle list", async () => {
+    it("has no chip for a number a tile on the page already shows", async () => {
         vi.mocked(getToday).mockResolvedValue({
             ...response,
             meta: {
@@ -153,23 +140,17 @@ describe("Heute dran", () => {
         });
         renderPanel();
 
-        expect(
-            await screen.findByRole("link", { name: /392\s*Wenig Tank/ }),
-        ).toHaveAttribute("href", "/alerts?type=LOW_FUEL");
+        await screen.findByRole("link", { name: /1s*Gespräch führen/ });
+        expect(screen.queryByRole("link", { name: /Fristen überfällig/ })).toBeNull();
+        expect(screen.queryByRole("link", { name: /Kein Signal/ })).toBeNull();
+        expect(screen.queryByRole("link", { name: /392s*Wenig Tank/ })).toBeNull();
     });
 
-    it("resolves a no-signal warning in the row and says so", async () => {
+    it("lists a no-signal task with no button: the warning closes itself", async () => {
         renderPanel();
 
         const row = await screen.findByRole("link", { name: /K-FUNK 1/ });
-        fireEvent.click(within(row).getByRole("button", { name: "Erledigen" }));
-
-        await waitFor(() => expect(resolveAlert).toHaveBeenCalledWith(7));
-        expect(
-            await screen.findByText("Warnung für K-FUNK 1 erledigt."),
-        ).toHaveAttribute("role", "status");
-        // The row button does not open the vehicle.
-        expect(screen.queryByText("Fahrzeugseite")).toBeNull();
+        expect(within(row).queryByRole("button")).toBeNull();
     });
 
     it("opens the vehicle form on Schicht for a deadline", async () => {
@@ -195,8 +176,8 @@ describe("Heute dran", () => {
     it("keeps Enter on a row button for the button", async () => {
         renderPanel();
 
-        const row = await screen.findByRole("link", { name: /K-FUNK 1/ });
-        fireEvent.keyDown(within(row).getByRole("button", { name: "Erledigen" }), {
+        const row = await screen.findByRole("link", { name: /K-HU 1/ });
+        fireEvent.keyDown(within(row).getByRole("button", { name: "Eintragen" }), {
             key: "Enter",
         });
 
@@ -220,6 +201,5 @@ describe("Heute dran", () => {
 
         await screen.findByRole("link", { name: /K-HU 1/ });
         expect(screen.queryByRole("button", { name: "Eintragen" })).toBeNull();
-        expect(screen.queryByRole("button", { name: "Erledigen" })).toBeNull();
     });
 });
