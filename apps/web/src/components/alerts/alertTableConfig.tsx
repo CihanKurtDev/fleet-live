@@ -34,6 +34,7 @@ export const alertTiles: AlertTileOption[] = [
     {
         id: "OFFLINE",
         label: "Kein Signal",
+        tone: "critical",
         view: { filter: "open", type: "OFFLINE" },
     },
     {

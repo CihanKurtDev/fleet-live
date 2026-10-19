@@ -52,7 +52,7 @@ Controls that sit in one group share one size and one centre line. `apps/web/scr
 - A control whose text changes with its state (Speichern / Wird gespeichert…, Depot anlegen / Klicken abbrechen) keeps its width: `Button` `busy` + `busyLabel`, or `ui/Button/SwapLabel` in a custom control.
 - One focus indicator: 2 px outline in `--focus-ring` (`:focus-visible` in `index.css`, `--focus-width`). Do not replace it with a faint shadow; it must reach 3:1.
 - Text colours come from tokens; tinted tags mix at most 12 % of their colour into the background so 12 px text stays at 4.5:1 in both schemes.
-- Status pill (Auf Fahrt green, Standby amber, Feierabend grey, Kein Signal red) and hint tags (Tempo red, Kein Signal grey, Tank amber) use the existing colour tokens.
+- Status pill (Auf Fahrt green, Standby amber, Feierabend grey, Kein Signal red) and hint tags (Tempo red, Kein Signal red, Tank amber) use the existing colour tokens.
 - Confirm dialog for destructive or bulk actions: title with the count, one sentence, list of affected items, Abbrechen plus the action.
 - Short `role="status"` line after every write that stays on the page ("3 Warnungen erledigt.", "Fahrzeug K-AB 1 angelegt.", "Mitglied entfernt."). A new action clears the old line. A create that opens the new record's page needs none.
 - Dialogs: `Modal` keeps the header fixed and scrolls the body; form actions stick to the bottom, so Speichern is always reachable. Footer buttons are `md` like the fields. A confirm dialog focuses Abbrechen first; a form focuses its first (or `data-autofocus`) field. Removing a person or record always asks first in a confirm dialog (title, one sentence, the affected items, Abbrechen plus Löschen/Entfernen).
