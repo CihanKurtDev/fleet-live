@@ -6,6 +6,7 @@ import { Button } from "../ui/Button/Button";
 import { Checkbox } from "../ui/Checkbox/Checkbox";
 import { Input } from "../ui/Input/Input";
 import { Modal } from "../ui/Modal/Modal";
+import { TablePagination } from "../ui/Table/TablePagination";
 import styles from "./FleetDriverPicker.module.scss";
 
 type FleetDriverPickerProps = {
@@ -155,6 +156,17 @@ export const FleetDriverPicker = ({
                             Liste auswählen.
                         </p>
                     )}
+                    {searching && !searchPending && pageCount > 1 && (
+                        <div className={styles.pager}>
+                            <TablePagination
+                                compact
+                                page={page}
+                                pageCount={pageCount}
+                                total={matched}
+                                onPageChange={setPage}
+                            />
+                        </div>
+                    )}
                     <div className={styles.footer}>
                         <Button
                             variant="ghost"
@@ -164,32 +176,6 @@ export const FleetDriverPicker = ({
                         >
                             Auswahl aufheben
                         </Button>
-                        {searching && !searchPending && pageCount > 1 && (
-                            <div className={styles.pager}>
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={page <= 1}
-                                    onClick={() => setPage(page - 1)}
-                                >
-                                    Zurück
-                                </Button>
-                                <span>
-                                    Seite {formatCount(page)} von{" "}
-                                    {formatCount(pageCount)}
-                                </span>
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="sm"
-                                    disabled={page >= pageCount}
-                                    onClick={() => setPage(page + 1)}
-                                >
-                                    Weiter
-                                </Button>
-                            </div>
-                        )}
                         <div className={styles.actions}>
                             <Button
                                 type="button"
