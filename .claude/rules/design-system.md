@@ -27,7 +27,7 @@ The source design is board 0 on the canvas "fleet-live Ein Rahmen für alle Seit
 2. **KPI tiles**: `ui/KpiTiles` on Fahrzeuge, Warnungen, Fahrer, Fristen and Karte (uppercase label, number, hint line). The hint line is always there, empty if needed, so every tile has one height (80 px desktop). A tile is a filter button with a pressed state; one is always active ("Alle" / "Offen").
 3. **List panel** (one bordered panel that fills the remaining height):
    - Toolbar, 54 px: "Auswählen" first (only where a bulk action exists, dispatchers only), further filters as menus, search right-aligned.
-   - Selection bar replaces the toolbar in selection mode: page checkbox, "N ausgewählt", optional summary, bulk actions, "Fertig".
+   - Selection bar replaces the toolbar in selection mode: page checkbox, "N ausgewählt", optional summary, bulk actions, "Abbrechen".
    - Header row 38 px, muted 12 px labels, sort marks.
    - Rows 48 px: identity first (bold value plus muted second line), state in the middle, hints right, an optional 28 px row button last. Rows fill the measured height (`hooks/useBoundHeight`), no fixed 10.
    - Footer 48 px: "X–Y von N" left, pages right.

@@ -46,7 +46,7 @@ export const Table = <RowType,>({
             >
                 {columns.some((column) => column.width) && (
                     <colgroup>
-                        {showSelect && <col style={{ width: 36 }} />}
+                        {showSelect && <col style={{ width: 44 }} />}
                         {columns.map((column) => (
                             <col
                                 key={String(column.key)}

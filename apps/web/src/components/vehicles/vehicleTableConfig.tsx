@@ -136,7 +136,8 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
         key: "status",
         displayText: "Status",
-        width: "130px",
+        // The longest chip ("Kein Signal") plus the cell padding, so no "…".
+        width: "150px",
         sortable: true,
         render: (value) => <VehicleStatusChip status={value} />,
     },
@@ -210,6 +211,9 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
         key: "active_alerts",
         displayText: "Warnungen",
+        // Without a width this column got 0 px in a narrow window and the
+        // hints (Funk, Tempo, Tank) were out of reach.
+        width: "180px",
         sortable: true,
         render: (_value, { row }) => {
             const types = warningTypes(row);

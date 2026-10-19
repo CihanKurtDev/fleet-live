@@ -4,7 +4,7 @@ type Key = string | number;
 type Selection = { key: string; ids: Key[] };
 
 /**
- * Selection as a mode ("Auswählen" … "Fertig") for a list page.
+ * Selection as a mode ("Auswählen" … "Abbrechen") for a list page.
  *
  * `rowKeys` are the selectable keys on the current page. `resetKey` is the
  * list query (page, filter, sort, search): when it changes the selection is
@@ -63,7 +63,7 @@ export const useSelectionMode = <K extends Key>(
         /** Selection mode is on. */
         active,
         start,
-        /** Leaves the mode and clears the selection ("Fertig", Escape). */
+        /** Leaves the mode and clears the selection ("Abbrechen", Escape). */
         stop,
         selectedIds,
         count,

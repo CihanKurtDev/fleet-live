@@ -25,7 +25,7 @@ The design shows exactly these actions. Anything new is marked as new in the rep
 ## 3. Selection only as a mode
 
 - Checkboxes appear only after the user presses "Auswählen", and only on pages that have a bulk action.
-- In selection mode a row click toggles the row, row buttons are hidden, and a selection bar replaces the toolbar: "N ausgewählt", the bulk actions, "Fertig". Escape also ends it.
+- In selection mode a row click toggles the row, row buttons are hidden, and a selection bar replaces the toolbar: "N ausgewählt", the bulk actions, "Abbrechen". Escape also ends it.
 - Viewers never see "Auswählen".
 
 ## 4. Same thing, same look
@@ -40,7 +40,7 @@ Walk every element and answer: what happens on click, for which role, and does a
 
 ## 6. Dialogs and panels follow the same rules
 
-A dialog that lists things (assign drivers, pick vehicles, bulk confirm) is a small list page: header with the one primary action, the list with rows that have one clear action each, and the same selection mode as every list ("Auswählen" → checkboxes → selection bar → "Fertig"). It never mixes checkboxes and per-row buttons for the same action, and it never has its own "Bearbeiten" mode.
+A dialog that lists things (assign drivers, pick vehicles, bulk confirm) is a small list page: header with the one primary action, the list with rows that have one clear action each, and the same selection mode as every list ("Auswählen" → checkboxes → selection bar → "Abbrechen"). It never mixes checkboxes and per-row buttons for the same action, and it never has its own "Bearbeiten" mode.
 
 ## 7. Use it before you report it
 

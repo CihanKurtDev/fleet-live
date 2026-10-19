@@ -147,7 +147,7 @@ describe("Fahrzeuge panel on the driver detail", () => {
         // three rows plus the page checkbox
         expect(checkboxes()).toHaveLength(4);
         expect(screen.getByText("0 ausgewählt")).toBeVisible();
-        expect(screen.getByRole("button", { name: "Fertig" })).toBeVisible();
+        expect(screen.getByRole("button", { name: "Abbrechen" })).toBeVisible();
     });
 
     it("counts ticked rows and removes exactly those after confirming", async () => {
@@ -192,10 +192,10 @@ describe("Fahrzeuge panel on the driver detail", () => {
         expect(checkboxes()).toHaveLength(0);
     });
 
-    it("ends selection mode with Fertig", () => {
+    it("ends selection mode with Abbrechen", () => {
         renderDriverPanel();
         fireEvent.click(screen.getByRole("button", { name: "Auswählen" }));
-        fireEvent.click(screen.getByRole("button", { name: "Fertig" }));
+        fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
 
         expect(screen.getByRole("button", { name: "Zuweisen" })).toBeVisible();
     });

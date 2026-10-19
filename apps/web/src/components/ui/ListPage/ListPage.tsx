@@ -186,7 +186,7 @@ interface SelectionBarProps {
     summary?: ReactNode;
     /** Bulk actions, e.g. `<Button variant="dangerOutline" size="toolbar">`. */
     actions?: ReactNode;
-    /** "Fertig" and Escape: leave selection mode. */
+    /** "Abbrechen" and Escape: leave selection mode. */
     onDone: () => void;
 }
 
@@ -239,7 +239,7 @@ export const SelectionBar = ({
             <div className={styles.selectionActions}>
                 {actions}
                 <Button variant="secondary" size="toolbar" onClick={onDone}>
-                    Fertig
+                    Abbrechen
                 </Button>
             </div>
         </div>

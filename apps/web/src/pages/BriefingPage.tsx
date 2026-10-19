@@ -63,7 +63,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
             label: VEHICLE_STATUS_LABELS.OFFLINE,
             hint: "Fahrzeuge",
             tone: "critical",
-            to: "/vehicles?filter=offline",
+            to: "/alerts?type=OFFLINE",
         },
         {
             key: "driving",

@@ -15,7 +15,7 @@ interface DueKindChipsProps {
  * rail sits below it. The same switch as the rail's kind buttons.
  */
 export const DueKindChips = ({ kinds, activeKind, onKind }: DueKindChipsProps) => (
-    <div className={styles.chips} role="group" aria-label="Art">
+    <div className={styles.chips} role="group" aria-label="Art" data-tip="due-kinds">
         {kinds.map((kind) => {
             const active = activeKind === kind.id;
 

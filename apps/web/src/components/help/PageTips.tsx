@@ -50,8 +50,11 @@ function placeNear(target: Element): Placement {
     };
 }
 
+/** The first element of that name that is shown (a hidden one has no box). */
 const findTarget = (name: string) =>
-    document.querySelector(`[data-tip="${name}"]`);
+    [...document.querySelectorAll(`[data-tip="${name}"]`)].find(
+        (element) => element.checkVisibility?.() ?? true,
+    ) ?? null;
 
 /**
  * Short coach marks for one page. They show once per person; the help drawer
