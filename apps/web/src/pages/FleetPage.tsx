@@ -396,7 +396,10 @@ export const FleetPage = () => {
         setFilter(filter === id ? undefined : id);
     };
     const kpiTiles: FleetKpiTile[] = [
-        ...MAP_STATUS_LEGEND.map((status): FleetKpiTile => {
+        // Kein Signal is not a tile here: those vehicles have no position and are
+        // never drawn. It stays on Schicht, the vehicle list and the inbox.
+        ...MAP_STATUS_LEGEND.filter((status) => status !== "OFFLINE").map(
+            (status): FleetKpiTile => {
             const totals = statusTotals[status];
             const label = vehicleStatusLabel(status);
 
@@ -418,7 +421,8 @@ export const FleetPage = () => {
                         current === status ? null : status,
                     ),
             };
-        }),
+            },
+        ),
         {
             key: "speeding",
             label: "Tempo jetzt",

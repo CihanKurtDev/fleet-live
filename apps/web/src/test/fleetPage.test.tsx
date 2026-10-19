@@ -140,7 +140,7 @@ beforeEach(() => {
 const band = () => screen.getByRole("group", { name: "Lage" });
 
 describe("Flottenkarte", () => {
-    it("shows the four status tiles with their fleet counts, and the two warning tiles", async () => {
+    it("shows the three status tiles with their fleet counts (no Kein Signal tile), and the two warning tiles", async () => {
         renderPage();
 
         await waitFor(() =>
@@ -152,7 +152,7 @@ describe("Flottenkarte", () => {
         );
         expect(within(band()).getByRole("button", { name: /^Standby.*, 1 gesamt$/ })).toBeInTheDocument();
         expect(within(band()).getByRole("button", { name: /^Feierabend.*, 1 gesamt$/ })).toBeInTheDocument();
-        expect(within(band()).getByRole("button", { name: /^Kein Signal.*, 1 gesamt$/ })).toBeInTheDocument();
+        expect(within(band()).queryByRole("button", { name: /^Kein Signal/ })).toBeNull();
         expect(within(band()).getByRole("button", { name: "Tempo jetzt, 3" })).toBeInTheDocument();
         expect(within(band()).getByRole("button", { name: "Wenig Tank, 9" })).toBeInTheDocument();
     });
@@ -182,10 +182,6 @@ describe("Flottenkarte", () => {
         const map = await screen.findByTestId("map");
         await waitFor(() => expect(within(map).getAllByRole("button")).toHaveLength(1));
         expect(within(map).getByText("dot K-FL 5")).toBeInTheDocument();
-        expect(within(band()).getByRole("button", { name: /^Kein Signal/ })).toHaveAttribute(
-            "aria-pressed",
-            "true",
-        );
         // The status is a chip in the page, not a server filter.
         expect(vi.mocked(useFleetPositions).mock.calls.at(-1)?.[0].filter).toBeUndefined();
     });
