@@ -483,11 +483,11 @@ Cookie: fleet_session=…
 {
   "license_plate": "K-XY 123",
   "fuel_level": 85,
-  "status": "DRIVING"
+  "status": "IDLE"
 }
 ```
 
-`company_id` im Body wird ignoriert.
+`company_id` im Body wird ignoriert. Ein Fahrzeug fährt nur mit Fahrer: `status: "DRIVING"` ohne aktuellen Fahrer antwortet `409` mit `fields.status`. Erst `POST /api/drivers/:id/vehicles`, dann `PATCH /api/drivers/:id/current-vehicle`, dann auf `DRIVING` setzen.
 
 ---
 
