@@ -12,7 +12,7 @@ Flottenleitstelle für Dispatcher. Schichtüberblick, Live-Karte, Fahrten, Fahre
 
 ### Schichtüberblick
 
-![Schichtüberblick mit Kennzahlen und Monatsverlauf](docs/screenshots/briefing.png)
+![Schichtüberblick mit Lagekarte, Kennzahlen und der Liste „Heute dran“](docs/screenshots/briefing.png)
 
 ### Warnungs-Inbox
 
@@ -252,7 +252,7 @@ Ohne Session landet man auf `/login`. Danach ist `/` die Startseite.
 
 ## Schichtüberblick
 
-Oben die Kennzahlen: offene Warnungen, Kein Signal, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
+Hinter den Kacheln liegt die Karte der Flotte. Oben die Kennzahlen: offene Warnungen, Kein Signal, fahrend, bereit, niedriger Tank, im Depot. Daneben drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. „Heute dran“ zeigt, was jetzt zu tun ist (Daten eintragen, Gespräch führen, Fristen bald fällig). Daneben zwei kleine Diagramme; die exakten Monatswerte stehen in einer Tabelle zum Aufklappen. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
 
 ## Fahrzeugliste
 
