@@ -9,21 +9,21 @@ Vorbereitung: `npm run db:seed`, Anwendung starten, Browser auf 1366×768, Dispa
 - Sprechertext: „fleet-live ist eine TypeScript-Flottenleitstelle mit Session-Login und mandantengetrennten Daten.“
 
 **8–20 s — Schichtüberblick**
-- Briefing mit Statuszahlen und offenen Warnungen zeigen.
-- Sprechertext: „Die Startseite bündelt den aktuellen Flottenzustand, Ausfälle und die wichtigsten Aufgaben der Schicht.“
+- Schichtüberblick zeigen: Lagekarte, Kacheln, Fristenzahlen und die Liste „Heute dran“.
+- Sprechertext: „Die Startseite bündelt den aktuellen Flottenzustand, Ausfälle, Fristen und die Aufgaben der Schicht. Jede Zahl führt zur Liste mit denselben Zeilen.“
 
 **20–35 s — Flottenkarte**
-- Zur Flottenkarte wechseln, Statusfilter zeigen und eine Dichtezelle öffnen.
+- Zur Flottenkarte wechseln, eine Statuskachel als Filter zeigen und einen Fahrer filtern.
 - Nach einem Kennzeichen suchen, sodass die Karte zum Fahrzeug springt.
-- Sprechertext: „Die Karte aggregiert große Ergebnismengen serverseitig und wechselt beim Hineinzoomen zu Live-Markern.“
+- Sprechertext: „Die Karte lädt die Positionen der Firma einmal und zeigt jedes Fahrzeug live; über 5000 Treffer aggregiert der Server zu Dichtezellen.“
 
 **35–52 s — Fahrzeug und Fahrt**
 - Einen Marker öffnen. Karte, laufende Fahrt und Live-Bewegung zeigen.
-- Sprechertext: „SSE liefert nur fokussierte Telemetrie. Der dauerhafte Fahrweg liegt kompakt als codierte Polyline in der Fahrt.“
+- Sprechertext: „Jedes Fahrzeug meldet sich im eigenen Takt, SSE liefert nur fokussierte Telemetrie. Der dauerhafte Fahrweg liegt kompakt als codierte Polyline in der Fahrt.“
 
 **52–65 s — Warnungen**
 - Warnungen öffnen, Typfilter zeigen und eine Warnung erledigen.
-- Sprechertext: „Geschwindigkeits- und Offline-Ereignisse werden live erkannt; Bearbeitung und Fahrer-Snapshot bleiben nachvollziehbar.“
+- Sprechertext: „Tempo ist eine Warnung je Fahrt, Tank und Kein Signal schließen sich selbst; Erledigtes und der Fahrer-Snapshot bleiben nachvollziehbar.“
 
 **65–80 s — Stammdatenimport**
 - Import-Assistent öffnen und eine vorbereitete CSV/XLSX bis zur Vorschau zeigen.
@@ -35,6 +35,6 @@ Vorbereitung: `npm run db:seed`, Anwendung starten, Browser auf 1366×768, Dispa
 
 ## Aufnahme-Checkliste
 - Standard-Seed verwenden, Simulation laufen lassen.
-- Light Theme für den Hauptclip; Dark Theme kurz separat prüfen.
+- Dunkles Theme für den Hauptclip (so sind die Bilder in der README); das helle kurz separat prüfen.
 - Keine DevTools, Benachrichtigungen oder Passwortmanager-Pop-ups.
 - Video extern hosten oder als komprimiertes MP4/WebM verlinken; keine großen Binärdateien ins Repository legen.

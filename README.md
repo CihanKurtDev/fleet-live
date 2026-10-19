@@ -145,21 +145,29 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `POST` | `/api/auth/forgot-password` | `{ email }`, gleiche Antwort ob das Konto existiert |
 | `POST` | `/api/auth/reset-password` | `{ token, password }`, beendet alle Sessions |
 | `POST` | `/api/auth/logout` | Löscht die Session |
+| `POST` | `/api/auth/logout-all` | Beendet alle Sessions der Person |
+| `POST` | `/api/auth/password` | Passwort ändern |
 | `GET`  | `/api/auth/me` | Aktueller Nutzer inklusive `company_name`, `memberships` oder `401` |
 | `POST` | `/api/auth/company` | Aktive Firma wechseln |
 | `POST` | `/api/auth/companies` | Weitere Firma anlegen und dorthin wechseln |
 | `POST` | `/api/auth/invites` | Dispatcher lädt `{ email, role }` ein |
+| `POST` | `/api/auth/invites/accept` | Einladung annehmen |
+| `GET`, `PATCH`, `DELETE` | `/api/auth/members`, `/api/auth/members/:userId` | Team der Firma lesen, Rolle ändern, entfernen (Dispatcher). Eine Firma behält mindestens einen Dispatcher |
+| `GET`, `PATCH` | `/api/auth/security` | Firmen-Login (OIDC) lesen und setzen (Dispatcher) |
+| `POST` | `/api/auth/totp/setup`, `/totp/confirm`, `/totp/disable` | Zwei-Faktor einrichten, bestätigen, ausschalten |
+| `POST` | `/api/auth/import-prompt/dismiss` | Die einmalige Frage nach dem Import schließen |
 | `GET`  | `/api/auth/sso/providers` | `{ google, microsoft }` — nur `true`, wenn Client-ID und Secret gesetzt sind |
-| `GET`  | `/api/auth/sso/google/start` | Weiterleitung zu Google. Microsoft und `/sso/company/start` analog |
+| `GET`  | `/api/auth/sso/google/start` | Weiterleitung zu Google. Microsoft (`/sso/microsoft/start`) analog; die Rückkehr ist `/sso/:provider/callback` |
+| `POST`, `GET` | `/api/auth/sso/company/discover`, `/sso/company/start`, `/sso/company/callback` | Firmen-IdP: Firma finden, Weiterleitung, Rückkehr |
 
-`remember: true` hält das Cookie sieben Tage. Sonst zwölf Stunden, Cookie nur für die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld. Passwort mindestens 12 und höchstens 128 Zeichen. Ohne `SMTP_URL` schreibt die Entwicklung den Reset-Link ins Server-Log und sagt das in der Antwort; es geht keine Mail raus. Produktion ohne SMTP antwortet `503`. Die Anmeldeseite zeigt Google und Microsoft nur, wenn die jeweiligen Client-Variablen gesetzt sind.
+`remember: true` hält das Cookie sieben Tage. Sonst ist es ein Sitzungs-Cookie, und 15 Minuten ohne Nutzung beenden die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld. Passwort mindestens 12 und höchstens 128 Zeichen. Ohne `SMTP_URL` schreibt die Entwicklung den Reset-Link ins Server-Log und sagt das in der Antwort; es geht keine Mail raus. Produktion ohne SMTP antwortet `503`. Die Anmeldeseite zeigt Google und Microsoft nur, wenn die jeweiligen Client-Variablen gesetzt sind.
 
 ## Fahrzeuge und Livedaten
 
 | Methode  | Endpoint                         | Beschreibung |
 | -------- | -------------------------------- | ------------ |
 | `GET`    | `/api/vehicles`                  | Liste (`search`, `filter`, `sort`, `dir`, `page`, `limit`) |
-| `GET`    | `/api/vehicles/positions`        | Letzte Positionen für die Karte (`bbox`, `filter`, `drivers`). `search` wird angenommen und blendet nichts aus |
+| `GET`    | `/api/vehicles/positions`        | Letzte Positionen für die Karte (`bbox`, `filter`, `drivers` oder `driver_search`). `search` wird angenommen und blendet nichts aus |
 | `GET`    | `/api/vehicles/drivers`          | Fahrersuche (`search`, `page`; `names` lädt eine Auswahl nach) |
 | `GET`    | `/api/vehicles/:id`              | Ein Fahrzeug. `404` wenn weg oder andere Firma |
 | `GET`    | `/api/vehicles/:id/telemetry`    | Letzte Punkte (`limit` 10, 25, 50, 100, Standard 50) |
@@ -173,30 +181,45 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `GET`    | `/api/stream`                    | SSE: `connected` (`connection_id`), Telemetrie, `vehicles-changed` |
 | `POST`   | `/api/stream/focus`              | `{ connection_id, ids }`. Nur Fahrzeuge dieser Firma, Verbindung muss dazugehören |
 | `GET`    | `/api/sim`                       | `{ running, available }` für diese Firma |
+| `GET`    | `/api/sim/routes`                | Die Simulator-Straßen als kodierte Polylinien für die Karten |
 | `PATCH`  | `/api/sim`                       | `{ running }`, Sim dieser Firma pausieren oder fortsetzen |
 | `GET`    | `/api/alerts`                    | Warnungen (`filter` open/resolved/all, optional `type`, `vehicle_id`, `driver_id`, `page`, `limit`) |
 | `PATCH`  | `/api/alerts/:id`                | `{ resolved: true }`, nur `dispatcher` |
+| `PATCH`  | `/api/alerts`                    | `{ ids, resolved: true }`, mehrere auf einmal, nur `dispatcher`. Eine fremde ID ist `404` und nichts ändert sich |
 | `GET`    | `/api/briefing`                  | Snapshot für die Startseite |
+| `GET`    | `/api/today`                     | Die Liste „Heute dran“ der Schicht (`limit` 1 bis 50, Standard 12) |
+| `GET`    | `/api/due`                       | Fristen seitenweise (`state`, optional `kind`, `search`) |
+| `GET`, `PATCH` | `/api/due/settings`        | Vorlauf in Tagen und Kontrollabstand in Monaten. Lesen auch als Viewer, schreiben nur `dispatcher` |
+| `GET`    | `/api/sites`                     | Depots der Firma mit Zahlen |
+| `POST`, `PATCH`, `DELETE` | `/api/sites`, `/api/sites/:id` | Depotkreise pflegen, `dispatcher` |
 | `GET`    | `/api/drivers`                   | Fahrer (`search`, `page`, `limit`, optional `vehicle_id`, `min_open_warnings`, `without_vehicle=true`). Sortierung: offene Warnungen |
 | `POST`   | `/api/drivers`                   | `{ name, phone?, licence_expires_on?, licence_checked_on? }`, `dispatcher` |
 | `GET`    | `/api/drivers/:id`               | Fahrer, Freigaben, aktuelles Fahrzeug. `404` wenn weg oder andere Firma |
 | `PATCH`  | `/api/drivers/:id`               | `{ name?, phone?, licence_expires_on?, licence_checked_on? }`, `dispatcher` |
+| `DELETE` | `/api/drivers/:id`               | `204`, oder `409`, solange der Fahrer ein fahrendes Fahrzeug hat, `dispatcher` |
 | `POST`   | `/api/drivers/:id/vehicles`      | `{ vehicle_id }`, Freigabe, `dispatcher` |
 | `DELETE` | `/api/drivers/:id/vehicles/:vehicleId` | Freigabe weg, `dispatcher` |
 | `PATCH`  | `/api/drivers/:id/current-vehicle` | `{ vehicle_id }` oder `{ vehicle_id: null }`, `dispatcher` |
+| `POST`   | `/api/import/preview`            | `csv` oder `xlsx` (Base64) prüfen, `dispatcher` |
+| `GET` | `/api/import/preview/:previewId/rows` | Zeilen der Vorschau lesen |
+| `PATCH`, `POST` | `/api/import/preview/:previewId/actions`, `/mark-existing` | Aktionen je Zeile ändern, Zeilen als „schon da“ markieren |
+| `POST`   | `/api/import/commit`             | Alles in einer Transaktion schreiben, schreibt das Log und optional das Firmenprofil |
+| `GET`, `PUT` | `/api/import/profile`        | Gespeicherte Spaltenzuordnung der Firma |
+| `GET`    | `/api/import/runs`               | Import-Log der Firma |
+| `GET`    | `/api/export/vehicles`, `/alerts`, `/trips`, `/period` | CSV der Firma (Semikolon, deutsche Köpfe), nur `dispatcher`. `/period?month=JJJJ-MM` ist ein Monat |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
 `GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `unassigned`, `driving`, `idle`, `stopped`, `offline`, `in_depot`, `speeding`).
 
-`GET /api/alerts` gibt Warnungen mit Kennzeichen und dem Fahrer zum Zeitpunkt des Öffnens (`driver_id` / `driver_name`). Dazu `ended_at` und `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s }`). Standardfilter `open` heißt `resolved_at IS NULL`. `ended_at` spielt dafür keine Rolle. `type` optional: `SPEEDING`, `LOW_FUEL`, `OFFLINE`. `meta.counts` ist `open` / `resolved` / `all` und ignoriert `type`. `meta.type_counts` hängt am Filter. `vehicle_id` oder `driver_id` optional, sonst 404 wenn fremd. Umbesetzung ändert alte Zeilen nicht.
+`GET /api/alerts` gibt Warnungen mit Kennzeichen und dem Fahrer zum Zeitpunkt des Öffnens (`driver_id` / `driver_name`). Dazu `ended_at` und `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s, event_count }`). Standardfilter `open` heißt `resolved_at IS NULL`. `ended_at` spielt dafür keine Rolle. `type` optional: `SPEEDING`, `LOW_FUEL`, `OFFLINE`. `meta.counts` ist `open` / `resolved` / `all` und ignoriert `type`. `meta.type_counts` hängt am Filter. `vehicle_id` oder `driver_id` optional, sonst 404 wenn fremd. Umbesetzung ändert alte Zeilen nicht.
 
 `GET /api/drivers` listet Fahrer der Session-Firma. `counts` und `open_warnings` zählen nur SPEEDING (über den Snapshot `alerts.driver_id`). `vehicle_plate` nur wenn genau ein freigegebenes Fahrzeug. `current_vehicle_plate` ist das Fahrzeug mit `current_driver_id`. Mit `vehicle_id` kommen die Fahrer, die für dieses Fahrzeug frei sind. `min_open_warnings` lässt nur Fahrer mit mindestens so vielen offenen SPEEDING-Warnungen durch, `without_vehicle=true` nur Fahrer ohne aktuelles Fahrzeug; `meta.total` zählt nach Filter. `last_warning_at` ist die neueste offene SPEEDING-Warnung. `GET /api/drivers/:id` hängt `vehicles` (`is_current`) und `current_vehicle` an.
 
 `GET /api/briefing` gibt Statuszähler (`driving`, `idle`, `offline`), Inbox `open`, `low_fuel`, `in_depot`, monatliche `history` und `due` als Zähler (überfällig, in 30 Tagen, fehlende Felder). `GET /api/due` gibt dieselben Fristen seitenweise (`state`, optional `kind`, `search`). `viewer` darf lesen.
 
-`GET /api/vehicles/positions` ist entweder `positions` oder `density`, plus `meta.total`, `meta.matched` und `meta.without_position`. `matched` zählt die Filtertreffer der Firma ohne Kartenausschnitt, inklusive Fahrzeuge ohne Position. Jede Zeile hat `has_position`. Ohne Telemetrie sind Koordinaten null; `without_position` ignoriert den Kartenausschnitt. `bbox=west,south,east,north` optional und gilt nur für Zeilen mit Position. `search` schränkt die Zeilen nicht ein. Kennzeichen und aktueller Fahrer werden in dem geladenen Bestand gesucht. `drivers` filtert die Ansicht. Bis `FLEET_POSITIONS_MAX` (5000) kommen Einzelpositionen. Die Karte lädt diesen Bestand einmal und clustert im Ausschnitt. Darüber höchstens 32 mal 20 Dichtezellen.
+`GET /api/vehicles/positions` ist entweder `positions` oder `density`, plus `meta.total`, `meta.matched` und `meta.without_position`. `matched` zählt die Filtertreffer der Firma ohne Kartenausschnitt, inklusive Fahrzeuge ohne Position. Jede Zeile hat `has_position`. Ohne Telemetrie sind Koordinaten null; `without_position` ignoriert den Kartenausschnitt. `bbox=west,south,east,north` optional und gilt nur für Zeilen mit Position. `search` schränkt die Zeilen nicht ein. Kennzeichen und aktueller Fahrer werden in dem geladenen Bestand gesucht. `drivers` filtert die Ansicht. Bis `FLEET_POSITIONS_MAX` (5000) kommen Einzelpositionen. Die Karte lädt diesen Bestand einmal. Darüber höchstens 32 mal 20 Dichtezellen.
 
-Query-Parameter stehen in `@fleet-live/shared`. Kaputte Sortierung oder Limits: `400`. Seitengröße 10, erlaubt 10, 25, 50, 100. Kennzeichen max. 32 Zeichen, Fahrername max. 80. Beides eindeutig pro Firma.
+Query-Parameter stehen in `@fleet-live/shared`. Kaputte Sortierung oder Limits: `400`. Seitengröße 1 bis 100 (Standard 10); die Listen fragen so viele Zeilen an, wie in ihre Höhe passen. Kennzeichen max. 32 Zeichen, Fahrername max. 80. Beides eindeutig pro Firma.
 
 Validierung:
 
@@ -241,6 +264,7 @@ Listenstand steht in der URL. Reload behält die Ansicht. Frischer Besuch von `/
 | `/konto` | Passwort, Zwei-Faktor, Einladungen, Firmen-Login |
 | `/`             | Schichtüberblick |
 | `/vehicles`     | Liste, Anlegen |
+| `/vehicles/import` | Import-Assistent (Datei, Spalten, Vorschau, Ergebnis) |
 | `/vehicles/:id` | Detail, Karte, Zuweisung, Warnungen, Bearbeiten, Löschen |
 | `/fleet`        | Flottenkarte |
 | `/alerts`       | Warnungen (offen/erledigt, optional `type`, `vehicle_id` / `driver_id`) |
@@ -264,7 +288,7 @@ Anlegen, bearbeiten, löschen. Status als Badge. Tank während der Fahrt nur les
 
 ## Flottenkarte
 
-`/fleet` lädt die Positionen der eigenen Firma einmal (bis 5000 Einzelpunkte) und clustert sie im Ausschnitt. Schwenken lädt nicht neu. Die Leiste zeigt, wie viele Fahrzeuge im Ausschnitt liegen, wie viele der Filter trifft und wie viele keine Position haben. Der Fahrer-Picker ist ein Filter, kein Muss. Über 5000 Treffer mit Position werden Dichtekreise. Ein Klick auf eine Gruppe zoomt heran; übereinanderliegende Fahrzeuge öffnen eine Liste. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (bis zu 3000 im Fokus, bevorzugt im Ausschnitt). Spuren gibt es hier nicht, die liegen auf der Detailseite.
+`/fleet` lädt die Positionen der eigenen Firma einmal (bis 5000 Einzelpunkte). Jedes Fahrzeug im Ausschnitt ist ein eigener Punkt, das Gruppieren ist vorerst ausgeschaltet. Schwenken lädt nicht neu. Die Leiste zeigt, wie viele Fahrzeuge im Ausschnitt liegen, wie viele der Filter trifft und wie viele keine Position haben. Der Fahrer-Picker ist ein Filter, kein Muss. Über 5000 Treffer mit Position werden Dichtekreise. Übereinanderliegende Fahrzeuge öffnen eine Liste. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (bis zu 3000 im Fokus, das gewählte zuerst). Spuren gibt es hier nicht, die liegen auf der Detailseite.
 
 Tabellenkomponente: [apps/docs/table.md](apps/docs/table.md).
 
@@ -278,7 +302,7 @@ Der Simulator spielt Geräte: jedes `DRIVING`-Fahrzeug mit Fahrer, dessen Firma 
 
 Pro Fahrzeug bleiben `TELEMETRY_KEEP_PER_VEHICLE` Rohzeilen (Standard 100). Das ist die Retention. Trip-Ende schreibt Speed 0 an der letzten Position.
 
-Fokussierte Fahrzeuge fahren auf eingebackenen OSRM-Linien. Tempo nach Stadt/Autobahn plus etwas Rauschen. Zeitskala so, dass ein typischer Korridor in 1 bis 2 Minuten durch ist.
+Fahrende Fahrzeuge fahren auf eingebackenen OSRM-Linien. Tempo nach Stadt/Autobahn plus etwas Rauschen. Die Simulation läuft im Zeitraffer (Faktor 5), die Fahrzeit einer Fahrt sagt also nichts über echte Zeit.
 
 ## Fahrten
 
@@ -324,7 +348,7 @@ Live-Speed sitzt in der Telemetrie. Die Polyline hat keinen Speed pro Punkt.
 
 Eigene Entität, Name eindeutig pro Firma. Freigabe ist `driver_vehicles` (M:N). Aktuell höchstens ein Fahrzeug (`vehicles.current_driver_id`). `NULL` heißt Pool. `driver_name` am Fahrzeug ist der aktuelle Name oder `NULL`.
 
-`POST /api/drivers` legt an (`name`, optional `phone`). `PATCH` ändert Name oder Telefon. Umbenennen schreibt `vehicles.driver_name` mit, wenn der Fahrer aktuell ist. Zuweisen hängt am Fahrer, nicht am Fahrzeug-Write. `GET /api/drivers` sortiert nach offenen SPEEDING-Warnungen und zählt SPEEDING inklusive erledigter. `GET /api/vehicles/drivers` ist nur der Namensfilter auf der Karte.
+`POST /api/drivers` legt an (`name`, optional `phone`). `PATCH` ändert Name, Telefon oder die Führerscheindaten. `DELETE` löscht den Fahrer, solange er kein fahrendes Fahrzeug hat; die Warnungen bleiben ohne Namen im Verlauf. Umbenennen schreibt `vehicles.driver_name` mit, wenn der Fahrer aktuell ist. Zuweisen hängt am Fahrer, nicht am Fahrzeug-Write. `GET /api/drivers` sortiert nach offenen SPEEDING-Warnungen und zählt SPEEDING inklusive erledigter. `GET /api/vehicles/drivers` ist nur der Namensfilter auf der Karte.
 
 ---
 
@@ -341,6 +365,11 @@ vehicles       → company_id, current_driver_id   UNIQUE (company_id, license_p
 telemetry      → vehicle_id
 trips          → vehicle_id   (eine offene Fahrt pro Fahrzeug)
 alerts         → vehicle_id, driver_id (Snapshot beim Öffnen)
+sites          → company_id   (Depotkreise)
+alert_month_stats → company_id, Monat   (Summen, bevor Warnungen gelöscht werden)
+trip_month_km  → Kilometer je Firma und Monat
+import_runs, import_mapping_profiles → company_id   (Log und Spaltenzuordnung)
+auth_tokens, sso_identities, totp_recovery_codes → Anmeldung
 ```
 
 Partieller Unique-Index `trips(vehicle_id) WHERE ended_at IS NULL`: eine offene Fahrt gleichzeitig.
@@ -409,6 +438,8 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `TELEMETRY_BATCH_SIZE` | `3000` | Höchstens so viele Meldungen pro Tick |
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
 | `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
+| `IMPORT_FALLBACK_LATITUDE` | `50.9375` | Startpunkt beim Import, wenn die Firma kein Depot hat (Köln) |
+| `IMPORT_FALLBACK_LONGITUDE` | `6.9603` | |
 | `LOG_LEVEL` | `info` | |
 | `NODE_ENV` | keiner, muss gesetzt sein | `development`, `test` oder `production`. Ohne Wert startet der Prozess nicht. Lokal setzt `apps/api/dev.env` (von den npm-Skripten geladen) `development`. API-Pauschallimit nur in Produktion. Login-Limit auch in der Entwicklung |
 | `ALLOW_DEMO_ACCOUNTS` | `false` | Legt beim Start die Demo-Konten mit bekanntem Passwort an (nur außerhalb von Produktion) und erlaubt sie unter `NODE_ENV=production`. Lokal in `apps/api/dev.env` auf `true` |
