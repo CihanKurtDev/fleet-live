@@ -79,7 +79,7 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
             key: "low_fuel",
             label: "Wenig Tank",
             tone: "warning",
-            to: "/vehicles?filter=low_fuel",
+            to: "/alerts?type=LOW_FUEL",
         },
         {
             key: "in_depot",

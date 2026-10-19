@@ -49,7 +49,7 @@ const KIND: Record<
     low_fuel: {
         tag: "Wenig Tank",
         chip: "Wenig Tank",
-        to: "/vehicles?filter=low_fuel",
+        to: "/alerts?type=LOW_FUEL",
         tone: "warning",
     },
     deadline_soon: {

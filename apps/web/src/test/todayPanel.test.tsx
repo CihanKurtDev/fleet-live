@@ -143,6 +143,21 @@ describe("Heute dran", () => {
         expect(screen.getByText(/von 16 offenen Aufgaben/)).toBeInTheDocument();
     });
 
+    it("opens the inbox for a warning type, not the vehicle list", async () => {
+        vi.mocked(getToday).mockResolvedValue({
+            ...response,
+            meta: {
+                ...response.meta,
+                counts: { ...response.meta.counts, low_fuel: 392 },
+            },
+        });
+        renderPanel();
+
+        expect(
+            await screen.findByRole("link", { name: /392\s*Wenig Tank/ }),
+        ).toHaveAttribute("href", "/alerts?type=LOW_FUEL");
+    });
+
     it("resolves a no-signal warning in the row and says so", async () => {
         renderPanel();
 
