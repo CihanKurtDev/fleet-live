@@ -13,7 +13,7 @@ import { toCsv } from "../lib/csv";
 const ALERT_TYPE_LABELS = {
     SPEEDING: "Geschwindigkeit",
     LOW_FUEL: "Wenig Tank",
-    OFFLINE: "Funk",
+    OFFLINE: "Kein Signal",
 } as const;
 
 const ALERT_SEVERITY_LABELS = {

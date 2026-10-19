@@ -45,7 +45,7 @@ const PAGE_TIPS: Record<TipPageId, PageTip[]> = {
         {
             target: "list-tiles",
             title: "Kachel = Art der Warnung",
-            body: "Tempo, Funk und Wenig Tank zeigen die offenen Warnungen dieser Art. „Erledigt“ ist der Verlauf. Funk und Wenig Tank schließen sich selbst, sobald das Fahrzeug wieder meldet oder getankt ist.",
+            body: "Tempo, Kein Signal und Wenig Tank zeigen die offenen Warnungen dieser Art. „Erledigt“ ist der Verlauf. Kein Signal und Wenig Tank schließen sich selbst, sobald das Fahrzeug wieder meldet oder getankt ist.",
         },
         {
             target: "list-select",

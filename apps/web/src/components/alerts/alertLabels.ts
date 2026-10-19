@@ -3,13 +3,13 @@ import type { Alert, AlertType } from "@fleet-live/shared";
 export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
     SPEEDING: "Tempo",
     LOW_FUEL: "Wenig Tank",
-    OFFLINE: "Funk",
+    OFFLINE: "Kein Signal",
 };
 
 export const ALERT_TYPE_CHIPS: Record<AlertType, string> = {
     SPEEDING: "Tempo",
     LOW_FUEL: "Tank",
-    OFFLINE: "Funk",
+    OFFLINE: "Kein Signal",
 };
 
 export const alertTypeLabel = (type: AlertType) => ALERT_TYPE_LABELS[type];
@@ -21,7 +21,7 @@ export const warningCount = (count: number) =>
 export const resolvedNotice = (count: number) =>
     count === 1 ? "Warnung erledigt." : `${count} Warnungen erledigt.`;
 
-/** „alle Funk · 3 Fahrzeuge“ oder „Tempo, Funk · 2 Fahrzeuge“. */
+/** „alle Kein Signal · 3 Fahrzeuge“ oder „Tempo, Kein Signal · 2 Fahrzeuge“. */
 export const selectionSummary = (
     rows: Array<Pick<Alert, "type" | "vehicle_id">>,
 ): string => {

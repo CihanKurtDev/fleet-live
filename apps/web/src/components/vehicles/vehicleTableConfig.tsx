@@ -212,7 +212,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         key: "active_alerts",
         displayText: "Warnungen",
         // Without a width this column got 0 px in a narrow window and the
-        // hints (Funk, Tempo, Tank) were out of reach.
+        // hints (Kein Signal, Tempo, Tank) were out of reach.
         width: "180px",
         sortable: true,
         render: (_value, { row }) => {

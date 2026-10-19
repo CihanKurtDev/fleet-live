@@ -43,7 +43,7 @@ const EXAMPLES = 5;
  *    wird `IDLE`, die Fahrt endet wie in `syncTrip` (Abschlusspunkt mit Tempo 0,
  *    Tempo-Ereignis zu, Fahrt geschlossen). Es wird kein Fahrer erfunden.
  * 2. `DRIVING` ohne offene Fahrt: `DRIVING` öffnet die Fahrt.
- * 3. `OFFLINE` ohne offene Funk-Warnung: `OFFLINE` öffnet sie, mit dem Zeitpunkt
+ * 3. `OFFLINE` ohne offene Kein-Signal-Warnung: `OFFLINE` öffnet sie, mit dem Zeitpunkt
  *    der letzten Meldung plus der Funkstille-Schwelle.
  * 4. Warnungen, die vor ihrer Entstehung beendet oder erledigt sind.
  * 5. Depot-Zugehörigkeit nach dem letzten Standort (`depot_site_id`).
@@ -122,7 +122,7 @@ export function repairData(
             examples: plates(noTrip),
         });
 
-        // 3. OFFLINE ohne offene Funk-Warnung
+        // 3. OFFLINE ohne offene Kein-Signal-Warnung
         const silent = db
             .prepare(
                 `SELECT v.id, v.company_id, v.license_plate, t.recorded_at AS last_report
@@ -160,7 +160,7 @@ export function repairData(
 
         reports.push({
             id: "offline_without_warning",
-            label: "Kein Signal ohne offene Funk-Warnung (Warnung eröffnet)",
+            label: "Kein Signal ohne offene Kein-Signal-Warnung (Warnung eröffnet)",
             count: silent.length,
             examples: plates(silent),
         });

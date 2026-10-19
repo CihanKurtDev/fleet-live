@@ -120,13 +120,13 @@ const PAGES: Record<string, HelpPage> = {
             "Der Eingang für Warnungen der Firma. „Offen“ sind Warnungen, die noch niemand erledigt hat.",
         items: [
             {
-                question: "Was bedeuten Tempo, Funk und Wenig Tank?",
-                answer: `Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Funk: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Die Warnung geht von selbst weg, sobald das Fahrzeug wieder meldet. Wenig Tank: der Tankstand liegt unter ${LOW_FUEL_THRESHOLD_PERCENT} %. Die Warnung geht von selbst weg, sobald der Tank wieder darüber liegt. Es sind dieselben Fahrzeuge wie bei „Wenig Tank“ unter Fahrzeuge.`,
+                question: "Was bedeuten Tempo, Kein Signal und Wenig Tank?",
+                answer: `Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Kein Signal: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Die Warnung geht von selbst weg, sobald das Fahrzeug wieder meldet. Wenig Tank: der Tankstand liegt unter ${LOW_FUEL_THRESHOLD_PERCENT} %. Die Warnung geht von selbst weg, sobald der Tank wieder darüber liegt. Es sind dieselben Fahrzeuge wie bei „Wenig Tank“ unter Fahrzeuge.`,
             },
             {
                 question: "Was macht „Erledigen“?",
                 answer:
-                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. „Wenig Tank“ und „Funk“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist bzw. das Fahrzeug wieder meldet. Eine beendete Tempo-Warnung, die niemand erledigt, wird nach 7 Tagen Verlauf und steht dann unter „Erledigt“. Erledigte Warnungen bleiben 90 Tage sichtbar, die Monatszahlen der Diagramme bleiben.",
+                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. „Wenig Tank“ und „Kein Signal“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist bzw. das Fahrzeug wieder meldet. Eine beendete Tempo-Warnung, die niemand erledigt, wird nach 7 Tagen Verlauf und steht dann unter „Erledigt“. Erledigte Warnungen bleiben 90 Tage sichtbar, die Monatszahlen der Diagramme bleiben.",
             },
             {
                 question: "Wohin führt eine Zeile?",
@@ -175,7 +175,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was zählen „Verstöße“ und „Davon offen“?",
                 answer:
-                    "Verstöße sind alle Tempo-Warnungen des Fahrers, „Davon offen“ die noch nicht erledigten. Tank und Funk hängen am Fahrzeug, nicht am Fahrer.",
+                    "Verstöße sind alle Tempo-Warnungen des Fahrers, „Davon offen“ die noch nicht erledigten. Tank und Kein Signal hängen am Fahrzeug, nicht am Fahrer.",
             },
             {
                 question: "Wie lege ich einen Fahrer an?",
@@ -205,7 +205,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was steht unter „Hinweise“?",
                 answer:
-                    "Offene Hinweise zu Tank und Funk an diesem Fahrzeug. Tempo-Warnungen stehen unter Warnungen und am Fahrer.",
+                    "Offene Hinweise zu Tank und Kein Signal an diesem Fahrzeug. Tempo-Warnungen stehen unter Warnungen und am Fahrer.",
             },
             {
                 question: "Wo ändere ich HU, UVV oder den Stammstandort?",
@@ -234,7 +234,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was zählt unter „Verstöße“?",
                 answer:
-                    "Nur Tempo-Warnungen. Tank und Funk hängen am Fahrzeug.",
+                    "Nur Tempo-Warnungen. Tank und Kein Signal hängen am Fahrzeug.",
             },
         ],
     },

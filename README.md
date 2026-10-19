@@ -80,8 +80,8 @@ Was die App heute kann, und was als Nächstes kommt.
 
 * Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt
 * Niedriger Tankstand (unter 15 %) ist eine Warnung, die von selbst verschwindet, sobald getankt ist
-* Funk-Ausfall, wenn ein Fahrzeug verstummt oder offline gemeldet ist
-* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Funk
+* Kein Signal, wenn ein Fahrzeug verstummt oder offline gemeldet ist
+* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Kein Signal
 * Schichtüberblick auf der Startseite, offene Warnungen in der Navigation
 * Flottenkarte mit Dichtezellen und Kennzeichen-Sprung, Fahrspur am Fahrzeug, Fahrer, Firmen-Login
 * Fahrtarchiv am Fahrzeug: alte Fahrten durchblättern, abgeschlossene Strecke auf der Karte
@@ -240,7 +240,7 @@ Ohne Session landet man auf `/login`. Danach ist `/` die Startseite.
 
 ## Schichtüberblick
 
-Oben die Kennzahlen: offene Warnungen, Funk-Ausfall, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
+Oben die Kennzahlen: offene Warnungen, Kein Signal, fahrend, bereit, niedriger Tank, im Depot. Darunter drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. Darunter der Monatsverlauf. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
 
 ## Fahrzeugliste
 
@@ -296,7 +296,7 @@ Drei Schichten, eine Tabelle `alerts`.
 
 * **Indikator.** `speedBand` und `speeding_open`. Orange über `speed_limit_kmh` ohne offenes Event. Rot, solange SPEEDING `ended_at` null hat. Nur bei `DRIVING`. Nach Event-Ende ist die Zelle wieder normal, auch wenn die Inbox-Zeile noch offen ist.
 * **Warnung.** `resolved_at IS NULL`. Warnungen `/alerts`. Dispatcher quittiert per `PATCH`. `ended_at` ist nicht dasselbe wie erledigt.
-* **Verstoßhistorie.** SPEEDING-Zeilen, auch erledigte, gezählt pro Snapshot-Fahrer auf `/drivers`. Tank und Funk bleiben am Fahrzeug. `resolved_at` heißt gesehen, nicht „war nie“.
+* **Verstoßhistorie.** SPEEDING-Zeilen, auch erledigte, gezählt pro Snapshot-Fahrer auf `/drivers`. Tank und Kein Signal bleiben am Fahrzeug. `resolved_at` heißt gesehen, nicht „war nie“.
 
 `alerts` hängt an `vehicle_id`. Zugriff über `alert → vehicle → company`. `driver_id` wird beim Öffnen aus `vehicles.current_driver_id` kopiert und danach nicht mehr angefasst. `active_alerts` ist der offene Zähler am Fahrzeug und im Listenfilter.
 

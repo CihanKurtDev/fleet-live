@@ -280,7 +280,7 @@ export const LandingPage = () => {
                                 columns="1.2fr auto 1.4fr"
                                 rows={[
                                     { lead: "HB-HV 0007", sub: "Lisa Müller", tag: ["Tempo", "t"], detail: "138 km/h · Limit 100" },
-                                    { lead: "D-JB 0009", sub: "kein Fahrer", tag: ["Funk", "f"], detail: "keine Meldung" },
+                                    { lead: "D-JB 0009", sub: "kein Fahrer", tag: ["Kein Signal", "f"], detail: "keine Meldung" },
                                     { lead: "K-AA 0104", sub: "Clara Schneider", tag: ["Tank", "k"], detail: "Tankstand 5 %" },
                                 ]}
                             />
@@ -375,7 +375,7 @@ export const LandingPage = () => {
                                 ["var(--l-go)", "Auf Fahrt", "Das Fahrzeug meldet Position und Tempo. Die Fahrt wird als Strecke aufgezeichnet."],
                                 ["var(--l-idle)", "Standby", "Bereit, aber nicht unterwegs. Oft am Depot."],
                                 ["var(--l-off)", "Feierabend", "Abgestellt. Die letzte Position bleibt sichtbar."],
-                                ["var(--l-lost)", "Kein Signal", "Keine Meldungen mehr. Daraus wird eine Funk-Warnung."],
+                                ["var(--l-lost)", "Kein Signal", "Keine Meldungen mehr. Daraus wird eine Warnung."],
                             ] as const
                         ).map(([color, name, text]) => (
                             <div key={name} className={styles.signal} style={{ "--c": color } as CSSProperties}>

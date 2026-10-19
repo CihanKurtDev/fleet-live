@@ -21,13 +21,13 @@ const INVARIANTS: Array<[string, string]> = [
          WHERE t.ended_at IS NULL AND v.status <> 'DRIVING'`,
     ],
     [
-        "ein Fahrzeug ohne Signal hat eine offene Funk-Warnung",
+        "ein Fahrzeug ohne Signal hat eine offene Kein-Signal-Warnung",
         `SELECT COUNT(*) AS c FROM vehicles v WHERE v.status = 'OFFLINE'
            AND NOT EXISTS (SELECT 1 FROM alerts a WHERE a.vehicle_id = v.id
                            AND a.type = 'OFFLINE' AND a.ended_at IS NULL)`,
     ],
     [
-        "eine offene Funk-Warnung gehört zu einem Fahrzeug ohne Signal",
+        "eine offene Kein-Signal-Warnung gehört zu einem Fahrzeug ohne Signal",
         `SELECT COUNT(*) AS c FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id
          WHERE a.type = 'OFFLINE' AND a.ended_at IS NULL AND v.status <> 'OFFLINE'`,
     ],

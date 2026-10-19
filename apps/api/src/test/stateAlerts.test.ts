@@ -53,7 +53,7 @@ const daysAgo = (days: number) =>
         .slice(0, 19)
         .replace("T", " ");
 
-describe("Funk is a state warning", () => {
+describe("Kein Signal is a state warning", () => {
     it("cannot be closed by hand, single or in bulk", async () => {
         const vehicle = make("K-ST 1", "OFFLINE");
         const [offline] = rows(vehicle.id, "OFFLINE");

@@ -101,7 +101,7 @@ export class ExceptionEventModel {
         return [...notify];
     }
 
-    /** Create/Update: Status `OFFLINE` öffnet bzw. beendet Funk-Warnung. */
+    /** Create/Update: Status `OFFLINE` öffnet bzw. beendet Kein-Signal-Warnung. */
     static syncVehicle(input: {
         id: number;
         status: VehicleStatus;

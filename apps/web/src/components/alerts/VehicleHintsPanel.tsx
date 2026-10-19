@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
     DUE_KIND_LABELS,
@@ -7,15 +6,10 @@ import {
     explainHuMonth,
     explainUvv,
     isLowFuelLevel,
-    type Alert,
     type Vehicle,
 } from "@fleet-live/shared";
 
-import { ApiError, isAbortError } from "../../api/client";
-import { listAlerts, resolveAlert } from "../../api/alerts";
-import { retryTransient } from "../../api/retryTransient";
-import { useVehicles } from "../../context/vehiclesContext";
-import { formatIsoDate, formatShortStamp } from "../../utils/dateTime";
+import { formatIsoDate } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
 import type { VehicleFormField } from "../vehicles/VehicleForm";
 import { WarningChip } from "./WarningChip";
@@ -33,14 +27,6 @@ type DueHint = {
     state: "overdue" | "missing";
     due_on: string | null;
 };
-
-/**
- * The open (not yet resolved) no-signal warning to show: a running one first,
- * else the newest one that has ended but nobody has resolved yet.
- */
-const openOffline = (alerts: Alert[]): Alert | undefined =>
-    alerts.find((alert) => alert.type === "OFFLINE" && alert.ended_at === null) ??
-    alerts.find((alert) => alert.type === "OFFLINE");
 
 /**
  * HU and UVV of this vehicle that need a date now: missing or past. "Soon"
@@ -82,89 +68,16 @@ export const VehicleHintsPanel = ({
     canWrite,
     onEditMaster,
 }: VehicleHintsPanelProps) => {
-    const { listEpoch, refetchLists } = useVehicles();
-    const [offlineAlert, setOfflineAlert] = useState<
-        Alert | undefined
-    >();
-    const [error, setError] = useState<string | null>(null);
-    const [resolvingId, setResolvingId] = useState<number | null>(null);
-
     const inboxHref = `/alerts?vehicle_id=${vehicle.id}&type=OFFLINE`;
     const tankLow = isLowFuelLevel(vehicle.fuel_level);
+    // The warning closes itself when the vehicle reports again, so it is
+    // there exactly while the vehicle has no signal.
     const noSignal =
         vehicle.status === "OFFLINE" ||
         vehicle.open_alert_types.includes("OFFLINE");
 
-    const requestKey = `${vehicle.id}\0${listEpoch}`;
-    const [fetchKey, setFetchKey] = useState(requestKey);
-    if (requestKey !== fetchKey) {
-        setFetchKey(requestKey);
-        setError(null);
-        setOfflineAlert(undefined);
-    }
-
-    useEffect(() => {
-        const controller = new AbortController();
-
-        retryTransient(
-            () =>
-                listAlerts(
-                    {
-                        filter: "open",
-                        type: "OFFLINE",
-                        sort: "created_at",
-                        dir: "desc",
-                        page: 1,
-                        limit: 10,
-                        vehicle_id: vehicle.id,
-                    },
-                    controller.signal,
-                ),
-            controller.signal,
-        )
-            .then((offline) => {
-                setOfflineAlert(openOffline(offline.data));
-            })
-            .catch((caught: unknown) => {
-                if (controller.signal.aborted || isAbortError(caught)) {
-                    return;
-                }
-
-                setError(
-                    caught instanceof Error
-                        ? caught.message
-                        : "Hinweise konnten nicht geladen werden.",
-                );
-            });
-
-        return () => controller.abort();
-    }, [vehicle.id, listEpoch]);
-
-    const handleResolve = async (id: number) => {
-        setResolvingId(id);
-        setError(null);
-
-        try {
-            await resolveAlert(id);
-            refetchLists();
-        } catch (caught) {
-            setError(
-                caught instanceof ApiError
-                    ? caught.message
-                    : "Warnung konnte nicht erledigt werden.",
-            );
-        } finally {
-            setResolvingId(null);
-        }
-    };
-
     const showTank = tankLow;
-    const showFunk = noSignal || offlineAlert !== undefined;
-    // The vehicle reports again: say so, the warning only waits to be resolved.
-    const signalBack =
-        vehicle.status !== "OFFLINE" &&
-        offlineAlert !== undefined &&
-        offlineAlert.ended_at !== null;
+    const showFunk = noSignal;
     const dueHints = dueHintsFor(vehicle);
 
     return (
@@ -178,12 +91,6 @@ export const VehicleHintsPanel = ({
                 ) : null}
             </div>
 
-            {error && (
-                <p className={styles.error} role="alert">
-                    {error}
-                </p>
-            )}
-
             {!showTank && !showFunk && dueHints.length === 0 ? (
                 <p className={styles.empty}>Keine offenen Hinweise.</p>
             ) : (
@@ -191,24 +98,7 @@ export const VehicleHintsPanel = ({
                     {showFunk && (
                         <li className={styles.item} data-tone="danger">
                             <WarningChip type="OFFLINE" />
-                            <p className={styles.message}>
-                                {signalBack
-                                    ? `Kein Signal · beendet ${formatShortStamp(offlineAlert.ended_at)}`
-                                    : "Kein Signal"}
-                            </p>
-                            {canWrite && offlineAlert ? (
-                                <Button
-                                    variant="secondary"
-                                    size="row"
-                                    disabled={resolvingId === offlineAlert.id}
-                                    title="Aus der Liste nehmen. Zustand am Fahrzeug bleibt."
-                                    onClick={() =>
-                                        void handleResolve(offlineAlert.id)
-                                    }
-                                >
-                                    Erledigen
-                                </Button>
-                            ) : null}
+                            <p className={styles.message}>Meldet sich nicht.</p>
                         </li>
                     )}
                     {showTank && (

@@ -132,7 +132,7 @@ describe("alert list page", () => {
             name: "Tempo, 1",
         });
         expect(
-            within(tiles).getByRole("button", { name: "Funk, 2" }),
+            within(tiles).getByRole("button", { name: "Kein Signal, 2" }),
         ).toBeInTheDocument();
         expect(
             within(tiles).getByRole("button", { name: "Wenig Tank, 0" }),
@@ -191,7 +191,7 @@ describe("alert list page", () => {
         await screen.findByText("K-AB 1");
 
         expect(screen.getByText("Lisa Müller")).toBeInTheDocument();
-        expect(screen.getAllByText("Funk").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Kein Signal").length).toBeGreaterThan(0);
         expect(screen.queryByText("Schwere")).toBeNull();
         expect(
             screen.getByRole("button", { name: /^Zeitpunkt, absteigend/ }),

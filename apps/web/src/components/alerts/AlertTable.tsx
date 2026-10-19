@@ -86,7 +86,7 @@ export const AlertTable = ({
         setPage,
     } = useServerTable<Alert>({ listQuery, listResult });
 
-    // Nothing to select on Erledigt, nor on Wenig Tank and Funk (they close
+    // Nothing to select on Erledigt, nor on Wenig Tank and Kein Signal (they close
     // themselves).
     const selectable =
         canWrite &&

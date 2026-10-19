@@ -33,7 +33,7 @@ export const alertTiles: AlertTileOption[] = [
     },
     {
         id: "OFFLINE",
-        label: "Funk",
+        label: "Kein Signal",
         view: { filter: "open", type: "OFFLINE" },
     },
     {
@@ -51,7 +51,7 @@ export const alertTiles: AlertTileOption[] = [
 
 /**
  * A dispatcher closes an open warning by hand, except the ones that follow a
- * state (Wenig Tank, Funk): they close themselves when the state is over.
+ * state (Wenig Tank, Kein Signal): they close themselves when the state is over.
  */
 export const canResolveByHand = (
     alert: Pick<Alert, "type" | "resolved_at">,
