@@ -60,7 +60,14 @@ const schema = readFileSync(schemaPath, "utf8");
 db.exec(schema);
 migrate(db);
 
-if (!config.isTest && !config.isProduction && !isMemoryDatabase) {
+// Accounts with a known password only when asked for (`ALLOW_DEMO_ACCOUNTS`,
+// set in dev.env), not for every process that is not production.
+if (
+    config.allowDemoAccounts &&
+    !config.isTest &&
+    !config.isProduction &&
+    !isMemoryDatabase
+) {
     ensureDevAccounts(db);
 }
 

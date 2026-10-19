@@ -25,7 +25,12 @@ export function readCookie(
             continue;
         }
 
-        return decodeURIComponent(trimmed.slice(separator + 1));
+        try {
+            return decodeURIComponent(trimmed.slice(separator + 1));
+        } catch {
+            // A broken value is no value: the caller treats it as signed out.
+            return undefined;
+        }
     }
 
     return undefined;

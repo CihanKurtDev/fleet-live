@@ -397,8 +397,8 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
 | `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
 | `LOG_LEVEL` | `info` | |
-| `NODE_ENV` | `development` | API-Pauschallimit nur in Produktion. Login-Limit auch in der Entwicklung |
-| `ALLOW_DEMO_ACCOUNTS` | `false` | Für Demo-Seed unter `NODE_ENV=production` auf `true` setzen |
+| `NODE_ENV` | keiner, muss gesetzt sein | `development`, `test` oder `production`. Ohne Wert startet der Prozess nicht. Lokal setzt `apps/api/dev.env` (von den npm-Skripten geladen) `development`. API-Pauschallimit nur in Produktion. Login-Limit auch in der Entwicklung |
+| `ALLOW_DEMO_ACCOUNTS` | `false` | Legt beim Start die Demo-Konten mit bekanntem Passwort an (nur außerhalb von Produktion) und erlaubt sie unter `NODE_ENV=production`. Lokal in `apps/api/dev.env` auf `true` |
 | `SMTP_URL` | leer | Nodemailer-URL, z. B. `smtp://user:pass@localhost:1025`. Ohne Wert: Link nur im Server-Log. Produktion ohne Wert: `503` |
 | `MAIL_FROM` | `fleet-live <noreply@localhost>` | Absender |
 | `WEB_ORIGIN` | `http://localhost:5173` | Origin der UI. Mail-Links und OIDC-Redirects. Vite bindet fest Port 5173 |
