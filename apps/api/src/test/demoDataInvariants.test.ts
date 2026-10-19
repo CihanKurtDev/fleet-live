@@ -32,6 +32,17 @@ const INVARIANTS: Array<[string, string]> = [
          WHERE a.type = 'OFFLINE' AND a.ended_at IS NULL AND v.status <> 'OFFLINE'`,
     ],
     [
+        "ein Fahrzeug unter der Tank-Schwelle hat genau eine offene Tank-Warnung",
+        `SELECT COUNT(*) AS c FROM vehicles v WHERE v.fuel_level < 15
+           AND (SELECT COUNT(*) FROM alerts a WHERE a.vehicle_id = v.id
+                AND a.type = 'LOW_FUEL' AND a.resolved_at IS NULL) <> 1`,
+    ],
+    [
+        "eine offene Tank-Warnung gehört zu einem Fahrzeug unter der Schwelle",
+        `SELECT COUNT(*) AS c FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id
+         WHERE a.type = 'LOW_FUEL' AND a.resolved_at IS NULL AND v.fuel_level >= 15`,
+    ],
+    [
         "ein offenes Tempo-Ereignis gibt es nur bei einem Fahrzeug auf Fahrt",
         `SELECT COUNT(*) AS c FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id
          WHERE a.type = 'SPEEDING' AND a.ended_at IS NULL AND v.status <> 'DRIVING'`,

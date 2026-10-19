@@ -10,7 +10,9 @@ import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { setCompanySimRunning, resetSimControlForTests } from "../lib/simControl";
-import { giveCurrentDriver, loginAs } from "./helpers";
+import { db } from "../db/database";
+import { syncLowFuelAlerts } from "../db/lowFuelAlerts";
+import { giveCurrentDriver, insertAlert, loginAs } from "./helpers";
 
 function drivingPatch(
     vehicleId: number,
@@ -53,7 +55,139 @@ afterEach(() => {
     resetSimControlForTests();
 });
 
-describe("no live LOW_FUEL ticker", () => {
+const lowFuelRows = (vehicleId: number) =>
+    db
+        .prepare(
+            `SELECT id, severity, details, ended_at, resolved_at FROM alerts
+             WHERE vehicle_id = ? AND type = 'LOW_FUEL' ORDER BY id`,
+        )
+        .all(vehicleId) as Array<{
+        id: number;
+        severity: string;
+        details: string | null;
+        ended_at: string | null;
+        resolved_at: string | null;
+    }>;
+
+describe("LOW_FUEL follows the tank", () => {
+    it("opens when a vehicle is saved under the threshold and goes away when it is filled", async () => {
+        const created = await api.post("/api/vehicles").send({
+            license_plate: "K-FU 3",
+            fuel_level: 10,
+            status: "IDLE",
+        });
+
+        assert.equal(created.status, 201);
+        assert.equal(created.body.active_alerts, 1);
+        assert.deepEqual(created.body.open_alert_types, ["LOW_FUEL"]);
+
+        const open = await openInbox(api, "LOW_FUEL");
+        assert.equal(open.body.data.length, 1);
+        assert.equal(open.body.data[0].license_plate, "K-FU 3");
+        assert.deepEqual(open.body.data[0].details, { fuel_level: 10 });
+
+        // Lower, still low: the same row, with the new reading.
+        const lower = await api
+            .patch(`/api/vehicles/${created.body.id}`)
+            .send({ fuel_level: 4 });
+        assert.equal(lower.body.active_alerts, 1);
+        const rows = lowFuelRows(created.body.id);
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0].severity, "HIGH");
+        assert.deepEqual(JSON.parse(rows[0].details ?? "{}"), { fuel_level: 4 });
+
+        // Filled: the warning is gone, not waiting for a click.
+        const filled = await api
+            .patch(`/api/vehicles/${created.body.id}`)
+            .send({ fuel_level: 80 });
+        assert.equal(filled.body.active_alerts, 0);
+        assert.deepEqual(filled.body.open_alert_types, []);
+        assert.equal((await openInbox(api, "LOW_FUEL")).body.data.length, 0);
+        const [closed] = lowFuelRows(created.body.id);
+        assert.notEqual(closed.resolved_at, null);
+        assert.notEqual(closed.ended_at, null);
+
+        // Under the threshold again: a new warning.
+        const again = await api
+            .patch(`/api/vehicles/${created.body.id}`)
+            .send({ fuel_level: LOW_FUEL_THRESHOLD_PERCENT - 1 });
+        assert.equal(again.body.active_alerts, 1);
+        assert.equal(lowFuelRows(created.body.id).length, 2);
+    });
+
+    it("is not closed by hand: the vehicle is still low", async () => {
+        const created = await api.post("/api/vehicles").send({
+            license_plate: "K-FU 4",
+            fuel_level: 9,
+            status: "IDLE",
+        });
+        const [row] = lowFuelRows(created.body.id);
+
+        const single = await api
+            .patch(`/api/alerts/${row.id}`)
+            .send({ resolved: true });
+        assert.equal(single.status, 200);
+        assert.equal(single.body.resolved_at, null);
+
+        const bulk = await api
+            .patch("/api/alerts")
+            .send({ ids: [row.id], resolved: true });
+        assert.equal(bulk.status, 200);
+        assert.equal(bulk.body.data.resolved, 0);
+        assert.equal(lowFuelRows(created.body.id)[0].resolved_at, null);
+    });
+
+    it("sets old rows right: one open warning per low vehicle, none for a full tank", () => {
+        const make = (plate: string, fuel: number) =>
+            VehicleModel.create({
+                license_plate: plate,
+                company_id: 1,
+                status: "IDLE",
+                fuel_level: fuel,
+            });
+        const clickedAway = make("K-FU 10", 8);
+        const stale = make("K-FU 11", 9);
+        const filledUp = make("K-FU 12", 70);
+        const fine = make("K-FU 13", 60);
+        // Resolved by a click while the tank was still low (the old behaviour).
+        insertAlert(clickedAway.id, {
+            type: "LOW_FUEL",
+            resolved_at: "2026-01-02 00:00:00",
+        });
+        // Ended, never resolved.
+        insertAlert(stale.id, {
+            type: "LOW_FUEL",
+            ended_at: "2026-01-03 00:00:00",
+        });
+        // Still open, but the tank was filled since.
+        insertAlert(filledUp.id, { type: "LOW_FUEL" });
+
+        syncLowFuelAlerts(db);
+
+        const openOf = (id: number) =>
+            lowFuelRows(id).filter((row) => row.resolved_at === null);
+
+        assert.equal(openOf(clickedAway.id).length, 1);
+        assert.equal(openOf(stale.id).length, 1);
+        assert.equal(openOf(filledUp.id).length, 0);
+        assert.equal(lowFuelRows(fine.id).length, 0);
+        assert.equal(VehicleModel.getById(clickedAway.id, 1)?.active_alerts, 1);
+        assert.equal(VehicleModel.getById(stale.id, 1)?.active_alerts, 1);
+        assert.equal(VehicleModel.getById(filledUp.id, 1)?.active_alerts, 0);
+
+        // A second run changes nothing.
+        const before = db.prepare("SELECT COUNT(*) AS n FROM alerts").get() as {
+            n: number;
+        };
+        syncLowFuelAlerts(db);
+        const after = db.prepare("SELECT COUNT(*) AS n FROM alerts").get() as {
+            n: number;
+        };
+        assert.equal(after.n, before.n);
+    });
+});
+
+describe("the ticker does not touch LOW_FUEL", () => {
     it("does not open LOW_FUEL from telemetry patches", async () => {
         const vehicle = VehicleModel.create({
             license_plate: "K-FU 1",
@@ -81,9 +215,9 @@ describe("no live LOW_FUEL ticker", () => {
         assert.deepEqual(detail.body.open_alert_types, []);
     });
 
-    it("does not open LOW_FUEL when a vehicle with a driver starts driving below the threshold", async () => {
+    it("does not open a second LOW_FUEL when a low vehicle starts driving", async () => {
         const created = await api.post("/api/vehicles").send({
-            license_plate: "K-FU 3",
+            license_plate: "K-FU 5",
             fuel_level: 10,
             status: "IDLE",
         });
@@ -97,10 +231,8 @@ describe("no live LOW_FUEL ticker", () => {
 
         assert.equal(response.status, 200);
         assert.equal(response.body.status, "DRIVING");
-        assert.equal(response.body.active_alerts, 0);
-
-        const inbox = await openInbox(api, "LOW_FUEL");
-        assert.equal(inbox.body.data.length, 0);
+        assert.equal(response.body.active_alerts, 1);
+        assert.equal(lowFuelRows(created.body.id).length, 1);
     });
 });
 

@@ -135,7 +135,7 @@ describe("alert list page", () => {
             within(tiles).getByRole("button", { name: "Funk, 2" }),
         ).toBeInTheDocument();
         expect(
-            within(tiles).getByRole("button", { name: "Tank-Warnung, 0" }),
+            within(tiles).getByRole("button", { name: "Wenig Tank, 0" }),
         ).toBeInTheDocument();
         expect(
             within(tiles).getByRole("button", { name: "Erledigt, 5" }),

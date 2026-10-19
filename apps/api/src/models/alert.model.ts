@@ -135,6 +135,7 @@ const RESOLVE = `
     SET resolved_at = ?
     WHERE id = ?
       AND resolved_at IS NULL
+      AND type <> 'LOW_FUEL'
       AND vehicle_id IN (
           SELECT id FROM vehicles WHERE company_id = ?
       )
@@ -154,6 +155,7 @@ const RESOLVE_MANY = `
     SET resolved_at = ?
     WHERE id IN (SELECT value FROM json_each(?))
       AND resolved_at IS NULL
+      AND type <> 'LOW_FUEL'
       AND vehicle_id IN (
           SELECT id FROM vehicles WHERE company_id = ?
       )

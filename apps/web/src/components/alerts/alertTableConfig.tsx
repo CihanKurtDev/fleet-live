@@ -37,7 +37,7 @@ export const alertTiles: AlertTileOption[] = [
     },
     {
         id: "LOW_FUEL",
-        label: "Tank-Warnung",
+        label: "Wenig Tank",
         tone: "warning",
         view: { filter: "open", type: "LOW_FUEL" },
     },
@@ -47,6 +47,14 @@ export const alertTiles: AlertTileOption[] = [
         view: { filter: "resolved", type: null },
     },
 ];
+
+/**
+ * A dispatcher closes an open warning by hand, except the tank warning: it
+ * closes itself when the tank is above the threshold again.
+ */
+export const canResolveByHand = (
+    alert: Pick<Alert, "type" | "resolved_at">,
+) => alert.resolved_at === null && alert.type !== "LOW_FUEL";
 
 /** The tile that is pressed for the current query. */
 export const activeAlertTile = (

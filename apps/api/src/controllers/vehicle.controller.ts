@@ -174,6 +174,7 @@ function syncExceptions(vehicle: Vehicle, companyId: number): Vehicle {
         id: vehicle.id,
         status: vehicle.status,
     });
+    ExceptionEventModel.syncFuel(vehicle.id);
     return VehicleModel.getById(vehicle.id, companyId) ?? vehicle;
 }
 

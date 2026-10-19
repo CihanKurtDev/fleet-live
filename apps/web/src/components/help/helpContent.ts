@@ -117,14 +117,13 @@ const PAGES: Record<string, HelpPage> = {
             "Der Eingang für Warnungen der Firma. „Offen“ sind Warnungen, die noch niemand erledigt hat.",
         items: [
             {
-                question: "Was bedeuten Tempo, Funk und Tank-Warnung?",
-                answer:
-                    "Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Funk: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Tank-Warnung: mitgelieferte Verlaufsdaten; neu angelegt wird so ein Eintrag nicht. Den aktuellen Tankstand zeigt die Kachel „Wenig Tank“ unter Fahrzeuge, das sind andere Zahlen.",
+                question: "Was bedeuten Tempo, Funk und Wenig Tank?",
+                answer: `Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Funk: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Wenig Tank: der Tankstand liegt unter ${LOW_FUEL_THRESHOLD_PERCENT} %. Die Warnung geht von selbst weg, sobald der Tank wieder darüber liegt. Es sind dieselben Fahrzeuge wie bei „Wenig Tank“ unter Fahrzeuge.`,
             },
             {
                 question: "Was macht „Erledigen“?",
                 answer:
-                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher.",
+                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. „Wenig Tank“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist.",
             },
             {
                 question: "Wohin führt eine Zeile?",

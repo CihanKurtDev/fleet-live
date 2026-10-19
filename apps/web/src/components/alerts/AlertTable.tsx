@@ -33,6 +33,7 @@ import {
     activeAlertTile,
     alertTileCount,
     alertTiles,
+    canResolveByHand,
 } from "./alertTableConfig";
 import { useAlertResolveColumn } from "./useAlertResolveColumn";
 import { useOpenTypeCounts } from "./useOpenTypeCounts";
@@ -81,9 +82,11 @@ export const AlertTable = ({
         setPage,
     } = useServerTable<Alert>({ listQuery, listResult });
 
-    const selectable = canWrite && query.filter !== "resolved";
+    // Nothing to select on Erledigt, nor on Wenig Tank (those close themselves).
+    const selectable =
+        canWrite && query.filter !== "resolved" && query.type !== "LOW_FUEL";
     const openRows = useMemo(
-        () => paginatedRows.filter((row) => row.resolved_at === null),
+        () => paginatedRows.filter(canResolveByHand),
         [paginatedRows],
     );
     const rowKeys = useMemo(() => openRows.map((row) => row.id), [openRows]);
@@ -269,7 +272,7 @@ export const AlertTable = ({
                         selectionMode={selecting}
                         selectedRows={selection.selectedIds}
                         onSelectRow={(key) => selection.toggle(Number(key))}
-                        isRowSelectable={(alert) => alert.resolved_at === null}
+                        isRowSelectable={canResolveByHand}
                         getRowSelectLabel={(alert) =>
                             `Warnung ${alert.license_plate}, ${formatTimestamp(alert.created_at)} auswählen`
                         }

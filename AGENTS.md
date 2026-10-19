@@ -17,7 +17,7 @@ Phases 1–14 are in place (including depot circles on the fleet map, shift-brie
 
 - Code is what exists. If README and code disagree, code wins. README describes the running system and user-visible upcoming work, not the engineering backlog.
 - `apps/docs/table.md` is the table-component spec, not a backlog. Do not add client-side vehicle-list sorting because `sortRows.ts` exists.
-- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts` with optional `type`). SPEEDING and OFFLINE rows are live events (8 s over the current sim road-class limit; no report for 15 s after a company pause, or status `OFFLINE`). LOW_FUEL is a current vehicle reading/filter plus seeded alert history, not a ticker event. That is not OSM and not a general rule engine. Home `/` is the company shift briefing (`GET /api/briefing`). Deadline tiles open `/fristen` (`GET /api/due`). Next engineering item is a mid-session 401 back to `/login`. Do not start CI/CD.
+- README mentions alerts as a domain (table, `active_alerts`, filter) and as REST (`GET`/`PATCH /api/alerts` with optional `type`). SPEEDING and OFFLINE rows are live events (8 s over the current sim road-class limit; no report for 15 s after a company pause, or status `OFFLINE`). LOW_FUEL is a state warning: a vehicle under the tank threshold has one open row, and the row closes itself when the tank is above it again (not a ticker event; `fuel_level` changes only by writes). That is not OSM and not a general rule engine. Home `/` is the company shift briefing (`GET /api/briefing`). Deadline tiles open `/fristen` (`GET /api/due`). Next engineering item is a mid-session 401 back to `/login`. Do not start CI/CD.
 
 ## Workflow
 
