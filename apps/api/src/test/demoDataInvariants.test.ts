@@ -43,6 +43,18 @@ const INVARIANTS: Array<[string, string]> = [
          WHERE a.type = 'LOW_FUEL' AND a.resolved_at IS NULL AND v.fuel_level >= 15`,
     ],
     [
+        "eine beendete Funk- oder Tank-Warnung ist auch erledigt",
+        `SELECT COUNT(*) AS c FROM alerts
+         WHERE type IN ('OFFLINE', 'LOW_FUEL')
+           AND ended_at IS NOT NULL AND resolved_at IS NULL`,
+    ],
+    [
+        "ein beendetes Tempo-Ereignis steht höchstens 7 Tage bei den offenen",
+        `SELECT COUNT(*) AS c FROM alerts
+         WHERE type = 'SPEEDING' AND resolved_at IS NULL
+           AND ended_at IS NOT NULL AND ended_at <= datetime('now', '-7 days')`,
+    ],
+    [
         "ein offenes Tempo-Ereignis gibt es nur bei einem Fahrzeug auf Fahrt",
         `SELECT COUNT(*) AS c FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id
          WHERE a.type = 'SPEEDING' AND a.ended_at IS NULL AND v.status <> 'DRIVING'`,

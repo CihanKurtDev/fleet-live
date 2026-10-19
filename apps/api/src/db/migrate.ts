@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { isValidIsoDate } from "@fleet-live/shared";
-import { syncLowFuelAlerts } from "./lowFuelAlerts";
+import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
 
 const SCHEMA_VERSION = 22;
 
@@ -1568,7 +1568,8 @@ export function migrate(database: DatabaseSync) {
     ensureTotpLastStep(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.
-    syncLowFuelAlerts(database);
+    syncStateAlerts(database);
+    archiveStaleSpeeding(database);
 
     if (currentVersion < SCHEMA_VERSION) {
         database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);

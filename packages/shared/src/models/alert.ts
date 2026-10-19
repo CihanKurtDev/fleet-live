@@ -49,6 +49,23 @@ export const LOW_FUEL_CRITICAL_PERCENT = 5;
 export const OFFLINE_AFTER_MS = 15_000;
 
 /**
+ * Warnungen, die einen Zustand melden und sich selbst schließen, sobald der
+ * Zustand vorbei ist (Tank wieder über der Schwelle, Signal wieder da). Man
+ * erledigt sie nicht von Hand.
+ */
+export const SELF_CLOSING_ALERT_TYPES = ["LOW_FUEL", "OFFLINE"] as const;
+
+export function isSelfClosingAlertType(type: string): boolean {
+    return (SELF_CLOSING_ALERT_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * Ein beendetes Tempo-Ereignis, das so lange niemand erledigt hat, gilt danach
+ * als Verlauf und steht nicht mehr bei den offenen Warnungen.
+ */
+export const SPEEDING_OPEN_DAYS = 7;
+
+/**
  * Eine Warnung hängt am Fahrzeug. `driver_id` ist der Fahrer zum
  * Zeitpunkt des Open (Snapshot). `license_plate` kommt aus dem Join
  * aufs Fahrzeug, `driver_name` aus dem Snapshot-Fahrer.

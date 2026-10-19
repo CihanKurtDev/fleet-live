@@ -23,7 +23,7 @@ const alert = (overrides: Partial<Alert> & { id: number }): Alert => ({
     driver_id: null,
     license_plate: `K-AB ${overrides.id}`,
     driver_name: null,
-    type: "OFFLINE",
+    type: "SPEEDING",
     severity: "MEDIUM",
     message: "Fahrzeug sendet kein Signal",
     details: null,
@@ -237,7 +237,7 @@ describe("alert list page", () => {
 
         expect(within(bar).getByText("2 ausgewählt")).toBeInTheDocument();
         expect(
-            within(bar).getByText("alle Funk · 2 Fahrzeuge"),
+            within(bar).getByText("alle Tempo · 2 Fahrzeuge"),
         ).toBeInTheDocument();
 
         const pageBox = within(bar).getByRole("checkbox", {

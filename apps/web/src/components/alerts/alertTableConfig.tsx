@@ -1,5 +1,6 @@
 import {
     formatAlertEvent,
+    isSelfClosingAlertType,
     type Alert,
     type AlertFilterId,
     type AlertListMeta,
@@ -49,12 +50,12 @@ export const alertTiles: AlertTileOption[] = [
 ];
 
 /**
- * A dispatcher closes an open warning by hand, except the tank warning: it
- * closes itself when the tank is above the threshold again.
+ * A dispatcher closes an open warning by hand, except the ones that follow a
+ * state (Wenig Tank, Funk): they close themselves when the state is over.
  */
 export const canResolveByHand = (
     alert: Pick<Alert, "type" | "resolved_at">,
-) => alert.resolved_at === null && alert.type !== "LOW_FUEL";
+) => alert.resolved_at === null && !isSelfClosingAlertType(alert.type);
 
 /** The tile that is pressed for the current query. */
 export const activeAlertTile = (

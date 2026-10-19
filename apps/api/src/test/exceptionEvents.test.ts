@@ -11,7 +11,7 @@ import { UserModel } from "../models/user.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { setCompanySimRunning, resetSimControlForTests } from "../lib/simControl";
 import { db } from "../db/database";
-import { syncLowFuelAlerts } from "../db/lowFuelAlerts";
+import { syncStateAlerts } from "../db/stateAlerts";
 import { giveCurrentDriver, insertAlert, loginAs } from "./helpers";
 
 function drivingPatch(
@@ -162,7 +162,7 @@ describe("LOW_FUEL follows the tank", () => {
         // Still open, but the tank was filled since.
         insertAlert(filledUp.id, { type: "LOW_FUEL" });
 
-        syncLowFuelAlerts(db);
+        syncStateAlerts(db);
 
         const openOf = (id: number) =>
             lowFuelRows(id).filter((row) => row.resolved_at === null);
@@ -179,7 +179,7 @@ describe("LOW_FUEL follows the tank", () => {
         const before = db.prepare("SELECT COUNT(*) AS n FROM alerts").get() as {
             n: number;
         };
-        syncLowFuelAlerts(db);
+        syncStateAlerts(db);
         const after = db.prepare("SELECT COUNT(*) AS n FROM alerts").get() as {
             n: number;
         };
@@ -264,10 +264,17 @@ describe("live OFFLINE", () => {
         setCompanySimRunning(1, true);
         drivingPatch(vehicle.id, 1, 80, start + OFFLINE_AFTER_MS + 400);
 
-        const after = await openInbox(api, "OFFLINE");
-        assert.equal(after.body.data.length, 1);
-        assert.equal(typeof after.body.data[0].ended_at, "string");
-        assert.equal(after.body.data[0].resolved_at, null);
+        // The signal is back: the warning closes itself, nobody clicks it away.
+        const open = await openInbox(api, "OFFLINE");
+        assert.equal(open.body.data.length, 0);
+
+        const all = await api
+            .get("/api/alerts")
+            .query({ type: "OFFLINE", filter: "all" });
+        assert.equal(all.body.data.length, 1);
+        assert.equal(typeof all.body.data[0].ended_at, "string");
+        assert.equal(all.body.data[0].resolved_at, all.body.data[0].ended_at);
+        assert.equal(VehicleModel.getById(vehicle.id, 1)?.active_alerts, 0);
     });
 
     it("does not treat a running sim gap as lost signal", async () => {
@@ -325,7 +332,9 @@ describe("live OFFLINE", () => {
             start + OFFLINE_AFTER_MS + 400,
         );
 
-        const rows = await openInbox(api, "OFFLINE");
+        const rows = await api
+            .get("/api/alerts")
+            .query({ type: "OFFLINE", filter: "all" });
         const endedByPlate = new Map<string, unknown>(
             rows.body.data.map((row: { license_plate: string; ended_at: unknown }) => [
                 row.license_plate,
@@ -336,6 +345,13 @@ describe("live OFFLINE", () => {
         assert.equal(typeof endedByPlate.get("K-OF 7"), "string");
         assert.equal(typeof endedByPlate.get("K-OF 8"), "string");
         assert.equal(endedByPlate.get("K-OF 9"), null);
+
+        // Only the two that ended left the open inbox.
+        const open = await openInbox(api, "OFFLINE");
+        assert.deepEqual(
+            open.body.data.map((row: { license_plate: string }) => row.license_plate),
+            ["K-OF 9"],
+        );
     });
 
     it("opens OFFLINE when status is set to OFFLINE", async () => {

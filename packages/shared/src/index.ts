@@ -122,6 +122,7 @@ export {
     isAlertType,
     isLowFuelAlertDetails,
     isLowFuelLevel,
+    isSelfClosingAlertType,
     isSpeedingAlertDetails,
     LOW_FUEL_CRITICAL_PERCENT,
     LOW_FUEL_THRESHOLD_PERCENT,
@@ -130,7 +131,9 @@ export {
     parseAlertBulkPatch,
     parseAlertListQuery,
     parseAlertPatch,
+    SELF_CLOSING_ALERT_TYPES,
     serializeAlertListQuery,
+    SPEEDING_OPEN_DAYS,
 } from "./models/alert";
 
 export type { Site, SiteInput, SiteListResponse, SitePatch } from "./models/site";

@@ -1,5 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import { serializeAlertListQuery, type Alert } from "@fleet-live/shared";
+import {
+    isSelfClosingAlertType,
+    serializeAlertListQuery,
+    type Alert,
+} from "@fleet-live/shared";
 
 import { resolveAlerts } from "../../api/alerts";
 import { ApiError } from "../../api/client";
@@ -82,9 +86,12 @@ export const AlertTable = ({
         setPage,
     } = useServerTable<Alert>({ listQuery, listResult });
 
-    // Nothing to select on Erledigt, nor on Wenig Tank (those close themselves).
+    // Nothing to select on Erledigt, nor on Wenig Tank and Funk (they close
+    // themselves).
     const selectable =
-        canWrite && query.filter !== "resolved" && query.type !== "LOW_FUEL";
+        canWrite &&
+        query.filter !== "resolved" &&
+        !(query.type && isSelfClosingAlertType(query.type));
     const openRows = useMemo(
         () => paginatedRows.filter(canResolveByHand),
         [paginatedRows],

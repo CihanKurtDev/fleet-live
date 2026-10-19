@@ -1,3 +1,5 @@
+import { db } from "../db/database";
+import { archiveStaleSpeeding } from "../db/stateAlerts";
 import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
@@ -8,6 +10,10 @@ import type { TelemetryPatch } from "@fleet-live/shared";
 
 let timer: ReturnType<typeof setInterval> | undefined;
 let intervalMs = 0;
+let lastArchive = 0;
+
+/** Ended speeding events that ran out of their open days are looked for this often. */
+const ARCHIVE_EVERY_MS = 10 * 60_000;
 
 function broadcastPatches(
     patches: Array<TelemetryPatch & { company_id: number }>,
@@ -66,6 +72,14 @@ export function startTelemetryTicker(ms: number) {
 
             for (const companyId of SpeedingEventModel.endStale()) {
                 notifyCompanies.add(companyId);
+            }
+
+            if (Date.now() - lastArchive >= ARCHIVE_EVERY_MS) {
+                lastArchive = Date.now();
+
+                for (const companyId of archiveStaleSpeeding(db)) {
+                    notifyCompanies.add(companyId);
+                }
             }
 
             broadcastPatches(patches);

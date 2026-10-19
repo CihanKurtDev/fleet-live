@@ -4,12 +4,10 @@ import {
     type VehicleStatus,
 } from "@fleet-live/shared";
 import { db } from "../db/database";
-import { syncLowFuelAlerts } from "../db/lowFuelAlerts";
+import { OFFLINE_MESSAGE, syncStateAlerts } from "../db/stateAlerts";
 import { isCompanySimRunning } from "../lib/simControl";
 import { sqliteFromMs } from "../lib/sqlTime";
 import { AlertModel } from "./alert.model";
-
-const OFFLINE_MESSAGE = "Fahrzeug sendet kein Signal.";
 
 type LastReport = {
     companyId: number;
@@ -113,10 +111,10 @@ export class ExceptionEventModel {
 
     /**
      * Create/Update: unter `LOW_FUEL_THRESHOLD_PERCENT` öffnet die Tank-
-     * Warnung, ab der Schwelle verschwindet sie (siehe `syncLowFuelAlerts`).
+     * Warnung, ab der Schwelle verschwindet sie (siehe `syncStateAlerts`).
      */
     static syncFuel(vehicleId: number, nowMs = Date.now()): void {
-        syncLowFuelAlerts(db, { vehicleId }, sqliteFromMs(nowMs));
+        syncStateAlerts(db, { vehicleId }, sqliteFromMs(nowMs));
     }
 
     static resetForTests() {

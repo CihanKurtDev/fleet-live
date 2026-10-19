@@ -10,6 +10,7 @@ import type {
 } from "@fleet-live/shared";
 import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
 import { withTransaction } from "../db/database";
+import { SELF_CLOSING_TYPES_SQL } from "../db/stateAlerts";
 import { stmt } from "../db/statements";
 import { nowSqlite } from "../lib/sqlTime";
 import { pagedQuery } from "../lib/pagination";
@@ -114,9 +115,13 @@ const UPDATE_TYPED = `
       AND ended_at IS NULL
 `;
 
+// A warning that follows a state is also done when the state is over: nobody
+// has to click it away.
 const END_OPEN_TYPE = `
     UPDATE alerts
-    SET ended_at = ?
+    SET ended_at = ?,
+        resolved_at = CASE WHEN type IN ${SELF_CLOSING_TYPES_SQL}
+                           THEN COALESCE(resolved_at, ?) ELSE resolved_at END
     WHERE vehicle_id = ?
       AND type = ?
       AND ended_at IS NULL
@@ -124,7 +129,9 @@ const END_OPEN_TYPE = `
 
 const END_OPEN_TYPE_FOR_VEHICLES = `
     UPDATE alerts
-    SET ended_at = ?
+    SET ended_at = ?,
+        resolved_at = CASE WHEN type IN ${SELF_CLOSING_TYPES_SQL}
+                           THEN COALESCE(resolved_at, ?) ELSE resolved_at END
     WHERE type = ?
       AND ended_at IS NULL
       AND vehicle_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
@@ -135,7 +142,7 @@ const RESOLVE = `
     SET resolved_at = ?
     WHERE id = ?
       AND resolved_at IS NULL
-      AND type <> 'LOW_FUEL'
+      AND type NOT IN ${SELF_CLOSING_TYPES_SQL}
       AND vehicle_id IN (
           SELECT id FROM vehicles WHERE company_id = ?
       )
@@ -155,7 +162,7 @@ const RESOLVE_MANY = `
     SET resolved_at = ?
     WHERE id IN (SELECT value FROM json_each(?))
       AND resolved_at IS NULL
-      AND type <> 'LOW_FUEL'
+      AND type NOT IN ${SELF_CLOSING_TYPES_SQL}
       AND vehicle_id IN (
           SELECT id FROM vehicles WHERE company_id = ?
       )
@@ -571,6 +578,7 @@ export class AlertModel {
 
         const result = stmt(END_OPEN_TYPE_FOR_VEHICLES).run(
             endedAt,
+            endedAt,
             type,
             JSON.stringify(vehicleIds),
         );
@@ -582,7 +590,7 @@ export class AlertModel {
         type: AlertType,
         endedAt: string,
     ): boolean {
-        const result = stmt(END_OPEN_TYPE).run(endedAt, vehicleId, type);
+        const result = stmt(END_OPEN_TYPE).run(endedAt, endedAt, vehicleId, type);
         return result.changes > 0;
     }
 }

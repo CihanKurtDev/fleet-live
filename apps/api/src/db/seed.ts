@@ -5,7 +5,7 @@ import {
     dropMaintenanceTriggers,
 } from "./migrate";
 import { upsertDevAccounts } from "./devAccounts";
-import { syncLowFuelAlerts } from "./lowFuelAlerts";
+import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
 import {
     assignDepotSitesFromTelemetry,
     replaceCompanyDepots,
@@ -321,7 +321,8 @@ function seedLarge() {
     }
 
     applyMaintenanceTriggers(db);
-    syncLowFuelAlerts(db);
+    syncStateAlerts(db);
+    archiveStaleSpeeding(db);
     db.exec("ANALYZE");
 }
 
