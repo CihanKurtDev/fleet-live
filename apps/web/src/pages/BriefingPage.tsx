@@ -1,8 +1,9 @@
 import { Link } from "react-router";
-import type {
-    BriefingCounts,
-    BriefingData,
-    DueCounts,
+import {
+    VEHICLE_STATUS_LABELS,
+    type BriefingCounts,
+    type BriefingData,
+    type DueCounts,
 } from "@fleet-live/shared";
 import { ImportPrompt } from "../components/auth/ImportPrompt";
 
@@ -58,20 +59,20 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         },
         {
             key: "offline",
-            label: "Kein Signal",
+            label: VEHICLE_STATUS_LABELS.OFFLINE,
             hint: "Fahrzeuge",
             tone: "critical",
             to: "/vehicles?filter=offline",
         },
         {
             key: "driving",
-            label: "Auf Fahrt",
+            label: VEHICLE_STATUS_LABELS.DRIVING,
             tone: "positive",
             to: "/vehicles?filter=driving",
         },
         {
             key: "idle",
-            label: "Standby",
+            label: VEHICLE_STATUS_LABELS.IDLE,
             tone: "neutral",
             to: "/vehicles?filter=idle",
         },

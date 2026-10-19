@@ -2,11 +2,14 @@ import {
     ALERT_TYPES,
     isLowFuelLevel,
     speedBand,
+    VEHICLE_STATUS_FILTER,
+    VEHICLE_STATUS_LABELS,
     VEHICLE_TYPE_LABELS,
     type AlertType,
     type Vehicle,
     type VehicleFilterId,
     type VehicleListCounts,
+    type VehicleStatus,
 } from "@fleet-live/shared";
 import type {
     TableColumn,
@@ -19,16 +22,28 @@ import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
 import { VehicleStatusChip } from "./VehicleStatusChip";
 import styles from "./vehicleTableConfig.module.scss";
 
+/** Filter and tile of a status: id, name and count come from shared. */
+const statusFilter = (status: VehicleStatus) => ({
+    id: VEHICLE_STATUS_FILTER[status],
+    displayText: VEHICLE_STATUS_LABELS[status],
+});
+
+const statusTile = (status: VehicleStatus) => ({
+    id: VEHICLE_STATUS_FILTER[status],
+    label: VEHICLE_STATUS_LABELS[status],
+    count: VEHICLE_STATUS_FILTER[status],
+});
+
 export const vehicleFilters: Array<
     TableFilter<Vehicle> & { id: VehicleFilterId }
 > = [
     { id: "alerts", displayText: "Warnungen" },
     { id: "low_fuel", displayText: "Wenig Tank" },
     { id: "unassigned", displayText: "Kein Fahrer" },
-    { id: "driving", displayText: "Auf Fahrt" },
-    { id: "idle", displayText: "Standby" },
-    { id: "offline", displayText: "Kein Signal" },
-    { id: "stopped", displayText: "Feierabend" },
+    statusFilter("DRIVING"),
+    statusFilter("IDLE"),
+    statusFilter("OFFLINE"),
+    statusFilter("STOPPED"),
     { id: "in_depot", displayText: "Im Depot" },
     { id: "speeding", displayText: "Tempo jetzt" },
 ];
@@ -48,10 +63,10 @@ type VehicleFilterOption = {
  */
 export const vehicleTileFilters: VehicleFilterOption[] = [
     { id: null, label: "Alle", count: "all" },
-    { id: "driving", label: "Auf Fahrt", count: "driving", tone: "positive" },
-    { id: "idle", label: "Standby", count: "idle" },
-    { id: "stopped", label: "Feierabend", count: "stopped" },
-    { id: "offline", label: "Kein Signal", count: "offline", tone: "critical" },
+    { ...statusTile("DRIVING"), tone: "positive" },
+    statusTile("IDLE"),
+    statusTile("STOPPED"),
+    { ...statusTile("OFFLINE"), tone: "critical" },
     { id: "speeding", label: "Tempo jetzt", count: "speeding", tone: "critical" },
     { id: "alerts", label: "Mit Warnung", count: "alerts", tone: "critical" },
     { id: "low_fuel", label: "Wenig Tank", count: "low_fuel", tone: "warning" },

@@ -38,6 +38,8 @@ export type BriefingCounts = {
     offline: number;
     driving: number;
     idle: number;
+    /** Status `STOPPED`, auf den Listen „Feierabend“. */
+    stopped: number;
     low_fuel: number;
     /** Letzte Position liegt in einem Depot-Radius der Firma. */
     in_depot: number;
