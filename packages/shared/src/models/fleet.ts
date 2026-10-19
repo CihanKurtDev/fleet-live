@@ -55,6 +55,11 @@ export type FleetPositionsQuery = {
     search?: string;
     /** Leer/fehlt = alle Fahrer. Sonst nur Fahrzeuge dieser Namen. */
     drivers?: string[];
+    /**
+     * Statt Namen: alle Fahrzeuge, deren aktueller Fahrer oder Kennzeichen
+     * den Text enthält. Ohne Obergrenze der Namensliste.
+     */
+    driver_search?: string;
 };
 
 /** Seitengröße der Fahrersuche — nicht die Trefferanzahl. */
@@ -215,6 +220,14 @@ export const fleetPositionsQuerySchema = z.object({
         toDriverList,
         driverNamesSchema.optional(),
     ),
+    driver_search: z.preprocess(
+        firstQueryString,
+        z
+            .string()
+            .trim()
+            .max(100, "Suche darf höchstens 100 Zeichen haben.")
+            .optional(),
+    ),
 });
 
 export function parseFleetPositionsQuery(
@@ -243,6 +256,10 @@ export function serializeFleetPositionsQuery(
 
     for (const name of query.drivers ?? []) {
         params.append("drivers", name);
+    }
+
+    if (query.driver_search) {
+        params.set("driver_search", query.driver_search);
     }
 
     return params;

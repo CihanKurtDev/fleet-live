@@ -31,11 +31,16 @@ const mergeKnownDrivers = (
 type UseFleetDriverFilterArgs = {
     selected: string[];
     onChange: (names: string[]) => void;
+    /** The active text filter (`driver_search`), "" when there is none. */
+    searchText: string;
+    onSearchText: (text: string) => void;
 };
 
 export const useFleetDriverFilter = ({
     selected,
     onChange,
+    searchText,
+    onSearchText,
 }: UseFleetDriverFilterArgs) => {
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState<string[]>([]);
@@ -166,11 +171,11 @@ export const useFleetDriverFilter = ({
 
     const openModal = useCallback(() => {
         setDraft(selected);
-        setQuery("");
+        setQuery(searchText);
         setHits([]);
         setPage(1);
         setOpen(true);
-    }, [selected]);
+    }, [searchText, selected]);
 
     const closeModal = useCallback(() => {
         setOpen(false);
@@ -193,44 +198,28 @@ export const useFleetDriverFilter = ({
         });
     }, []);
 
-    /** Adds the first matches of the search (the first page, at most FLEET_DRIVERS_MAX in all). */
-    const selectAllMatches = useCallback(async () => {
-        if (debouncedQuery.length === 0) {
+    /** Filters by the text of the search: every match, no list of names. */
+    const applySearchText = useCallback(() => {
+        const text = query.trim();
+
+        if (text.length === 0) {
             return;
         }
 
-        try {
-            const response = await listFleetDrivers({
-                search: debouncedQuery,
-                page: 1,
-            });
-            setKnown((current) => mergeKnownDrivers(current, response.data));
-            setDraft((current) => {
-                const next = [...current];
-
-                for (const row of response.data) {
-                    if (next.length >= FLEET_DRIVERS_MAX) {
-                        break;
-                    }
-
-                    if (!next.includes(row.name)) {
-                        next.push(row.name);
-                    }
-                }
-
-                return next;
-            });
-        } catch (caught: unknown) {
-            if (!isAbortError(caught)) {
-                // The list stays as it is; the user can still tick rows.
-            }
-        }
-    }, [debouncedQuery]);
+        onSearchText(text);
+        closeModal();
+    }, [closeModal, onSearchText, query]);
 
     const apply = useCallback(() => {
+        // Ticked names replace a text filter; with none ticked the text stays.
+        if (draft.length === 0 && searchText.length > 0 && selected.length === 0) {
+            closeModal();
+            return;
+        }
+
         onChange(draft);
         closeModal();
-    }, [closeModal, draft, onChange]);
+    }, [closeModal, draft, onChange, searchText, selected.length]);
 
     const searching = query.trim().length > 0;
     const searchPending =
@@ -260,7 +249,7 @@ export const useFleetDriverFilter = ({
         searching,
         searchPending,
         toggle,
-        selectAllMatches,
+        applySearchText,
         apply,
     };
 };

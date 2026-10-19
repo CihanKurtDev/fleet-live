@@ -39,14 +39,23 @@ const respond = (matches: number) => {
     });
 };
 
-const open = async (onChange = vi.fn()) => {
-    render(<FleetDriverPicker selected={[]} onChange={onChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "Fahrer filtern" }));
+const open = async (props: Partial<Parameters<typeof FleetDriverPicker>[0]> = {}) => {
+    const onChange = vi.fn();
+    const onSearchText = vi.fn();
+    render(
+        <FleetDriverPicker
+            selected={[]}
+            onChange={onChange}
+            onSearchText={onSearchText}
+            {...props}
+        />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Fahrer/ }));
     fireEvent.change(await screen.findByRole("searchbox", { name: "Name oder Kennzeichen" }), {
         target: { value: "fahrer" },
     });
 
-    return onChange;
+    return { onChange, onSearchText };
 };
 
 beforeEach(() => {
@@ -54,31 +63,57 @@ beforeEach(() => {
 });
 
 describe("Fahrer filtern", () => {
-    it("selects every match of the search and applies them", async () => {
-        respond(3);
-        const onChange = await open();
+    it("filters by the text of the search: every match, without a list of names", async () => {
+        respond(200);
+        const { onSearchText, onChange } = await open();
 
         fireEvent.click(
-            await screen.findByRole("button", { name: "Alle 3 Treffer auswählen" }),
+            await screen.findByRole("button", { name: "Alle 200 Treffer filtern" }),
         );
-        await waitFor(() => expect(screen.getAllByRole("checkbox", { checked: true })).toHaveLength(3));
 
-        fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
-        expect(onChange).toHaveBeenCalledWith(["Fahrer 1", "Fahrer 2", "Fahrer 3"]);
+        expect(onSearchText).toHaveBeenCalledWith("fahrer");
+        expect(onChange).not.toHaveBeenCalled();
+        // The dialog closes with the filter set.
+        await waitFor(() => expect(screen.queryByRole("searchbox")).toBeNull());
     });
 
-    it("takes at most 50 and says so", async () => {
-        respond(200);
-        const onChange = await open();
+    it("says Treffer filtern for a single match", async () => {
+        respond(1);
+        await open();
 
-        fireEvent.click(
-            await screen.findByRole("button", { name: "Die ersten 50 Treffer auswählen" }),
-        );
-        await waitFor(() => expect(screen.getAllByRole("checkbox", { checked: true })).toHaveLength(50));
-        expect(screen.getByRole("button", { name: "Die ersten 50 Treffer auswählen" })).toBeDisabled();
+        expect(await screen.findByRole("button", { name: "Treffer filtern" })).toBeInTheDocument();
+    });
 
+    it("still picks single drivers by name", async () => {
+        respond(3);
+        const { onChange } = await open();
+
+        const rows = await screen.findAllByRole("checkbox");
+        fireEvent.click(rows[0]);
         fireEvent.click(screen.getByRole("button", { name: "Übernehmen" }));
-        expect(onChange.mock.calls[0][0]).toHaveLength(50);
+
+        expect(onChange).toHaveBeenCalledWith(["Fahrer 1"]);
+    });
+
+    it("shows the active text on the trigger and clears it with Auswahl aufheben", async () => {
+        respond(3);
+        const onSearchText = vi.fn();
+        render(
+            <FleetDriverPicker
+                selected={[]}
+                onChange={vi.fn()}
+                searchText="2"
+                onSearchText={onSearchText}
+            />,
+        );
+
+        const trigger = screen.getByRole("button", { name: "Fahrer: Suche „2“" });
+        expect(trigger).toHaveTextContent("Suche „2“");
+
+        fireEvent.click(trigger);
+        fireEvent.click(await screen.findByRole("button", { name: "Auswahl aufheben" }));
+
+        expect(onSearchText).toHaveBeenCalledWith("");
     });
 
     it("offers nothing without a search", async () => {
@@ -87,6 +122,6 @@ describe("Fahrer filtern", () => {
         fireEvent.click(screen.getByRole("button", { name: "Fahrer filtern" }));
 
         await screen.findByRole("searchbox", { name: "Name oder Kennzeichen" });
-        expect(screen.queryByRole("button", { name: /Treffer auswählen/ })).toBeNull();
+        expect(screen.queryByRole("button", { name: /Treffer filtern/ })).toBeNull();
     });
 });

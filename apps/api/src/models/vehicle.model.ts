@@ -397,6 +397,15 @@ export class VehicleModel {
                     )
                 )`
                 : "";
+        // Suchtext statt Namensliste: aktueller Fahrer oder Kennzeichen.
+        const driverSearch = query.driver_search ?? "";
+        const driverSearchSql =
+            driverSearch.length > 0
+                ? `AND (
+                    lower(coalesce(v.driver_name, '')) LIKE ? ESCAPE '#'
+                    OR lower(v.license_plate) LIKE ? ESCAPE '#'
+                )`
+                : "";
         // `search` schränkt diese Antwort nicht ein. Die Karte sucht im
         // geladenen Bestand und blendet die übrigen Fahrzeuge nicht aus.
         const activeBbox = query.bbox;
@@ -408,11 +417,15 @@ export class VehicleModel {
             WHERE v.company_id = ?
               ${filterSql}
               ${driverSql}
+              ${driverSearchSql}
         `;
         const matchParams = [
             companyId,
             ...selectedDrivers,
             ...selectedDrivers,
+            ...(driverSearch.length > 0
+                ? [toLikePattern(driverSearch), toLikePattern(driverSearch)]
+                : []),
         ];
         const bboxParams = activeBbox
             ? [

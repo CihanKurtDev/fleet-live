@@ -118,6 +118,8 @@ export const FleetPage = () => {
         bbox,
         filter,
         drivers,
+        driverSearch,
+        setDriverSearch,
         depotId,
         searchDraft,
         setSearchDraft,
@@ -143,6 +145,7 @@ export const FleetPage = () => {
     } = useFleetPositions({
         filter: statusFromFilter(filter) ? undefined : filter,
         drivers,
+        driverSearch,
         pinnedId: selectedId,
     });
     const briefing = useBriefing();
@@ -312,7 +315,8 @@ export const FleetPage = () => {
         rowCount: mode === "density" ? total : vehicles.length,
         positionedCount,
         inViewCount,
-        hasNarrowingFilter: filter !== undefined || drivers.length > 0,
+        hasNarrowingFilter:
+            filter !== undefined || drivers.length > 0 || driverSearch.length > 0,
     });
     const fleetPath = `/fleet${queryString ? `?${queryString}` : ""}`;
     const draftDirty = draft !== null && isDepotDraftDirty(draft, sites);
@@ -688,6 +692,8 @@ export const FleetPage = () => {
                         <FleetDriverPicker
                             selected={drivers}
                             onChange={setDrivers}
+                            searchText={driverSearch}
+                            onSearchText={setDriverSearch}
                         />
 
                         <TableFilterBar

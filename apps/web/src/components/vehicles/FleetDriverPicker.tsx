@@ -12,11 +12,16 @@ import styles from "./FleetDriverPicker.module.scss";
 type FleetDriverPickerProps = {
     selected: string[];
     onChange: (names: string[]) => void;
+    /** Text filter that stands for every matching driver ("" = none). */
+    searchText?: string;
+    onSearchText?: (text: string) => void;
 };
 
 export const FleetDriverPicker = ({
     selected,
     onChange,
+    searchText = "",
+    onSearchText = () => undefined,
 }: FleetDriverPickerProps) => {
     const {
         open,
@@ -37,21 +42,27 @@ export const FleetDriverPicker = ({
         searching,
         searchPending,
         toggle,
-        selectAllMatches,
+        applySearchText,
         apply,
     } = useFleetDriverFilter({
         selected,
         onChange,
+        searchText,
+        onSearchText,
     });
 
     const label =
-        selected.length === 0
+        searchText.length > 0
+            ? `Suche „${searchText}“`
+            : selected.length === 0
             ? "Fahrer filtern"
             : selected.length === 1
               ? selected[0]
               : `${formatCount(selected.length)} Fahrer`;
     const triggerLabel =
-        selected.length === 0
+        searchText.length > 0
+            ? `Fahrer: Suche „${searchText}“`
+            : selected.length === 0
             ? "Fahrer filtern"
             : selected.length === 1
               ? `Fahrer: ${selected[0]}`
@@ -77,7 +88,7 @@ export const FleetDriverPicker = ({
                 aria-haspopup="dialog"
                 aria-expanded={open}
                 aria-label={triggerLabel}
-                data-filled={selected.length > 0 ? "true" : undefined}
+                data-filled={selected.length > 0 || searchText.length > 0 ? "true" : undefined}
                 onClick={openModal}
             >
                 <span className={styles.triggerText}>{label}</span>
@@ -178,21 +189,21 @@ export const FleetDriverPicker = ({
                                 <Button
                                     variant="secondary"
                                     size="md"
-                                    disabled={draft.length >= FLEET_DRIVERS_MAX}
-                                    onClick={() => void selectAllMatches()}
+                                    onClick={applySearchText}
                                 >
-                                    {matched > FLEET_DRIVERS_MAX
-                                        ? `Die ersten ${FLEET_DRIVERS_MAX} Treffer auswählen`
-                                        : matched === 1
-                                          ? "Treffer auswählen"
-                                          : `Alle ${formatCount(matched)} Treffer auswählen`}
+                                    {matched === 1
+                                        ? "Treffer filtern"
+                                        : `Alle ${formatCount(matched)} Treffer filtern`}
                                 </Button>
                             )}
                             <Button
                                 variant="ghost"
                                 size="md"
-                                disabled={draft.length === 0}
-                                onClick={() => setDraft([])}
+                                disabled={draft.length === 0 && searchText.length === 0}
+                                onClick={() => {
+                                    setDraft([]);
+                                    onSearchText("");
+                                }}
                             >
                                 Auswahl aufheben
                             </Button>
