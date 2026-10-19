@@ -56,8 +56,11 @@ export const FleetDriverPicker = ({
             : selected.length === 1
               ? `Fahrer: ${selected[0]}`
               : `${formatCount(selected.length)} Fahrer ausgewählt`;
+    // Turning a page keeps the old rows, the count and the pager on screen until
+    // the next page is there; only a first search shows "Suche…".
+    const firstSearch = searchPending && matched === 0;
     const summary = searching
-        ? searchPending
+        ? firstSearch
             ? "Suche…"
             : `${formatCount(matched)} Treffer`
         : draft.length > 0
@@ -157,20 +160,21 @@ export const FleetDriverPicker = ({
                             Liste auswählen.
                         </p>
                     )}
-                    {searching && !searchPending && pageCount > 1 && (
+                    {searching && !firstSearch && pageCount > 1 && (
                         <div className={styles.pager}>
                             <TablePagination
                                 compact
                                 page={page}
                                 pageCount={pageCount}
                                 total={matched}
+                                disabled={searchPending}
                                 onPageChange={setPage}
                             />
                         </div>
                     )}
                     <div className={styles.footer}>
                         <div className={styles.selectActions}>
-                            {searching && !searchPending && matched > 0 && (
+                            {searching && !firstSearch && matched > 0 && (
                                 <Button
                                     variant="secondary"
                                     size="md"
