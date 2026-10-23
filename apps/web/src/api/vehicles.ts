@@ -3,6 +3,8 @@ import type {
     FleetDriversResponse,
     FleetPositionsQuery,
     FleetPositionsResponse,
+    TelemetryHistoryLimit,
+    TelemetryHistoryResponse,
     TripListQuery,
     TripListResponse,
     TripResponse,
@@ -54,6 +56,21 @@ export function listDrivers(
 
     return request<FleetDriversResponse>(
         `/api/vehicles/drivers${suffix ? `?${suffix}` : ""}`,
+        { signal },
+    );
+}
+
+/**
+ * Die letzten Rohpunkte mit Gerätezeit, ältester zuerst. Nur für den Start
+ * der Wiedergabe auf der Karte, nicht für die Spur (die ist `Trip.path`).
+ */
+export function getVehicleTelemetry(
+    id: number,
+    limit: TelemetryHistoryLimit,
+    signal?: AbortSignal,
+) {
+    return request<TelemetryHistoryResponse>(
+        `/api/vehicles/${id}/telemetry?limit=${limit}`,
         { signal },
     );
 }

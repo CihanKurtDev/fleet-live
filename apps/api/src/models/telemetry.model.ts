@@ -2,7 +2,7 @@ import type { TelemetryPatch, TelemetryPoint } from "@fleet-live/shared";
 import { config } from "../config";
 import { db } from "../db/database";
 import { stmt } from "../db/statements";
-import { nowSqlite } from "../lib/sqlTime";
+import { nowSqlite, nowSqliteMs } from "../lib/sqlTime";
 import { nextSimTick, SIM_PING_SECONDS } from "../sim/routes";
 import { TripModel } from "./trip.model";
 import { isCompanySimRunning } from "../lib/simControl";
@@ -122,7 +122,7 @@ function writePatches(pings: Ping[]): TickedPatch[] {
     const insert = stmt(INSERT_TELEMETRY);
     const prune = stmt(PRUNE_TELEMETRY);
     const updateFuelAndLimit = stmt(UPDATE_FUEL_AND_LIMIT);
-    const recordedAt = nowSqlite();
+    const recordedAt = nowSqliteMs();
     const patches: TickedPatch[] = [];
     const keep = config.telemetryKeepPerVehicle;
 
@@ -308,7 +308,7 @@ export class TelemetryModel {
             return undefined;
         }
 
-        const recordedAt = nowSqlite();
+        const recordedAt = nowSqliteMs();
 
         stmt(INSERT_TELEMETRY).run(
             vehicleId,

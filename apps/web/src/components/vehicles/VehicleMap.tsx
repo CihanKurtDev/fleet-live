@@ -9,9 +9,10 @@ import {
     useLeafletFollowMap,
 } from "../../hooks/useLeafletFollowMap";
 import { useLatestRef } from "../../hooks/useLatestRef";
-import { useMarkerSlide } from "../../hooks/useMarkerSlide";
 import { themeColor } from "./leafletMap";
 import type { MapPoint } from "./mapGeometry";
+import { PlaybackAge } from "./PlaybackAge";
+import { VehiclePlayback, type PlaybackFix, type RoadPoint } from "./vehiclePlayback";
 import {
     vehicleStatusColor,
     vehicleStatusLabel,
@@ -23,12 +24,29 @@ export type { MapPoint } from "./mapGeometry";
 type VehicleMapProps = {
     latitude: number;
     longitude: number;
+    /** Device time of the position (`recorded_at`). */
+    recordedAt: string | null;
     label: string;
     status: VehicleStatus;
     trail?: MapPoint[];
+    /**
+     * The trail is the open trip and grows with the reports: the marker is
+     * played back along it and the line ends at the marker. Otherwise the
+     * trail is an archived trip, drawn whole.
+     */
+    live?: boolean;
+    /** Stored fixes to start the playback with (null while they load). */
+    history?: readonly PlaybackFix[] | null;
+    /** The trail may still turn live (its trip is loading): hold the marker back. */
+    loading?: boolean;
     /** Fill the parent's height instead of the fixed map height. */
     fill?: boolean;
 };
+
+/** The one vehicle of this map, in its playback. */
+const VEHICLE = 0;
+/** Encode/RDP noise; used to decide if a longer trail is the same polyline grown. */
+const PREFIX_EPS_M = 12;
 
 const markerTooltip = (label: string, status: VehicleStatus) =>
     `${label} · ${vehicleStatusLabel(status)}`;
@@ -41,12 +59,38 @@ const createMarkerIcon = () =>
         iconAnchor: [8, 8],
     });
 
+const toPoints = (trail: readonly MapPoint[]): RoadPoint[] =>
+    trail.map((point) => ({ lat: point.latitude, lng: point.longitude }));
+
+const sameVertex = (a: RoadPoint | undefined, b: RoadPoint | undefined) =>
+    Boolean(a && b && L.latLng(a).distanceTo(b) <= PREFIX_EPS_M);
+
+/** The longer line is the shorter one with points added at the end. */
+const grewFrom = (previous: RoadPoint[], next: RoadPoint[]) => {
+    if (previous.length === 0 || next.length <= previous.length) {
+        return false;
+    }
+
+    const last = previous.length - 1;
+    const middle = Math.floor(last / 2);
+
+    return (
+        sameVertex(previous[0], next[0]) &&
+        sameVertex(previous[last], next[last]) &&
+        (previous.length <= 4 || sameVertex(previous[middle], next[middle]))
+    );
+};
+
 export const VehicleMap = ({
     latitude,
     longitude,
+    recordedAt,
     label,
     status,
     trail,
+    live = false,
+    history = null,
+    loading = false,
     fill = false,
 }: VehicleMapProps) => {
     const {
@@ -58,11 +102,23 @@ export const VehicleMap = ({
         recenter,
         setViewSilent,
     } = useLeafletFollowMap();
-    const { sync, cancel } = useMarkerSlide();
     const markerRef = useRef<L.Marker | null>(null);
     const lineRef = useRef<L.Polyline | null>(null);
     const statusRef = useLatestRef(status);
     const labelRef = useLatestRef(label);
+    const panRef = useLatestRef(panIfFollowing);
+    /** Where the vehicle is shown, the same playback as on the fleet map. */
+    const playbackRef = useRef(new VehiclePlayback());
+    /** The trail as last handed to the playback, and whether it was the live one. */
+    const trailRef = useRef<MapPoint[] | undefined>(undefined);
+    const pointsRef = useRef<RoadPoint[]>([]);
+    const liveRef = useRef(false);
+    /** The playback started from the history for the current live trail. */
+    const seededRef = useRef(false);
+    /** How many trail points the drawn line holds before the marker. */
+    const drawnRef = useRef(-1);
+    const frameRef = useRef(0);
+    const playRef = useRef<() => void>(() => undefined);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -92,14 +148,61 @@ export const VehicleMap = ({
             });
         });
 
+        // One frame: the marker at the played-back position, the live line up
+        // to it, the camera on it. Runs while there is something to play.
+        const step = (now: number) => {
+            frameRef.current = 0;
+            const shown = playbackRef.current.at(VEHICLE, now);
+            const marker = markerRef.current;
+
+            if (!shown || !marker) {
+                return;
+            }
+
+            const at = L.latLng(shown.lat, shown.lng);
+
+            marker.setLatLng(at);
+
+            if (liveRef.current) {
+                const drawn = line.getLatLngs() as L.LatLng[];
+
+                if (drawnRef.current !== shown.passed) {
+                    drawnRef.current = shown.passed;
+                    line.setLatLngs([
+                        ...pointsRef.current
+                            .slice(0, shown.passed)
+                            .map((point) => L.latLng(point)),
+                        at,
+                    ]);
+                } else if (drawn.length > 0) {
+                    drawn[drawn.length - 1] = at;
+                    line.setLatLngs(drawn);
+                }
+            }
+
+            panRef.current(at);
+
+            if (!shown.done) {
+                frameRef.current = requestAnimationFrame(step);
+            }
+        };
+
+        playRef.current = () => {
+            if (frameRef.current === 0) {
+                frameRef.current = requestAnimationFrame(step);
+            }
+        };
+
         return () => {
-            cancel();
+            cancelAnimationFrame(frameRef.current);
+            frameRef.current = 0;
+            playRef.current = () => undefined;
             line.remove();
             lineRef.current = null;
             markerRef.current?.remove();
             markerRef.current = null;
         };
-    }, [cancel, mapRef, themedRef, statusRef]);
+    }, [mapRef, panRef, themedRef]);
 
     useEffect(() => {
         markerRef.current?.setTooltipContent(markerTooltip(label, status));
@@ -114,10 +217,15 @@ export const VehicleMap = ({
         }
 
         const next = L.latLng(latitude, longitude);
-        let marker = markerRef.current;
+        // The marker appears at the first position it is shown at: for the
+        // live trip that is the played-back one, a few seconds behind the
+        // newest report, so it does not stand there first and jump back.
+        const placeMarker = (at: L.LatLng) => {
+            if (markerRef.current) {
+                return;
+            }
 
-        if (!marker) {
-            marker = L.marker(next, {
+            const marker = L.marker(at, {
                 icon: createMarkerIcon(),
                 keyboard: false,
             });
@@ -127,26 +235,106 @@ export const VehicleMap = ({
             });
             marker.addTo(map);
             markerRef.current = marker;
-            setViewSilent(next, INITIAL_MAP_ZOOM, { animate: false });
+            setViewSilent(at, INITIAL_MAP_ZOOM, { animate: false });
+        };
+
+        const playback = playbackRef.current;
+        const now = performance.now();
+        const fix = { lat: latitude, lng: longitude, recordedAt };
+        const report = (road?: RoadPoint[], newTrip?: boolean) =>
+            playback.report(VEHICLE, { ...fix, road, newTrip }, now);
+        const trailChanged = trail !== trailRef.current;
+        const points = trailChanged
+            ? toPoints(live ? (trail ?? []) : [])
+            : pointsRef.current;
+        const previous = pointsRef.current;
+
+        trailRef.current = trail;
+
+        if (
+            !markerRef.current &&
+            (loading || (live && history === null && !seededRef.current))
+        ) {
+            // The open trip or the stored fixes are on their way (small
+            // requests): the map already shows the place, the marker waits
+            // for the playback.
+            pointsRef.current = points;
+
+            if (!markerRef.current) {
+                setViewSilent(next, INITIAL_MAP_ZOOM, { animate: false });
+            }
+            return;
         }
 
-        sync({
-            trail,
-            next,
-            marker,
-            line,
-            panIfFollowing,
-        });
+        if (!live || points.length < 2) {
+            // An archived trip (or none): drawn whole, the marker plays the
+            // reports on their own.
+            placeMarker(next);
+            liveRef.current = false;
+            seededRef.current = false;
+            pointsRef.current = [];
+            drawnRef.current = -1;
+
+            if (trailChanged) {
+                line.setLatLngs(
+                    toPoints(trail ?? []).map((point) => L.latLng(point)),
+                );
+            }
+            report();
+            playRef.current();
+            return;
+        }
+
+        const grew = trailChanged && grewFrom(previous, points);
+        // `path_reset`: a new trip, the line starts again.
+        const restarted =
+            trailChanged && previous.length > 0 && points.length < previous.length;
+
+        pointsRef.current = points;
+
+        if (
+            !seededRef.current ||
+            !liveRef.current ||
+            (trailChanged && !grew && !restarted)
+        ) {
+            const fixes = history ?? [];
+
+            liveRef.current = true;
+            seededRef.current = true;
+            drawnRef.current = -1;
+            playback.seed(
+                VEHICLE,
+                recordedAt === null ? fixes : [...fixes, { ...fix, recordedAt }],
+                points,
+                now,
+            );
+
+            const shown = playback.at(VEHICLE, now);
+
+            placeMarker(shown ? L.latLng(shown.lat, shown.lng) : next);
+        } else if (grew) {
+            report(points.slice(previous.length));
+        } else if (restarted) {
+            drawnRef.current = -1;
+            report(points, true);
+        } else {
+            report();
+        }
+
+        playRef.current();
     }, [
         latitude,
         longitude,
+        recordedAt,
         trail,
+        live,
+        history,
+        loading,
         mapRef,
-        panIfFollowing,
         setViewSilent,
-        sync,
         labelRef,
         statusRef,
+        panRef,
     ]);
 
     const statusLabel = vehicleStatusLabel(status);
@@ -170,6 +358,13 @@ export const VehicleMap = ({
                 }
                 role="img"
                 aria-label={`Karte mit Position von ${label}, Status ${statusLabel}`}
+            />
+            <PlaybackAge
+                read={(now) =>
+                    statusRef.current === "DRIVING"
+                        ? playbackRef.current.at(VEHICLE, now)
+                        : undefined
+                }
             />
             {!following && (
                 <button

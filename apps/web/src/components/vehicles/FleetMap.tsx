@@ -14,6 +14,7 @@ import { useLatestRef } from "../../hooks/useLatestRef";
 import { formatCount } from "../../utils/formatCount";
 import type { DepotDraft } from "./depotDraft";
 import { listSimRoutes } from "../../api/sim";
+import { getVehicleTelemetry, getVehicleTrip } from "../../api/vehicles";
 import {
     addRouteLines,
     depotColor,
@@ -32,7 +33,8 @@ import {
     type StatusCounts,
 } from "./clusterFleet";
 import { useClusterIndex } from "./useClusterIndex";
-import { PositionTweens, type RoadPoint } from "./positionTween";
+import { VehiclePlayback, type RoadPoint } from "./vehiclePlayback";
+import { PlaybackAge } from "./PlaybackAge";
 import { SmoothDot, SmoothMarker } from "./smoothMarkers";
 import {
     MAP_STATUS_LEGEND,
@@ -94,13 +96,19 @@ type Leaving = {
 
 /*
  * Vehicles report every few seconds. Where a vehicle is shown at any moment
- * comes from `PositionTweens` (one report behind, always on its way): dots are
- * drawn at that position every frame, the group index is built from it (about
- * once a second), a group symbol rides at the middle of its members' shown
- * positions, and the camera that follows the selected vehicle pans over the
- * same stretch in the same time.
+ * comes from `VehiclePlayback` (the reports played back on the device clock,
+ * a few seconds in the past): dots are drawn at that position every frame,
+ * the group index is built from it (about once a second), a group symbol
+ * rides at the middle of its members' shown positions, and the camera that
+ * follows the selected vehicle is moved to its dot in the same frame.
  */
-const GLIDE_MIN_MS = 250;
+/** Further than this from the middle, the follow camera glides there instead of jumping. */
+const FOLLOW_GLIDE_PX = 80;
+const FOLLOW_GLIDE_MS = 500;
+/** While the camera follows, the view is handed to React at most this often. */
+const FOLLOW_VIEW_MS = 1_000;
+/** Stored fixes that start the playback of a vehicle selected before its next report. */
+const PLAYBACK_HISTORY_LIMIT = 10;
 /** A click on a vehicle zooms to here (the scale bar shows 3 km), never out. */
 const VEHICLE_CLICK_ZOOM = 11;
 const VEHICLE_FLIGHT_MS = 800;
@@ -340,19 +348,36 @@ export const FleetMap = ({
     const declutterRef = useRef<() => void>(() => undefined);
     /** Starts the frame loop that moves gliding dots. */
     const glideRef = useRef<() => void>(() => undefined);
-    /** Where each vehicle is shown right now (see PositionTweens). */
-    const tweensRef = useRef(new PositionTweens());
+    /** Where each vehicle is shown right now (see VehiclePlayback). */
+    const playbackRef = useRef(new VehiclePlayback());
     const { subscribeTripPath } = useVehicles();
     const leavingRef = useRef<Leaving[]>([]);
     /**
      * The selected vehicle stays in the middle while it drives, until the user
      * drags or zooms; selecting it again resumes (like the detail map).
      */
-    const followRef = useRef({ on: false, lat: NaN, lng: NaN });
+    const followRef = useRef({ on: false });
     /** Set by a click on a vehicle (dot or list row): the next follow step zooms in. */
     const zoomOnSelectRef = useRef(false);
     /** Until then a flight to the clicked vehicle runs; follow pans would cut it short. */
     const flyUntilRef = useRef(0);
+    const selectedIdRef = useLatestRef(selectedId);
+    /** The age label belongs to the selected vehicle while it drives. */
+    const readSelectedAge = (now: number) => {
+        const id = selectedIdRef.current;
+        const vehicle = vehiclesRef.current.find((item) => item.id === id);
+
+        return id !== null && vehicle?.status === "DRIVING"
+            ? playbackRef.current.at(id, now)
+            : undefined;
+    };
+    /** A click on a vehicle: select it, fly to it and follow it. */
+    const followVehicleRef = useLatestRef((id: number) => {
+        followRef.current.on = true;
+        zoomOnSelectRef.current = true;
+        onSelect(id);
+        glideRef.current();
+    });
     /**
      * The selected vehicle once more as a DOM symbol above the groups, so a
      * group driving over it never takes the click (dots are on the canvas,
@@ -400,7 +425,7 @@ export const FleetMap = ({
         const now = performance.now();
 
         return latest.map((point) => {
-            const shown = tweensRef.current.at(point.id, now);
+            const shown = playbackRef.current.at(point.id, now);
 
             return shown
                 ? { ...point, latitude: shown.lat, longitude: shown.lng }
@@ -534,17 +559,27 @@ export const FleetMap = ({
 
         let ignoreView = true;
         let timer: number | undefined;
+        /** Set while the follow camera moves the map (every frame). */
+        let followPanning = false;
+        let viewPublishedAt = 0;
         const emitBounds = () => {
             onBoundsChangeRef.current(boundsToBBox(map.getBounds()));
         };
         const publishView = () => {
+            const now = performance.now();
+
+            if (followPanning && now - viewPublishedAt < FOLLOW_VIEW_MS) {
+                return;
+            }
+
+            viewPublishedAt = now;
             setView({
                 bbox: boundsToBBox(map.getBounds()),
                 zoom: map.getZoom(),
             });
         };
         const onUserView = () => {
-            if (ignoreView) {
+            if (ignoreView || (followPanning && timer !== undefined)) {
                 return;
             }
 
@@ -645,6 +680,84 @@ export const FleetMap = ({
         map.on("zoomstart", onZoomStart);
         map.on("zoom zoomanim", onZoomStep);
         map.on("zoomend", onZoomEnd);
+        /*
+         * The camera that follows the selected vehicle: a click flies there
+         * first; afterwards the map is moved under the dot in the same frame
+         * the dot moves, so it stays in the middle. Returns true while there
+         * is more to follow.
+         */
+        const follow = (now: number) => {
+            const id = selectedIdRef.current;
+
+            if (id === null || zooming) {
+                return false;
+            }
+
+            const vehicle = vehiclesRef.current.find((item) => item.id === id);
+            const shown = playbackRef.current.at(id, now);
+
+            if (!vehicle || !shown) {
+                return false;
+            }
+
+            if (zoomOnSelectRef.current) {
+                // A click on a vehicle brings it close: the 3 km scale, or
+                // nearer if the map already is.
+                zoomOnSelectRef.current = false;
+                const zoom = Math.max(map.getZoom(), VEHICLE_CLICK_ZOOM);
+                const reduced = prefersReducedMotion();
+                const target =
+                    playbackRef.current.ahead(
+                        id,
+                        now,
+                        reduced ? 0 : VEHICLE_FLIGHT_MS,
+                    ) ?? shown;
+
+                if (reduced) {
+                    map.setView(target, zoom, { animate: false });
+                } else {
+                    flyUntilRef.current = now + VEHICLE_FLIGHT_MS;
+                    map.flyTo(target, zoom, {
+                        duration: VEHICLE_FLIGHT_MS / 1000,
+                    });
+                }
+                return true;
+            }
+
+            if (now < flyUntilRef.current) {
+                return true;
+            }
+
+            if (!followRef.current.on || vehicle.status !== "DRIVING") {
+                return false;
+            }
+
+            const origin = map.project(map.getCenter());
+            const at = map.project([shown.lat, shown.lng]);
+            const dx = at.x - origin.x;
+            const dy = at.y - origin.y;
+            const far = dx * dx + dy * dy;
+
+            if (far > FOLLOW_GLIDE_PX * FOLLOW_GLIDE_PX) {
+                // Far from the middle (a selection without a flight): glide there.
+                const target =
+                    playbackRef.current.ahead(id, now, FOLLOW_GLIDE_MS) ?? shown;
+
+                flyUntilRef.current = now + FOLLOW_GLIDE_MS;
+                map.panTo(target, {
+                    animate: !prefersReducedMotion(),
+                    duration: FOLLOW_GLIDE_MS / 1000,
+                    easeLinearity: 1,
+                    noMoveStart: true,
+                });
+            } else if (far >= 0.01) {
+                followPanning = true;
+                map.panBy([dx, dy], { animate: false, noMoveStart: true });
+                followPanning = false;
+            }
+
+            return !shown.done;
+        };
         const glideStep = (now: number) => {
             glideFrame = 0;
             let moving = false;
@@ -654,11 +767,11 @@ export const FleetMap = ({
                 return;
             }
 
-            const tweens = tweensRef.current;
+            const playback = playbackRef.current;
 
             // A group rides at the middle of its members as they are shown now.
             for (const entry of clusterMarkersRef.current.values()) {
-                const centre = tweens.centre(entry.members, now);
+                const centre = playback.centre(entry.members, now);
 
                 if (!centre) {
                     continue;
@@ -702,7 +815,7 @@ export const FleetMap = ({
             }
 
             for (const [id, entry] of markersRef.current) {
-                const shown = tweens.at(id, now);
+                const shown = playback.at(id, now);
 
                 if (!shown) {
                     continue;
@@ -785,6 +898,10 @@ export const FleetMap = ({
 
             syncSelectedMarker();
 
+            if (follow(now)) {
+                moving = true;
+            }
+
             if (moving) {
                 glideFrame = requestAnimationFrame(glideStep);
             }
@@ -859,7 +976,7 @@ export const FleetMap = ({
             mapRef.current = null;
             canvasRef.current = null;
         };
-    }, [onBoundsChangeRef]);
+    }, [onBoundsChangeRef, selectedIdRef, vehiclesRef]);
 
     /** Where each vehicle's group symbol is drawn right now (for symbols that come out of it). */
     const groupSpots = () => {
@@ -893,7 +1010,7 @@ export const FleetMap = ({
                 const from = reset
                     ? undefined
                     : (pending?.points[pending.points.length - 1] ??
-                      tweensRef.current.heading(id));
+                      playbackRef.current.last(id));
 
                 if (!reset && !from) {
                     return;
@@ -920,10 +1037,10 @@ export const FleetMap = ({
         [subscribeTripPath],
     );
 
-    // Every report starts the stretch its vehicle is shown on. Declared before
+    // Every report goes into its vehicle's playback buffer. Declared before
     // the effects that draw, so they see the new stretch.
     useEffect(() => {
-        const tweens = tweensRef.current;
+        const playback = playbackRef.current;
         const now = performance.now();
         const jump = prefersReducedMotion();
         const ids = new Set<number>();
@@ -939,14 +1056,17 @@ export const FleetMap = ({
             roads.delete(vehicle.id);
 
             if (
-                tweens.report(
+                playback.report(
                     vehicle.id,
-                    vehicle.latitude,
-                    vehicle.longitude,
+                    {
+                        lat: vehicle.latitude,
+                        lng: vehicle.longitude,
+                        recordedAt: vehicle.recorded_at,
+                        road: road?.points,
+                        newTrip: road?.newTrip,
+                        jump,
+                    },
                     now,
-                    jump,
-                    road?.points,
-                    road?.newTrip,
                 )
             ) {
                 const entry = markersRef.current.get(vehicle.id);
@@ -957,7 +1077,7 @@ export const FleetMap = ({
             }
         }
 
-        tweens.retain(ids);
+        playback.retain(ids);
         glideRef.current();
     }, [vehicles]);
 
@@ -994,7 +1114,7 @@ export const FleetMap = ({
 
             seen.add(vehicle.id);
             const existing = markers.get(vehicle.id);
-            const shown = tweensRef.current.at(vehicle.id, performance.now());
+            const shown = playbackRef.current.at(vehicle.id, performance.now());
             const at = shown
                 ? L.latLng(shown.lat, shown.lng)
                 : L.latLng(vehicle.latitude, vehicle.longitude);
@@ -1013,9 +1133,7 @@ export const FleetMap = ({
                 marker.on("click", (event) => {
                     L.DomEvent.stopPropagation(event);
                     ignoreMapClickRef.current = true;
-                    followRef.current.on = true;
-                    zoomOnSelectRef.current = true;
-                    onSelectRef.current(vehicle.id);
+                    followVehicleRef.current(vehicle.id);
                 });
                 marker.addTo(map);
                 // A dot that comes out of a group starts at the group's symbol.
@@ -1098,10 +1216,7 @@ export const FleetMap = ({
             marker.on("click", (event) => {
                 L.DomEvent.stopPropagation(event);
                 ignoreMapClickRef.current = true;
-                followRef.current.on = true;
-                zoomOnSelectRef.current = true;
-                followRef.current.lat = NaN;
-                onSelectRef.current(id);
+                followVehicleRef.current(id);
             });
             marker.addTo(map);
             selectedMarkerRef.current = { marker, id, status: dot.status };
@@ -1109,7 +1224,7 @@ export const FleetMap = ({
         syncSelectedMarker();
 
         declutterRef.current();
-    }, [clusters, groupIds, mode, onSelectRef, selectedId, vehicles]);
+    }, [clusters, followVehicleRef, groupIds, mode, onSelectRef, selectedId, vehicles]);
 
     useEffect(
         () => () => {
@@ -1221,7 +1336,7 @@ export const FleetMap = ({
 
             const members = clusterMemberIds(clusterIndexRef.current, item.id);
             const now = performance.now();
-            const centre = tweensRef.current.centre(members, now);
+            const centre = playbackRef.current.centre(members, now);
 
             if (existing) {
                 // The index was rebuilt: the same group has a new id and may
@@ -1403,80 +1518,65 @@ export const FleetMap = ({
     }, [densityCells, mode]);
 
     useEffect(() => {
-        followRef.current = {
-            on: selectedId !== null,
-            lat: NaN,
-            lng: NaN,
-        };
+        followRef.current = { on: selectedId !== null };
+        glideRef.current();
     }, [selectedId]);
 
-    // Pans to where the selected vehicle is heading, over the stretch its dot
-    // is gliding on (the same start and the same time), so the dot stays in
-    // the middle and the map moves evenly underneath.
+    // A vehicle selected before its next report has nothing to play yet:
+    // its buffer is filled from the stored fixes and the open trip, so it
+    // moves at once instead of standing until the next report.
+    // Runs again once the snapshot holds the vehicle (a link with `vehicle=`).
+    const selectedDriving =
+        selectedVehicle?.status === "DRIVING" && hasMapPosition(selectedVehicle);
+
     useEffect(() => {
-        const map = mapRef.current;
-        const follow = followRef.current;
-
-        if (!map || !follow.on || selectedId === null) {
-            return;
-        }
-
-        const vehicle = vehicles.find((item) => item.id === selectedId);
-
-        // A click on a vehicle brings it close: the 3 km scale, or nearer if
-        // the map already is. The follow pans wait until the flight is over.
-        if (zoomOnSelectRef.current && vehicle && hasMapPosition(vehicle)) {
-            zoomOnSelectRef.current = false;
-            const heading = tweensRef.current.heading(vehicle.id);
-            const zoom = Math.max(map.getZoom(), VEHICLE_CLICK_ZOOM);
-            const target: L.LatLngExpression = heading
-                ? [heading.lat, heading.lng]
-                : [vehicle.latitude, vehicle.longitude];
-
-            follow.lat = vehicle.latitude;
-            follow.lng = vehicle.longitude;
-
-            if (prefersReducedMotion()) {
-                map.setView(target, zoom, { animate: false });
-            } else {
-                flyUntilRef.current = performance.now() + VEHICLE_FLIGHT_MS;
-                map.flyTo(target, zoom, {
-                    duration: VEHICLE_FLIGHT_MS / 1000,
-                });
-            }
-            return;
-        }
+        const id = selectedId;
 
         if (
-            !vehicle ||
-            !hasMapPosition(vehicle) ||
-            vehicle.status !== "DRIVING" ||
-            performance.now() < flyUntilRef.current ||
-            (vehicle.latitude === follow.lat &&
-                vehicle.longitude === follow.lng)
+            id === null ||
+            !selectedDriving ||
+            playbackRef.current.canPlay(id)
         ) {
             return;
         }
 
-        const heading = tweensRef.current.heading(vehicle.id);
-        const ms = heading?.ms ?? 0;
+        const controller = new AbortController();
 
-        follow.lat = vehicle.latitude;
-        follow.lng = vehicle.longitude;
-        map.panTo(
-            heading
-                ? [heading.lat, heading.lng]
-                : [vehicle.latitude, vehicle.longitude],
-            prefersReducedMotion() || ms <= 0
-                ? { animate: false }
-                : {
-                      animate: true,
-                      duration: Math.max(GLIDE_MIN_MS, ms) / 1000,
-                      easeLinearity: 1,
-                      noMoveStart: true,
-                  },
-        );
-    }, [selectedId, vehicles]);
+        Promise.all([
+            getVehicleTelemetry(id, PLAYBACK_HISTORY_LIMIT, controller.signal),
+            getVehicleTrip(id, controller.signal),
+        ])
+            .then(([history, trip]) => {
+                const playback = playbackRef.current;
+
+                if (playback.canPlay(id)) {
+                    return;
+                }
+
+                playback.seed(
+                    id,
+                    history.data.map((point) => ({
+                        lat: point.latitude,
+                        lng: point.longitude,
+                        recordedAt: point.recorded_at,
+                    })),
+                    trip.data && trip.data.ended_at === null
+                        ? decodePolyline(trip.data.path)
+                        : [],
+                    performance.now(),
+                );
+
+                const entry = markersRef.current.get(id);
+
+                if (entry) {
+                    entry.settled = false;
+                }
+                glideRef.current();
+            })
+            .catch(() => undefined);
+
+        return () => controller.abort();
+    }, [selectedDriving, selectedId]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -1890,6 +1990,7 @@ export const FleetMap = ({
                         : "Flottenkarte mit Depots und Fahrzeuggruppen. Eine Gruppe vergrößert den Ausschnitt, ein Marker wählt das Fahrzeug."
                 }
             />
+            <PlaybackAge read={readSelectedAge} />
             {stackVehicles.length > 0 && (
                 <section
                     className={styles.vehicleList}
@@ -1924,9 +2025,7 @@ export const FleetMap = ({
                                             : undefined
                                     }
                                     onClick={() => {
-                                        zoomOnSelectRef.current = true;
-                                        followRef.current.on = true;
-                                        onSelect(vehicle.id);
+                                        followVehicleRef.current(vehicle.id);
                                     }}
                                 >
                                     <span>{vehicle.license_plate}</span>
@@ -1962,9 +2061,7 @@ export const FleetMap = ({
                                             : undefined
                                     }
                                     onClick={() => {
-                                        zoomOnSelectRef.current = true;
-                                        followRef.current.on = true;
-                                        onSelect(vehicle.id);
+                                        followVehicleRef.current(vehicle.id);
                                     }}
                                 >
                                     <span>{vehicle.license_plate}</span>
