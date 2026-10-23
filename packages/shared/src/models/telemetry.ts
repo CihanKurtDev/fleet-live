@@ -5,6 +5,45 @@ export const TELEMETRY_HISTORY_LIMITS = [10, 25, 50, 100] as const;
 
 export type TelemetryHistoryLimit = (typeof TELEMETRY_HISTORY_LIMITS)[number];
 
+/**
+ * `recorded_at` ist die Gerätezeit eines Punkts: UTC ohne Zone im Format
+ * von SQLite, `JJJJ-MM-TT HH:MM:SS`, mit Bruchteilen der Sekunde, wo das
+ * Gerät sie liefert (der Simulator schreibt Millisekunden). `T` statt des
+ * Leerzeichens und ein `Z` am Ende sind erlaubt, eine andere Zone nicht.
+ */
+const RECORDED_AT_PATTERN =
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?Z?$/;
+
+/**
+ * Gerätezeit in Millisekunden seit 1970 (UTC), oder `null` für alles, was
+ * nicht dem Format entspricht. Keine Zahl wird nach ihrer Stellenzahl als
+ * Sekunden oder Millisekunden erraten.
+ */
+export function parseRecordedAt(value: string): number | null {
+    const match = RECORDED_AT_PATTERN.exec(value);
+
+    if (!match) {
+        return null;
+    }
+
+    const [year, month, day, hour, minute, second] = match
+        .slice(1, 7)
+        .map(Number) as [number, number, number, number, number, number];
+    const ms = Number((match[7] ?? "").padEnd(3, "0").slice(0, 3));
+    const time = Date.UTC(year, month - 1, day, hour, minute, second, ms);
+    const date = new Date(time);
+
+    // Date.UTC rolls 30 February over into March; the contract does not.
+    return date.getUTCFullYear() === year &&
+        date.getUTCMonth() === month - 1 &&
+        date.getUTCDate() === day &&
+        date.getUTCHours() === hour &&
+        date.getUTCMinutes() === minute &&
+        date.getUTCSeconds() === second
+        ? time
+        : null;
+}
+
 /** Live-Patch eines Fahrzeugs aus dem Telemetrie-Stream (SSE `telemetry`). */
 export const telemetryPatchSchema = z.object({
     id: z

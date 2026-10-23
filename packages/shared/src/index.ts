@@ -66,6 +66,7 @@ export {
     WIRE_COORDINATE_DECIMALS,
     compactTelemetryPatches,
     expandTelemetryPatches,
+    parseRecordedAt,
     parseTelemetryHistoryQuery,
     telemetryHistoryQuerySchema,
     telemetryPatchSchema,

@@ -32,6 +32,34 @@
     }
 }
 
+/* „Stand vor 6 s“: the age of the played-back position, top right on both maps. */
+.playbackAge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 500;
+
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    margin: 0;
+    padding: 0 8px;
+
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+
+    &[hidden] {
+        display: none;
+    }
+}
+
 .vehicleList {
     position: absolute;
     left: 12px;

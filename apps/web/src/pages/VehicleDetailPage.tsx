@@ -13,7 +13,11 @@ import { Link, useParams } from "react-router";
 
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
-import { getVehicleTripById, listVehicleTrips } from "../api/vehicles";
+import {
+    getVehicleTelemetry,
+    getVehicleTripById,
+    listVehicleTrips,
+} from "../api/vehicles";
 import { VehicleHintsPanel } from "../components/alerts/VehicleHintsPanel";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { useDetailBack } from "../components/navigation/useDetailBack";
@@ -28,6 +32,7 @@ import {
 } from "../components/vehicles/VehicleMap";
 import { VehicleTripArchive } from "../components/vehicles/VehicleTripArchive";
 import { VehicleMoreMenu } from "../components/vehicles/VehicleMoreMenu";
+import type { PlaybackFix } from "../components/vehicles/vehiclePlayback";
 import { pathLength, toLatLngs } from "../components/vehicles/mapGeometry";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
 import { VehicleStatusChip } from "../components/vehicles/VehicleStatusChip";
@@ -77,6 +82,9 @@ const describeTrip = (trip: TripListItem): string => {
     )} · Spitze ${Math.round(trip.max_speed)} km/h`;
 };
 
+/** Enough stored fixes to cover the playback delay of up to 10 s. */
+const PLAYBACK_HISTORY_LIMIT = 10;
+
 export const VehicleDetailPage = () => {
     const { id } = useParams();
     const { from, navigate } = useDetailBack("/vehicles");
@@ -101,11 +109,17 @@ export const VehicleDetailPage = () => {
     const [archiveLimit, setArchiveLimit] = useState(10);
     const [archivePageCount, setArchivePageCount] = useState(1);
     const [archiveTotal, setArchiveTotal] = useState(0);
-    const [archiveLoading, setArchiveLoading] = useState(false);
+    // The trip list is fetched as soon as the page has a vehicle id.
+    const [archiveLoading, setArchiveLoading] = useState(parsedId !== null);
     const [archiveError, setArchiveError] = useState<string | null>(null);
     const [archiveRetryKey, setArchiveRetryKey] = useState(0);
     const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+    /** Stored fixes that start the map's playback (see VehiclePlayback). */
+    const [playbackHistory, setPlaybackHistory] = useState<{
+        vehicleId: number;
+        fixes: PlaybackFix[];
+    } | null>(null);
 
     if (parsedId !== tripVehicleId) {
         setTripVehicleId(parsedId);
@@ -158,6 +172,38 @@ export const VehicleDetailPage = () => {
             setLivePath("");
         }
     }
+
+    const drivingId = vehicleStatus === "DRIVING" ? parsedId : null;
+
+    // Once per vehicle while it drives: the last stored fixes, so the marker
+    // moves from the first moment instead of waiting for the next report.
+    useEffect(() => {
+        if (drivingId === null) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        getVehicleTelemetry(drivingId, PLAYBACK_HISTORY_LIMIT, controller.signal)
+            .then((response) => {
+                setPlaybackHistory({
+                    vehicleId: drivingId,
+                    fixes: response.data.map((point) => ({
+                        lat: point.latitude,
+                        lng: point.longitude,
+                        recordedAt: point.recorded_at,
+                    })),
+                });
+            })
+            .catch((caught: unknown) => {
+                if (!isAbortError(caught)) {
+                    // Without history the marker starts with the next report.
+                    setPlaybackHistory({ vehicleId: drivingId, fixes: [] });
+                }
+            });
+
+        return () => controller.abort();
+    }, [drivingId]);
 
     useEffect(() => {
         if (parsedId === null) {
@@ -289,6 +335,14 @@ export const VehicleDetailPage = () => {
         archiveTrips.find((row) => row.id === selectedTripId) ??
         selectedTrip;
 
+    // A driving vehicle whose trip is still loading may be about to play its
+    // open trip: the map holds its marker back until it knows.
+    const tripLoading =
+        vehicle?.status === "DRIVING" &&
+        archiveError === null &&
+        (selectedTripId === null
+            ? archiveLoading
+            : selectedTrip?.id !== selectedTripId);
     const openPath =
         vehicle?.status === "DRIVING" &&
         selectedTrip?.ended_at === null
@@ -641,7 +695,15 @@ export const VehicleDetailPage = () => {
                                     longitude={position.longitude}
                                     label={vehicle.license_plate}
                                     status={vehicle.status}
+                                    recordedAt={vehicle.recorded_at}
                                     trail={showTrail ? trail : undefined}
+                                    live={openPath !== ""}
+                                    loading={tripLoading}
+                                    history={
+                                        playbackHistory?.vehicleId === vehicle.id
+                                            ? playbackHistory.fixes
+                                            : null
+                                    }
                                     fill
                                 />
                             </div>
