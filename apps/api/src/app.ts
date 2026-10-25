@@ -33,6 +33,9 @@ export function createApp() {
     const app = express();
 
     app.disable("x-powered-by");
+    // 0: X-Forwarded-For is ignored and the socket address counts (limiters,
+    // logs). Behind a proxy that overwrites the header, set TRUST_PROXY_HOPS.
+    app.set("trust proxy", config.trustProxyHops);
 
     app.use(requestId);
     app.use(

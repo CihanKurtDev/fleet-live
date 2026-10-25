@@ -21,6 +21,7 @@ Data flow: React `--HTTP + SSE /api-->` Express (`app.ts` + `routes/`) → contr
 - Models never take `req` / `res`.
 - `apps/web/src/components/ui` is generic (Table, Button, Modal, Avatar, Checkbox, Input). Vehicle logic lives in `components/vehicles`, alert logic in `components/alerts`, plus hooks and `api/`.
 - Live updates are SSE (`GET /api/stream`, `POST /api/stream/focus`), not WebSockets and not list polling.
+- Security model, open items and what a deployment must provide: `SECURITY.md`, `docs/security-remediation-plan.md`. Keep them in step when auth, sessions, SSE or limits change.
 
 ## Current vs planned
 

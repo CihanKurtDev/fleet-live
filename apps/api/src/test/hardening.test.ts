@@ -91,6 +91,31 @@ describe("a broken session cookie", () => {
     });
 });
 
+describe("the sign-in limiters outside the test mode", () => {
+    it("stop guessing of login steps and links, whatever X-Forwarded-For claims", () => {
+        const result = runChild("rateLimits.child.ts", {
+            NODE_ENV: "development",
+            DATABASE_PATH: ":memory:",
+        });
+        assert.equal(result.status, 0, result.output);
+        const line = result.output.split("\n").find((text) => text.startsWith("{"));
+        assert.ok(line, result.output);
+        const seen = JSON.parse(line) as Record<string, number[] | unknown>;
+
+        for (const key of ["totp", "reset", "ssoStart"]) {
+            const statuses = seen[key] as number[];
+            assert.notEqual(statuses[0], 429, key);
+            assert.equal(statuses.at(-1), 429, `${key}: ${statuses.join(",")}`);
+        }
+
+        // Invite and reset links share one budget of wrong links.
+        assert.deepEqual([...new Set(seen.invite as number[])], [429]);
+
+        // Without TRUST_PROXY_HOPS the socket address counts.
+        assert.equal(seen.trustProxy, 0);
+    });
+});
+
 describe("the process environment", () => {
     it("refuses to start without NODE_ENV", () => {
         const result = runChild("configGuard.child.ts", {});
@@ -128,6 +153,21 @@ describe("the process environment", () => {
             assert.match(asked.output, /demo-accounts: 2/);
         } finally {
             rmSync(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+describe("the request id", () => {
+    it("keeps a well-formed id from the proxy", async () => {
+        const response = await request(app).get("/api/health").set("X-Request-Id", "abc-123.def_4");
+        assert.equal(response.headers["x-request-id"], "abc-123.def_4");
+    });
+
+    it("replaces an id that is too long or carries other characters", async () => {
+        for (const incoming of ["x".repeat(200), "a b", "<script>", "aä"]) {
+            const response = await request(app).get("/api/health").set("X-Request-Id", incoming);
+            assert.notEqual(response.headers["x-request-id"], incoming);
+            assert.match(String(response.headers["x-request-id"]), /^[0-9a-f-]{36}$/);
         }
     });
 });

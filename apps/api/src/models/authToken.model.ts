@@ -7,7 +7,8 @@ export type TokenPurpose =
     | "invite"
     | "login_challenge"
     | "totp_setup"
-    | "sso_state";
+    | "sso_state"
+    | "sso_link";
 
 export type AuthTokenRow = {
     id: number;
@@ -83,6 +84,24 @@ export const AuthTokenModel = {
         return stmt(SELECT_USED).get(hashToken(token), purpose) as
             | AuthTokenRow
             | undefined;
+    },
+
+    /**
+     * Uses a single-use token up and returns it, or nothing when it is unknown,
+     * expired or was used: of two requests with the same token one wins.
+     */
+    claim(token: string, purpose: TokenPurpose): AuthTokenRow | undefined {
+        const row = this.find(token, purpose);
+
+        if (!row) {
+            return undefined;
+        }
+
+        const result = stmt(
+            "UPDATE auth_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL",
+        ).run(row.id);
+
+        return Number(result.changes) === 1 ? row : undefined;
     },
 
     consume(id: number) {

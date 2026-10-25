@@ -3,6 +3,7 @@ import type { AuthUser } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { hashToken } from "../lib/tokenHash";
 import { presentUser } from "./authView";
+import { policyGap, type SessionProof } from "./sessionPolicy";
 import { UserModel } from "./user.model";
 
 /**
@@ -11,12 +12,14 @@ import { UserModel } from "./user.model";
  * The column is still called `token`.
  */
 const INSERT_SESSION = `
-    INSERT INTO sessions (user_id, company_id, token, expires_at, persistent)
-    VALUES (?, ?, ?, datetime('now', ?), ?)
+    INSERT INTO sessions (
+        user_id, company_id, token, expires_at, persistent, mfa, sso_company_id
+    )
+    VALUES (?, ?, ?, datetime('now', ?), ?, ?, ?)
 `;
 
 const SELECT_SESSION = `
-    SELECT user_id, company_id, persistent
+    SELECT user_id, company_id, persistent, mfa, sso_company_id
     FROM sessions
     WHERE token = ?
       AND expires_at > datetime('now')
@@ -49,12 +52,37 @@ const DELETE_EXPIRED = `
     WHERE expires_at <= datetime('now')
 `;
 
+const DELETE_OLD_TOKENS = `
+    DELETE FROM auth_tokens
+    WHERE expires_at <= datetime('now', '-7 days')
+`;
+
 /** Expired rows are removed in a sweep, not on every request. */
 const PURGE_EVERY_MS = 60_000;
 let lastPurge = 0;
 
+type SessionRow = {
+    user_id: number;
+    company_id: number;
+    persistent: number;
+    mfa: number;
+    sso_company_id: number | null;
+};
+
+export type OpenSession = {
+    user: AuthUser;
+    proof: SessionProof;
+};
+
+const NO_PROOF: SessionProof = { mfa: false, ssoCompanyId: null };
+
 export const SessionModel = {
-    create(userId: number, companyId: number, persist: boolean): string {
+    create(
+        userId: number,
+        companyId: number,
+        persist: boolean,
+        proof: SessionProof = NO_PROOF,
+    ): string {
         const token = randomBytes(32).toString("hex");
         stmt(INSERT_SESSION).run(
             userId,
@@ -62,38 +90,63 @@ export const SessionModel = {
             hashToken(token),
             persist ? "+7 days" : `+${IDLE_MINUTES} minutes`,
             persist ? 1 : 0,
+            proof.mfa ? 1 : 0,
+            proof.ssoCompanyId,
         );
 
         return token;
     },
 
-    /** An expired session is never found, swept or not. */
-    findUser(token: string): AuthUser | undefined {
+    /**
+     * The person and proof of a session. An expired session is never found,
+     * swept or not; neither is one that the company rules no longer admit
+     * (a second factor or the company login that became required, a removed
+     * membership): such a row is deleted, the next request goes to the login.
+     * `touch` moves the end of an idle session; a stream check does not.
+     */
+    find(token: string, touch = true): OpenSession | undefined {
         this.purgeExpiredIfDue();
         const hash = hashToken(token);
-        const row = stmt(SELECT_SESSION).get(hash) as
-            | { user_id: number; company_id: number; persistent: number }
-            | undefined;
+        const row = stmt(SELECT_SESSION).get(hash) as SessionRow | undefined;
 
         if (!row) {
             return undefined;
         }
 
-        if (row.persistent !== 1) {
-            stmt(TOUCH_IDLE).run(hash);
-        }
+        const proof: SessionProof = {
+            mfa: row.mfa === 1,
+            ssoCompanyId: row.sso_company_id,
+        };
 
-        const user = UserModel.getById(row.user_id);
-
-        if (!user) {
+        if (policyGap(row.user_id, row.company_id, proof) !== null) {
+            stmt(DELETE_BY_TOKEN).run(hash);
             return undefined;
         }
 
-        return presentUser(user, row.company_id);
+        if (touch && row.persistent !== 1) {
+            stmt(TOUCH_IDLE).run(hash);
+        }
+
+        const record = UserModel.getById(row.user_id);
+        const user = record ? presentUser(record, row.company_id) : undefined;
+
+        return user ? { user, proof } : undefined;
+    },
+
+    findUser(token: string): AuthUser | undefined {
+        return this.find(token)?.user;
+    },
+
+    /** The session passed a second factor (set up during the session). */
+    setMfa(token: string) {
+        stmt("UPDATE sessions SET mfa = 1 WHERE token = ?").run(hashToken(token));
     },
 
     purgeExpired() {
         stmt(DELETE_EXPIRED).run();
+        // Single-use tokens stay a week past their end (a used confirmation
+        // link still answers "already confirmed"), then they go too.
+        stmt(DELETE_OLD_TOKENS).run();
         lastPurge = Date.now();
     },
 

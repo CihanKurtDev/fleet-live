@@ -27,6 +27,14 @@ if (config.isProduction && !config.allowDemoAccounts) {
     }
 }
 
+if (config.oidcPrivateHosts.length > 0) {
+    // Deliberate and visible: these company logins may reach internal addresses.
+    logger.warn(
+        { hosts: config.oidcPrivateHosts },
+        "OIDC_PRIVATE_HOSTS is set: company logins on these hosts may resolve to internal addresses",
+    );
+}
+
 const server = app.listen(config.port, () => {
     logger.info(`API running on http://localhost:${config.port}`);
 });

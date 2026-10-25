@@ -27,8 +27,15 @@ export const AcceptInvitePage = () => {
         setError(null);
 
         try {
-            const user = await acceptInvite({ token, name, password });
-            setUser(user);
+            const result = await acceptInvite({ token, name, password });
+
+            if ("next" in result) {
+                // The company requires a second factor or its own login.
+                navigate("/login?einladung=angenommen", { replace: true });
+                return;
+            }
+
+            setUser(result);
             navigate("/", { replace: true });
         } catch (caught: unknown) {
             setError(
