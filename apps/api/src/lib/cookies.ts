@@ -71,9 +71,9 @@ export function setSessionCookie(
     token: string,
     persist: boolean,
 ) {
-    response.setHeader("Set-Cookie", sessionCookieHeader(token, persist));
+    response.append("Set-Cookie", sessionCookieHeader(token, persist));
 }
 
 export function clearSessionCookie(response: Response) {
-    response.setHeader("Set-Cookie", clearCookieHeader(SESSION_COOKIE));
+    response.append("Set-Cookie", clearCookieHeader(SESSION_COOKIE));
 }

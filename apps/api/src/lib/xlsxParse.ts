@@ -274,15 +274,33 @@ function unzipWorkbook(buffer: Buffer): Record<string, Uint8Array> {
     }
 
     let files: Record<string, Uint8Array>;
+    let entryCount = 0;
+    let declaredTotal = 0;
+    let tooLarge = false;
 
     try {
-        files = unzipSync(new Uint8Array(buffer));
+        // The sizes are checked on the directory, before anything is inflated:
+        // fflate inflates an entry into a buffer of its declared size, so a
+        // zip bomb is refused without the memory it would need.
+        files = unzipSync(new Uint8Array(buffer), {
+            filter(file) {
+                entryCount += 1;
+                declaredTotal += file.originalSize;
+                tooLarge ||=
+                    entryCount > XLSX_ENTRY_MAX ||
+                    file.originalSize > XLSX_ENTRY_MAX_BYTES ||
+                    declaredTotal > XLSX_UNCOMPRESSED_MAX_BYTES;
+
+                return !tooLarge;
+            },
+        });
     } catch {
         throw new BadRequestError("Die Excel-Datei konnte nicht gelesen werden.");
     }
 
     const entries = Object.values(files);
     if (
+        tooLarge ||
         entries.length > XLSX_ENTRY_MAX ||
         entries.some((entry) => entry.byteLength > XLSX_ENTRY_MAX_BYTES) ||
         entries.reduce((sum, entry) => sum + entry.byteLength, 0) >

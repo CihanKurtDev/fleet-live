@@ -31,6 +31,7 @@ vi.mock("../api/auth", () => ({
     acceptInvite: vi.fn(),
     getSsoProviders: vi.fn(),
     discoverCompanySso: vi.fn(),
+    startSsoLink: vi.fn(),
 }));
 
 import {
@@ -44,8 +45,30 @@ import {
     resendVerification,
     resetPassword,
     setupTotp,
+    startSsoLink,
     verifyEmail,
 } from "../api/auth";
+
+/** Records what the page assigns to `window.location.href`. */
+const captureNavigation = () => {
+    const assigned: string[] = [];
+    const realLocation = window.location;
+    const spy = vi.spyOn(window, "location", "get").mockImplementation(
+        () =>
+            new Proxy(realLocation, {
+                set(target, property, value) {
+                    if (property === "href") {
+                        assigned.push(String(value));
+                        return true;
+                    }
+
+                    return Reflect.set(target, property, value);
+                },
+            }) as Location,
+    );
+
+    return { assigned, restore: () => spy.mockRestore() };
+};
 
 const submit = (name: string) => {
     const button = screen.getByRole("button", { name });
@@ -338,6 +361,86 @@ describe("login page", () => {
         expect(setupTotp).toHaveBeenCalledWith("enroll-1");
     });
 
+    it("takes the second-factor step an identity provider hands back", async () => {
+        vi.mocked(confirmTotp).mockResolvedValue(authUser());
+        renderLogin("/login#challenge=sso-step&step=totp");
+
+        expect(
+            await screen.findByText(
+                "Gib den Code aus der Authenticator-App oder einen Wiederherstellungscode ein.",
+            ),
+        ).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText("Code"), {
+            target: { value: "654321" },
+        });
+        submit("Anmelden");
+
+        expect(await screen.findByText("Schicht")).toBeInTheDocument();
+        expect(confirmTotp).toHaveBeenCalledWith({
+            challenge: "sso-step",
+            code: "654321",
+        });
+    });
+
+    it("goes on to link the company login when the company requires it", async () => {
+        vi.mocked(login).mockRejectedValue(
+            new ApiError(
+                "Diese Firma meldet sich über den Firmen-Login an.",
+                403,
+                undefined,
+                "SSO_REQUIRED",
+                { sso_company_id: 4, link_challenge: "link-1" },
+            ),
+        );
+        vi.mocked(startSsoLink).mockResolvedValue({
+            url: "https://idp.example/auth?state=s",
+        });
+        const navigation = captureNavigation();
+        renderLogin();
+
+        fireEvent.change(screen.getByLabelText("E-Mail"), {
+            target: { value: "cihan@example.com" },
+        });
+        fireEvent.change(screen.getByLabelText("Passwort"), {
+            target: { value: "development-only-password" },
+        });
+        submit("Anmelden");
+
+        await vi.waitFor(() => {
+            expect(navigation.assigned).toEqual(["https://idp.example/auth?state=s"]);
+        });
+        navigation.restore();
+        expect(startSsoLink).toHaveBeenCalledWith({
+            provider: "company",
+            company_id: 4,
+            challenge: "link-1",
+        });
+    });
+
+    it("explains that a company requires its own login", () => {
+        renderLogin("/login?sso=company");
+
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            "Diese Firma meldet sich über den Firmen-Login an.",
+        );
+    });
+
+    it("says that an external login is not linked to an account", () => {
+        renderLogin("/login?sso=unknown");
+
+        expect(screen.getByRole("alert")).toHaveTextContent(
+            "Dieser Login ist mit keinem Konto verknüpft.",
+        );
+    });
+
+    it("asks to sign in after an accepted invite", () => {
+        renderLogin("/login?einladung=angenommen");
+
+        expect(
+            screen.getByText("Einladung angenommen. Melde dich jetzt an."),
+        ).toBeInTheDocument();
+    });
+
     it("explains a missing identity-provider configuration", () => {
         renderLogin("/login?sso=unconfigured");
 
@@ -552,6 +655,36 @@ describe("accept invite page", () => {
             password: "development-only-password",
         });
         expect(setUser).toHaveBeenCalledWith(signedIn);
+    });
+
+    it("sends to the sign-in when the company requires more than the password", async () => {
+        vi.mocked(acceptInvite).mockResolvedValue({ next: "login" });
+        const setUser = vi.fn();
+        const router = createMemoryRouter(
+            [
+                { path: "/einladung", element: <AcceptInvitePage /> },
+                { path: "/login", element: <p>Anmeldeseite</p> },
+            ],
+            { initialEntries: ["/einladung?token=invite-token"] },
+        );
+
+        render(
+            <AuthContext.Provider value={{ user: null, isReady: true, setUser }}>
+                <RouterProvider router={router} />
+            </AuthContext.Provider>,
+        );
+
+        fireEvent.change(screen.getByLabelText("Name"), {
+            target: { value: "Neu" },
+        });
+        fireEvent.change(screen.getByLabelText("Passwort"), {
+            target: { value: "development-only-password" },
+        });
+        submit("Einladung annehmen");
+
+        expect(await screen.findByText("Anmeldeseite")).toBeInTheDocument();
+        expect(router.state.location.search).toBe("?einladung=angenommen");
+        expect(setUser).not.toHaveBeenCalled();
     });
 
     it("rejects a link without a token", () => {

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
 import { db } from "../db/database";
+import { toCsv } from "../lib/csv";
 import { parseCsv } from "../lib/csvParse";
 import { TripModel } from "../models/trip.model";
 import { UserModel } from "../models/user.model";
@@ -233,6 +234,25 @@ describe("GET /api/export", () => {
         const invalid = await api.get("/api/export/period?month=2026-13");
         assert.equal(invalid.status, 400);
         assert.equal(invalid.body.code, "VALIDATION_ERROR");
+    });
+});
+
+describe("a CSV cell", () => {
+    it("never starts with something a spreadsheet runs as a formula", () => {
+        const inputs = ["=1+1", "+1", "-1", "@SUM(A1)", "\t=cmd", "\r=cmd", " =1", "＝1+1", "K-AB 1"];
+        const line = toCsv([inputs]).replace(/^\uFEFF/, "").replace(/\r\n$/, "");
+
+        assert.deepEqual(line.split(";"), [
+            "'=1+1",
+            "'+1",
+            "'-1",
+            "'@SUM(A1)",
+            "'\t=cmd",
+            "' =cmd",
+            "' =1",
+            "'＝1+1",
+            "K-AB 1",
+        ]);
     });
 });
 

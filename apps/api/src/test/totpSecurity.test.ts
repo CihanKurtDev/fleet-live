@@ -11,6 +11,7 @@ import {
     randomTotpSecret,
     totpCode,
 } from "../lib/totp";
+import { replaceRecoveryCodes } from "../models/account.model";
 import { UserModel } from "../models/user.model";
 
 const EMAIL = "second-factor@example.com";
@@ -159,5 +160,68 @@ describe("a code counts once", () => {
             totpCode(base32Decode(secret), Date.now() + STEP_MS),
         );
         assert.equal(next.status, 200);
+    });
+});
+
+describe("a recovery code", () => {
+    it("counts once and leaves the second factor in place", async () => {
+        const { user } = accountWithTotp();
+        replaceRecoveryCodes(user.id, ["first-code-1", "second-code-2"]);
+
+        const used = await confirm((await loginStep()).challenge, "first-code-1");
+        assert.equal(used.status, 200);
+        assert.equal(UserModel.getById(user.id)?.totp_enabled, 1);
+
+        // Without the authenticator, the next login still asks for a factor.
+        const next = await loginStep();
+        assert.equal(next.step, "totp");
+        const again = await confirm(next.challenge, "first-code-1");
+        assert.equal(again.status, 401);
+        const other = await confirm(next.challenge, "second-code-2");
+        assert.equal(other.status, 200);
+    });
+});
+
+describe("a second factor being set up", () => {
+    it("keeps its secret out of the stored step, at login and in the account", async () => {
+        UserModel.create({
+            name: "Neu",
+            email: EMAIL,
+            password: PASSWORD,
+            company_id: 1,
+            role: "dispatcher",
+        });
+        db.prepare("UPDATE companies SET totp_required = 1 WHERE id = 1").run();
+        const step = await loginStep();
+        assert.equal(step.step, "totp_enroll");
+        const atLogin = await request(app).post("/api/auth/totp/setup").send({ challenge: step.challenge });
+        assert.equal(atLogin.status, 200);
+
+        const payloads = () =>
+            (db.prepare("SELECT payload FROM auth_tokens").all() as { payload: string | null }[])
+                .map((row) => row.payload ?? "")
+                .join("\n");
+        assert.doesNotMatch(payloads(), new RegExp(atLogin.body.secret));
+
+        const done = await confirm(step.challenge, totpCode(base32Decode(atLogin.body.secret)));
+        assert.equal(done.status, 200);
+        db.prepare("UPDATE companies SET totp_required = 0 WHERE id = 1").run();
+    });
+
+    it("keeps the secret of a set-up in the account out of the stored step", async () => {
+        UserModel.create({ name: "Konto", email: EMAIL, password: PASSWORD, company_id: 1, role: "dispatcher" });
+        const agent = request.agent(app);
+        await agent.post("/api/auth/login").send({ email: EMAIL, password: PASSWORD }).expect(200);
+        const setup = await agent.post("/api/auth/totp/setup").expect(200);
+
+        const stored = (db.prepare("SELECT payload FROM auth_tokens WHERE purpose = 'totp_setup'").get() as {
+            payload: string;
+        }).payload;
+        assert.doesNotMatch(stored, new RegExp(setup.body.secret));
+
+        await agent
+            .post("/api/auth/totp/confirm")
+            .send({ setup_token: setup.body.setup_token, code: totpCode(base32Decode(setup.body.secret)) })
+            .expect(200);
     });
 });

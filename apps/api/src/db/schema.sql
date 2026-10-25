@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     company_id INTEGER NOT NULL,
     token TEXT NOT NULL UNIQUE,
     persistent INTEGER NOT NULL DEFAULT 0,
+    -- The session passed a second factor (TOTP or a recovery code).
+    mfa INTEGER NOT NULL DEFAULT 0,
+    -- Set when a company login (OIDC) opened the session; it then stays in that company.
+    sso_company_id INTEGER,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TEXT NOT NULL,
 
@@ -72,7 +76,8 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
         'invite',
         'login_challenge',
         'totp_setup',
-        'sso_state'
+        'sso_state',
+        'sso_link'
     )),
     token_hash TEXT NOT NULL UNIQUE,
     expires_at TEXT NOT NULL,
@@ -98,18 +103,22 @@ CREATE TABLE IF NOT EXISTS totp_recovery_codes (
         ON DELETE CASCADE
 );
 
+-- An external login, keyed by the validated issuer and subject of its ID token.
+-- `provider` is where it was linked (google, microsoft, company:<id>); a row is
+-- only written by an explicit link of the signed-in owner, never by e-mail.
 CREATE TABLE IF NOT EXISTS sso_identities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     provider TEXT NOT NULL,
-    subject TEXT NOT NULL,
+    issuer TEXT NOT NULL CHECK (issuer <> ''),
+    subject TEXT NOT NULL CHECK (subject <> ''),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (user_id)
         REFERENCES users(id)
         ON DELETE CASCADE,
 
-    UNIQUE (provider, subject)
+    UNIQUE (provider, issuer, subject)
 );
 
 CREATE TABLE IF NOT EXISTS drivers (

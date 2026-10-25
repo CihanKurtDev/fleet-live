@@ -6,6 +6,7 @@ import {
     ForbiddenError,
     ValidationError,
 } from "../lib/errors";
+import { assertSafeIssuer, issuerMatches } from "../lib/oidc";
 import { hashPassword } from "../lib/password";
 import { open, seal } from "../lib/secretBox";
 import { hashToken } from "../lib/tokenHash";
@@ -94,11 +95,10 @@ export function registerAccount(input: {
 }
 
 export function verifyEmailToken(token: string): boolean {
-    const row = AuthTokenModel.find(token, "verify_email");
+    const row = AuthTokenModel.claim(token, "verify_email");
 
     if (row?.user_id) {
         UserModel.markEmailVerified(row.user_id);
-        AuthTokenModel.consume(row.id);
         return true;
     }
 
@@ -131,18 +131,20 @@ export function userForPasswordReset(email: string): UserRecord | undefined {
     return user;
 }
 
-export function resetPassword(token: string, password: string): boolean {
-    const row = AuthTokenModel.find(token, "reset_password");
+/** Sets a new password with a reset link; returns whose, or nothing for a bad link. */
+export function resetPassword(token: string, password: string): number | undefined {
+    const row = AuthTokenModel.claim(token, "reset_password");
 
     if (!row?.user_id) {
-        return false;
+        return undefined;
     }
 
     UserModel.setPasswordHash(row.user_id, hashPassword(password));
     UserModel.markEmailVerified(row.user_id);
-    AuthTokenModel.consume(row.id);
+    // Every session ends, and so does every other open reset link.
     SessionModel.deleteForUser(row.user_id);
-    return true;
+    AuthTokenModel.deleteForUser(row.user_id, "reset_password");
+    return row.user_id;
 }
 
 export function inviteMember(
@@ -188,7 +190,7 @@ export function acceptInvite(input: {
     name: string;
     password: string;
 }): { userId: number; companyId: number } | undefined {
-    const row = AuthTokenModel.find(input.token, "invite");
+    const row = AuthTokenModel.claim(input.token, "invite");
 
     if (!row?.user_id || !row.company_id) {
         return undefined;
@@ -197,7 +199,6 @@ export function acceptInvite(input: {
     UserModel.setName(row.user_id, input.name);
     UserModel.setPasswordHash(row.user_id, hashPassword(input.password));
     UserModel.markEmailVerified(row.user_id);
-    AuthTokenModel.consume(row.id);
 
     return { userId: row.user_id, companyId: row.company_id };
 }
@@ -358,6 +359,11 @@ export function updateSecurity(companyId: number, input: SecurityInput) {
 
     const issuer =
         input.sso_issuer === undefined ? current.sso_issuer : input.sso_issuer;
+
+    // The server fetches this URL; it must not point into its own network.
+    if (input.sso_issuer) {
+        assertSafeIssuer(input.sso_issuer);
+    }
     const clientId =
         input.sso_client_id === undefined
             ? current.sso_client_id
@@ -376,6 +382,19 @@ export function updateSecurity(companyId: number, input: SecurityInput) {
         throw new ValidationError("Für den Firmen-Login braucht es einen Issuer.", {
             sso_issuer: "Für den Firmen-Login braucht es einen Issuer.",
         });
+    }
+
+    // A changed identity provider is not the one the members linked. While the
+    // company requires its login, that would lock everyone out.
+    if (
+        ssoRequired &&
+        (issuer !== current.sso_issuer ||
+            clientId !== current.sso_client_id ||
+            secret !== current.sso_client_secret)
+    ) {
+        throw new ConflictError(
+            "Schalte „Firmen-Login verlangen“ aus, bevor du den Firmen-Login änderst.",
+        );
     }
 
     stmt(
@@ -468,51 +487,98 @@ export function consumeRecoveryCode(userId: number, code: string): boolean {
         return false;
     }
 
-    stmt("DELETE FROM totp_recovery_codes WHERE user_id = ?").run(userId);
-    UserModel.setTotp(userId, null, false);
-    return true;
+    // One code, once. The second factor stays: switching it off here left the
+    // account without one until someone noticed. A new authenticator is set
+    // up in the account, which also issues new codes.
+    const result = stmt(
+        "UPDATE totp_recovery_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL",
+    ).run(row.id);
+
+    return Number(result.changes) === 1;
 }
 
 function normalizeRecoveryCode(code: string): string {
     return code.replace(/\s/g, "").toLowerCase();
 }
 
-export function findSsoUser(provider: string, subject: string): UserRecord | undefined {
+/**
+ * The account an external login belongs to. Only an identity linked by its
+ * owner counts: issuer and subject of the validated token, through the same
+ * provider it was linked with. The e-mail of the provider plays no part.
+ */
+export function findSsoUser(
+    provider: string,
+    issuer: string,
+    subject: string,
+): UserRecord | undefined {
     const row = stmt(
         `
         SELECT user_id
         FROM sso_identities
         WHERE provider = ?
+          AND issuer = ?
           AND subject = ?
         `,
-    ).get(provider, subject) as { user_id: number } | undefined;
+    ).get(provider, issuer, subject) as { user_id: number } | undefined;
 
     return row ? UserModel.getById(row.user_id) : undefined;
 }
 
-export function linkSsoIdentity(
-    user: UserRecord,
+/**
+ * Whether the person has linked this provider. With `issuer`, only a link
+ * to that issuer counts: a link to an earlier company login does not sign in
+ * through the current one.
+ */
+export function hasSsoIdentity(
+    userId: number,
     provider: string,
-    subject: string,
-    emailVerifiedByIdp: boolean,
-): UserRecord | undefined {
-    if (!emailVerifiedByIdp) {
-        return undefined;
-    }
+    issuer?: string | null,
+): boolean {
+    const rows = stmt(
+        "SELECT issuer FROM sso_identities WHERE user_id = ? AND provider = ?",
+    ).all(userId, provider) as { issuer: string }[];
 
-    if (!user.email_verified_at && user.password_hash) {
-        return undefined;
-    }
+    return issuer === undefined
+        ? rows.length > 0
+        : Boolean(issuer) && rows.some((row) => issuerMatches(issuer ?? "", row.issuer));
+}
 
-    stmt(
-        `
-        INSERT OR IGNORE INTO sso_identities (user_id, provider, subject)
-        VALUES (?, ?, ?)
-        `,
-    ).run(user.id, provider, subject);
-    UserModel.markEmailVerified(user.id);
+/**
+ * Links an external login to the signed-in owner. An identity that already
+ * belongs to another account stays there (`taken`), whichever provider it was
+ * linked with; linking the same one twice is a no-op.
+ */
+export function linkSsoIdentity(input: {
+    userId: number;
+    provider: string;
+    issuer: string;
+    subject: string;
+}): "linked" | "taken" {
+    return withTransaction(() => {
+        const other = stmt(
+            `
+            SELECT user_id
+            FROM sso_identities
+            WHERE issuer = ?
+              AND subject = ?
+              AND user_id <> ?
+            LIMIT 1
+            `,
+        ).get(input.issuer, input.subject, input.userId);
 
-    return UserModel.getById(user.id);
+        if (other) {
+            return "taken";
+        }
+
+        stmt(
+            `
+            INSERT OR IGNORE INTO sso_identities (user_id, provider, issuer, subject)
+            VALUES (?, ?, ?, ?)
+            `,
+        ).run(input.userId, input.provider, input.issuer, input.subject);
+
+        return "linked";
+    });
 }
 
 export function authUserFor(userId: number, companyId: number) {

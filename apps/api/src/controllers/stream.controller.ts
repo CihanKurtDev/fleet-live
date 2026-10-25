@@ -1,19 +1,45 @@
 import type { Request, Response } from "express";
 import { parseStreamFocus } from "@fleet-live/shared";
-import { BadRequestError } from "../lib/errors";
+import { AppError, BadRequestError, UnauthorizedError } from "../lib/errors";
 import { sessionCompany } from "../lib/http";
+import { hashToken } from "../lib/tokenHash";
+import { SessionModel } from "../models/session.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { logger } from "../logger";
 import { openSseWriter } from "../sse/compression";
 import {
     replay,
     setConnectionFocus,
+    streamCountForUser,
     subscribe,
     unsubscribe,
 } from "../sse/hub";
 
+/** How often an open stream checks that its session still admits it. */
+const HEARTBEAT_MS = 15_000;
+
+/**
+ * Open streams per person: one per tab, with room to spare. Each stream holds
+ * a socket and a compressor on the server, so the number has a ceiling.
+ */
+const STREAMS_PER_USER_MAX = 20;
+
 export function streamEvents(req: Request, res: Response) {
     const companyId = sessionCompany(req);
+    const auth = req.auth;
+    const userId = req.user?.id;
+
+    if (!auth || userId === undefined) {
+        throw new UnauthorizedError();
+    }
+
+    if (streamCountForUser(userId) >= STREAMS_PER_USER_MAX) {
+        throw new AppError(
+            429,
+            "STREAM_LIMIT",
+            "Zu viele offene Live-Verbindungen. Schließe ein paar Tabs.",
+        );
+    }
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
@@ -25,7 +51,32 @@ export function streamEvents(req: Request, res: Response) {
     const writer = openSseWriter(res, req.headers["accept-encoding"]);
     res.flushHeaders();
 
-    const connectionId = subscribe(writer, companyId);
+    let closed = false;
+    const timer: { heartbeat?: NodeJS.Timeout } = {};
+
+    const onClose = () => {
+        if (closed) {
+            return;
+        }
+
+        closed = true;
+        clearInterval(timer.heartbeat);
+        unsubscribe(writer);
+        // Gibt den Kompressor frei; für die unkomprimierte Antwort ist es harmlos.
+        writer.end();
+        logger.info(
+            { companyId, connectionId },
+            "sse connection closed",
+        );
+    };
+
+    // The stream belongs to this session in this company: the hub ends it when
+    // the session ends or changes, and the heartbeat checks it again.
+    const connectionId = subscribe(writer, companyId, {
+        userId,
+        tokenHash: hashToken(auth.token),
+        onEnd: onClose,
+    });
     logger.info(
         { companyId, connectionId },
         "sse connection opened",
@@ -41,22 +92,24 @@ export function streamEvents(req: Request, res: Response) {
 
     replay(writer, Number.isFinite(lastEventId) ? lastEventId : 0);
 
-    const heartbeat = setInterval(() => {
+    timer.heartbeat = setInterval(() => {
+        // An expired session, or one the company rules no longer admit, ends
+        // the stream; the check does not keep an idle session alive.
+        const session = SessionModel.find(auth.token, false);
+
+        if (
+            !session ||
+            session.user.company_id !== companyId ||
+            session.user.id !== userId
+        ) {
+            onClose();
+            return;
+        }
+
         writer.write("event: heartbeat\ndata: {}\n\n");
-    }, 15_000);
+    }, HEARTBEAT_MS);
 
-    heartbeat.unref?.();
-
-    const onClose = () => {
-        clearInterval(heartbeat);
-        unsubscribe(writer);
-        // Gibt den Kompressor frei; für die unkomprimierte Antwort ist es harmlos.
-        writer.end();
-        logger.info(
-            { companyId, connectionId },
-            "sse connection closed",
-        );
-    };
+    timer.heartbeat.unref?.();
 
     req.on("close", onClose);
     req.on("end", onClose);
@@ -70,6 +123,7 @@ export function setStreamFocus(req: Request, res: Response) {
         connection_id,
         owned,
         companyId,
+        req.user?.id,
     );
 
     if (count === false) {

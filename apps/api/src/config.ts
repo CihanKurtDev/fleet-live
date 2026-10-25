@@ -77,6 +77,20 @@ const environmentSchema = z.object({
     GOOGLE_CLIENT_SECRET: z.string().default(""),
     MICROSOFT_CLIENT_ID: z.string().default(""),
     MICROSOFT_CLIENT_SECRET: z.string().default(""),
+
+    /**
+     * Hosts of company logins that may resolve to an internal address (an IdP
+     * in the own network). Empty: every OIDC request goes to public addresses
+     * only. Exact names, comma-separated; no wildcards.
+     */
+    OIDC_PRIVATE_HOSTS: z.string().default(""),
+
+    /**
+     * Wie viele Reverse-Proxies vor der API stehen (Express `trust proxy`).
+     * 0: die Adresse des Sockets zählt, `X-Forwarded-For` wird ignoriert.
+     * Nur setzen, wenn ein Proxy den Header wirklich überschreibt.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
 });
 
 // No silent default: a process started without NODE_ENV would run in
@@ -146,6 +160,10 @@ export const config = {
     googleClientSecret: env.GOOGLE_CLIENT_SECRET,
     microsoftClientId: env.MICROSOFT_CLIENT_ID,
     microsoftClientSecret: env.MICROSOFT_CLIENT_SECRET,
+    oidcPrivateHosts: env.OIDC_PRIVATE_HOSTS.split(",")
+        .map((host) => host.trim().toLowerCase())
+        .filter(Boolean),
+    trustProxyHops: env.TRUST_PROXY_HOPS,
 } as const;
 
 export type Config = typeof config;

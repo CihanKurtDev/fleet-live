@@ -22,6 +22,7 @@ import {
     consumeRecoveryCode,
     createCompanyForUser,
     dismissImportPrompt,
+    hasSsoIdentity,
     inviteMember,
     listMembers,
     pickLoginCompany,
@@ -37,7 +38,6 @@ import {
     verifyEmailToken,
 } from "../models/account.model";
 import { AuthTokenModel } from "../models/authToken.model";
-import { membershipRow } from "../models/authView";
 import { SessionModel } from "../models/session.model";
 import { UserModel } from "../models/user.model";
 import {
@@ -58,7 +58,16 @@ import {
     sendMail,
     type MailDelivery,
 } from "../lib/mailer";
-import { openSession } from "../lib/openSession";
+import {
+    continueLogin,
+    openSession,
+    sendLoginOutcome,
+    SSO_REQUIRED_MESSAGE,
+    type ChallengePayload,
+} from "../lib/openSession";
+import { companyProvider, decideLogin } from "../models/loginPolicy";
+import { policyGap, type PolicyGap } from "../models/sessionPolicy";
+import { endStreams } from "../sse/hub";
 import {
     hashPasswordAsync,
     needsRehash,
@@ -212,38 +221,16 @@ export async function login(req: Request, res: Response) {
         throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
     }
 
-    if (company.sso_required === 1) {
-        throw new AppError(
-            403,
-            "SSO_REQUIRED",
-            "Diese Firma meldet sich über den Firmen-Login an.",
-            undefined,
-            { sso_company_id: company.company_id },
-        );
-    }
-
-    const needsTotp = user.totp_enabled === 1 || company.totp_required === 1;
-
-    if (needsTotp) {
-        const challenge = AuthTokenModel.issue({
+    sendLoginOutcome(
+        res,
+        continueLogin(req, res, {
             userId: user.id,
-            purpose: "login_challenge",
-            ttl: "+10 minutes",
             companyId: company.company_id,
-            payload: JSON.stringify({
-                enroll: user.totp_enabled !== 1,
-                remember: input.remember,
-            }),
-        });
-
-        res.json({
-            step: user.totp_enabled === 1 ? "totp" : "totp_enroll",
-            challenge,
-        });
-        return;
-    }
-
-    res.json(openSession(req, res, user.id, company.company_id, input.remember));
+            remember: input.remember,
+            mfa: false,
+            ssoCompanyId: null,
+        }),
+    );
 }
 
 export function logout(req: Request, res: Response) {
@@ -251,6 +238,7 @@ export function logout(req: Request, res: Response) {
 
     if (token) {
         SessionModel.delete(token);
+        endStreams({ token });
     }
 
     clearSessionCookie(res);
@@ -271,6 +259,7 @@ export function logoutAll(req: Request, res: Response) {
     }
 
     SessionModel.deleteForUser(req.user.id);
+    endStreams({ userId: req.user.id });
     clearSessionCookie(res);
     res.status(204).end();
 }
@@ -309,9 +298,13 @@ export async function forgotPassword(req: Request, res: Response) {
 export function resetPasswordHandler(req: Request, res: Response) {
     const input = parseResetInput(req.body);
 
-    if (!resetPassword(input.token, input.password)) {
+    const userId = resetPassword(input.token, input.password);
+
+    if (userId === undefined) {
         throw new ValidationError(INVALID_LINK);
     }
+
+    endStreams({ userId });
 
     res.status(204).end();
 }
@@ -338,6 +331,7 @@ export async function changePassword(req: Request, res: Response) {
 
     if (token) {
         SessionModel.deleteForUserExcept(user.id, token);
+        endStreams({ userId: user.id, exceptToken: token });
     }
 
     res.status(204).end();
@@ -388,8 +382,16 @@ export function acceptInviteHandler(req: Request, res: Response) {
         throw new ValidationError(INVALID_LINK);
     }
 
+    // The invite proves the e-mail, not the factors the company requires.
+    const proof = { mfa: false, ssoCompanyId: null };
+
+    if (decideLogin(accepted.userId, accepted.companyId, proof).kind !== "session") {
+        res.json({ next: "login" });
+        return;
+    }
+
     res.json(
-        openSession(req, res, accepted.userId, accepted.companyId, false),
+        openSession(req, res, accepted.userId, accepted.companyId, false, proof),
     );
 }
 
@@ -413,6 +415,9 @@ export function patchMember(req: Request, res: Response) {
         throw new NotFoundError("Mitglied nicht gefunden.");
     }
 
+    // Open streams of that person in this company reconnect with the new role.
+    endStreams({ userId, companyId: req.user.company_id });
+
     res.json({ data: listMembers(req.user.company_id) });
 }
 
@@ -426,6 +431,8 @@ export function deleteMember(req: Request, res: Response) {
     if (!Number.isInteger(userId) || !removeMember(req.user.company_id, userId)) {
         throw new NotFoundError("Mitglied nicht gefunden.");
     }
+
+    endStreams({ userId, companyId: req.user.company_id });
 
     if (userId === req.user.id) {
         clearSessionCookie(res);
@@ -442,14 +449,20 @@ export function createCompany(req: Request, res: Response) {
     }
 
     const { name } = parseCompanyInput(req.body);
-    const companyId = createCompanyForUser(req.user.id, name);
-    const token = readCookie(req.headers.cookie, SESSION_COOKIE);
+    const token = req.auth?.token;
 
     if (!token) {
         throw new UnauthorizedError();
     }
 
+    // A session of a company login stays in that company.
+    if (req.auth?.proof.ssoCompanyId !== null) {
+        throw switchRefused("sso_scope", 0);
+    }
+
+    const companyId = createCompanyForUser(req.user.id, name);
     SessionModel.setCompany(token, companyId);
+    endStreams({ token });
     const user = authUserFor(req.user.id, companyId);
 
     if (!user) {
@@ -465,38 +478,50 @@ export function switchCompany(req: Request, res: Response) {
     }
 
     const { company_id: companyId } = parseSwitchCompanyInput(req.body);
-    const row = membershipRow(req.user.id, companyId);
+    const auth = req.auth;
 
-    if (!row) {
-        throw new NotFoundError("Firma nicht gefunden.");
-    }
-
-    if (row.sso_required === 1) {
-        throw new AppError(
-            403,
-            "SSO_REQUIRED",
-            "Diese Firma meldet sich über den Firmen-Login an.",
-            undefined,
-            { sso_company_id: companyId },
-        );
-    }
-
-    const record = UserModel.getById(req.user.id);
-
-    if (row.totp_required === 1 && record?.totp_enabled !== 1) {
-        throw new ForbiddenError(
-            "Diese Firma verlangt Zwei-Faktor. Richte ihn im Konto ein.",
-        );
-    }
-
-    const token = readCookie(req.headers.cookie, SESSION_COOKIE);
-
-    if (!token) {
+    if (!auth) {
         throw new UnauthorizedError();
     }
 
-    SessionModel.setCompany(token, companyId);
+    // The same rules as for a new session: a company that requires its own
+    // login or a second factor needs a session that passed them.
+    const gap = policyGap(req.user.id, companyId, auth.proof);
+
+    if (gap !== null) {
+        throw switchRefused(gap, companyId);
+    }
+
+    SessionModel.setCompany(auth.token, companyId);
+    // A stream belongs to the company it was opened for.
+    endStreams({ token: auth.token });
     res.json(authUserFor(req.user.id, companyId));
+}
+
+function switchRefused(gap: PolicyGap, companyId: number): AppError {
+    if (gap === "no_membership") {
+        return new NotFoundError("Firma nicht gefunden.");
+    }
+
+    if (gap === "sso_scope") {
+        return new AppError(
+            403,
+            "REAUTH_REQUIRED",
+            "Der Firmen-Login gilt nur für seine Firma. Melde dich für die andere Firma neu an.",
+        );
+    }
+
+    if (gap === "sso_required") {
+        return new AppError(403, "SSO_REQUIRED", SSO_REQUIRED_MESSAGE, undefined, {
+            sso_company_id: companyId,
+        });
+    }
+
+    return new AppError(
+        403,
+        "TOTP_REQUIRED",
+        "Diese Firma verlangt Zwei-Faktor. Richte ihn im Konto ein und melde dich neu an.",
+    );
 }
 
 export function dismissImport(req: Request, res: Response) {
@@ -531,7 +556,57 @@ export function patchSecurity(req: Request, res: Response) {
         throw new UnauthorizedError();
     }
 
-    updateSecurity(req.user.company_id, parseSecurityInput(req.body));
+    const input = parseSecurityInput(req.body);
+    const current = companySecurity(req.user.company_id);
+    const proof = req.auth?.proof;
+
+    if (!current || !proof) {
+        throw new UnauthorizedError();
+    }
+
+    // Turning a rule on that this very session does not meet would lock the
+    // dispatcher out, and with the last dispatcher the whole company.
+    if (input.totp_required === true && current.totp_required !== 1 && !proof.mfa) {
+        throw new AppError(
+            403,
+            "TOTP_REQUIRED",
+            "Richte zuerst selbst Zwei-Faktor ein und melde dich damit an.",
+        );
+    }
+
+    // The dispatcher who requires the company login must have used it: a
+    // session of that login, or an own link to the configured issuer.
+    if (
+        input.sso_required === true &&
+        current.sso_required !== 1 &&
+        proof.ssoCompanyId !== req.user.company_id &&
+        !hasSsoIdentity(
+            req.user.id,
+            companyProvider(req.user.company_id),
+            current.sso_issuer,
+        )
+    ) {
+        throw new AppError(
+            403,
+            "SSO_LINK_REQUIRED",
+            "Verknüpfe zuerst dein Konto mit dem Firmen-Login, dann lässt er sich verlangen.",
+            undefined,
+            { company_id: req.user.company_id },
+        );
+    }
+
+    updateSecurity(req.user.company_id, input);
+    const next = companySecurity(req.user.company_id);
+
+    // Sessions that no longer meet stricter rules end on their next request;
+    // their streams end now.
+    if (
+        (next?.totp_required === 1 && current.totp_required !== 1) ||
+        (next?.sso_required === 1 && current.sso_required !== 1)
+    ) {
+        endStreams({ companyId: req.user.company_id });
+    }
+
     res.json(publicSecurity(req.user.company_id));
 }
 
@@ -540,14 +615,6 @@ const MAX_STEP_FAILURES = 5;
 
 const TOTP_LOCKED_MESSAGE =
     "Zu viele falsche Codes. Bitte später erneut versuchen.";
-
-type ChallengePayload = {
-    /** The step was issued to set up a second factor, not to ask for one. */
-    enroll?: boolean;
-    remember?: boolean;
-    secret?: string;
-    failures?: number;
-};
 
 function challengePayload(raw: string | null): ChallengePayload {
     if (!raw) {
@@ -587,7 +654,8 @@ export function setupTotp(req: Request, res: Response) {
             throw new ForbiddenError("Zwei-Faktor ist schon eingerichtet.");
         }
 
-        payload.secret = encoded;
+        // The step row holds the new secret sealed, like the account does.
+        payload.secret = seal(encoded);
         AuthTokenModel.setPayload(row.id, JSON.stringify(payload));
         res.json({
             secret: encoded,
@@ -604,7 +672,7 @@ export function setupTotp(req: Request, res: Response) {
         userId: req.user.id,
         purpose: "totp_setup",
         ttl: "+10 minutes",
-        payload: JSON.stringify({ secret: encoded }),
+        payload: JSON.stringify({ secret: seal(encoded) }),
     });
 
     res.json({
@@ -634,6 +702,19 @@ function acceptTotpCode(
 
     UserModel.setTotpLastStep(user.id, step);
     return true;
+}
+
+/** The secret a set-up step carries, or nothing when it is missing or unreadable. */
+function stepSecret(payload: ChallengePayload): string | undefined {
+    if (!payload.secret) {
+        return undefined;
+    }
+
+    try {
+        return openSecret(payload.secret);
+    } catch {
+        return undefined;
+    }
 }
 
 function enableTotp(userId: number, encodedSecret: string, code: string): string[] {
@@ -677,8 +758,10 @@ export function confirmTotp(req: Request, res: Response) {
         const enrolling = payload.enroll === true && user.totp_enabled !== 1;
 
         try {
-            if (enrolling && payload.secret) {
-                recovery = enableTotp(user.id, payload.secret, input.code);
+            const secret = stepSecret(payload);
+
+            if (enrolling && secret) {
+                recovery = enableTotp(user.id, secret, input.code);
             } else if (
                 user.totp_enabled === 1 &&
                 acceptTotpCode(user, input.code)
@@ -709,15 +792,25 @@ export function confirmTotp(req: Request, res: Response) {
         }
 
         clearTotpFailures(user.id);
-        AuthTokenModel.consume(row.id);
-        const auth = openSession(
-            req,
-            res,
-            user.id,
-            row.company_id,
-            payload.remember === true,
-        );
-        res.json(recovery ? { ...auth, recovery_codes: recovery } : auth);
+
+        if (!AuthTokenModel.claim(input.challenge, "login_challenge")) {
+            throw new UnauthorizedError("Der Schritt ist abgelaufen.");
+        }
+
+        const outcome = continueLogin(req, res, {
+            userId: user.id,
+            companyId: row.company_id,
+            remember: payload.remember === true,
+            mfa: true,
+            ssoCompanyId: payload.sso_company_id ?? null,
+        });
+
+        if (outcome.kind === "session" && recovery) {
+            res.json({ ...outcome.user, recovery_codes: recovery });
+            return;
+        }
+
+        sendLoginOutcome(res, outcome);
         return;
     }
 
@@ -733,12 +826,20 @@ export function confirmTotp(req: Request, res: Response) {
 
     const payload = challengePayload(row.payload);
 
-    if (!payload.secret) {
+    const secret = stepSecret(payload);
+
+    if (!secret) {
         throw new ValidationError("Einrichtung ist abgelaufen.");
     }
 
-    const recovery = enableTotp(req.user.id, payload.secret, input.code);
+    const recovery = enableTotp(req.user.id, secret, input.code);
     AuthTokenModel.consume(row.id);
+
+    // This session has just shown the new factor.
+    if (req.auth) {
+        SessionModel.setMfa(req.auth.token);
+    }
+
     const auth = authUserFor(req.user.id, req.user.company_id);
     res.json({ ...auth, recovery_codes: recovery });
 }

@@ -6,7 +6,15 @@ import {
     type LoginChallenge,
     type SsoProviders,
 } from "@fleet-live/shared";
-import { confirmTotp, discoverCompanySso, getSsoProviders, login, resendVerification, setupTotp } from "../api/auth";
+import {
+    confirmTotp,
+    discoverCompanySso,
+    getSsoProviders,
+    login,
+    resendVerification,
+    setupTotp,
+    startSsoLink,
+} from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Checkbox } from "../components/ui/Checkbox/Checkbox";
@@ -35,7 +43,19 @@ const loginRedirectPath = (location: {
 
 const ssoHint = (value: string | null) => {
     if (value === "unknown") {
-        return "Für diese E-Mail gibt es noch kein Konto. Registriere zuerst die Firma.";
+        return "Dieser Login ist mit keinem Konto verknüpft. Melde dich mit Passwort an.";
+    }
+
+    if (value === "company") {
+        return "Diese Firma meldet sich über den Firmen-Login an.";
+    }
+
+    if (value === "taken") {
+        return "Dieser Firmen-Login gehört schon zu einem anderen Konto.";
+    }
+
+    if (value === "mismatch") {
+        return "Der Firmen-Login meldet eine andere oder unbestätigte E-Mail.";
     }
 
     if (value === "unconfigured") {
@@ -49,6 +69,23 @@ const ssoHint = (value: string | null) => {
     return null;
 };
 
+/**
+ * The second-factor step an identity provider hands back after its login
+ * (`/login#challenge=…&step=…`). The fragment never reaches a server; it is
+ * removed from the address at once.
+ */
+const challengeFromHash = (fragment: string): LoginChallenge | null => {
+    const hash = new URLSearchParams(fragment.replace(/^#/, ""));
+    const challenge = hash.get("challenge");
+    const step = hash.get("step");
+
+    if (!challenge || (step !== "totp" && step !== "totp_enroll")) {
+        return null;
+    }
+
+    return { step, challenge };
+};
+
 export const LoginPage = () => {
     usePageTitle("Anmelden");
     const navigate = useNavigate();
@@ -59,9 +96,15 @@ export const LoginPage = () => {
     const [password, setPassword] = useState("");
     const [remember, setRemember] = useState(false);
     const [code, setCode] = useState("");
-    const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
+    const [challenge, setChallenge] = useState<LoginChallenge | null>(() =>
+        challengeFromHash(location.hash),
+    );
     const [error, setError] = useState<string | null>(ssoHint(searchParams.get("sso")));
-    const [info, setInfo] = useState<string | null>(null);
+    const [info, setInfo] = useState<string | null>(
+        searchParams.get("einladung") === "angenommen"
+            ? "Einladung angenommen. Melde dich jetzt an."
+            : null,
+    );
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unverified, setUnverified] = useState(false);
@@ -70,6 +113,17 @@ export const LoginPage = () => {
         google: false,
         microsoft: false,
     });
+
+    // The step from the fragment is in state now; it leaves the address bar
+    // and the history entry.
+    useEffect(() => {
+        if (location.hash.includes("challenge=")) {
+            navigate(
+                { pathname: location.pathname, search: location.search },
+                { replace: true },
+            );
+        }
+    }, [location.hash, location.pathname, location.search, navigate]);
 
     useEffect(() => {
         let cancelled = false;
@@ -162,6 +216,24 @@ export const LoginPage = () => {
 
             finish(result);
         } catch (caught: unknown) {
+            if (
+                caught instanceof ApiError &&
+                caught.code === "SSO_REQUIRED" &&
+                typeof caught.details?.link_challenge === "string" &&
+                typeof caught.details.sso_company_id === "number"
+            ) {
+                // Password and second factor are done; the company login is
+                // linked now, at the company's identity provider.
+                setInfo("Weiter zum Firmen-Login …");
+                const started = await startSsoLink({
+                    provider: "company",
+                    company_id: caught.details.sso_company_id,
+                    challenge: caught.details.link_challenge,
+                });
+                window.location.href = started.url;
+                return;
+            }
+
             if (caught instanceof ApiError) {
                 setError(caught.message);
                 setFieldErrors(caught.fields ?? {});

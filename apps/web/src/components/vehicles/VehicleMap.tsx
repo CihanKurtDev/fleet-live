@@ -10,6 +10,7 @@ import {
 } from "../../hooks/useLeafletFollowMap";
 import { useLatestRef } from "../../hooks/useLatestRef";
 import { themeColor } from "./leafletMap";
+import { detailTooltipHtml } from "./mapLabels";
 import type { MapPoint } from "./mapGeometry";
 import { PlaybackAge } from "./PlaybackAge";
 import { VehiclePlayback, type PlaybackFix, type RoadPoint } from "./vehiclePlayback";
@@ -49,7 +50,7 @@ const VEHICLE = 0;
 const PREFIX_EPS_M = 12;
 
 const markerTooltip = (label: string, status: VehicleStatus) =>
-    `${label} · ${vehicleStatusLabel(status)}`;
+    detailTooltipHtml(label, status);
 
 const createMarkerIcon = () =>
     L.divIcon({

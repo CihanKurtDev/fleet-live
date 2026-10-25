@@ -1,6 +1,7 @@
 /**
  * Semikolon, weil Excel unter de-DE so trennt. Der Import liest beides.
- * Ein führendes `'` stoppt Formeln (`=`, `+`, `-`, `@`).
+ * Ein führendes `'` stoppt Formeln: `=`, `+`, `-`, `@`, auch nach Leerraum,
+ * Tab oder Zeilenumbruch und in voller Breite (`＝` usw.).
  */
 export function toCsv(rows: string[][]): string {
     const lines = rows.map((row) => row.map(csvCell).join(";"));
@@ -9,7 +10,7 @@ export function toCsv(rows: string[][]): string {
 
 function csvCell(value: string): string {
     let text = value.replace(/\r\n|\r|\n/g, " ");
-    if (/^[=+\-@]/.test(text)) {
+    if (/^\s*[=+\-@＝＋－＠]/.test(text)) {
         text = `'${text}`;
     }
 

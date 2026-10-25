@@ -23,6 +23,7 @@ import {
     markerStyle,
 } from "./fleetMapStyle";
 import { createThemedMap, themeColor } from "./leafletMap";
+import { depotLabelHtml, fleetTooltipHtml } from "./mapLabels";
 import {
     FLEET_CLUSTER_FIT_PADDING_PX,
     FLEET_CLUSTER_MAX_ZOOM,
@@ -225,8 +226,7 @@ const hasMapPosition = (
     vehicle.latitude !== null &&
     vehicle.longitude !== null;
 
-const markerTooltip = (vehicle: FleetPosition) =>
-    `${vehicle.license_plate} · ${vehicle.driver_name ?? "Kein Fahrer"} · ${vehicleStatusLabel(vehicle.status)}`;
+const markerTooltip = (vehicle: FleetPosition) => fleetTooltipHtml(vehicle);
 
 const densityStatus = (cell: FleetDensityCell): VehicleStatus =>
     (Object.entries(cell.counts) as [VehicleStatus, number][]).reduce(
@@ -1770,7 +1770,7 @@ export const FleetMap = ({
                 interactive: false,
             })
                 .setLatLng(labelAt(latitude, longitude, radius))
-                .setContent(name)
+                .setContent(depotLabelHtml(name))
                 .addTo(group);
 
         const drawHandle = (

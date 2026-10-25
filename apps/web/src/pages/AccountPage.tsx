@@ -13,6 +13,7 @@ import {
     removeMember,
     setMemberRole,
     setupTotp,
+    startSsoLink,
     switchCompany,
     updateSecurity,
     type CompanySecurity,
@@ -40,6 +41,30 @@ const DISPATCHER_SECTIONS: SectionId[] = [...OWN_SECTIONS, "team", "firmen-login
 
 type Message = { section: SectionId; text: string };
 
+/** The answer of a company-login link (`/konto?sso=…`), set by the API. */
+const linkMessages = (result: string | null): { info: Message | null; error: Message | null } => {
+    if (result === "linked") {
+        return {
+            info: {
+                section: "firmen-login",
+                text: "Dein Konto ist mit dem Firmen-Login verknüpft. Jetzt lässt er sich verlangen.",
+            },
+            error: null,
+        };
+    }
+
+    const text =
+        result === "taken"
+            ? "Dieser Firmen-Login gehört schon zu einem anderen Konto."
+            : result === "mismatch"
+              ? "Der Firmen-Login meldet eine andere oder unbestätigte E-Mail."
+              : result === "error"
+                ? "Die Verknüpfung mit dem Firmen-Login ist fehlgeschlagen."
+                : null;
+
+    return { info: null, error: text ? { section: "firmen-login", text } : null };
+};
+
 const ROLE_LABEL: Record<UserRole, string> = {
     dispatcher: "Dispatcher",
     viewer: "Nur lesen",
@@ -55,11 +80,15 @@ const RoleOptions = () => (
 export const AccountPage = () => {
     usePageTitle("Konto");
     const { user, setUser } = useAuth();
-    const { hash } = useLocation();
+    const { hash, search } = useLocation();
     const [members, setMembers] = useState<Member[]>([]);
     const [security, setSecurity] = useState<CompanySecurity | null>(null);
-    const [error, setError] = useState<Message | null>(null);
-    const [info, setInfo] = useState<Message | null>(null);
+    const [error, setError] = useState<Message | null>(
+        () => linkMessages(new URLSearchParams(search).get("sso")).error,
+    );
+    const [info, setInfo] = useState<Message | null>(
+        () => linkMessages(new URLSearchParams(search).get("sso")).info,
+    );
     const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
     const [isRemoving, setIsRemoving] = useState(false);
     const [recovery, setRecovery] = useState<string[]>([]);
@@ -300,6 +329,24 @@ export const AccountPage = () => {
                     : "Gespeichert.",
             );
         } catch (caught: unknown) {
+            if (caught instanceof ApiError && caught.code === "SSO_LINK_REQUIRED" && user) {
+                // Requiring the company login needs a round trip through it
+                // first; the browser comes back here with `?sso=linked`.
+                setInfo({ section: "firmen-login", text: "Weiter zum Firmen-Login …" });
+
+                try {
+                    const started = await startSsoLink({
+                        provider: "company",
+                        company_id: user.company_id,
+                    });
+                    window.location.href = started.url;
+                } catch (linkError: unknown) {
+                    showError("firmen-login", linkError, "Der Firmen-Login konnte nicht gestartet werden.");
+                }
+
+                return;
+            }
+
             showError("firmen-login", caught, "Einstellungen konnten nicht gespeichert werden.");
         }
     };

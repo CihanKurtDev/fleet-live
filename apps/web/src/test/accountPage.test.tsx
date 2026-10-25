@@ -22,6 +22,7 @@ vi.mock("../api/auth", () => ({
     removeMember: vi.fn(),
     setMemberRole: vi.fn(),
     setupTotp: vi.fn(),
+    startSsoLink: vi.fn(),
     switchCompany: vi.fn(),
     updateSecurity: vi.fn(),
 }));
@@ -37,6 +38,7 @@ import {
     removeMember,
     setMemberRole,
     setupTotp,
+    startSsoLink,
     switchCompany,
     updateSecurity,
 } from "../api/auth";
@@ -374,6 +376,73 @@ describe("account page", () => {
             sso_client_id: "client-id",
             sso_client_secret: "secret-value",
         });
+    });
+
+    it("links the own account first when the company login is to be required", async () => {
+        vi.mocked(getSecurity).mockResolvedValue({
+            ...security,
+            sso_issuer: "https://idp.example",
+            sso_client_id: "client-id",
+            sso_secret_set: true,
+            sso_configured: true,
+        });
+        vi.mocked(updateSecurity).mockRejectedValue(
+            new ApiError(
+                "Verknüpfe zuerst dein Konto mit dem Firmen-Login, dann lässt er sich verlangen.",
+                403,
+                undefined,
+                "SSO_LINK_REQUIRED",
+                { company_id: 1 },
+            ),
+        );
+        vi.mocked(startSsoLink).mockResolvedValue({ url: "https://idp.example/auth?state=s" });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
+
+        fireEvent.click(await screen.findByRole("checkbox", { name: "Firmen-Login verlangen" }));
+        const assigned: string[] = [];
+        const realLocation = window.location;
+        const spy = vi.spyOn(window, "location", "get").mockImplementation(
+            () =>
+                new Proxy(realLocation, {
+                    get(target, property) {
+                        const value = Reflect.get(target, property, target);
+                        return typeof value === "function" ? value.bind(target) : value;
+                    },
+                    set(target, property, value) {
+                        if (property === "href") {
+                            assigned.push(String(value));
+                            return true;
+                        }
+
+                        return Reflect.set(target, property, value);
+                    },
+                }) as Location,
+        );
+        submit("Einstellungen speichern");
+
+        await waitFor(() => {
+            expect(assigned).toEqual(["https://idp.example/auth?state=s"]);
+        });
+        spy.mockRestore();
+        expect(startSsoLink).toHaveBeenCalledWith({ provider: "company", company_id: 1 });
+    });
+
+    it("says when the company login was linked", async () => {
+        vi.mocked(getSecurity).mockResolvedValue(security);
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto?sso=linked#firmen-login" });
+
+        expect(await screen.findByRole("status")).toHaveTextContent(
+            "Dein Konto ist mit dem Firmen-Login verknüpft.",
+        );
+    });
+
+    it("says why the company login could not be linked", async () => {
+        vi.mocked(getSecurity).mockResolvedValue(security);
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto?sso=mismatch#firmen-login" });
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+            "Der Firmen-Login meldet eine andere oder unbestätigte E-Mail.",
+        );
     });
 
     it("hides company administration from a viewer", async () => {

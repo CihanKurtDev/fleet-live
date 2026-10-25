@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { hashToken } from "../lib/tokenHash";
 import type { SseWriter } from "./compression";
 import {
     STREAM_FOCUS_MAX_IDS,
@@ -17,10 +18,20 @@ type PendingPatch = { id: number; path_delta?: string; path_reset?: true } & Rec
     unknown
 >;
 
+/** Who a stream belongs to: the session that opened it. */
+export type StreamOwner = {
+    userId: number;
+    /** sha256 of the session token, like the `sessions` table. */
+    tokenHash: string;
+    /** Ends the response and its timers; called once when the hub drops the stream. */
+    onEnd: () => void;
+};
+
 type Client = {
     res: SseWriter;
     focusIds: number[];
     companyId: number;
+    owner?: StreamOwner;
     /**
      * Neueste Werte je Fahrzeug, solange der Socket des Zuschauers voll ist.
      * Ein langsamer Zuschauer bekommt dann einen zusammengefassten Tick statt
@@ -204,12 +215,17 @@ export function broadcast(
     }
 }
 
-export function subscribe(res: SseWriter, companyId: number): string {
+export function subscribe(
+    res: SseWriter,
+    companyId: number,
+    owner?: StreamOwner,
+): string {
     const connectionId = randomUUID();
     clients.set(connectionId, {
         res,
         focusIds: [],
         companyId,
+        owner,
         pending: new Map(),
         pendingEventId: 0,
         waitingForDrain: false,
@@ -248,16 +264,78 @@ export function setConnectionFocus(
     connectionId: string,
     ids: number[],
     companyId: number,
+    userId?: number,
 ): number | false {
     const client = clients.get(connectionId);
 
-    if (!client || client.companyId !== companyId) {
+    // Only the person whose session opened the stream steers it.
+    if (
+        !client ||
+        client.companyId !== companyId ||
+        (client.owner !== undefined && client.owner.userId !== userId)
+    ) {
         return false;
     }
 
     const unique = sanitizeIds(ids);
     client.focusIds = unique;
     return unique.length;
+}
+
+/**
+ * Ends the open streams that match every given field: one session (`token`),
+ * one person (`userId`, optionally all but `exceptToken`), one company.
+ * Called when a session ends or changes company, a password is reset or
+ * changed, a membership is removed or its role changes, or a company changes
+ * its sign-in rules. A browser whose session is still valid reconnects (SSE
+ * `retry`); one without gets 401.
+ */
+export function endStreams(match: {
+    token?: string;
+    userId?: number;
+    companyId?: number;
+    exceptToken?: string;
+}) {
+    const tokenHash = match.token ? hashToken(match.token) : undefined;
+    const exceptHash = match.exceptToken ? hashToken(match.exceptToken) : undefined;
+    let ended = 0;
+
+    for (const [connectionId, client] of clients) {
+        const owner = client.owner;
+
+        if (
+            (tokenHash !== undefined && owner?.tokenHash !== tokenHash) ||
+            (match.userId !== undefined && owner?.userId !== match.userId) ||
+            (match.companyId !== undefined && client.companyId !== match.companyId) ||
+            (exceptHash !== undefined && owner?.tokenHash === exceptHash)
+        ) {
+            continue;
+        }
+
+        clients.delete(connectionId);
+        ended += 1;
+
+        if (owner) {
+            owner.onEnd();
+        } else {
+            client.res.end();
+        }
+    }
+
+    return ended;
+}
+
+/** Open streams of one person, across their sessions. */
+export function streamCountForUser(userId: number): number {
+    let count = 0;
+
+    for (const client of clients.values()) {
+        if (client.owner?.userId === userId) {
+            count += 1;
+        }
+    }
+
+    return count;
 }
 
 export function closeAllSseClients() {

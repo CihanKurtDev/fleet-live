@@ -33,6 +33,17 @@ export const getMe = (signal?: AbortSignal) =>
 export const getSsoProviders = (signal?: AbortSignal) =>
     request<SsoProviders>("/api/auth/sso/providers", { signal });
 
+/** Starts linking an external login; the browser then goes to `url`. */
+export const startSsoLink = (input: {
+    provider: "google" | "microsoft" | "company";
+    company_id?: number;
+    challenge?: string;
+}) =>
+    request<{ url: string }>("/api/auth/sso/link", {
+        method: "POST",
+        body: input,
+    });
+
 export const discoverCompanySso = (email: string) =>
     request<{ company_id: number }>("/api/auth/sso/company/discover", {
         method: "POST",
@@ -85,7 +96,8 @@ export const acceptInvite = (input: {
     name: string;
     password: string;
 }) =>
-    request<AuthUser>("/api/auth/invites/accept", {
+    // `next: "login"` when the company requires more than the password.
+    request<AuthUser | { next: "login" }>("/api/auth/invites/accept", {
         method: "POST",
         body: input,
     });

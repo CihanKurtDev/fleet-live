@@ -148,6 +148,21 @@ const totpCodeSchema = z.object({
     setup_token: z.string().trim().min(1).max(200).optional(),
 });
 
+const ssoLinkSchema = z
+    .object({
+        provider: z.enum(["google", "microsoft", "company"], {
+            error: "Anbieter ist ungültig.",
+        }),
+        company_id: z.number().int().positive("Firma ist ungültig.").optional(),
+        challenge: z.string().trim().min(1).max(200).optional(),
+    })
+    .refine((value) => value.provider !== "company" || value.company_id !== undefined, {
+        path: ["company_id"],
+        message: "Firma ist erforderlich.",
+    });
+
+export type SsoLinkInput = z.infer<typeof ssoLinkSchema>;
+
 const securitySchema = z
     .object({
         totp_required: z.boolean().optional(),
@@ -239,6 +254,11 @@ export function parseTotpCodeInput(input: unknown): {
     setup_token?: string;
 } {
     return totpCodeSchema.parse(input);
+}
+
+/** Starts linking an external login to the account (`POST /api/auth/sso/link`). */
+export function parseSsoLinkInput(input: unknown): SsoLinkInput {
+    return ssoLinkSchema.parse(input);
 }
 
 export function parseSecurityInput(input: unknown): SecurityInput {

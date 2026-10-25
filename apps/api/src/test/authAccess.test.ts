@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
+import { db } from "../db/database";
 import { takeMails } from "../lib/mailer";
 import { setOidcDriverForTests } from "../lib/oidc";
 import { base32Decode, totpCode } from "../lib/totp";
@@ -273,7 +274,9 @@ describe("totp and sso", () => {
         assert.match(String(done.headers["set-cookie"]), /fleet_session=/);
     });
 
-    it("logs an existing user in through the mocked issuer", async () => {
+    // An external login signs in only after its owner linked it while signed
+    // in (ssoLinking.test.ts); a matching e-mail alone is not enough.
+    it("does not sign an existing user in through an unlinked external login", async () => {
         UserModel.create({
             name: "SSO",
             email: "sso@example.com",
@@ -286,6 +289,7 @@ describe("totp and sso", () => {
             },
             async callback() {
                 return {
+                    issuer: "https://accounts.google.com",
                     subject: "subject-1",
                     email: "sso@example.com",
                     emailVerified: true,
@@ -309,15 +313,8 @@ describe("totp and sso", () => {
             .set("Cookie", cookie)
             .redirects(0);
         assert.equal(done.status, 302);
-        assert.match(String(done.headers.location), /\/$/);
-        const session = done.headers["set-cookie"];
-        assert.match(String(session), /fleet_session=/);
-
-        const me = await request(app)
-            .get("/api/auth/me")
-            .set("Cookie", session);
-        assert.equal(me.status, 200);
-        assert.equal(me.body.email, "sso@example.com");
+        assert.match(String(done.headers.location), /sso=unknown/);
+        assert.doesNotMatch(String(done.headers["set-cookie"]), /fleet_session=/);
     });
 
     it("refuses the password when the company requires its own login", async () => {
@@ -328,7 +325,6 @@ describe("totp and sso", () => {
                 sso_issuer: "https://login.example.com",
                 sso_client_id: "client",
                 sso_client_secret: "secret-value",
-                sso_required: true,
             })
             .expect(200);
         const saved = await agent.get("/api/auth/security");
@@ -337,6 +333,9 @@ describe("totp and sso", () => {
         assert.equal(saved.body.sso_client_id, "client");
         assert.equal(saved.body.sso_secret_set, true);
         assert.equal(saved.body.sso_client_secret, undefined);
+        // Requiring the company login needs a session of that login
+        // (loginPolicy.test.ts); here only the refusal of the password counts.
+        db.prepare("UPDATE companies SET sso_required = 1 WHERE id = 1").run();
 
         const discovered = await request(app)
             .post("/api/auth/sso/company/discover")

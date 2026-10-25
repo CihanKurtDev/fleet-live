@@ -181,6 +181,7 @@ export type {
     MembershipSummary,
     RegisterInput,
     SecurityInput,
+    SsoLinkInput,
     SsoProviders,
     UserRole,
 } from "./models/auth";
@@ -200,6 +201,7 @@ export {
     parseRegisterInput,
     parseResetInput,
     parseSecurityInput,
+    parseSsoLinkInput,
     parseSwitchCompanyInput,
     parseTokenInput,
     parseTotpCodeInput,

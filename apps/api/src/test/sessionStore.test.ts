@@ -150,3 +150,23 @@ describe("expired and idle sessions", () => {
         assert.equal(rowFor(token)?.expires_at, before?.expires_at);
     });
 });
+
+describe("single-use tokens", () => {
+    it("are swept a week after they expired, with the sessions", () => {
+        const insert = db.prepare(
+            "INSERT INTO auth_tokens (purpose, token_hash, expires_at) VALUES ('sso_state', ?, datetime('now', ?))",
+        );
+        insert.run("old", "-8 days");
+        insert.run("recent", "-1 days");
+        insert.run("open", "+10 minutes");
+
+        SessionModel.purgeExpired();
+
+        const left = (
+            db.prepare("SELECT token_hash FROM auth_tokens ORDER BY token_hash").all() as {
+                token_hash: string;
+            }[]
+        ).map((row) => row.token_hash);
+        assert.deepEqual(left, ["open", "recent"]);
+    });
+});

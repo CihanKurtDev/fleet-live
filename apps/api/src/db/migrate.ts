@@ -3,7 +3,7 @@ import { isValidIsoDate } from "@fleet-live/shared";
 import { pruneResolvedAlerts } from "./alertRetention";
 import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
 
-const SCHEMA_VERSION = 22;
+const SCHEMA_VERSION = 23;
 
 type TableColumn = {
     name: string;
@@ -1110,6 +1110,120 @@ function ensureTotpLastStep(database: DatabaseSync) {
     addColumn(database, "users", "totp_last_step", "INTEGER");
 }
 
+/**
+ * v23: the sign-in hardening.
+ *
+ * - `sessions` remember whether a second factor was passed (`mfa`) and which
+ *   company login opened them (`sso_company_id`); rows from before count as
+ *   neither, so a company that requires either sends them back to the login.
+ * - `auth_tokens` accepts `sso_link` (the step that lets a member link the
+ *   company login after password and second factor).
+ * - `sso_identities` is keyed by issuer and subject. Rows from before were
+ *   written by matching the e-mail of the identity provider, which is the flaw
+ *   this fixes: they move to `sso_identities_legacy` untouched and are never
+ *   used to sign in. Their owners link again, signed in, from the account page.
+ */
+export function ensureAuthHardening(database: DatabaseSync) {
+    addColumn(database, "sessions", "mfa", "INTEGER NOT NULL DEFAULT 0");
+    addColumn(database, "sessions", "sso_company_id", "INTEGER");
+
+    const tokensSql = tableSql(database, "auth_tokens");
+
+    if (tokensSql && !tokensSql.includes("'sso_link'")) {
+        withRebuild(database, () => {
+            database.exec(`
+                CREATE TABLE auth_tokens_v23 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    purpose TEXT NOT NULL CHECK (purpose IN (
+                        'verify_email', 'reset_password', 'invite',
+                        'login_challenge', 'totp_setup', 'sso_state',
+                        'sso_link'
+                    )),
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at TEXT NOT NULL,
+                    used_at TEXT,
+                    company_id INTEGER,
+                    role TEXT,
+                    payload TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+                INSERT INTO auth_tokens_v23 (
+                    id, user_id, purpose, token_hash, expires_at, used_at,
+                    company_id, role, payload, created_at
+                )
+                SELECT id, user_id, purpose, token_hash, expires_at, used_at,
+                       company_id, role, payload, created_at
+                FROM auth_tokens;
+                DROP TABLE auth_tokens;
+                ALTER TABLE auth_tokens_v23 RENAME TO auth_tokens;
+            `);
+        });
+    }
+
+    if (
+        tableExists(database, "sso_identities") &&
+        !columnNames(database, "sso_identities").has("issuer")
+    ) {
+        withRebuild(database, () => {
+            database.exec(`
+                CREATE TABLE IF NOT EXISTS sso_identities_legacy (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    provider TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    moved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT OR IGNORE INTO sso_identities_legacy (id, user_id, provider, subject, created_at)
+                SELECT id, user_id, provider, subject, created_at FROM sso_identities;
+                DROP TABLE sso_identities;
+                CREATE TABLE sso_identities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    provider TEXT NOT NULL,
+                    issuer TEXT NOT NULL CHECK (issuer <> ''),
+                    subject TEXT NOT NULL CHECK (subject <> ''),
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE (provider, issuer, subject)
+                );
+            `);
+        });
+    }
+
+    if (tableExists(database, "sso_identities")) {
+        database.exec(`
+            CREATE INDEX IF NOT EXISTS idx_sso_identities_issuer_subject
+                ON sso_identities(issuer, subject);
+            CREATE INDEX IF NOT EXISTS idx_sso_identities_user
+                ON sso_identities(user_id);
+        `);
+    }
+}
+
+function tableSql(database: DatabaseSync, name: string): string | undefined {
+    const row = database
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get(name) as { sql: string } | undefined;
+
+    return row?.sql;
+}
+
+/** One transaction for a table rebuild: either the new table is there or the old one. */
+function withRebuild(database: DatabaseSync, rebuild: () => void) {
+    database.exec("BEGIN");
+
+    try {
+        rebuild();
+        database.exec("COMMIT");
+    } catch (error) {
+        database.exec("ROLLBACK");
+        throw error;
+    }
+}
+
 function addColumn(
     database: DatabaseSync,
     table: string,
@@ -1567,6 +1681,7 @@ export function migrate(database: DatabaseSync) {
     ensureAccountIndexes(database);
     ensureSessionPersistent(database);
     ensureTotpLastStep(database);
+    ensureAuthHardening(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.
     syncStateAlerts(database);

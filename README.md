@@ -159,8 +159,11 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `GET`  | `/api/auth/sso/providers` | `{ google, microsoft }` — nur `true`, wenn Client-ID und Secret gesetzt sind |
 | `GET`  | `/api/auth/sso/google/start` | Weiterleitung zu Google. Microsoft (`/sso/microsoft/start`) analog; die Rückkehr ist `/sso/:provider/callback` |
 | `POST`, `GET` | `/api/auth/sso/company/discover`, `/sso/company/start`, `/sso/company/callback` | Firmen-IdP: Firma finden, Weiterleitung, Rückkehr |
+| `POST` | `/api/auth/sso/link` | `{ provider, company_id?, challenge? }` → `{ url }`. Verknüpft einen externen Login mit dem angemeldeten Konto, oder mit `challenge` (aus `SSO_REQUIRED`) den Firmen-Login nach Passwort und zweitem Faktor |
 
 `remember: true` hält das Cookie sieben Tage. Sonst ist es ein Sitzungs-Cookie, und 15 Minuten ohne Nutzung beenden die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld. Passwort mindestens 12 und höchstens 128 Zeichen. Ohne `SMTP_URL` schreibt die Entwicklung den Reset-Link ins Server-Log und sagt das in der Antwort; es geht keine Mail raus. Produktion ohne SMTP antwortet `503`. Die Anmeldeseite zeigt Google und Microsoft nur, wenn die jeweiligen Client-Variablen gesetzt sind.
+
+Ein externer Login meldet nur an, wenn ihn der Inhaber verknüpft hat (Issuer und Subject des Tokens; eine gleiche E-Mail allein genügt nie). Verlangt die Firma ihren eigenen Login, verknüpft die Anmeldeseite ihn nach Passwort und zweitem Faktor einmalig. Verlangen Konto oder Firma einen zweiten Faktor, fragt die Anmeldung auch nach Google, Microsoft oder dem Firmen-Login danach. Eine Sitzung aus dem Firmen-Login gilt nur in dieser Firma. Ändert eine Firma diese Regeln, enden die Sitzungen und Live-Verbindungen, die sie nicht erfüllen. Sicherheitsmodell, offene Punkte und Betriebsanforderungen: [`SECURITY.md`](SECURITY.md), [`docs/security-remediation-plan.md`](docs/security-remediation-plan.md).
 
 ## Fahrzeuge und Livedaten
 
@@ -451,6 +454,8 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `GOOGLE_CLIENT_SECRET` | leer | |
 | `MICROSOFT_CLIENT_ID` | leer | Zusammen mit `MICROSOFT_CLIENT_SECRET`. Sonst kein Microsoft-Button |
 | `MICROSOFT_CLIENT_SECRET` | leer | |
+| `OIDC_PRIVATE_HOSTS` | leer | Hostnamen von Firmen-IdPs, die auf interne Adressen zeigen dürfen (kommagetrennt, exakt). Sonst gehen OIDC-Anfragen nur per HTTPS an öffentliche Adressen |
+| `TRUST_PROXY_HOPS` | `0` | Anzahl Proxies, die `X-Forwarded-For` überschreiben. `0`: der Header wird ignoriert |
 
 Google und Microsoft sind OpenID Connect gegen feste Issuer (`https://accounts.google.com` bzw. `https://login.microsoftonline.com/common/v2.0`). Im IdP als Redirect-URI eintragen:
 
