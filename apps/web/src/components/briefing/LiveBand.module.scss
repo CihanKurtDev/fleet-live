@@ -60,7 +60,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 16px 18px 16px;
+    padding: 16px var(--pad-panel);
     pointer-events: none;
 
     :global(:is(a, button, summary, input, select, [role="button"])) {

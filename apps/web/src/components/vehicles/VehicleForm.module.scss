@@ -39,6 +39,8 @@
     gap: 8px;
 
     margin: 0 -20px -20px;
-    padding: 8px 20px 20px;
+    padding: 12px 20px 20px;
+    /* A line, so the fields scrolling under the buttons read as cut off. */
+    border-top: 1px solid var(--border);
     background: var(--bg);
 }

@@ -203,3 +203,42 @@ describe("Heute dran", () => {
         expect(screen.queryByRole("button", { name: "Eintragen" })).toBeNull();
     });
 });
+
+describe("Heute dran in an empty company", () => {
+    const nothing: TodayResponse = {
+        data: [],
+        meta: {
+            ...response.meta,
+            counts: {
+                deadline_overdue: 0,
+                driver_talk: 0,
+                offline: 0,
+                low_fuel: 0,
+                deadline_soon: 0,
+            },
+            total: 0,
+        },
+    };
+
+    it("says where tasks will come from, not that the shift is calm", async () => {
+        vi.mocked(getToday).mockResolvedValue(nothing);
+        renderAuth(
+            <VehiclesContext.Provider value={vehicles}>
+                <TodayPanel companyEmpty />
+            </VehiclesContext.Provider>,
+            { user: authUser(), route: "/" },
+        );
+
+        expect(await screen.findByText("Noch keine Aufgaben")).toBeInTheDocument();
+        expect(screen.queryByText("Nichts offen. Gute Schicht.")).toBeNull();
+    });
+
+    it("keeps the calm line once the company has vehicles", async () => {
+        vi.mocked(getToday).mockResolvedValue(nothing);
+        renderPanel();
+
+        expect(
+            await screen.findByText("Nichts offen. Gute Schicht."),
+        ).toBeInTheDocument();
+    });
+});

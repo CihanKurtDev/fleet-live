@@ -111,6 +111,29 @@ describe("GET /api/due", () => {
         assert.equal(kind.body.data[0].kind, "uvv");
     });
 
+    it("says whether the company has vehicles and drivers at all", async () => {
+        const empty = await api.get("/api/due?state=overdue");
+
+        assert.equal(empty.status, 200);
+        assert.deepEqual(empty.body.meta.subjects, { vehicles: 0, drivers: 0 });
+
+        VehicleModel.create({
+            license_plate: "K-DA 1",
+            company_id: 1,
+            hu_due_on: "2099-01-01",
+            uvv_due_on: "2099-01-01",
+        });
+        DriverModel.create(2, "Fremd Fahrer");
+
+        const searched = await api.get("/api/due?state=overdue&search=nichts");
+
+        assert.equal(searched.body.meta.total, 0);
+        assert.deepEqual(searched.body.meta.subjects, {
+            vehicles: 1,
+            drivers: 0,
+        });
+    });
+
     it("finds a plate", async () => {
         VehicleModel.create({
             license_plate: "K-FIND 1",

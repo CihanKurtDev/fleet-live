@@ -38,6 +38,8 @@ import styles from "./DriverTable.module.scss";
 interface DriverTableProps {
     /** Header actions for dispatchers ("Fahrer anlegen"). */
     actions?: ReactNode;
+    /** First steps in the list of a company without drivers. Dispatchers only. */
+    emptyActions?: ReactNode;
     /** Enables "Auswählen" and bulk delete. Dispatchers only. */
     canDelete?: boolean;
     /** Called after drivers were deleted, to refetch the lists. */
@@ -51,6 +53,7 @@ interface DriverTableProps {
 /** `/drivers`: header, tiles, the list panel. */
 export const DriverTable = ({
     actions,
+    emptyActions,
     canDelete = false,
     onDeleted,
     initialNotice = null,
@@ -109,7 +112,12 @@ export const DriverTable = ({
         (listQuery.query.sort === "open_warnings" &&
             listQuery.query.dir === "desc");
 
-    const summary = counts
+    // Tiles leave `counts.all` alone; only the search narrows it.
+    const noDrivers = counts !== undefined && !hasSearch && counts.all === 0;
+
+    const summary = noDrivers
+        ? "Noch keine Fahrer in dieser Firma."
+        : counts
         ? [
               hasSearch
                   ? `${formatCount(counts.all)} Treffer`
@@ -229,6 +237,7 @@ export const DriverTable = ({
                         onStartSelection={
                             canDelete ? selection.start : undefined
                         }
+                        disabled={noDrivers}
                         search={{
                             value: tableState.search,
                             onChange: setSearch,
@@ -265,7 +274,17 @@ export const DriverTable = ({
                         isLoading={isLoading}
                         skeletonRowCount={pageSize}
                         emptyContent={emptyContent(
-                            isFiltered ? (
+                            noDrivers ? (
+                                <ListEmpty
+                                    title="Noch keine Fahrer"
+                                    message={
+                                        emptyActions
+                                            ? "Fahrer kommen mit dem Excel-Import (Blatt Fahrer, dazu Freigaben und Besatzung) oder einzeln."
+                                            : "Ein Dispatcher deiner Firma legt die Fahrer an. Danach siehst du hier alles live."
+                                    }
+                                    actions={emptyActions}
+                                />
+                            ) : isFiltered ? (
                                 <ListEmpty
                                     message="Keine Fahrer passen zu Suche und Filter."
                                     onClearFilters={listQuery.clearFilters}

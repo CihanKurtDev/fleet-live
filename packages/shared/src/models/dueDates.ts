@@ -114,6 +114,11 @@ export type DueListMeta = {
     lead_days?: number;
     /** Aufgelöster Kontrollabstand. `0` heißt, die Kontrolle ist aus. */
     licence_check_months?: number;
+    /**
+     * Aktive Fahrzeuge und Fahrer der Firma, unabhängig von Stand und Suche.
+     * Beide `0`: die Firma ist leer, „Nichts offen“ wäre falsch.
+     */
+    subjects?: { vehicles: number; drivers: number };
 };
 
 export type DueListResponse = {

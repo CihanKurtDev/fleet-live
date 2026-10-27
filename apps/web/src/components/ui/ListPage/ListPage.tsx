@@ -136,10 +136,15 @@ type ListSearch = {
 interface ListToolbarProps {
     /** Shows "Auswählen" first. Only where a bulk action exists, dispatchers only. */
     onStartSelection?: () => void;
-    /** Further filters as menus (`ui/Menu/MenuButton`). */
+    /** Further filters as menus (`ui/Menu/MenuButton`). Pass `disabled` to them too. */
     filters?: ReactNode;
     /** Search field, right-aligned. */
     search?: ListSearch;
+    /**
+     * Nothing to select, filter or search yet (empty company): the controls
+     * stay in place, greyed out, so nothing moves once rows arrive.
+     */
+    disabled?: boolean;
 }
 
 /** 54 px toolbar: Auswählen, filters, search right. */
@@ -147,6 +152,7 @@ export const ListToolbar = ({
     onStartSelection,
     filters,
     search,
+    disabled = false,
 }: ListToolbarProps) => (
     <div className={styles.toolbar}>
         {onStartSelection && (
@@ -154,6 +160,7 @@ export const ListToolbar = ({
                 variant="secondary"
                 size="toolbar"
                 data-tip="list-select"
+                disabled={disabled}
                 onClick={onStartSelection}
             >
                 Auswählen
@@ -169,6 +176,7 @@ export const ListToolbar = ({
                 placeholder={search.placeholder}
                 aria-label={search.ariaLabel}
                 value={search.value}
+                disabled={disabled}
                 onChange={(event) => search.onChange(event.target.value)}
             />
         )}
@@ -306,16 +314,33 @@ interface ListEmptyProps {
     message: string;
     /** Shown as "Filter aufheben" while a filter or search is active. */
     onClearFilters?: () => void;
+    /**
+     * Nothing exists yet (empty company): a heading above the message. The
+     * message then says how the first rows arrive.
+     */
+    title?: string;
+    /** The first step, e.g. "Bestand importieren". Dispatchers only. */
+    actions?: ReactNode;
 }
 
-/** Empty list: one line, plus "Filter aufheben" when a filter is active. */
-export const ListEmpty = ({ message, onClearFilters }: ListEmptyProps) => (
-    <div className={styles.empty}>
+/**
+ * Empty list: one line, plus "Filter aufheben" when a filter is active. In
+ * an empty company: heading, one sentence and the page's first step.
+ */
+export const ListEmpty = ({
+    message,
+    onClearFilters,
+    title,
+    actions,
+}: ListEmptyProps) => (
+    <div className={title ? `${styles.empty} ${styles.emptyStart}` : styles.empty}>
+        {title && <h2 className={styles.emptyTitle}>{title}</h2>}
         <p>{message}</p>
         {onClearFilters && (
             <Button variant="secondary" size="row" onClick={onClearFilters}>
                 Filter aufheben
             </Button>
         )}
+        {actions && <div className={styles.emptyActions}>{actions}</div>}
     </div>
 );

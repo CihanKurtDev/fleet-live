@@ -22,6 +22,7 @@ import { PageTips } from "../components/help/PageTips";
 import { FleetEventFeed } from "../components/alerts/FleetEventFeed";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
+import { Button } from "../components/ui/Button/Button";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { TableFilterBar } from "../components/ui/Table/TableFilterBar";
 import { DepotPanel } from "../components/vehicles/DepotPanel";
@@ -311,14 +312,18 @@ export const FleetPage = () => {
                 isInsideBBox(vehicle.latitude, vehicle.longitude, bbox),
         ).length;
     }, [bbox, vehicles]);
+    const hasNarrowingFilter =
+        filter !== undefined || drivers.length > 0 || driverSearch.length > 0;
     const emptyMessage = fleetEmptyMessage({
         mode,
         rowCount: mode === "density" ? total : vehicles.length,
         positionedCount,
         inViewCount,
-        hasNarrowingFilter:
-            filter !== undefined || drivers.length > 0 || driverSearch.length > 0,
+        hasNarrowingFilter,
     });
+    // The unfiltered snapshot is the whole company: nothing to draw yet.
+    const companyEmpty =
+        mode === "positions" && vehicles.length === 0 && !hasNarrowingFilter;
     const fleetPath = `/fleet${queryString ? `?${queryString}` : ""}`;
     const draftDirty = draft !== null && isDepotDraftDirty(draft, sites);
     const vehiclePanelOpen = selectedVehicle !== null;
@@ -899,7 +904,40 @@ export const FleetPage = () => {
                                 onAskDelete={setDeleteTarget}
                             />
                         )}
-                        {hasLoaded && !error && emptyMessage && (
+                        {/* Out of the way while a depot is placed or edited on the map. */}
+                        {hasLoaded && !error && companyEmpty && !placing && draft === null && (
+                            <div className={styles.start} role="status">
+                                <h2 className={styles.startTitle}>
+                                    Noch keine Fahrzeuge auf der Karte
+                                </h2>
+                                <p>
+                                    {canEdit
+                                        ? "Nach dem Import stehen die Fahrzeuge an ihrem Depot."
+                                        : "Ein Dispatcher deiner Firma legt den Bestand an. Danach siehst du hier alles live."}
+                                </p>
+                                {canEdit && (
+                                    <div className={styles.startActions}>
+                                        <Button
+                                            variant="primary"
+                                            size="toolbar"
+                                            onClick={() =>
+                                                navigate("/vehicles/import")
+                                            }
+                                        >
+                                            Bestand importieren
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            size="toolbar"
+                                            onClick={startPlaceDepot}
+                                        >
+                                            Depot anlegen
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {hasLoaded && !error && emptyMessage && !companyEmpty && (
                             <p className={styles.empty} role="status">
                                 {emptyMessage}
                             </p>

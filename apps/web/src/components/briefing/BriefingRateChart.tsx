@@ -57,10 +57,13 @@ export const BriefingRateChart = ({
     series,
     baseline,
     year,
+    empty = false,
 }: {
     series: RateMonth[];
     baseline: number;
     year: string;
+    /** No month had a driver on a vehicle yet. */
+    empty?: boolean;
 }) => {
     const theme = useChartTheme();
     const tick = { fill: theme.text, fontSize: 12 } as const;
@@ -73,6 +76,11 @@ export const BriefingRateChart = ({
             title="Wie viele Fahrer waren zu schnell?"
             lead="Bezogen auf den heutigen Bestand (alle Fahrer mit Fahrzeug): wie viel Prozent hatten in dem Monat mindestens einen Tempo-Verstoß. Ein Fahrer zählt einmal — egal ob er einmal oder zehnmal zu schnell war."
             note="Die gestrichelte Linie ist der Schnitt der Vormonate. Steigt die Kurve darüber, wird es ungewöhnlich."
+            blank={
+                empty
+                    ? "Die Kurve beginnt im ersten Monat, in dem Fahrzeuge mit Fahrer unterwegs sind."
+                    : undefined
+            }
         >
             <ComposedChart
                 data={series}

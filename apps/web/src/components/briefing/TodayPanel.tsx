@@ -97,7 +97,12 @@ const reason = (item: TodayItem): string => {
  * has no tile on the page and open the list that shows exactly those; the
  * others (Überfällig, Kein Signal, Wenig Tank) are counted by their tile.
  */
-export const TodayPanel = () => {
+export const TodayPanel = ({
+    companyEmpty = false,
+}: {
+    /** No vehicle yet: say where tasks will come from, not "Gute Schicht". */
+    companyEmpty?: boolean;
+}) => {
     const { user } = useAuth();
     const canWrite = user?.role === "dispatcher";
     const navigate = useNavigate();
@@ -197,7 +202,18 @@ export const TodayPanel = () => {
                 )}
                 {!error && data && data.data.length === 0 && (
                     <li className={styles.empty}>
-                        Nichts offen. Gute Schicht.
+                        {companyEmpty ? (
+                            <>
+                                <strong className={styles.emptyTitle}>
+                                    Noch keine Aufgaben
+                                </strong>
+                                Sobald Fahrzeuge und Fahrer da sind, steht hier,
+                                was heute zu tun ist: fehlende Daten, fällige
+                                Fristen, Warnungen.
+                            </>
+                        ) : (
+                            "Nichts offen. Gute Schicht."
+                        )}
                     </li>
                 )}
                 {data?.data.map((item) => (
@@ -227,8 +243,10 @@ export const TodayPanel = () => {
 
             {data && (
                 <p className={styles.foot}>
-                    Die nächsten {formatCount(data.data.length)} von{" "}
-                    {formatCount(data.meta.total)} offenen Aufgaben
+                    {/* "0 von 0" says nothing; the line keeps its height. */}
+                    {data.meta.total > 0
+                        ? `Die nächsten ${formatCount(data.data.length)} von ${formatCount(data.meta.total)} offenen Aufgaben`
+                        : " "}
                 </p>
             )}
 

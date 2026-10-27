@@ -3,7 +3,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--gap-block);
     padding: 0 16px 16px;
     box-sizing: border-box;
     text-align: left;
@@ -41,16 +41,23 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr);
-    gap: 24px;
+    /* The rail's text keeps its 280 px; the panel padding comes on top. */
+    grid-template-columns: calc(280px + 2 * var(--pad-panel)) minmax(0, 1fr);
+    gap: var(--gap-block);
 }
 
+/* A panel like the list beside it. */
 .rail {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 16px;
     overflow-y: auto;
+    box-sizing: border-box;
+    padding: 14px var(--pad-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
 }
 
 .railBlock {
@@ -202,7 +209,7 @@
 
 /* Pagination reads its side padding from this variable. */
 .group {
-    --panel-pad-x: 20px;
+    --panel-pad-x: var(--pad-panel);
 }
 
 .group + .group {
@@ -217,7 +224,7 @@
     width: 100%;
     height: 40px;
     box-sizing: border-box;
-    padding: 0 20px;
+    padding: 0 var(--pad-panel);
     border: 0;
     border-bottom: 1px solid var(--border);
     background: var(--code-bg);
@@ -271,7 +278,7 @@
 
 .groupStatus {
     margin: 0;
-    padding: 10px 20px;
+    padding: 10px var(--pad-panel);
     border-bottom: 1px solid var(--border);
     font-size: 13px;
     color: var(--text);
@@ -283,7 +290,7 @@
     height: 40px;
     box-sizing: border-box;
     margin: 0;
-    padding: 0 20px;
+    padding: 0 var(--pad-panel);
     border-bottom: 1px solid var(--border);
     font-size: 13px;
     color: var(--success);
@@ -302,7 +309,7 @@
     gap: 12px;
     height: 48px;
     box-sizing: border-box;
-    padding: 0 20px;
+    padding: 0 var(--pad-panel);
     border-bottom: 1px solid var(--border);
     color: inherit;
     text-decoration: none;
@@ -344,7 +351,7 @@
     width: 100%;
     height: 40px;
     box-sizing: border-box;
-    padding: 0 20px;
+    padding: 0 var(--pad-panel);
     border: 0;
     border-bottom: 1px solid var(--border);
     background: transparent;

@@ -170,10 +170,15 @@ export const AlertTable = ({
     const activeTile = activeAlertTile(query);
     const isFiltered = activeTile !== "open" || hasScope;
     const counts = meta?.counts;
+    // Never a warning in this company (or none yet in a new one): not the
+    // same as "Keine offenen Warnungen", which says the inbox is cleared.
+    const noAlerts = counts !== undefined && !hasScope && counts.all === 0;
 
     const summary = (
         <>
-            {counts
+            {noAlerts
+                ? "Noch keine Warnungen."
+                : counts
                 ? `${formatCount(counts.open)} offen · ${formatCount(counts.resolved)} erledigt · neueste zuerst`
                 : "Warnungen der Firma"}
             {query.vehicle_id !== undefined && (
@@ -221,7 +226,15 @@ export const AlertTable = ({
                 title="Warnungen"
                 summary={summary}
                 notice={notice}
-                actions={canWrite ? <ExportButton kind="alerts" size="toolbar" /> : undefined}
+                actions={
+                    canWrite ? (
+                        <ExportButton
+                            kind="alerts"
+                            size="toolbar"
+                            disabled={noAlerts}
+                        />
+                    ) : undefined
+                }
             />
 
             <KpiTiles
@@ -258,6 +271,7 @@ export const AlertTable = ({
                         onStartSelection={
                             selectable ? selection.start : undefined
                         }
+                        disabled={noAlerts}
                     />
                 )}
 
@@ -295,7 +309,12 @@ export const AlertTable = ({
                         isLoading={isLoading}
                         skeletonRowCount={pageSize}
                         emptyContent={emptyContent(
-                            isFiltered ? (
+                            noAlerts ? (
+                                <ListEmpty
+                                    title="Noch keine Warnungen"
+                                    message="Warnungen entstehen von selbst: wenn ein Fahrzeug zu schnell fährt, der Tank unter 15 % fällt oder das Signal fehlt."
+                                />
+                            ) : isFiltered ? (
                                 <ListEmpty
                                     message="Keine Warnungen passen zum Filter."
                                     onClearFilters={clearFilters}

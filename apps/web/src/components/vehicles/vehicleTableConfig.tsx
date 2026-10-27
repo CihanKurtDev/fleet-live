@@ -166,7 +166,7 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     },
     {
         key: "speed",
-        displayText: "Geschwindigkeit",
+        displayText: "Tempo",
         headerText: "km/h",
         width: "100px",
         sortable: true,

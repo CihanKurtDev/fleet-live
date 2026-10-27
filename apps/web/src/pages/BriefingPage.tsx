@@ -31,7 +31,17 @@ const briefingDateLabel = (now = new Date()) =>
         month: "long",
     }).format(now);
 
-const briefingNeed = (open: number) => {
+/** Every vehicle has one of these statuses, so all zero means none yet. */
+const hasNoVehicles = (counts: BriefingCounts) =>
+    counts.driving + counts.idle + counts.stopped + counts.offline === 0;
+
+const briefingNeed = (counts: BriefingCounts) => {
+    const { open } = counts;
+
+    if (hasNoVehicles(counts)) {
+        return "Noch keine Fahrzeuge in dieser Firma.";
+    }
+
     if (open === 0) {
         return "Keine offenen Warnungen.";
     }
@@ -193,7 +203,7 @@ const BriefingBody = ({
                 <p className={styles.subtitle}>
                     {briefingDateLabel()} ·{" "}
                     <span className={styles.need}>
-                        {briefingNeed(data.counts.open)}
+                        {briefingNeed(data.counts)}
                     </span>
                 </p>
                 <FirstSteps className={styles.headSteps} />
@@ -205,7 +215,12 @@ const BriefingBody = ({
                     >
                         Karte öffnen
                     </Link>
-                    {canWrite && <ExportButton kind="period" />}
+                    {canWrite && (
+                        <ExportButton
+                            kind="period"
+                            disabled={hasNoVehicles(data.counts)}
+                        />
+                    )}
                 </div>
             </header>
             <div className={styles.tiles}>
@@ -214,8 +229,11 @@ const BriefingBody = ({
                 <DueKpis due={data.due} leadDays={data.due_lead_days} />
             </div>
         </LiveBand>
-        <ImportPrompt />
-        <BriefingCharts history={data.history} lead={<TodayPanel />} />
+        <ImportPrompt companyEmpty={hasNoVehicles(data.counts)} />
+        <BriefingCharts
+            history={data.history}
+            lead={<TodayPanel companyEmpty={hasNoVehicles(data.counts)} />}
+        />
         <PageTips page="briefing" />
     </>
 );

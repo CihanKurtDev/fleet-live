@@ -37,8 +37,13 @@ import { vehicleStatusLabel } from "./vehicleStatus";
 import styles from "./VehicleTable.module.scss";
 
 interface VehicleTableProps {
-    /** Header actions for dispatchers (Importieren, Exportieren, anlegen). */
-    actions?: ReactNode;
+    /**
+     * Header actions for dispatchers (Importieren, Exportieren, anlegen).
+     * `empty` is true while the company has no vehicle.
+     */
+    actions?: (empty: boolean) => ReactNode;
+    /** First steps in the list of an empty company. Dispatchers only. */
+    emptyActions?: ReactNode;
     /** Enables "Auswählen" and bulk delete. Dispatchers only. */
     onDeleteVehicles?: (ids: number[]) => Promise<void>;
     /** Row click: opens the vehicle. */
@@ -53,6 +58,7 @@ const vehicleCount = (count: number) =>
 /** `/vehicles`: header, status tiles, the list panel. */
 export const VehicleTable = ({
     actions,
+    emptyActions,
     onDeleteVehicles,
     onSelectVehicle,
     pageNotice,
@@ -100,8 +106,12 @@ export const VehicleTable = ({
     const activeFilter = tableState.filterId;
     const hasSearch = tableState.search.trim().length > 0;
     const isFiltered = activeFilter !== null || hasSearch;
+    // Tiles and "Weitere Filter" leave `counts.all` alone; only the search narrows it.
+    const companyEmpty = counts !== undefined && !hasSearch && counts.all === 0;
 
-    const summary = counts
+    const summary = companyEmpty
+        ? "Noch keine Fahrzeuge in dieser Firma."
+        : counts
         ? [
               hasSearch
                   ? `${formatCount(counts.all)} Treffer`
@@ -162,7 +172,7 @@ export const VehicleTable = ({
                 title="Fahrzeuge"
                 summary={summary}
                 notice={notice ?? pageNotice}
-                actions={actions}
+                actions={actions?.(companyEmpty)}
             />
 
             <KpiTiles
@@ -202,8 +212,10 @@ export const VehicleTable = ({
                         onStartSelection={
                             onDeleteVehicles ? selection.start : undefined
                         }
+                        disabled={companyEmpty}
                         filters={
                             <MenuButton
+                                disabled={companyEmpty}
                                 label={activeMore?.label ?? "Weitere Filter"}
                                 ariaLabel={
                                     activeMore
@@ -273,7 +285,17 @@ export const VehicleTable = ({
                         isLoading={isLoading}
                         skeletonRowCount={pageSize}
                         emptyContent={emptyContent(
-                            isFiltered ? (
+                            companyEmpty ? (
+                                <ListEmpty
+                                    title="Noch keine Fahrzeuge"
+                                    message={
+                                        emptyActions
+                                            ? "Lade deinen Bestand als CSV- oder Excel-Datei hoch. Fahrer, Freigaben und Fristen kommen in derselben Datei mit."
+                                            : "Ein Dispatcher deiner Firma legt den Bestand an. Danach siehst du hier alles live."
+                                    }
+                                    actions={emptyActions}
+                                />
+                            ) : isFiltered ? (
                                 <ListEmpty
                                     message="Keine Fahrzeuge passen zu Suche und Filter."
                                     onClearFilters={listQuery.clearFilters}
