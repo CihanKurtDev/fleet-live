@@ -9,9 +9,10 @@ vi.mock("../api/auth", () => ({
     logout: vi.fn(),
     switchCompany: vi.fn(),
     dismissImportPrompt: vi.fn(),
+    getMe: vi.fn(),
 }));
 
-import { dismissImportPrompt, logout, switchCompany } from "../api/auth";
+import { dismissImportPrompt, getMe, logout, switchCompany } from "../api/auth";
 
 describe("session menu", () => {
     beforeEach(() => {
@@ -112,8 +113,42 @@ describe("session menu", () => {
 });
 
 describe("import prompt", () => {
+    beforeEach(() => {
+        vi.mocked(getMe).mockReset();
+        vi.mocked(getMe).mockResolvedValue(authUser());
+    });
+
+    it("asks the server again when the company became empty after sign-in", async () => {
+        const fresh = authUser({ import_prompt: true });
+        vi.mocked(getMe).mockResolvedValue(fresh);
+        const { setUser } = renderAuth(<ImportPrompt companyEmpty />, {
+            user: authUser({ import_prompt: false }),
+        });
+
+        await vi.waitFor(() => expect(setUser).toHaveBeenCalledWith(fresh));
+        expect(getMe).toHaveBeenCalledOnce();
+    });
+
+    it("does not ask again while the company has vehicles", () => {
+        renderAuth(<ImportPrompt companyEmpty={false} />, {
+            user: authUser({ import_prompt: false }),
+        });
+
+        expect(getMe).not.toHaveBeenCalled();
+    });
+
     it("stays hidden once the company has vehicles or the prompt was dismissed", () => {
-        renderAuth(<ImportPrompt />, { user: authUser() });
+        renderAuth(<ImportPrompt companyEmpty />, { user: authUser() });
+
+        expect(
+            screen.queryByRole("heading", { name: "Noch keine Fahrzeuge" }),
+        ).not.toBeInTheDocument();
+    });
+
+    it("goes away when the briefing has vehicles, before the user is reloaded", () => {
+        renderAuth(<ImportPrompt companyEmpty={false} />, {
+            user: authUser({ import_prompt: true }),
+        });
 
         expect(
             screen.queryByRole("heading", { name: "Noch keine Fahrzeuge" }),
@@ -124,9 +159,9 @@ describe("import prompt", () => {
         const user = authUser({ import_prompt: true });
         const dismissed = authUser({ import_prompt: false });
         vi.mocked(dismissImportPrompt).mockResolvedValue(dismissed);
-        const { setUser } = renderAuth(<ImportPrompt />, { user });
+        const { setUser } = renderAuth(<ImportPrompt companyEmpty />, { user });
 
-        expect(screen.getByRole("link", { name: "Liste importieren" })).toHaveAttribute(
+        expect(screen.getByRole("link", { name: "Bestand importieren" })).toHaveAttribute(
             "href",
             "/vehicles/import",
         );

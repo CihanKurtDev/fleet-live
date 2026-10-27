@@ -23,12 +23,15 @@ const LABELS: Record<ExportKind, { label: string; aria: string }> = {
     },
 };
 
+/** One CSV download button. `disabled` while there is nothing to export. */
 export function ExportButton({
     kind,
     size = "sm",
+    disabled = false,
 }: {
     kind: ExportKind;
     size?: "sm" | "toolbar";
+    disabled?: boolean;
 }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -53,7 +56,7 @@ export function ExportButton({
             <Button
                 variant="secondary"
                 size={size}
-                disabled={busy}
+                disabled={busy || disabled}
                 busy={busy}
                 busyLabel="Wird exportiert…"
                 aria-label={copy.aria}

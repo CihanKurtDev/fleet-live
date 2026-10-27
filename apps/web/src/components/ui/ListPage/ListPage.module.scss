@@ -8,7 +8,7 @@
 .page {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--gap-block);
     box-sizing: border-box;
     min-width: 0;
     text-align: left;
@@ -107,7 +107,7 @@
     .toolbar,
     .selectionBar {
         height: 54px;
-        padding: 0 16px;
+        padding: 0 var(--pad-panel);
         border-bottom: 1px solid var(--border);
     }
 }
@@ -242,7 +242,7 @@
 @media (min-width: 701px) {
     .footer {
         height: 48px;
-        padding: 0 16px;
+        padding: 0 var(--pad-panel);
         border-top: 1px solid var(--border);
     }
 }
@@ -259,10 +259,34 @@
     }
 }
 
+/* Empty company: heading, one sentence, the first step. */
+.emptyStart {
+    padding: 24px 0;
+
+    p {
+        max-width: 440px;
+        line-height: 1.5;
+    }
+}
+
+.emptyTitle {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.1;
+    color: var(--text-h);
+}
+
+.emptyActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
 /* Phones: title, tiles strip, search, cards; selection bar at the bottom. */
 @media (max-width: 700px) {
     .page {
-        gap: 10px;
         padding: 12px 12px 20px;
     }
 
@@ -296,8 +320,32 @@
         display: none;
     }
 
+    /* Two even columns; an odd last action (the primary one) takes the row. */
     .actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         width: 100%;
+
+        > * {
+            min-width: 0;
+        }
+
+        /* Wrapped controls (the export menu) fill their column too. */
+        > :global(span) {
+            display: flex;
+
+            > * {
+                flex: 1 1 auto;
+            }
+        }
+
+        :global(button) {
+            width: 100%;
+        }
+
+        > :last-child:nth-child(odd) {
+            grid-column: 1 / -1;
+        }
     }
 
     .toolbar {

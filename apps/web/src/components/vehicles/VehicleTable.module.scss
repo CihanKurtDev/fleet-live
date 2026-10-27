@@ -68,6 +68,12 @@
             color: var(--text-h);
         }
 
+        /* A driver's name wraps instead of being cut off. */
+        :global(td[data-col="driver_name"]) {
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
         :global(td)::before {
             content: attr(data-label);
             display: block;

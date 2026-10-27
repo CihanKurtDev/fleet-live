@@ -11,6 +11,7 @@ export const ChartCard = ({
     className,
     compact,
     footer,
+    blank,
     children,
 }: {
     kicker: string;
@@ -20,6 +21,11 @@ export const ChartCard = ({
     className?: string;
     compact?: boolean;
     footer?: ReactNode;
+    /**
+     * No month has data yet (new company): this line stands where the chart
+     * would be, instead of empty axes. Legend and note go with the chart.
+     */
+    blank?: string;
     children: ReactNode;
 }) => (
     <section className={`${styles.card} ${className ?? ""}`.trim()}>
@@ -29,14 +35,25 @@ export const ChartCard = ({
         <p className={styles.lead} title={lead}>
             {lead}
         </p>
-        <div className={compact ? styles.chartCompact : styles.chart}>
-            <ResponsiveContainer width="100%" height="100%">
-                {children}
-            </ResponsiveContainer>
-        </div>
-        {footer}
-        <p className={styles.note} title={note}>
-            {note}
-        </p>
+        {blank ? (
+            <div
+                className={`${compact ? styles.chartCompact : styles.chart} ${styles.blank}`}
+            >
+                <p className={styles.blankTitle}>Noch kein Verlauf</p>
+                <p className={styles.blankText}>{blank}</p>
+            </div>
+        ) : (
+            <>
+                <div className={compact ? styles.chartCompact : styles.chart}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        {children}
+                    </ResponsiveContainer>
+                </div>
+                {footer}
+                <p className={styles.note} title={note}>
+                    {note}
+                </p>
+            </>
+        )}
     </section>
 );

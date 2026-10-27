@@ -100,6 +100,7 @@ const renderPage = (role: "dispatcher" | "viewer" = "dispatcher") =>
         <VehiclesContext.Provider value={vehicles}>
             <Routes>
                 <Route path="/vehicles" element={<VehiclesPage />} />
+                <Route path="/vehicles/import" element={<p>Importseite</p>} />
                 <Route path="/vehicles/:id" element={<p>Detailseite</p>} />
             </Routes>
         </VehiclesContext.Provider>,
@@ -335,5 +336,52 @@ describe("Fahrzeuge list page", () => {
             expect(screen.queryByRole("button", { name })).toBeNull();
         }
         expect(screen.getByRole("searchbox", { name: "Kennzeichen oder Fahrer suchen" })).toBeInTheDocument();
+    });
+
+    const emptyCompany = (): VehicleListResponse => {
+        const response = listResponse([]);
+        response.meta.total = 0;
+        response.meta.counts = Object.fromEntries(
+            Object.keys(response.meta.counts).map((key) => [key, 0]),
+        ) as VehicleListResponse["meta"]["counts"];
+        return response;
+    };
+
+    it("leads an empty company to the import instead of a dead end", async () => {
+        vi.mocked(listVehicles).mockResolvedValue(emptyCompany());
+        renderPage();
+
+        expect(
+            await screen.findByRole("heading", { name: "Noch keine Fahrzeuge" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText("Noch keine Fahrzeuge in dieser Firma."),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Bestand importieren" }),
+        ).toBeInTheDocument();
+        // Nothing to select, filter, search or export yet; the controls stay put.
+        expect(screen.getByRole("button", { name: "Auswählen" })).toBeDisabled();
+        expect(
+            screen.getByRole("searchbox", { name: "Kennzeichen oder Fahrer suchen" }),
+        ).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Exportieren" })).toBeDisabled();
+
+        fireEvent.click(screen.getByRole("button", { name: "Bestand importieren" }));
+        expect(await screen.findByText("Importseite")).toBeInTheDocument();
+    });
+
+    it("tells a viewer of an empty company who fills it", async () => {
+        vi.mocked(listVehicles).mockResolvedValue(emptyCompany());
+        renderPage("viewer");
+
+        expect(
+            await screen.findByText(
+                "Ein Dispatcher deiner Firma legt den Bestand an. Danach siehst du hier alles live.",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", { name: "Bestand importieren" }),
+        ).toBeNull();
     });
 });

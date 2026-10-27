@@ -43,13 +43,19 @@ function isActive(value: number): boolean {
     return Number(value) === 1;
 }
 
+function loadSubjects(companyId: number) {
+    return {
+        vehicles: stmt(VEHICLES).all(companyId) as VehicleDueRow[],
+        drivers: stmt(DRIVERS).all(companyId) as DriverDueRow[],
+    };
+}
+
 export class DueModel {
     static rowsForCompany(
         companyId: number,
         today = berlinTodayIso(),
+        { vehicles, drivers } = loadSubjects(companyId),
     ): DueListItem[] {
-        const vehicles = stmt(VEHICLES).all(companyId) as VehicleDueRow[];
-        const drivers = stmt(DRIVERS).all(companyId) as DriverDueRow[];
         const { lead_days: leadDays, check_months: checkMonths } =
             resolveDueSettings(CompanyModel.dueSettings(companyId));
 
@@ -80,7 +86,11 @@ export class DueModel {
         query: DueListQuery,
     ): DueListResponse {
         const window = resolveDueSettings(CompanyModel.dueSettings(companyId));
-        const listed = queryDueRows(this.rowsForCompany(companyId), query);
+        const subjects = loadSubjects(companyId);
+        const listed = queryDueRows(
+            this.rowsForCompany(companyId, berlinTodayIso(), subjects),
+            query,
+        );
 
         return {
             ...listed,
@@ -88,6 +98,10 @@ export class DueModel {
                 ...listed.meta,
                 lead_days: window.lead_days,
                 licence_check_months: window.check_months,
+                subjects: {
+                    vehicles: subjects.vehicles.length,
+                    drivers: subjects.drivers.length,
+                },
             },
         };
     }

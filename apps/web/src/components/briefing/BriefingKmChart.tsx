@@ -66,9 +66,12 @@ const KmTooltip = ({
 export const BriefingKmChart = ({
     series,
     year,
+    empty = false,
 }: {
     series: KmMonth[];
     year: string;
+    /** No month has driven kilometres yet. */
+    empty?: boolean;
 }) => {
     const theme = useChartTheme();
     const tick = { fill: theme.text, fontSize: 12 } as const;
@@ -92,6 +95,11 @@ export const BriefingKmChart = ({
             title="Passiert das oft — oder nur, weil viel gefahren wird?"
             lead="Tempo-Vorfälle je 1.000 gefahrene Kilometer. Wenn die Flotte wächst oder mehr Touren fährt, bleibt die Zahl vergleichbar. Die Balken daneben: wie groß der Anteil der schweren Tempo-Vorfälle war."
             note="Die Monatssumme bleibt, auch wenn alte Fahrten (der Verlauf auf der Karte) gelöscht werden."
+            blank={
+                empty
+                    ? "Die Balken erscheinen nach den ersten gefahrenen Kilometern."
+                    : undefined
+            }
             footer={
                 <ul className={styles.legend}>
                     <li className={styles.legendItem}>

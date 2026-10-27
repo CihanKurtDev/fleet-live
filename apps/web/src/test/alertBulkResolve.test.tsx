@@ -433,3 +433,49 @@ describe("alert list page", () => {
         await waitFor(() => expect(lastQuery().type).toBeUndefined());
     });
 });
+
+describe("Warnungen in a company without any warning", () => {
+    it("explains where warnings come from instead of an all-clear", async () => {
+        vi.mocked(listAlerts).mockResolvedValue({
+            data: [],
+            meta: {
+                page: 1,
+                limit: 10,
+                total: 0,
+                pageCount: 1,
+                counts: { all: 0, open: 0, resolved: 0 },
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 },
+            },
+        });
+        renderTable(true);
+
+        expect(
+            await screen.findByRole("heading", { name: "Noch keine Warnungen" }),
+        ).toBeInTheDocument();
+        expect(screen.getByText("Noch keine Warnungen.")).toBeInTheDocument();
+        expect(screen.queryByText("Keine offenen Warnungen.")).toBeNull();
+        expect(screen.getByRole("button", { name: "Auswählen" })).toBeDisabled();
+    });
+
+    it("keeps the all-clear when every warning is resolved", async () => {
+        vi.mocked(listAlerts).mockResolvedValue({
+            data: [],
+            meta: {
+                page: 1,
+                limit: 10,
+                total: 0,
+                pageCount: 1,
+                counts: { all: 5, open: 0, resolved: 5 },
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 },
+            },
+        });
+        renderTable(true);
+
+        expect(
+            await screen.findByText("Keine offenen Warnungen."),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("heading", { name: "Noch keine Warnungen" }),
+        ).toBeNull();
+    });
+});

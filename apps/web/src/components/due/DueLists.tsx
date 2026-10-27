@@ -1,7 +1,11 @@
+import { Link } from "react-router";
 import type { DueKind, DueListQuery } from "@fleet-live/shared";
 
+import { useAuth } from "../../hooks/useAuth";
 import { useBoundHeight } from "../../hooks/useBoundHeight";
 import { useDueList } from "../../hooks/useDueList";
+import { buttonClass } from "../ui/Button/buttonClass";
+import { ListEmpty } from "../ui/ListPage/ListPage";
 import { TablePagination } from "../ui/Table/TablePagination";
 import { DueGroup } from "./DueGroup";
 import {
@@ -30,6 +34,8 @@ export const DueOverview = ({
     onShowAll,
 }: ListProps & { onShowAll: (kind: DueKind) => void }) => {
     const { ref, height } = useBoundHeight();
+    const { user } = useAuth();
+    const canWrite = user?.role === "dispatcher";
     const base = { ...query, page: 1, limit: OVERVIEW_LIMIT };
     const lists = {
         licence_expiry: useDueList({ ...base, kind: "licence_expiry" }),
@@ -69,6 +75,29 @@ export const DueOverview = ({
                 <p className={styles.calm} role="status">
                     Fristen werden geladen…
                 </p>
+            </div>
+        );
+    }
+
+    // Without vehicles and drivers "Nichts offen" would read as all checked.
+    const subjects = lists.hu.meta?.subjects;
+    if (subjects && subjects.vehicles === 0 && subjects.drivers === 0) {
+        return (
+            <div ref={ref} className={styles.list}>
+                <ListEmpty
+                    title="Noch nichts zu prüfen"
+                    message="Die Firma hat noch keine Fahrzeuge und keine Fahrer. HU, UVV und Führerscheine erscheinen hier, sobald der Bestand importiert ist."
+                    actions={
+                        canWrite ? (
+                            <Link
+                                className={buttonClass("primary", "toolbar")}
+                                to="/vehicles/import"
+                            >
+                                Bestand importieren
+                            </Link>
+                        ) : undefined
+                    }
+                />
             </div>
         );
     }

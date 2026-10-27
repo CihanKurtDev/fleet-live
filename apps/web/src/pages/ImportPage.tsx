@@ -29,8 +29,10 @@ import {
     listImportRuns,
     previewImport,
 } from "../api/import";
+import { getMe } from "../api/auth";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
+import { SwapLabel } from "../components/ui/Button/SwapLabel";
 import { Table } from "../components/ui/Table/Table";
 import { DetailBackLink } from "../components/navigation/DetailBackLink";
 import { ImportPreviewStep } from "../components/vehicles/ImportPreviewStep";
@@ -234,7 +236,7 @@ function stepState(
 
 export const ImportPage = () => {
     usePageTitle("Bestand importieren");
-    const { user } = useAuth();
+    const { user, setUser } = useAuth();
     const navigate = useNavigate();
     const { refetchLists } = useVehicles();
     const canWrite = user?.role === "dispatcher";
@@ -472,6 +474,11 @@ export const ImportPage = () => {
             setCommitSummary(response.data);
             setStep("result");
             refetchLists();
+            // `import_prompt` (and the first-steps line it hides) depends on
+            // the vehicle count, which the user record only has from sign-in.
+            void getMe()
+                .then(setUser)
+                .catch(() => undefined);
             try {
                 const log = await listImportRuns();
                 setRuns(log.data);
@@ -527,9 +534,13 @@ export const ImportPage = () => {
 
     return (
         <section className={`${layout.page} ${styles.page}`}>
-            <header className={`${band.band} ${band.bleedDetail}`}>
-                <DetailBackLink fallback="/vehicles" />
-                <h1 className={styles.title}>Bestand importieren</h1>
+            <header
+                className={`${band.band} ${band.bleedDetail} ${styles.header}`}
+            >
+                <div className={styles.heading}>
+                    <DetailBackLink fallback="/vehicles" />
+                    <h1 className={styles.title}>Bestand importieren</h1>
+                </div>
                 <p className={styles.lead}>
                     Stammdaten und Zuweisungen aus CSV oder Excel laden. Die
                     Spaltenzuordnung merkt sich die Firma. Jeder Lauf landet im
@@ -609,7 +620,9 @@ export const ImportPage = () => {
                         className={
                             isDragging
                                 ? `${styles.dropzone} ${styles.dropzoneActive}`
-                                : styles.dropzone
+                                : fileName
+                                  ? `${styles.dropzone} ${styles.dropzoneReady}`
+                                  : styles.dropzone
                         }
                         onDragOver={(event) => {
                             event.preventDefault();
@@ -625,21 +638,46 @@ export const ImportPage = () => {
                             accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             onChange={handleFileChange}
                         />
-                        <svg
-                            className={styles.dropIcon}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            aria-hidden
-                        >
-                            <path d="M12 15V4M7 9l5-5 5 5" />
-                            <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-                        </svg>
-                        <p className={styles.dropTitle}>
-                            CSV oder Excel (.xlsx) hierher ziehen oder
-                            auswählen
-                        </p>
+                        {fileName ? (
+                            <>
+                                <svg
+                                    className={`${styles.dropIcon} ${styles.dropIconReady}`}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    aria-hidden
+                                >
+                                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                                    <path d="M14 3v5h5M9 14l2 2 4-4" />
+                                </svg>
+                                <div role="status">
+                                    <p className={styles.dropFile}>{fileName}</p>
+                                    <p className={styles.dropTitle}>
+                                        Datei gewählt. „Weiter“ ordnet die
+                                        Spalten zu.
+                                    </p>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <svg
+                                    className={styles.dropIcon}
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    aria-hidden
+                                >
+                                    <path d="M12 15V4M7 9l5-5 5 5" />
+                                    <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+                                </svg>
+                                <p className={styles.dropTitle}>
+                                    CSV oder Excel (.xlsx) hierher ziehen oder
+                                    auswählen
+                                </p>
+                            </>
+                        )}
                         <div className={styles.dropActions}>
                             <Button
                                 variant="secondary"
@@ -649,7 +687,12 @@ export const ImportPage = () => {
                                     fileInputRef.current?.click();
                                 }}
                             >
-                                Datei auswählen
+                                <SwapLabel
+                                    swapped={fileName !== null}
+                                    alt="Andere Datei"
+                                >
+                                    Datei auswählen
+                                </SwapLabel>
                             </Button>
                             <Button
                                 variant="secondary"
@@ -663,9 +706,9 @@ export const ImportPage = () => {
                                 Beispieldatei laden
                             </Button>
                         </div>
-                        <p className={styles.fileName}>
-                            {fileName ?? "Keine Datei gewählt"}
-                        </p>
+                        {!fileName && (
+                            <p className={styles.fileName}>Keine Datei gewählt</p>
+                        )}
                     </div>
                     <p className={styles.sampleLinks}>
                         <a

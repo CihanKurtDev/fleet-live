@@ -12,8 +12,17 @@ const ITEM_LABELS: Record<ExportKind, string> = {
     period: "Monat (CSV)",
 };
 
-/** "Exportieren ▾" in a list page header; each item downloads one CSV. */
-export function ExportMenu({ kinds }: { kinds: ExportKind[] }) {
+/**
+ * "Exportieren ▾" in a list page header; each item downloads one CSV.
+ * `disabled` while there is nothing to export (empty company).
+ */
+export function ExportMenu({
+    kinds,
+    disabled = false,
+}: {
+    kinds: ExportKind[];
+    disabled?: boolean;
+}) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +55,7 @@ export function ExportMenu({ kinds }: { kinds: ExportKind[] }) {
                 }
                 menuLabel="Exportieren"
                 busy={busy}
-                disabled={busy}
+                disabled={busy || disabled}
                 items={kinds.map((kind) => ({
                     key: kind,
                     label: ITEM_LABELS[kind],

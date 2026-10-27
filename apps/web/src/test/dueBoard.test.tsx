@@ -155,3 +155,33 @@ describe("Fristen board", () => {
         expect(screen.getAllByRole("button", { name: "Erneut versuchen" }).length).toBeGreaterThan(0);
     });
 });
+
+describe("Fristen in an empty company", () => {
+    it("says there is nothing to check yet instead of Nichts offen", async () => {
+        vi.mocked(listDue).mockImplementation(async () => ({
+            data: [],
+            meta: {
+                ...response(undefined).meta,
+                total: 0,
+                counts: { overdue: 0, soon: 0, missing: 0 },
+                kind_counts: {
+                    all: 0,
+                    hu: 0,
+                    uvv: 0,
+                    licence_expiry: 0,
+                    licence_check: 0,
+                },
+                subjects: { vehicles: 0, drivers: 0 },
+            },
+        }));
+        renderBoard();
+
+        expect(
+            await screen.findByRole("heading", { name: "Noch nichts zu prüfen" }),
+        ).toBeInTheDocument();
+        expect(screen.queryByText(/Nichts offen/)).toBeNull();
+        expect(
+            screen.getByRole("link", { name: "Bestand importieren" }),
+        ).toHaveAttribute("href", "/vehicles/import");
+    });
+});

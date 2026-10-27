@@ -104,8 +104,13 @@ export const BriefingCharts = ({
                     series={rateSeries}
                     baseline={baseline}
                     year={year}
+                    empty={history.every((month) => month.active_drivers === 0)}
                 />
-                <BriefingKmChart series={kmSeries} year={year} />
+                <BriefingKmChart
+                    series={kmSeries}
+                    year={year}
+                    empty={history.every((month) => month.distance_m === 0)}
+                />
             </div>
             <details className={styles.dataAlternative}>
                 <summary>Exakte Monatswerte anzeigen</summary>

@@ -46,6 +46,26 @@ export const DriversPage = () => {
                         </Button>
                     ) : undefined
                 }
+                emptyActions={
+                    canWrite ? (
+                        <>
+                            <Button
+                                variant="primary"
+                                size="toolbar"
+                                onClick={() => navigate("/vehicles/import")}
+                            >
+                                Bestand importieren
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="toolbar"
+                                onClick={() => setIsCreateOpen(true)}
+                            >
+                                Fahrer anlegen
+                            </Button>
+                        </>
+                    ) : undefined
+                }
                 onSelectDriver={(driver) => {
                     navigate(`/drivers/${driver.id}`, {
                         viewTransition: true,

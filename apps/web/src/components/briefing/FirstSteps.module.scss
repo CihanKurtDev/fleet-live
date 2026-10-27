@@ -120,8 +120,13 @@
     padding-inline: 8px;
 }
 
-/* Title row, wide: first two open steps, the rest as "+N". */
+/* Title row, wide: first two open steps, the rest as "+N", on one line. */
 @media (min-width: 1200px) {
+    .panel,
+    .steps {
+        flex-wrap: nowrap;
+    }
+
     .extra {
         display: none;
     }
