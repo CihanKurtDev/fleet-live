@@ -3,6 +3,7 @@ import {
     type VehicleStatus,
 } from "@fleet-live/shared";
 import { AlertModel } from "./alert.model";
+import { TripEventModel } from "./tripEvent.model";
 import {
     speedingDurationS,
     speedingSeverity,
@@ -80,6 +81,13 @@ function applyAction(
             writtenMaxSpeed: details.max_speed_kmh,
             writtenLimitKmh: details.limit_kmh,
         });
+        TripEventModel.trackSpeeding(vehicleId, {
+            alertId,
+            startedAt: sqliteFromMs(step.state.startedAtMs),
+            fromM: step.state.fromM,
+            maxSpeedKmh: step.state.maxSpeed,
+            limitKmh,
+        });
         return { speedingOpen: true, notify: true };
     }
 
@@ -104,6 +112,14 @@ function applyAction(
             trackers.set(vehicleId, step.state);
         }
 
+        // Carries on into a new trip after a turnaround, and after a restart.
+        TripEventModel.trackSpeeding(vehicleId, {
+            alertId,
+            startedAt: sqliteFromMs(nowMs),
+            maxSpeedKmh: step.state.maxSpeed,
+            limitKmh,
+        });
+
         return { speedingOpen: true, notify: false };
     }
 
@@ -114,6 +130,7 @@ function applyAction(
             AlertModel.endSpeeding(alertId, sqliteFromMs(nowMs));
         }
 
+        TripEventModel.end([vehicleId], "SPEEDING", sqliteFromMs(nowMs));
         trackers.delete(vehicleId);
         return { speedingOpen: false, notify: false };
     }
@@ -153,6 +170,12 @@ function tickOne(
         nowMs,
         limit_kmh: limitKmh,
     });
+
+    // Where the run begins on the trip: the first tick over the limit, not
+    // the one 8 s later that opens the warning.
+    if (!previous && step.state?.phase === "candidate") {
+        step.state.fromM = TripEventModel.openDistance(vehicleId) ?? undefined;
+    }
     const detailsLimit =
         typeof limitKmh === "number"
             ? limitKmh
@@ -202,6 +225,7 @@ export class SpeedingEventModel {
             }
 
             AlertModel.endSpeeding(row.id, sqliteFromMs(seen));
+            TripEventModel.end([row.vehicle_id], "SPEEDING", sqliteFromMs(seen));
             trackers.delete(row.vehicle_id);
             notify.add(row.company_id);
         }

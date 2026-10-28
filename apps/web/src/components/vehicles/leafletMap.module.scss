@@ -8,6 +8,42 @@
     height: 100%;
 }
 
+/*
+ * A framed trip (TripFocus): the map with the replay bar below it, the
+ * trip's panel beside both. The bar takes its height from the map.
+ */
+.wrapFocus {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "map panel"
+        "replay panel";
+    column-gap: var(--gap-block);
+
+    .mapStretch {
+        grid-area: map;
+        height: auto;
+    }
+}
+
+/* Stacked page: map, bar and panel one below the other; the page grows. */
+@media (max-width: 1000px) {
+    .wrapFocus {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto auto;
+        grid-template-areas:
+            "map"
+            "replay"
+            "panel";
+        row-gap: 12px;
+
+        .mapStretch {
+            height: 260px;
+        }
+    }
+}
+
 .recenter {
     position: absolute;
     bottom: 28px;
@@ -310,6 +346,10 @@
     background: none;
     border: none;
     cursor: pointer;
+}
+
+.wrap[data-isolated] .markerIcon {
+    visibility: hidden;
 }
 
 .marker {

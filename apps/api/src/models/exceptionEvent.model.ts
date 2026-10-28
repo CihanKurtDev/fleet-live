@@ -8,6 +8,7 @@ import { OFFLINE_MESSAGE, syncStateAlerts } from "../db/stateAlerts";
 import { isCompanySimRunning } from "../lib/simControl";
 import { sqliteFromMs } from "../lib/sqlTime";
 import { AlertModel } from "./alert.model";
+import { TripEventModel } from "./tripEvent.model";
 
 type LastReport = {
     companyId: number;
@@ -58,11 +59,9 @@ export class ExceptionEventModel {
         }
 
         // Ein Statement für den ganzen Tick statt eines je Fahrzeug.
-        AlertModel.endOpenTypeForVehicles(
-            patches.map((patch) => patch.id),
-            "OFFLINE",
-            sqliteFromMs(nowMs),
-        );
+        const ids = patches.map((patch) => patch.id);
+        AlertModel.endOpenTypeForVehicles(ids, "OFFLINE", sqliteFromMs(nowMs));
+        TripEventModel.end(ids, "OFFLINE", sqliteFromMs(nowMs));
 
         return [...notify];
     }
@@ -84,16 +83,22 @@ export class ExceptionEventModel {
                 continue;
             }
 
-            const opened = AlertModel.ensureOpen({
+            const createdAt = sqliteFromMs(report.atMs + OFFLINE_AFTER_MS);
+            const { id, opened } = AlertModel.ensureOpen({
                 vehicleId,
                 type: "OFFLINE",
-                createdAt: sqliteFromMs(report.atMs + OFFLINE_AFTER_MS),
+                createdAt,
                 severity: "HIGH",
                 message: OFFLINE_MESSAGE,
                 details: null,
-            }).opened;
+            });
 
             if (opened) {
+                // On the trip: where the vehicle stood when it went quiet.
+                TripEventModel.startOffline(vehicleId, {
+                    alertId: id,
+                    startedAt: createdAt,
+                });
                 notify.add(report.companyId);
             }
         }

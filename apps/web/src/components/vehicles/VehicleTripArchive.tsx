@@ -10,6 +10,8 @@ interface VehicleTripArchiveProps {
     trips: TripListItem[];
     selectedTripId: number | null;
     onSelectTrip: (tripId: number) => void;
+    /** A row is about to be picked (pointer over it, or focused). */
+    onTripIntent?: (trip: TripListItem) => void;
     page: number;
     pageCount: number;
     limit: number;
@@ -25,6 +27,7 @@ export const VehicleTripArchive = ({
     trips,
     selectedTripId,
     onSelectTrip,
+    onTripIntent,
     page,
     pageCount,
     limit,
@@ -51,6 +54,7 @@ export const VehicleTripArchive = ({
                         selectedTripId === null ? [] : [selectedTripId]
                     }
                     onRowClick={(row) => onSelectTrip(row.id)}
+                    onRowIntent={onTripIntent}
                     isLoading={isLoading}
                     skeletonRowCount={Math.min(limit, 10)}
                     emptyContent="Noch keine Fahrt aufgezeichnet. Die Linie erscheint, sobald das Fahrzeug unterwegs ist."

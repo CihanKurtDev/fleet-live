@@ -7,10 +7,16 @@ import {
     isLowFuelLevel,
 } from "@fleet-live/shared";
 import { decodePolyline, speedBand } from "@fleet-live/shared";
-import type { Trip, TripListItem, VehicleInput } from "@fleet-live/shared";
+import type {
+    Trip,
+    TripEvent,
+    TripListItem,
+    VehicleInput,
+} from "@fleet-live/shared";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 
+import { resolveAlerts } from "../api/alerts";
 import { isAbortError } from "../api/client";
 import { retryTransient } from "../api/retryTransient";
 import {
@@ -31,6 +37,8 @@ import {
     type MapPoint,
 } from "../components/vehicles/VehicleMap";
 import { VehicleTripArchive } from "../components/vehicles/VehicleTripArchive";
+import type { TripFocusInfo } from "../components/vehicles/TripFocus";
+import { useTripCache } from "../components/vehicles/useTripCache";
 import { VehicleMoreMenu } from "../components/vehicles/VehicleMoreMenu";
 import type { PlaybackFix } from "../components/vehicles/vehiclePlayback";
 import { pathLength, toLatLngs } from "../components/vehicles/mapGeometry";
@@ -88,7 +96,7 @@ const PLAYBACK_HISTORY_LIMIT = 10;
 export const VehicleDetailPage = () => {
     const { id } = useParams();
     const { from, navigate } = useDetailBack("/vehicles");
-    const { updateVehicle, deleteVehicles, subscribeTripPath } =
+    const { updateVehicle, deleteVehicles, subscribeTripPath, listEpoch } =
         useVehicles();
     const { user } = useAuth();
     const canWrite = user?.role === "dispatcher";
@@ -115,6 +123,17 @@ export const VehicleDetailPage = () => {
     const [archiveRetryKey, setArchiveRetryKey] = useState(0);
     const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+    /** The trip clicked in the list: the map frames it (not the first one picked on load). */
+    const [focusTripId, setFocusTripId] = useState<number | null>(null);
+    /** The trip framed on the map, kept while the next picked one loads. */
+    const [framedTripId, setFramedTripId] = useState<number | null>(null);
+    const tripCache = useTripCache(parsedId);
+    /** The framed trip's events, reloaded after a change. */
+    const [focusEvents, setFocusEvents] = useState<{
+        tripId: number;
+        events: TripEvent[];
+    } | null>(null);
+    const [eventsReload, setEventsReload] = useState(0);
     /** Stored fixes that start the map's playback (see VehiclePlayback). */
     const [playbackHistory, setPlaybackHistory] = useState<{
         vehicleId: number;
@@ -130,6 +149,8 @@ export const VehicleDetailPage = () => {
         setArchiveError(null);
         setSelectedTripId(null);
         setSelectedTrip(null);
+        setFocusTripId(null);
+        setFocusEvents(null);
     }
 
     const vehicleStatus = vehicle?.status;
@@ -314,6 +335,7 @@ export const VehicleDetailPage = () => {
             controller.signal,
         )
             .then((response) => {
+                tripCache.remember(response.data);
                 setSelectedTrip(response.data);
                 setLivePath("");
             })
@@ -329,7 +351,7 @@ export const VehicleDetailPage = () => {
             });
 
         return () => controller.abort();
-    }, [parsedId, selectedTripId, vehicleStatus]);
+    }, [parsedId, selectedTripId, vehicleStatus, tripCache]);
 
     const selectedFacts =
         archiveTrips.find((row) => row.id === selectedTripId) ??
@@ -376,6 +398,72 @@ export const VehicleDetailPage = () => {
         () => (openPath ? pathLength(toLatLngs(trail)) : null),
         [openPath, trail],
     );
+    // Framed once its line is on the map. While the next picked trip loads,
+    // the one framed so far stays, so the panel does not close and reopen.
+    const focusedTrip =
+        focusTripId !== null &&
+        showTrail &&
+        selectedTrip !== null &&
+        (selectedTrip.id === focusTripId || selectedTrip.id === framedTripId)
+            ? selectedTrip
+            : null;
+
+    if ((focusedTrip?.id ?? null) !== framedTripId) {
+        setFramedTripId(focusedTrip?.id ?? null);
+    }
+
+    const focusOpen = focusedTrip !== null && focusedTrip.ended_at === null;
+    // A running trip gets new events while it is framed: reload them on
+    // each change the stream announces. A closed one only after a resolve.
+    const eventsEpoch = focusOpen ? listEpoch : 0;
+
+    useEffect(() => {
+        if (
+            parsedId === null ||
+            focusTripId === null ||
+            (eventsEpoch === 0 && eventsReload === 0)
+        ) {
+            return;
+        }
+
+        const controller = new AbortController();
+
+        getVehicleTripById(parsedId, focusTripId, controller.signal)
+            .then((response) => {
+                tripCache.remember(response.data);
+                setFocusEvents({
+                    tripId: focusTripId,
+                    events: response.data?.events ?? [],
+                });
+            })
+            .catch(() => {
+                // The events from the first load stay.
+            });
+
+        return () => controller.abort();
+    }, [parsedId, focusTripId, eventsEpoch, eventsReload, tripCache]);
+
+    const tripFocus: TripFocusInfo | null = focusedTrip && {
+        trip: {
+            ...focusedTrip,
+            // The running trip's line grows with the stream; its events are
+            // placed on what is drawn.
+            distance_m:
+                focusOpen && openTrailMeters !== null
+                    ? Math.max(openTrailMeters, focusedTrip.distance_m)
+                    : focusedTrip.distance_m,
+        },
+        events:
+            focusEvents?.tripId === focusedTrip.id
+                ? focusEvents.events
+                : focusedTrip.events,
+        canResolve: canWrite,
+        onResolve: async (alertIds) => {
+            await resolveAlerts(alertIds);
+            tripCache.clear();
+            setEventsReload((current) => current + 1);
+        },
+    };
 
     usePageTitle(
         vehicle?.license_plate ?? (notFound ? "Fahrzeug nicht gefunden" : null),
@@ -705,6 +793,8 @@ export const VehicleDetailPage = () => {
                                             : null
                                     }
                                     fill
+                                    focus={tripFocus}
+                                    onLeaveFocus={() => setFocusTripId(null)}
                                 />
                             </div>
                         ) : (
@@ -747,7 +837,22 @@ export const VehicleDetailPage = () => {
                         <VehicleTripArchive
                             trips={archiveTrips}
                             selectedTripId={selectedTripId}
-                            onSelectTrip={setSelectedTripId}
+                            onSelectTrip={(tripId) => {
+                                setSelectedTripId(tripId);
+                                setFocusTripId(tripId);
+                                // Loaded before (or ahead, from the row under
+                                // the pointer): on the map in this click.
+                                const cached = tripCache.get(tripId);
+
+                                if (cached) {
+                                    setSelectedTrip(cached);
+                                }
+                            }}
+                            onTripIntent={(row) => {
+                                if (row.ended_at !== null) {
+                                    tripCache.prefetch(row.id);
+                                }
+                            }}
                             page={archivePage}
                             pageCount={archivePageCount}
                             limit={archiveLimit}

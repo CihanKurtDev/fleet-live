@@ -15,7 +15,7 @@ const columns: TableColumn<Row>[] = [
     },
 ];
 
-const renderRow = (onClick: () => void) =>
+const renderRow = (onClick: () => void, onIntent?: () => void) =>
     render(
         <table>
             <tbody>
@@ -27,6 +27,7 @@ const renderRow = (onClick: () => void) =>
                     interactive
                     onSelect={() => undefined}
                     onClick={onClick}
+                    onIntent={onIntent}
                 />
             </tbody>
         </table>,
@@ -54,5 +55,27 @@ describe("TableRow keyboard", () => {
         expect(onClick).not.toHaveBeenCalled();
         // Not cancelled: the browser still activates the button.
         expect(event).toBe(true);
+    });
+});
+
+describe("TableRow intent", () => {
+    it("reports a likely click when the pointer enters or the row gets focus", () => {
+        const onIntent = vi.fn();
+        renderRow(() => undefined, onIntent);
+        const row = screen.getByRole("row");
+
+        fireEvent.pointerEnter(row);
+        fireEvent.focus(row);
+
+        expect(onIntent).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not count focus on a row button", () => {
+        const onIntent = vi.fn();
+        renderRow(() => undefined, onIntent);
+
+        fireEvent.focus(screen.getByRole("button", { name: "Erledigen" }));
+
+        expect(onIntent).not.toHaveBeenCalled();
     });
 });
