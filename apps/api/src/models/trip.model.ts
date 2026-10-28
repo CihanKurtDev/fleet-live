@@ -12,9 +12,11 @@ import {
 } from "@fleet-live/shared";
 import { config } from "../config";
 import { stmt } from "../db/statements";
+import { EVENT_COUNT_SQL } from "../db/tripEvents";
 import { haversineMeters, simplifyPath } from "../lib/geo";
 import { nowSqlite, sqliteDaysAgo } from "../lib/sqlTime";
 import { pagedQuery } from "../lib/pagination";
+import { TripEventModel } from "./tripEvent.model";
 
 /**
  * Unterhalb dieser Distanz ist ein neuer Punkt Messrauschen und kein Stück
@@ -55,18 +57,39 @@ const ADD_MONTH_KM = `
         distance_m = distance_m + excluded.distance_m
 `;
 
-const SELECT_LATEST = `
-    SELECT
+/**
+ * The row fields every trip query returns: who drove (snapshot at the start)
+ * and how often the trip went over the limit or lost signal. An estimated
+ * event of an older trip counts the overshoots its warning summed up.
+ */
+const TRIP_COLUMNS = `
         t.id,
         t.vehicle_id,
         t.started_at,
         t.ended_at,
-        t.path,
         t.point_count,
         t.distance_m,
-        t.max_speed
+        t.max_speed,
+        t.driver_id,
+        d.name AS driver_name,
+        (
+            SELECT COALESCE(SUM(${EVENT_COUNT_SQL}), 0)
+            FROM trip_events e
+            LEFT JOIN alerts a ON a.id = e.alert_id
+            WHERE e.trip_id = t.id AND e.type = 'SPEEDING'
+        ) AS speeding_count,
+        (
+            SELECT COUNT(*) FROM trip_events e
+            WHERE e.trip_id = t.id AND e.type = 'OFFLINE'
+        ) AS offline_count`;
+
+const SELECT_LATEST = `
+    SELECT
+        ${TRIP_COLUMNS},
+        t.path
     FROM trips t
     INNER JOIN vehicles v ON v.id = t.vehicle_id
+    LEFT JOIN drivers d ON d.id = t.driver_id
     WHERE t.vehicle_id = ?
       AND v.company_id = ?
     ORDER BY t.ended_at IS NULL DESC, t.started_at DESC, t.id DESC
@@ -75,16 +98,11 @@ const SELECT_LATEST = `
 
 const LIST_FOR_VEHICLE = `
     SELECT
-        t.id,
-        t.vehicle_id,
-        t.started_at,
-        t.ended_at,
-        t.point_count,
-        t.distance_m,
-        t.max_speed,
+        ${TRIP_COLUMNS},
         COUNT(*) OVER () AS total
     FROM trips t
     INNER JOIN vehicles v ON v.id = t.vehicle_id
+    LEFT JOIN drivers d ON d.id = t.driver_id
     WHERE t.vehicle_id = ?
       AND v.company_id = ?
     ORDER BY t.ended_at IS NULL DESC, t.started_at DESC, t.id DESC
@@ -93,16 +111,11 @@ const LIST_FOR_VEHICLE = `
 
 const SELECT_ONE = `
     SELECT
-        t.id,
-        t.vehicle_id,
-        t.started_at,
-        t.ended_at,
-        t.path,
-        t.point_count,
-        t.distance_m,
-        t.max_speed
+        ${TRIP_COLUMNS},
+        t.path
     FROM trips t
     INNER JOIN vehicles v ON v.id = t.vehicle_id
+    LEFT JOIN drivers d ON d.id = t.driver_id
     WHERE t.id = ?
       AND t.vehicle_id = ?
       AND v.company_id = ?
@@ -122,8 +135,8 @@ const COUNT_FOR_VEHICLE = `
  * übersetzt jeden Unique-Verstoß in "Kennzeichen ist bereits vergeben".
  */
 const INSERT_TRIP_IF_NONE = `
-    INSERT INTO trips (vehicle_id, started_at)
-    SELECT ?, ?
+    INSERT INTO trips (vehicle_id, started_at, driver_id)
+    SELECT ?, ?, (SELECT current_driver_id FROM vehicles WHERE id = ?)
     WHERE NOT EXISTS (
         SELECT 1 FROM trips WHERE vehicle_id = ? AND ended_at IS NULL
     )
@@ -154,6 +167,15 @@ const CLOSE_TRIP = `
     WHERE id = ?
 `;
 
+// What is still running when the trip ends ends with it, where the trip ended.
+const END_TRIP_EVENTS = `
+    UPDATE trip_events
+    SET ended_at = ?,
+        to_m = CASE WHEN type = 'OFFLINE' THEN from_m ELSE ? END
+    WHERE trip_id = ?
+      AND ended_at IS NULL
+`;
+
 const PRUNE_CLOSED_FOR_COMPANY = `
     DELETE FROM trips
     WHERE ended_at IS NOT NULL
@@ -162,6 +184,31 @@ const PRUNE_CLOSED_FOR_COMPANY = `
           SELECT id FROM vehicles WHERE company_id = ?
       )
 `;
+
+type TripRow = Omit<TripListItem, "speeding_count" | "offline_count"> & {
+    speeding_count: number | bigint;
+    offline_count: number | bigint;
+};
+
+const toListItem = (row: TripRow): TripListItem => ({
+    id: row.id,
+    vehicle_id: row.vehicle_id,
+    started_at: row.started_at,
+    ended_at: row.ended_at,
+    point_count: row.point_count,
+    distance_m: row.distance_m,
+    max_speed: row.max_speed,
+    driver_id: row.driver_id,
+    driver_name: row.driver_name,
+    speeding_count: Number(row.speeding_count),
+    offline_count: Number(row.offline_count),
+});
+
+const toTrip = (row: TripRow & { path: string }): Trip => ({
+    ...toListItem(row),
+    path: row.path,
+    events: TripEventModel.listForTrip(row.id),
+});
 
 type OpenTripRow = {
     id: number;
@@ -180,7 +227,7 @@ export class TripModel {
             return existing;
         }
 
-        stmt(INSERT_TRIP_IF_NONE).run(vehicleId, at, vehicleId);
+        stmt(INSERT_TRIP_IF_NONE).run(vehicleId, at, vehicleId, vehicleId);
 
         const opened = stmt(SELECT_OPEN).get(vehicleId) as
             | OpenTripRow
@@ -298,6 +345,8 @@ export class TripModel {
             );
         }
 
+        stmt(END_TRIP_EVENTS).run(at, Number(open.distance_m), open.id);
+
         this.addClosedDistance(
             open.company_id,
             open.started_at,
@@ -344,10 +393,10 @@ export class TripModel {
         companyId: number,
     ): Trip | null {
         const row = stmt(SELECT_LATEST).get(vehicleId, companyId) as
-            | Trip
+            | (TripRow & { path: string })
             | undefined;
 
-        return row ?? null;
+        return row ? toTrip(row) : null;
     }
 
     static listForVehicle(
@@ -364,12 +413,7 @@ export class TripModel {
             countParams: [vehicleId, companyId],
             page: query.page,
             limit: query.limit,
-            map: (row) => {
-                const { total: _total, ...trip } = row as TripListItem & {
-                    total: number;
-                };
-                return trip;
-            },
+            map: (row) => toListItem(row as TripRow),
         });
     }
 
@@ -379,9 +423,9 @@ export class TripModel {
         companyId: number,
     ): Trip | null {
         const row = stmt(SELECT_ONE).get(tripId, vehicleId, companyId) as
-            | Trip
+            | (TripRow & { path: string })
             | undefined;
 
-        return row ?? null;
+        return row ? toTrip(row) : null;
     }
 }

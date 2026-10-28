@@ -23,6 +23,8 @@ interface TableRowProps<RowType> {
 
     onSelect: () => void;
     onClick?: () => void;
+    /** A click is likely (pointer over the row, or the row focused). */
+    onIntent?: () => void;
 }
 
 const TableRowComponent = <RowType,>({
@@ -37,6 +39,7 @@ const TableRowComponent = <RowType,>({
     rowClassName,
     onSelect,
     onClick,
+    onIntent,
 }: TableRowProps<RowType>) => {
 
     const renderContext: RenderContext<RowType> = {
@@ -73,6 +76,12 @@ const TableRowComponent = <RowType,>({
         <tr
             className={className}
             onClick={interactive ? handleRowClick : undefined}
+            onPointerEnter={onIntent}
+            onFocus={(event) => {
+                if (event.target === event.currentTarget) {
+                    onIntent?.();
+                }
+            }}
             onKeyDown={(event) => {
                 // Enter on a row button belongs to that button.
                 if (

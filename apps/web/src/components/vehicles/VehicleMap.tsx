@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import type { VehicleStatus } from "@fleet-live/shared";
 import L from "leaflet";
@@ -13,6 +13,7 @@ import { themeColor } from "./leafletMap";
 import { detailTooltipHtml } from "./mapLabels";
 import type { MapPoint } from "./mapGeometry";
 import { PlaybackAge } from "./PlaybackAge";
+import { TripFocus, type TripFocusInfo } from "./TripFocus";
 import { VehiclePlayback, type PlaybackFix, type RoadPoint } from "./vehiclePlayback";
 import {
     vehicleStatusColor,
@@ -42,12 +43,23 @@ type VehicleMapProps = {
     loading?: boolean;
     /** Fill the parent's height instead of the fixed map height. */
     fill?: boolean;
+    /** The trip picked in the list: shown whole, with its replay. */
+    focus?: TripFocusInfo | null;
+    /** "Zurück zum Fahrzeug": the map follows the vehicle again. */
+    onLeaveFocus?: () => void;
 };
 
 /** The one vehicle of this map, in its playback. */
 const VEHICLE = 0;
 /** Encode/RDP noise; used to decide if a longer trail is the same polyline grown. */
 const PREFIX_EPS_M = 12;
+/** Room around a framed trip (start and end markers); a short trip is not shown closer. */
+const FRAME_PADDING = 28;
+const FRAME_MAX_ZOOM = 16;
+
+const prefersReducedMotion = () =>
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const markerTooltip = (label: string, status: VehicleStatus) =>
     detailTooltipHtml(label, status);
@@ -93,6 +105,8 @@ export const VehicleMap = ({
     history = null,
     loading = false,
     fill = false,
+    focus = null,
+    onLeaveFocus,
 }: VehicleMapProps) => {
     const {
         containerRef,
@@ -101,6 +115,7 @@ export const VehicleMap = ({
         following,
         panIfFollowing,
         recenter,
+        frame,
         setViewSilent,
     } = useLeafletFollowMap();
     const markerRef = useRef<L.Marker | null>(null);
@@ -120,6 +135,44 @@ export const VehicleMap = ({
     const drawnRef = useRef(-1);
     const frameRef = useRef(0);
     const playRef = useRef<() => void>(() => undefined);
+    /** The zoom while following, before a trip was framed. */
+    const zoomBeforeRef = useRef<number | null>(null);
+    const focusRef = useLatestRef(focus);
+    const focusPoints = useMemo(() => toPoints(trail ?? []), [trail]);
+
+    const frameTrip = useCallback(
+        (bounds: L.LatLngBounds, topInset: number, maxZoom = FRAME_MAX_ZOOM) => {
+            const map = mapRef.current;
+
+            if (!map) {
+                return;
+            }
+
+            zoomBeforeRef.current ??= map.getZoom();
+            // The facts line covers the top of the map: the trip starts below it.
+            frame(
+                bounds,
+                {
+                    paddingTopLeft: [FRAME_PADDING, topInset + FRAME_PADDING],
+                    paddingBottomRight: [FRAME_PADDING, FRAME_PADDING],
+                    maxZoom,
+                },
+                !prefersReducedMotion(),
+            );
+        },
+        [frame, mapRef],
+    );
+
+    const leaveFocus = () => {
+        const marker = markerRef.current;
+
+        if (marker) {
+            recenter(marker.getLatLng(), zoomBeforeRef.current ?? undefined);
+        }
+
+        zoomBeforeRef.current = null;
+        onLeaveFocus?.();
+    };
 
     useEffect(() => {
         const map = mapRef.current;
@@ -342,10 +395,17 @@ export const VehicleMap = ({
 
     return (
         <div
-            className={
-                fill ? `${styles.wrap} ${styles.wrapFill}` : styles.wrap
-            }
+            className={[
+                styles.wrap,
+                fill && styles.wrapFill,
+                focus && styles.wrapFocus,
+            ]
+                .filter(Boolean)
+                .join(" ")}
             data-status={status}
+            // A closed trip is shown alone: the vehicle's live dot (often
+            // driving on the same roads) is hidden until "Zurück zum Fahrzeug".
+            data-isolated={(focus && focus.trip.ended_at !== null) || undefined}
             style={
                 {
                     "--marker-fill": vehicleStatusColor(status),
@@ -360,14 +420,25 @@ export const VehicleMap = ({
                 role="img"
                 aria-label={`Karte mit Position von ${label}, Status ${statusLabel}`}
             />
+            {/* While a trip is framed the map is about that trip, not the live age. */}
             <PlaybackAge
                 read={(now) =>
-                    statusRef.current === "DRIVING"
+                    statusRef.current === "DRIVING" && !focusRef.current
                         ? playbackRef.current.at(VEHICLE, now)
                         : undefined
                 }
             />
-            {!following && (
+            {focus && (
+                <TripFocus
+                    key={focus.trip.id}
+                    mapRef={mapRef}
+                    points={focusPoints}
+                    focus={focus}
+                    onFrame={frameTrip}
+                    onBack={leaveFocus}
+                />
+            )}
+            {!following && !focus && (
                 <button
                     type="button"
                     className={styles.recenter}

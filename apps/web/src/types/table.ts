@@ -110,6 +110,12 @@ export interface TableProps<RowType> {
 
     onRowClick?: (row: RowType) => void;
 
+    /**
+     * Pointer over the row or the row focused: a click is likely, so what
+     * it opens can load ahead.
+     */
+    onRowIntent?: (row: RowType) => void;
+
     /** Zusätzliche Klassen pro Zeile (z. B. Problem-Hervorhebung). */
     getRowClassName?: (row: RowType) => string | undefined;
 

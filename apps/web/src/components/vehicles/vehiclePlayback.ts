@@ -125,7 +125,8 @@ type Track = {
     nextOrdinal: number;
 };
 
-const meters = (a: RoadPoint, b: RoadPoint) => {
+/** Metres between two points; flat-earth, exact enough within a trip. */
+export const meters = (a: RoadPoint, b: RoadPoint) => {
     const dy = (b.lat - a.lat) * METERS_PER_DEGREE;
     const dx =
         (b.lng - a.lng) *

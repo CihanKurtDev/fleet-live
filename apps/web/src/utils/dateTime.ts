@@ -124,6 +124,24 @@ const dayMonthFormat = new Intl.DateTimeFormat("de-DE", {
     month: "2-digit",
 });
 
+/** Nur die Uhrzeit `HH:MM`, wenn der Tag schon dasteht (Ereignisse einer Fahrt). */
+export const formatClock = (value: string | null): string => {
+    const date = value === null ? null : parseSqliteUtc(value);
+
+    return date ? clockFormat.format(date) : "—";
+};
+
+/** Der Tag einer Fahrt: „heute“ oder `TT.MM.`. */
+export const formatDay = (value: string): string => {
+    const date = parseSqliteUtc(value);
+
+    if (!date) {
+        return "—";
+    }
+
+    return isSameDay(date, new Date()) ? "heute" : dayMonthFormat.format(date);
+};
+
 /** Kurze Zeitspalte für Ereignislisten: heute `HH:MM`, sonst `TT.MM.`. */
 export const formatEventTime = (value: string | null): string => {
     if (value === null) {

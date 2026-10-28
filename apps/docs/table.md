@@ -79,7 +79,7 @@ utils/getPageWindow.ts         – Seitenliste für die Pagination
 ## Generische Typen (`types/table.ts`)
 
 - **`TableColumn<T>`** – definiert eine Spalte: `key`, `displayText`, optional `sortable`, `sortBy` (eigene Sortierlogik) und `render` (eigenes Rendering des Zellwerts).
-- **`TableProps<RowType>`** – Props der `Table`-Komponente: `columns`, `rows`, `getRowKey`, `isEditing`, `selectedRows`, `onSelectRow`, `onRowClick`, `sortConfig`, `onSort`, `isLoading`, `skeletonRowCount`.
+- **`TableProps<RowType>`** – Props der `Table`-Komponente: `columns`, `rows`, `getRowKey`, `isEditing`, `selectedRows`, `onSelectRow`, `onRowClick`, `onRowIntent`, `sortConfig`, `onSort`, `isLoading`, `skeletonRowCount`.
 - **`SortConfig<T>`** – `{ key, direction: "asc" | "desc" } | null`.
 - **`RenderContext<RowType>`** – wird an `column.render` übergeben (`row`, `isSelected`, `isEditing`, `onSelect`).
 - **`TableFilter<RowType>`** – ein Filter: `id`, `displayText` und optionales `customSearchFunc` (nur relevant, wenn clientseitig gefiltert wird).
@@ -94,7 +94,7 @@ utils/getPageWindow.ts         – Seitenliste für die Pagination
 - **Pagination** mit 10/25/50/100 Zeilen pro Seite und einem gleichbleibend breiten Seitenfenster. State in der URL (`?page=`, `?limit=`).
 - **Custom Rendering** je Spalte über `render(value, context)`, z. B. `fuel_level` → `"82%"`.
 - **Zeilenauswahl** über den Bearbeitungsmodus (`isEditing`): ausgewählte Zeilen können gesammelt gelöscht werden. Im Bearbeitungsmodus wählt ein Klick auf die Zeile aus, statt zu navigieren.
-- **Klickbare Zeilen** über `onRowClick`, in der Fahrzeugliste für die Navigation zur Detailseite.
+- **Klickbare Zeilen** über `onRowClick`, in der Fahrzeugliste für die Navigation zur Detailseite. `onRowIntent` meldet Zeiger über der Zeile oder Fokus auf ihr, damit das Ziel vorladen kann (Fahrtenliste auf der Fahrzeugseite).
 - **Leerer Zustand**: „Keine Ergebnisse“, wenn die aktuelle Query keine Treffer hat. Liegt `page` hinter `pageCount`, ein eigener Hinweis plus Sprung zur letzten oder ersten Seite — die URL wird nicht still geklemmt.
 - **Skeleton**: Platzhalterzeilen plus Retry bei 502/503/504, solange die API (z. B. nach einem Neustart) noch nicht erreichbar ist.
 - **Live-Updates**: SSE-Patches für die aktuelle Seite und die Nachbarseiten. Focus ist pro SSE-Connection (`connection_id` aus dem `connected`-Event). Die API filtert Telemetrie-Events auf den Focus der jeweiligen Connection.

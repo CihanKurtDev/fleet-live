@@ -38,7 +38,10 @@ export const useLeafletFollowMap = () => {
             return;
         }
 
-        const themed = createThemedMap(container);
+        // Quarter steps like the fleet map, so a framed trip fills the view.
+        const themed = createThemedMap(container, {
+            mapOptions: { zoomSnap: 0.25 },
+        });
         themedRef.current = themed;
         mapRef.current = themed.map;
 
@@ -110,12 +113,41 @@ export const useLeafletFollowMap = () => {
     }, []);
 
     const recenter = useCallback(
-        (at: L.LatLng) => {
+        (at: L.LatLng, zoom?: number) => {
             followRef.current = true;
             setFollowing(true);
-            setViewSilent(at, undefined, { animate: false });
+            setViewSilent(at, zoom, { animate: false });
         },
         [setViewSilent],
+    );
+
+    /** Stops following and shows the bounds (a selected trip). */
+    const frame = useCallback(
+        (bounds: L.LatLngBounds, options: L.FitBoundsOptions, animate: boolean) => {
+            const map = mapRef.current;
+
+            if (!map) {
+                return;
+            }
+
+            followRef.current = false;
+            followAtRef.current = null;
+            setFollowing(false);
+            // Whatever appeared with the frame (the replay bar) may have
+            // changed the map's height since Leaflet last measured it.
+            map.invalidateSize({ pan: false });
+
+            // A flight starts from the current view; a map that has none yet
+            // (just created) jumps.
+            const hasView = (map as L.Map & { _loaded?: boolean })._loaded === true;
+
+            if (animate && hasView) {
+                map.flyToBounds(bounds, { duration: 0.65, ...options });
+            } else {
+                map.fitBounds(bounds, { animate: false, ...options });
+            }
+        },
+        [],
     );
 
     return {
@@ -125,6 +157,7 @@ export const useLeafletFollowMap = () => {
         following,
         panIfFollowing,
         recenter,
+        frame,
         setViewSilent,
     };
 };

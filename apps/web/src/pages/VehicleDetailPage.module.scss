@@ -236,6 +236,13 @@
     }
 }
 
+/* Stacked: the replay bar of a framed trip adds to the map's height. */
+@media (max-width: 1000px) {
+    .mapBody:has([data-replay]) {
+        height: auto;
+    }
+}
+
 @media (max-width: 700px) {
     .title {
         font-size: 20px;
@@ -298,6 +305,14 @@
         /* Extra height goes to both: taller windows show more trip rows. */
         grid-template-rows: minmax(240px, 1fr) minmax(330px, 1fr);
         min-height: 0;
+    }
+
+    /*
+     * A framed trip adds the replay bar under the map: the row keeps room
+     * for both (map at least 180 px); below that the page scrolls.
+     */
+    .main:has([data-replay]) {
+        grid-template-rows: minmax(340px, 1.25fr) minmax(330px, 1fr);
     }
 
     .mapBody {

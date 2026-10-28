@@ -1,0 +1,210 @@
+/* A trip framed on the detail map: way back on the map, replay below, panel beside. */
+
+/* Top of the map, right of the zoom buttons. */
+.overlay {
+    position: absolute;
+    top: 12px;
+    left: 54px;
+    z-index: 500;
+}
+
+.iconBox {
+    background: none;
+    border: none;
+}
+
+/* Start (A) and end (B) of the trip. */
+.end {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+
+    &[data-end="A"] {
+        border: 2px solid var(--success);
+        background: var(--bg);
+        color: var(--success);
+    }
+
+    &[data-end="B"] {
+        border: 2px solid var(--bg);
+        background: var(--accent-fill);
+        color: var(--on-accent);
+    }
+}
+
+/* One numbered marker per event, the same badge as in the panel. */
+.eventMarker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    background: var(--danger);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform var(--dur-1) var(--ease-out);
+
+    &[data-type="OFFLINE"] {
+        border-color: var(--danger);
+        background: var(--bg);
+        color: var(--danger);
+    }
+
+    &[data-estimated] {
+        border: 2px dashed var(--danger);
+        background: var(--bg);
+        color: var(--danger);
+    }
+
+    &[data-selected] {
+        box-shadow:
+            0 0 0 2px var(--bg),
+            0 0 0 4px var(--accent-fill);
+        transform: scale(1.15);
+    }
+}
+
+/* Leaflet sets a stroke attribute; these classes win over it.
+   Still to drive: muted, but clearly a line on the dark tiles. */
+.rest {
+    stroke: var(--text-muted);
+    stroke-opacity: 0.85;
+}
+
+.driven {
+    stroke: var(--accent-fill);
+}
+
+.speeding {
+    stroke: var(--danger);
+    stroke-opacity: 0.95;
+}
+
+.dot {
+    position: relative;
+    display: block;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent-fill) 18%, transparent);
+
+    /* Yellow like the driven line, so it is not taken for the live vehicle. */
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 7px;
+        border: 2px solid var(--bg);
+        border-radius: 50%;
+        background: var(--accent-fill);
+    }
+
+    /* Inside a speeding stretch. */
+    &[data-speeding] {
+        background: color-mix(in srgb, var(--danger) 22%, transparent);
+
+        &::after {
+            background: var(--danger);
+        }
+    }
+}
+
+.replay {
+    grid-area: replay;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding-top: 10px;
+}
+
+.player {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+/* Abspielen / Pause / Weiter / Nochmal: the widest sets the width. */
+.playLabels {
+    display: inline-grid;
+
+    > * {
+        grid-area: 1 / 1;
+    }
+}
+
+.hidden {
+    visibility: hidden;
+}
+
+.slider {
+    flex: 1 1 160px;
+    min-width: 0;
+}
+
+.speeds {
+    display: flex;
+    gap: 4px;
+}
+
+.speed {
+    min-width: 44px;
+    padding: 0 8px;
+    font-family: var(--mono);
+
+    &[aria-pressed="true"],
+    &[aria-pressed="true"]:hover:not(:disabled) {
+        border-color: var(--accent-fill);
+        background: var(--accent-fill);
+        color: var(--on-accent);
+    }
+}
+
+.km {
+    min-width: 22ch;
+    margin-left: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+
+    &[data-speeding] {
+        color: var(--danger);
+        font-weight: 600;
+    }
+}
+
+.note {
+    margin: 0;
+    color: var(--text);
+    font-size: 13px;
+}
+
+.side {
+    grid-area: panel;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+
+    > * {
+        flex: 1 1 auto;
+    }
+}

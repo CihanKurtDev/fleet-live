@@ -17,6 +17,7 @@ export const Table = <RowType,>({
     getRowSelectLabel,
     selectAll,
     onRowClick,
+    onRowIntent,
     getRowClassName,
     sortConfig = null,
     onSort,
@@ -148,6 +149,11 @@ export const Table = <RowType,>({
                                         onClick={
                                             onRowClick
                                                 ? () => onRowClick(row)
+                                                : undefined
+                                        }
+                                        onIntent={
+                                            onRowIntent
+                                                ? () => onRowIntent(row)
                                                 : undefined
                                         }
                                     />

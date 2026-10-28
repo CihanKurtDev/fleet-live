@@ -2,8 +2,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { isValidIsoDate } from "@fleet-live/shared";
 import { pruneResolvedAlerts } from "./alertRetention";
 import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
+import { backfillTripHistory, ensureTripEvents } from "./tripEvents";
 
-const SCHEMA_VERSION = 23;
+const SCHEMA_VERSION = 25;
 
 type TableColumn = {
     name: string;
@@ -1374,6 +1375,18 @@ function migrateToV21(database: DatabaseSync) {
  * hold the token itself and would never match: remove them, everyone signs
  * in once.
  */
+/** Trip events and drivers for the trips from before they were recorded. */
+function migrateToV24(database: DatabaseSync) {
+    ensureTripEvents(database);
+    backfillTripHistory(database);
+}
+
+/** Runs the history again with warnings that overlap a trip, not only those it began. */
+function migrateToV25(database: DatabaseSync) {
+    ensureTripEvents(database);
+    backfillTripHistory(database);
+}
+
 function migrateToV22(database: DatabaseSync) {
     if (tableExists(database, "sessions")) {
         database.exec("DELETE FROM sessions");
@@ -1661,6 +1674,14 @@ export function migrate(database: DatabaseSync) {
         migrateToV22(database);
     }
 
+    if (currentVersion < 24) {
+        migrateToV24(database);
+    }
+
+    if (currentVersion < 25) {
+        migrateToV25(database);
+    }
+
     // user_version kann schon hoch sein, obwohl ALTER nie gelaufen ist
     // (CREATE TABLE IF NOT EXISTS ändert bestehende Tabellen nicht).
     ensureUsersCompanyId(database);
@@ -1682,6 +1703,7 @@ export function migrate(database: DatabaseSync) {
     ensureSessionPersistent(database);
     ensureTotpLastStep(database);
     ensureAuthHardening(database);
+    ensureTripEvents(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.
     syncStateAlerts(database);

@@ -15,6 +15,8 @@ export type SpeedingTracker = {
     writtenDurationS?: number;
     writtenMaxSpeed?: number;
     writtenLimitKmh?: number;
+    /** Metres into the running trip where the vehicle first went over. */
+    fromM?: number;
 };
 
 export type SpeedingAction = "none" | "open" | "update" | "end";
