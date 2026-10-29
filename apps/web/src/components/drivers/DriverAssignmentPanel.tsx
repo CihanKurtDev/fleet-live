@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
-import type { DriverDetail, DriverVehicle, Vehicle } from "@fleet-live/shared";
+import {
+    VEHICLE_AVAILABILITY_LABELS,
+    type DriverDetail,
+    type DriverVehicle,
+    type Vehicle,
+} from "@fleet-live/shared";
 
 import {
     assignDriverVehicle,
@@ -166,11 +171,15 @@ export const DriverAssignmentPanel = ({
                 avatarName: vehicle.license_plate,
                 selectLabel: `${vehicle.license_plate} auswählen`,
                 status: assignmentStatus(
-                    vehicle.is_current ? "Aktuell" : "Freigegeben",
+                    vehicle.availability !== "READY"
+                        ? `Freigegeben · ${VEHICLE_AVAILABILITY_LABELS[vehicle.availability]}`
+                        : vehicle.is_current
+                          ? "Aktuell"
+                          : "Freigegeben",
                     vehicle.status,
                 ),
                 isCurrent: vehicle.is_current,
-                currentLocked: onTrip,
+                currentLocked: onTrip || vehicle.availability !== "READY",
                 removeLocked: onTrip && vehicle.is_current,
             }));
     }, [driver.vehicles, fromHere, onTrip]);

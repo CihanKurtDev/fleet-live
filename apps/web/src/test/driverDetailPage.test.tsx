@@ -73,6 +73,7 @@ const baseDriver: DriverDetail = {
             status: "IDLE",
             active_alerts: 0,
             is_current: true,
+            availability: "READY",
         },
         {
             id: 2,
@@ -80,6 +81,7 @@ const baseDriver: DriverDetail = {
             status: "IDLE",
             active_alerts: 0,
             is_current: false,
+            availability: "READY",
         },
     ],
     current_vehicle: {
@@ -88,6 +90,7 @@ const baseDriver: DriverDetail = {
         status: "IDLE",
         active_alerts: 0,
         is_current: true,
+        availability: "READY",
     },
 };
 

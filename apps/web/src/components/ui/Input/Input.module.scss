@@ -77,3 +77,12 @@
         outline-offset: 2px;
     }
 }
+
+.textarea {
+    display: block;
+    min-height: 72px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.45;
+    resize: vertical;
+}

@@ -86,3 +86,10 @@
 :global(:root[data-theme="dark"]) .dueChip {
     background: color-mix(in srgb, var(--warning) 22%, var(--surface));
 }
+
+/* An open workshop stay takes care of the date: no Eintragen. */
+.stay {
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--text);
+}

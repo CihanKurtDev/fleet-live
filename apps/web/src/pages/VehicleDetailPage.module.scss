@@ -53,6 +53,10 @@
     color: var(--text);
 }
 
+.summary[data-tone="error"] {
+    color: var(--danger);
+}
+
 .actions {
     display: flex;
     align-items: center;
@@ -302,8 +306,8 @@
 
     .main {
         display: grid;
-        /* Extra height goes to both: taller windows show more trip rows. */
-        grid-template-rows: minmax(240px, 1fr) minmax(330px, 1fr);
+        /* The Werkstatt strip takes its height; extra height goes to map and trips. */
+        grid-template-rows: auto minmax(240px, 1fr) minmax(330px, 1fr);
         min-height: 0;
     }
 
@@ -312,7 +316,7 @@
      * for both (map at least 180 px); below that the page scrolls.
      */
     .main:has([data-replay]) {
-        grid-template-rows: minmax(340px, 1.25fr) minmax(330px, 1fr);
+        grid-template-rows: auto minmax(340px, 1.25fr) minmax(330px, 1fr);
     }
 
     .mapBody {

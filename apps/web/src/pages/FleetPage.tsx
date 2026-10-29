@@ -429,6 +429,15 @@ export const FleetPage = () => {
             },
         ),
         {
+            key: "in_workshop",
+            label: "Werkstatt",
+            value: counts?.in_workshop ?? null,
+            hint: "Fahrzeuge",
+            tone: "neutral",
+            pressed: filter === "in_workshop",
+            onToggle: () => toggleServerFilter("in_workshop"),
+        },
+        {
             key: "speeding",
             label: "Tempo jetzt",
             value: counts?.speeding ?? null,

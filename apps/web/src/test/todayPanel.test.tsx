@@ -29,6 +29,7 @@ const empty = {
     since: null,
     open_warnings: null,
     fuel_level: null,
+    workshop: null,
 };
 
 const response: TodayResponse = {
@@ -67,6 +68,7 @@ const response: TodayResponse = {
             offline: 3,
             low_fuel: 0,
             deadline_soon: 0,
+            workshop_due: 0,
         },
         total: 16,
         limit: 6,
@@ -215,6 +217,7 @@ describe("Heute dran in an empty company", () => {
                 offline: 0,
                 low_fuel: 0,
                 deadline_soon: 0,
+                workshop_due: 0,
             },
             total: 0,
         },
@@ -240,5 +243,68 @@ describe("Heute dran in an empty company", () => {
         expect(
             await screen.findByText("Nichts offen. Gute Schicht."),
         ).toBeInTheDocument();
+    });
+});
+
+describe("Heute dran: workshop stays", () => {
+    const stay = {
+        id: 4,
+        vehicle_id: 5,
+        license_plate: "K-RT 4410",
+        hu_due_on: "2027-03",
+        reason: "MAINTENANCE" as const,
+        state: "IN_WORKSHOP" as const,
+        place: "Werkstatt Becker",
+        planned_on: "2026-10-20",
+        expected_on: "2026-10-27",
+        assignee_user_id: 1,
+        assignee_name: "Cihan Kurt",
+        note: null,
+        arrived_on: "2026-10-20",
+        finished_on: null,
+        cost_cents: null,
+        result_note: null,
+        created_at: "2026-10-19 10:00:00",
+    };
+    const late: TodayResponse = {
+        data: [
+            {
+                ...empty,
+                kind: "workshop_due",
+                key: "workshop_due:4",
+                vehicle_id: 5,
+                subject: "K-RT 4410",
+                workshop: stay,
+            },
+        ],
+        meta: {
+            ...response.meta,
+            counts: {
+                deadline_overdue: 0,
+                driver_talk: 0,
+                offline: 0,
+                low_fuel: 0,
+                deadline_soon: 0,
+                workshop_due: 1,
+            },
+            total: 1,
+        },
+    };
+
+    it("marks a late return, says who is on it and offers Fertig melden", async () => {
+        vi.mocked(getToday).mockResolvedValue(late);
+        renderPanel();
+
+        const row = await screen.findByRole("link", { name: /K-RT 4410/ });
+        expect(within(row).getByText("Rückgabe")).toBeInTheDocument();
+        expect(
+            within(row).getByText(
+                "Wartung bei Werkstatt Becker · fertig erwartet am 27.10.2026 · zuständig: du",
+            ),
+        ).toBeInTheDocument();
+        expect(within(row).getByRole("button", { name: "Fertig melden" })).toBeInTheDocument();
+
+        const chip = screen.getByRole("link", { name: /Werkstatt fällig/ });
+        expect(chip).toHaveAttribute("href", "/vehicles?filter=workshop_due");
     });
 });

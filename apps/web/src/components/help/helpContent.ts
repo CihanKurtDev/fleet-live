@@ -159,6 +159,12 @@ const PAGES: Record<string, HelpPage> = {
                     "Ein Klick auf eine Zeile öffnet das Fahrzeug oder den Fahrer, dort unter „Bearbeiten“. Viele Daten auf einmal gehen über den Import.",
             },
             {
+                question: "„Termin planen“ bei HU und UVV",
+                answer:
+                    "Plant den Werkstatt-Aufenthalt für dieses Fahrzeug. Danach steht in der Zeile der Termin oder „In der Werkstatt“. Wer „Fertig melden“ drückt, trägt bei der HU den neuen Monat ein; die Zeile verschwindet dann aus der Liste.",
+                dispatcherOnly: true,
+            },
+            {
                 question: "Sind Fristen Warnungen?",
                 answer:
                     "Nein. Fristen stehen nicht unter Warnungen. Ihre Zahlen zeigt die Schicht-Seite.",
@@ -190,8 +196,19 @@ const PAGES: Record<string, HelpPage> = {
         id: "vehicleDetail",
         title: "Fahrzeug",
         intro:
-            "Ein Fahrzeug: Tempo, Tank und letzte Meldung, Stammdaten, Position, Fahrten, Fahrer und offene Hinweise.",
+            "Ein Fahrzeug: Tempo, Tank und letzte Meldung, Werkstatt, Stammdaten, Position, Fahrten, Fahrer und offene Hinweise.",
         items: [
+            {
+                question: "Wie läuft ein Werkstatt-Aufenthalt?",
+                answer:
+                    "„In die Werkstatt“ plant einen Termin (Grund, Werkstatt, Datum, zuständig). „Angekommen“ meldet das Fahrzeug dort; dann bekommt es keinen Fahrer, bis „Fertig melden“ es zurückgibt. Bei einer HU trägst du dabei den neuen Monat von der Plakette ein, bei einer UVV gilt das Fertig-Datum als Prüfung. „Verlauf“ zeigt jede Änderung und frühere Aufenthalte mit Kosten.",
+            },
+            {
+                question: "Was heißt „Außer Dienst“?",
+                answer:
+                    "Das Fahrzeug wird keinem Fahrer zugewiesen, bis es wieder in Dienst gestellt ist. Beides steht unter „Weitere Aktionen“ (⋯), nicht während das Fahrzeug in der Werkstatt ist.",
+                dispatcherOnly: true,
+            },
             {
                 question: "Was zeigt die Linie auf der Karte?",
                 answer:

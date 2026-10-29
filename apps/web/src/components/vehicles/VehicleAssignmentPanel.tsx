@@ -40,6 +40,7 @@ export const VehicleAssignmentPanel = ({
 }: VehicleAssignmentPanelProps) => {
     const { listEpoch } = useVehicles();
     const vehicleOnTrip = vehicle.status === "DRIVING";
+    const unavailable = vehicle.availability !== "READY";
     const [rosterOpen, setRosterOpen] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
     const [pendingUnassign, setPendingUnassign] = useState<Driver[] | null>(
@@ -208,11 +209,11 @@ export const VehicleAssignmentPanel = ({
                         driver.current_vehicle_plate,
                     ),
                     isCurrent,
-                    currentLocked: vehicleOnTrip || driverOnTrip,
+                    currentLocked: vehicleOnTrip || driverOnTrip || unavailable,
                     removeLocked: vehicleOnTrip && isCurrent,
                 };
             });
-    }, [assigned, vehicle.current_driver_id, vehicleOnTrip]);
+    }, [assigned, vehicle.current_driver_id, vehicleOnTrip, unavailable]);
 
     const rowKeys = useMemo(
         () =>
@@ -289,6 +290,9 @@ export const VehicleAssignmentPanel = ({
                         darf fahren und steht nicht als Fahrer am Fahrzeug.
                         {vehicleOnTrip
                             ? " Fahrzeug ist unterwegs — aktueller Fahrer lässt sich erst nach der Fahrt wechseln oder entfernen."
+                            : ""}
+                        {unavailable
+                            ? ` ${vehicle.license_plate} ist ${vehicle.availability === "WORKSHOP" ? "in der Werkstatt" : "außer Dienst"} und bekommt so lange keinen aktuellen Fahrer.`
                             : ""}
                     </p>
 

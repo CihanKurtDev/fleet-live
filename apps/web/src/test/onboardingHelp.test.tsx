@@ -51,6 +51,9 @@ const mockSignals = ({
                 stopped: 0,
                 in_depot: 0,
                 speeding: 0,
+                in_workshop: 0,
+                workshop_due: 0,
+                out_of_service: 0,
             },
         },
     });

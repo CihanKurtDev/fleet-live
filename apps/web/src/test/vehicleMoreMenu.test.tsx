@@ -7,7 +7,13 @@ describe("VehicleMoreMenu", () => {
     it("keeps delete behind Weitere Aktionen and closes after choosing it", () => {
         const onDelete = vi.fn();
 
-        render(<VehicleMoreMenu onDelete={onDelete} />);
+        render(
+            <VehicleMoreMenu
+                availability="READY"
+                onOutOfService={vi.fn()}
+                onDelete={onDelete}
+            />,
+        );
 
         expect(
             screen.queryByRole("menuitem", { name: "Fahrzeug löschen" }),
@@ -34,7 +40,13 @@ describe("VehicleMoreMenu", () => {
     it("closes on Escape without deleting", () => {
         const onDelete = vi.fn();
 
-        render(<VehicleMoreMenu onDelete={onDelete} />);
+        render(
+            <VehicleMoreMenu
+                availability="READY"
+                onOutOfService={vi.fn()}
+                onDelete={onDelete}
+            />,
+        );
         fireEvent.click(
             screen.getByRole("button", { name: "Weitere Aktionen" }),
         );

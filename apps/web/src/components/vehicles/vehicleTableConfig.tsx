@@ -18,6 +18,8 @@ import type {
 import type { KpiTileTone } from "../ui/KpiTiles/KpiTiles";
 import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
 import { WarningChip } from "../alerts/WarningChip";
+import chipStyles from "../alerts/WarningChip.module.scss";
+import { isReturnLate, shortDate } from "./workshopText";
 import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
 import { VehicleStatusChip } from "./VehicleStatusChip";
 import styles from "./vehicleTableConfig.module.scss";
@@ -67,6 +69,7 @@ export const vehicleTileFilters: VehicleFilterOption[] = [
     statusTile("IDLE"),
     statusTile("STOPPED"),
     { ...statusTile("OFFLINE"), tone: "critical" },
+    { id: "in_workshop", label: "Werkstatt", count: "in_workshop" },
     { id: "speeding", label: "Tempo jetzt", count: "speeding", tone: "critical" },
     { id: "alerts", label: "Mit Warnung", count: "alerts", tone: "critical" },
     { id: "low_fuel", label: "Wenig Tank", count: "low_fuel", tone: "warning" },
@@ -76,7 +79,35 @@ export const vehicleTileFilters: VehicleFilterOption[] = [
 export const vehicleMoreFilters: VehicleFilterOption[] = [
     { id: "unassigned", label: "Kein Fahrer", count: "unassigned" },
     { id: "in_depot", label: "Im Depot", count: "in_depot" },
+    { id: "workshop_due", label: "Werkstatt fällig", count: "workshop_due" },
+    { id: "out_of_service", label: "Außer Dienst", count: "out_of_service" },
 ];
+
+/** „Werkstatt · fertig 31.10.“ (red when late) or „Außer Dienst“, before the warnings. */
+function availabilityHint(row: Vehicle) {
+    if (row.availability === "OUT_OF_SERVICE") {
+        return <span className={chipStyles.chip}>Außer Dienst</span>;
+    }
+
+    if (row.availability !== "WORKSHOP" || !row.workshop) {
+        return null;
+    }
+
+    return (
+        <>
+            <span className={chipStyles.chip}>Werkstatt</span>
+            {row.workshop.expected_on && (
+                <span
+                    className={
+                        isReturnLate(row.workshop) ? styles.late : styles.muted
+                    }
+                >
+                    fertig {shortDate(row.workshop.expected_on)}
+                </span>
+            )}
+        </>
+    );
+}
 
 function warningTypes(row: Vehicle): AlertType[] {
     const types = new Set(row.open_alert_types ?? []);
@@ -210,20 +241,22 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     },
     {
         key: "active_alerts",
-        displayText: "Warnungen",
+        displayText: "Hinweise",
         // Without a width this column got 0 px in a narrow window and the
-        // hints (Kein Signal, Tempo, Tank) were out of reach.
-        width: "180px",
+        // hints (Werkstatt, Kein Signal, Tempo, Tank) were out of reach.
+        width: "200px",
         sortable: true,
         render: (_value, { row }) => {
             const types = warningTypes(row);
+            const availability = availabilityHint(row);
 
-            if (types.length === 0) {
+            if (types.length === 0 && !availability) {
                 return <span className={styles.muted}>—</span>;
             }
 
             return (
                 <span className={styles.chips}>
+                    {availability}
                     {types.map((type) => (
                         <WarningChip key={type} type={type} />
                     ))}

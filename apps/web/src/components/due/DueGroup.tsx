@@ -1,9 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
-import type { DueKind, DueListItem } from "@fleet-live/shared";
+import { DUE_KIND_LABELS, type DueKind, type DueListItem } from "@fleet-live/shared";
 
+import type { WorkshopTarget } from "../../api/workshop";
+import { useAuth } from "../../hooks/useAuth";
 import { formatCount } from "../../utils/formatCount";
+import { Button } from "../ui/Button/Button";
 import { RetryMessage } from "../ui/RetryMessage";
+import { WorkshopPlanDialog } from "../vehicles/WorkshopPlanDialog";
+import { dueWorkshopText } from "../vehicles/workshopText";
 import {
     dueConsequence,
     dueDateText,
@@ -28,7 +33,18 @@ interface DueGroupProps {
     onShowAll?: () => void;
     /** Pagination of the full list of one kind. */
     footer?: ReactNode;
+    /** The page's status line after a write here (a planned stay). */
+    onNotice?: (text: string) => void;
 }
+
+/** HU and UVV are done in a workshop; their rows plan the stay. */
+const WORKSHOP_KINDS: ReadonlySet<DueKind> = new Set<DueKind>(["hu", "uvv"]);
+
+const planContext = (row: DueListItem): string => {
+    const label = DUE_KIND_LABELS[row.kind];
+    if (row.state === "missing") return `${label}-Datum fehlt`;
+    return `${label} fällig ${row.state === "overdue" ? "seit" : "am"} ${dueDateText(row)}`;
+};
 
 /** One kind: collapsible head, its rows, and the way to all of them. */
 export const DueGroup = ({
@@ -44,9 +60,51 @@ export const DueGroup = ({
     onRetry,
     onShowAll,
     footer,
+    onNotice,
 }: DueGroupProps) => {
     const location = useLocation();
+    const { user } = useAuth();
+    const canWrite = user?.role === "dispatcher";
     const [open, setOpen] = useState(true);
+    const [planning, setPlanning] = useState<WorkshopTarget | null>(null);
+    const workshopKind = WORKSHOP_KINDS.has(kind);
+
+    const workshopCell = (row: DueListItem) => {
+        if (!workshopKind) {
+            return <span className={styles.rowWorkshop} />;
+        }
+
+        if (row.workshop) {
+            const text = dueWorkshopText(row.workshop, row.kind === "hu" ? "HU" : "UVV");
+            return (
+                <span className={styles.rowWorkshop}>
+                    <b>{text.title}</b>
+                    <span>{text.detail}</span>
+                </span>
+            );
+        }
+
+        return (
+            <span className={styles.rowWorkshop}>
+                {canWrite && row.vehicle_id !== null && (
+                    <Button
+                        variant="secondary"
+                        size="row"
+                        onClick={() =>
+                            setPlanning({
+                                vehicleId: row.vehicle_id as number,
+                                licensePlate: row.label,
+                                reason: row.kind === "hu" ? "HU" : "UVV",
+                                context: planContext(row),
+                            })
+                        }
+                    >
+                        Termin planen
+                    </Button>
+                )}
+            </span>
+        );
+    };
     const from = `${location.pathname}${location.search}`;
     const bodyId = `due-group-${kind}`;
     const partial = !isLoading && rows.length < total;
@@ -110,14 +168,16 @@ export const DueGroup = ({
                                 return (
                                     <li
                                         key={`${row.kind}:${row.vehicle_id ?? 0}:${row.driver_id ?? 0}`}
+                                        className={styles.row}
                                     >
                                         {link ? (
-                                            <Link to={link} state={{ from }} className={styles.row}>
+                                            <Link to={link} state={{ from }} className={styles.rowLink}>
                                                 {content}
                                             </Link>
                                         ) : (
-                                            <div className={styles.row}>{content}</div>
+                                            <div className={styles.rowLink}>{content}</div>
                                         )}
+                                        {workshopCell(row)}
                                     </li>
                                 );
                             })}
@@ -132,6 +192,18 @@ export const DueGroup = ({
 
                     {footer}
                 </div>
+            )}
+
+            {workshopKind && (
+                <WorkshopPlanDialog
+                    target={planning}
+                    onClose={() => setPlanning(null)}
+                    onSaved={(_visit, message) => {
+                        setPlanning(null);
+                        onNotice?.(message);
+                        onRetry();
+                    }}
+                />
             )}
         </section>
     );
