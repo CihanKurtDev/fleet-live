@@ -1,5 +1,4 @@
-import type { Request } from "express";
-import { ipKeyGenerator, rateLimit } from "express-rate-limit";
+import { rateLimit } from "express-rate-limit";
 import { config } from "../config";
 
 const common = {
@@ -58,15 +57,3 @@ export const authIpRateLimit = rateLimit({
     },
 });
 
-export const loginAccountRateLimit = rateLimit({
-    ...common,
-    limit: 8,
-    keyGenerator: (req: Request) => {
-        const email =
-            typeof req.body?.email === "string"
-                ? req.body.email.trim().toLowerCase()
-                : "";
-
-        return email || ipKeyGenerator(req.ip ?? "unknown");
-    },
-});

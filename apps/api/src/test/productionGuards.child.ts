@@ -84,6 +84,8 @@ async function main() {
     assert.equal(invalid.body.code, "VALIDATION_ERROR");
     assert.equal(invalid.body.stack, undefined);
 
+    // Wrong passwords per address slow down: five free, the sixth sets a
+    // wait, and the next try right away has to wait.
     const accountStatuses: number[] = [];
     for (let i = 0; i < 12; i += 1) {
         const failed = await request(app)
@@ -95,14 +97,15 @@ async function main() {
             });
         accountStatuses.push(failed.status);
         if (failed.status === 429) {
-            assert.equal(failed.body.code, "LOGIN_RATE_LIMITED");
+            assert.equal(failed.body.code, "LOGIN_SLOW_DOWN");
+            assert.equal(failed.headers["retry-after"], "2");
             break;
         }
     }
-    const accountBlock = accountStatuses.indexOf(429);
-    assert.ok(
-        accountBlock >= 8 && accountBlock <= 20,
-        `account limit statuses: ${accountStatuses.join(",")}`,
+    assert.deepEqual(
+        accountStatuses,
+        [401, 401, 401, 401, 401, 401, 429],
+        `account slowdown statuses: ${accountStatuses.join(",")}`,
     );
 
     let sawAuthLimit = false;

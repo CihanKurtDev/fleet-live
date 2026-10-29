@@ -184,7 +184,7 @@ Controller validieren und mappen HTTP. Models führen SQL aus. Dünn gehalten.
 
 ## Grenzen
 
-* Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Das Login-Limit gilt auch in der Entwicklung, Tests lassen es aus.
+* Cookies sind für same origin gebaut. In Produktion braucht es `CORS_ORIGIN`, Origin-Checks bei Schreibzugriffen und ein Login-Limit. Das IP-Limit gilt auch in der Entwicklung, Tests lassen es aus. Falsche Passwörter je Adresse sperren nicht, sie verlängern die Wartezeit bis zum nächsten Versuch (höchstens eine Minute).
 * Abgelaufene Session: `GET /api/auth/me` und spätere `401`. Die UI räumt den Nutzer weg und geht nach `/login`. Falsches Passwort auf `POST /api/auth/login` zählt nicht als Session-Ende.
 * Sim-Pause liegt im Speicher. API-Neustart startet alle Firmen wieder.
 * Frontend-Tests (Vitest) decken Seiten, Bausteine und die Kartenlogik ab; Leaflet selbst läuft nicht in jsdom und wird im Browser geprüft. Es gibt keine CI auf GitHub, `npm run verify` läuft lokal.

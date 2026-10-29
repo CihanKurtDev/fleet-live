@@ -82,7 +82,7 @@ Tests liegen unter `apps/api/src/test/` (node:test + SuperTest, In-Memory-SQLite
 | A4.5 | Keine Rotation für `TOTP_ENCRYPTION_KEY` (verschlüsselt TOTP- und OIDC-Secrets). | OFFEN | Versionierte Schlüssel (`kid` im gespeicherten Wert) und ein Umschlüssel-Skript. |
 | A4.6 | Microsoft-Konten lassen sich nur verknüpfen, wenn der Token `email_verified` liefert; Entra liefert das meist nicht. | OFFEN | Für Entra ID die verifizierte Domain (`xms_edov`) oder eine Mandantenbindung auswerten. Bis dahin verknüpft Microsoft praktisch nicht (wie vorher schon bei der E-Mail-Zuordnung). |
 | A4.7 | Knopf zum Verknüpfen von Google/Microsoft auf der Kontoseite. | OFFEN | API steht (`POST /api/auth/sso/link`); sichtbare Änderung, braucht einen Canvas-Entwurf. |
-| A4.8 | Das Limit je E-Mail beim Login (8 Fehlversuche in 15 Min) sperrt auch die echte Person aus. | OFFEN | Abwägung zwischen Schutz vor Raten und Aussperren; z. B. Captcha oder Verzögerung statt Sperre. |
+| A4.8 | Das Limit je E-Mail beim Login (8 Fehlversuche in 15 Min) sperrt auch die echte Person aus. | IMPLEMENTIERT | Verzögerung statt Sperre (`lib/loginAttempts.ts`): fünf Fehlversuche frei, danach wartet der nächste Versuch 2, 4, 8 … höchstens 60 Sekunden (`429` `LOGIN_SLOW_DOWN`, `Retry-After`); das richtige Passwort setzt zurück. Wer rät, schafft etwa einen Versuch pro Minute, die echte Person wartet höchstens eine Minute. Das IP-Limit bleibt. Test: `loginSlowdown.test.ts`. |
 | A4.9 | Cookie-Präfix `__Host-` für das Sitzungscookie. | OFFEN | Optional; meldet beim Umstellen alle ab. |
 | A4.10 | `autocannon` (devDependency, nur für `npm run bench`) zieht `uuid`/`hyperid` mit mittlerer Schwachstelle. | OFFEN | Behebung nur per Major-Downgrade; läuft nicht in der Anwendung. |
 

@@ -41,7 +41,6 @@ import { requireAuth } from "../middleware/requireAuth";
 import { requireDispatcher } from "../middleware/requireDispatcher";
 import {
     authIpRateLimit,
-    loginAccountRateLimit,
     loginIpRateLimit,
     ssoStartRateLimit,
     tokenIpRateLimit,
@@ -52,7 +51,8 @@ const router = express.Router();
 router.post("/register", authIpRateLimit, register);
 router.post("/resend-verification", authIpRateLimit, resendVerification);
 router.post("/verify-email", tokenIpRateLimit, verifyEmail);
-router.post("/login", loginIpRateLimit, loginAccountRateLimit, login);
+// Wrong passwords per address slow down in the controller (lib/loginAttempts.ts).
+router.post("/login", loginIpRateLimit, login);
 router.post("/logout", logout);
 router.post("/logout-all", requireAuth, logoutAll);
 router.get("/me", getMe);

@@ -43,6 +43,11 @@ import {
     verifyEmailToken,
     withdrawInvite,
 } from "../models/account.model";
+import {
+    clearLoginFailures,
+    loginWaitSeconds,
+    recordLoginFailure,
+} from "../lib/loginAttempts";
 import { AuditModel } from "../models/audit.model";
 import { AuthTokenModel } from "../models/authToken.model";
 import { listMemberships, membershipRow } from "../models/authView";
@@ -205,18 +210,37 @@ export function verifyEmail(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
     const input = parseLoginInput(req.body);
+    const wait = loginWaitSeconds(input.email);
+
+    // Not checked at all while the address has to wait: a guess costs time,
+    // the real person gets in once the wait is over.
+    if (wait > 0) {
+        res.setHeader("Retry-After", String(wait));
+        throw new AppError(
+            429,
+            "LOGIN_SLOW_DOWN",
+            `Zu viele falsche Versuche. Bitte warte ${wait} Sekunden und versuche es dann erneut.`,
+            undefined,
+            { retry_after: wait },
+        );
+    }
+
     const user = UserModel.findByEmail(input.email);
 
     if (!user?.password_hash) {
         // The same wait as for a wrong password, so the answer does not
         // tell whether the email has an account.
         await spendPasswordTime(input.password);
+        recordLoginFailure(input.email);
         throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
     }
 
     if (!(await verifyPasswordAsync(input.password, user.password_hash))) {
+        recordLoginFailure(input.email);
         throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
     }
+
+    clearLoginFailures(input.email);
 
     if (needsRehash(user.password_hash)) {
         UserModel.setPasswordHash(

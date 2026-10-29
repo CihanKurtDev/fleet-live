@@ -2,6 +2,7 @@ import type { UserRole } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 import { hashPassword } from "../lib/password";
+import { resetLoginAttemptsForTests } from "../lib/loginAttempts";
 import { resetTotpAttemptsForTests } from "../lib/totpAttempts";
 
 export type UserRecord = {
@@ -116,6 +117,7 @@ export const UserModel = {
 
     resetForTests() {
         resetTotpAttemptsForTests();
+        resetLoginAttemptsForTests();
         db.exec("DELETE FROM import_runs");
         db.exec("DELETE FROM sso_identities");
         db.exec("DELETE FROM totp_recovery_codes");
