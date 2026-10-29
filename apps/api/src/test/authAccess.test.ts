@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
 import { db } from "../db/database";
+import { setTxtLookupForTests } from "../lib/dnsTxt";
 import { takeMails } from "../lib/mailer";
 import { setOidcDriverForTests } from "../lib/oidc";
 import { base32Decode, totpCode } from "../lib/totp";
@@ -64,6 +65,79 @@ describe("registration and email confirmation", () => {
         assert.equal(login.body.company_name, "Nordlicht GmbH");
         assert.equal(login.body.role, "dispatcher");
         assert.equal(login.body.import_prompt, true);
+    });
+
+    it("answers a registration with a taken e-mail like a new one", async () => {
+        UserModel.create({
+            name: "Bestehend",
+            email: "known@example.com",
+            password: PASSWORD,
+            company_id: 1,
+        });
+        const companies = () =>
+            (db.prepare("SELECT COUNT(*) AS n FROM companies").get() as { n: number }).n;
+        const before = companies();
+
+        const taken = await request(app).post("/api/auth/register").send({
+            company_name: "Fremd GmbH",
+            name: "Fremd",
+            email: "Known@Example.com",
+            password: "another-password-1",
+        });
+        const fresh = await request(app).post("/api/auth/register").send({
+            company_name: "Neu GmbH",
+            name: "Neu",
+            email: "fresh@example.com",
+            password: "another-password-1",
+        });
+
+        assert.equal(taken.status, 201);
+        assert.equal(fresh.status, 201);
+        assert.deepEqual(Object.keys(taken.body).sort(), Object.keys(fresh.body).sort());
+        assert.equal(taken.body.message, fresh.body.message);
+        // Only the new registration made a company.
+        assert.equal(companies(), before + 1);
+
+        const mails = takeMails();
+        const hint = mails.find((mail) => mail.to === "known@example.com");
+        assert.ok(hint);
+        assert.match(hint.subject, /Registrierung mit deiner E-Mail/);
+        assert.doesNotMatch(hint.link, /token=/);
+        // The existing account keeps its password.
+        await request(app)
+            .post("/api/auth/login")
+            .send({ email: "known@example.com", password: PASSWORD })
+            .expect(200);
+    });
+
+    it("sends the confirmation again when an unconfirmed address registers again", async () => {
+        const first = {
+            company_name: "Zweimal GmbH",
+            name: "Zweimal",
+            email: "zweimal@example.com",
+            password: PASSWORD,
+        };
+        await request(app).post("/api/auth/register").send(first).expect(201);
+        const [firstMail] = takeMails();
+        assert.ok(firstMail);
+
+        await request(app)
+            .post("/api/auth/register")
+            .send({ ...first, company_name: "Zweimal Andere GmbH" })
+            .expect(201);
+        const [again] = takeMails();
+        assert.ok(again);
+        assert.equal(again.subject, "E-Mail bestätigen");
+
+        // The older link is used up by the new one; the new one confirms.
+        await request(app)
+            .post("/api/auth/verify-email")
+            .send({ token: tokenFrom(firstMail.link) })
+            .expect(400);
+        await request(app)
+            .post("/api/auth/verify-email")
+            .send({ token: tokenFrom(again.link) })
+            .expect(204);
     });
 
     it("uses the same forgot-password answer when the email is unknown", async () => {
@@ -217,7 +291,7 @@ describe("memberships", () => {
             .expect(200);
     });
 
-    it("adds a membership when the email already has an account", async () => {
+    it("adds a membership only when an existing account accepts", async () => {
         UserModel.create({
             name: "Bestehend",
             email: "bestehend@example.com",
@@ -235,12 +309,28 @@ describe("memberships", () => {
             .send({ email: "bestehend@example.com", role: "dispatcher" })
             .expect(201);
 
-        const login = await request(app).post("/api/auth/login").send({
+        const invitee = request.agent(app);
+        const login = await invitee.post("/api/auth/login").send({
             email: "bestehend@example.com",
             password: PASSWORD,
         });
         assert.equal(login.status, 200);
-        assert.equal(login.body.memberships.length, 2);
+        assert.equal(login.body.memberships.length, 1);
+        assert.equal(login.body.invitations, 1);
+
+        const open = await invitee.get("/api/auth/invitations").expect(200);
+        assert.equal(open.body.data.length, 1);
+        const [invitation] = open.body.data;
+        assert.equal(invitation.company_name, "Zweite Mitgliedschaft");
+        assert.equal(invitation.role, "dispatcher");
+        assert.equal(invitation.invited_by_name, "Dispatcher 1");
+
+        const accepted = await invitee
+            .post(`/api/auth/invitations/${invitation.company_id}/accept`)
+            .expect(200);
+        assert.equal(accepted.body.memberships.length, 2);
+        assert.equal(accepted.body.invitations, 0);
+        assert.equal(accepted.body.company_id, 1);
     });
 });
 
@@ -335,6 +425,14 @@ describe("totp and sso", () => {
         assert.equal(saved.body.sso_client_secret, undefined);
         // Requiring the company login needs a session of that login
         // (loginPolicy.test.ts); here only the refusal of the password counts.
+        // The sign-in page finds the company login by a confirmed domain.
+        const domain = await agent
+            .post("/api/auth/domains")
+            .send({ domain: "example.com" })
+            .expect(201);
+        setTxtLookupForTests(async () => [[domain.body.data.record_value]]);
+        await agent.post(`/api/auth/domains/${domain.body.data.id}/verify`).expect(200);
+        setTxtLookupForTests(null);
         db.prepare("UPDATE companies SET sso_required = 1 WHERE id = 1").run();
 
         const discovered = await request(app)

@@ -122,4 +122,11 @@ export const AuthTokenModel = {
             "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = ?",
         ).run(userId, purpose);
     },
+
+    /** Invitation links of one company for one person. */
+    deleteInvites(userId: number, companyId: number) {
+        stmt(
+            "DELETE FROM auth_tokens WHERE user_id = ? AND purpose = 'invite' AND company_id = ?",
+        ).run(userId, companyId);
+    },
 };

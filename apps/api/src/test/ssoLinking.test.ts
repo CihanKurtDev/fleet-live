@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
+import { emailVerifiedFrom } from "../lib/oidc";
 import { UserModel } from "../models/user.model";
 import {
     addMembership,
@@ -200,7 +201,8 @@ describe("signing in with an external identity", () => {
         const linked = await finish(await startLink(agent, { provider: "google" }), cookie);
 
         assert.equal(linked.status, 302);
-        assert.match(String(linked.headers.location), /\/konto\?sso=linked/);
+        // Back on the section the link was started from.
+        assert.match(String(linked.headers.location), /\/konto\?sso=linked#anmeldung$/);
         // Linking does not replace the owner's session.
         assert.equal(cookieValue(linked.headers["set-cookie"], "fleet_session"), undefined);
         assert.deepEqual(identities(), [
@@ -291,5 +293,59 @@ describe("signing in with an external identity", () => {
             .get(`/api/auth/sso/google/callback?code=abc&state=${encodeURIComponent(flow.state)}`)
             .redirects(0);
         assert.match(String(done.headers.location), /sso=error/);
+    });
+});
+
+describe("the person's own Google and Microsoft links", () => {
+    it("shows a link on the account and removes it again", async () => {
+        user("own@example.com");
+        const { agent, cookie } = await passwordLogin("own@example.com");
+        assert.deepEqual((await agent.get("/api/auth/me")).body.sso_links, {
+            google: false,
+            microsoft: false,
+        });
+
+        idp.next = profile({ email: "own@example.com", subject: "own-sub" });
+        await finish(await startLink(agent, { provider: "google" }), cookie);
+        assert.deepEqual((await agent.get("/api/auth/me")).body.sso_links, {
+            google: true,
+            microsoft: false,
+        });
+
+        const removed = await agent.delete("/api/auth/sso/links/google").expect(200);
+        assert.deepEqual(removed.body.sso_links, { google: false, microsoft: false });
+        assert.deepEqual(identities(), []);
+        await agent.delete("/api/auth/sso/links/google").expect(404);
+    });
+
+    it("never removes a company's own login this way", async () => {
+        user("company-link@example.com");
+        configureCompanyIdp(1, IDP_A);
+        const { agent, cookie } = await passwordLogin("company-link@example.com");
+        idp.next = profile({ email: "company-link@example.com", issuer: IDP_A, subject: "c-sub" });
+        const linked = await finish(await startLink(agent, { provider: "company", company_id: 1 }), cookie);
+        assert.match(String(linked.headers.location), /\/konto\?sso=linked#firmen-login$/);
+
+        await agent.delete("/api/auth/sso/links/company:1").expect(404);
+        await agent.delete("/api/auth/sso/links/company").expect(404);
+        assert.equal(identities().length, 1);
+        await request(app).delete("/api/auth/sso/links/google").expect(401);
+    });
+});
+
+describe("a verified e-mail from the provider", () => {
+    const ENTRA = "https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0";
+
+    it("counts email_verified from any provider", () => {
+        assert.equal(emailVerifiedFrom({ iss: GOOGLE, email_verified: true }), true);
+        assert.equal(emailVerifiedFrom({ iss: GOOGLE, email_verified: "true" }), false);
+        assert.equal(emailVerifiedFrom({ iss: GOOGLE }), false);
+    });
+
+    it("counts xms_edov only in a token from Entra ID", () => {
+        assert.equal(emailVerifiedFrom({ iss: ENTRA, xms_edov: true }), true);
+        assert.equal(emailVerifiedFrom({ iss: ENTRA, xms_edov: false }), false);
+        assert.equal(emailVerifiedFrom({ iss: ENTRA }), false);
+        assert.equal(emailVerifiedFrom({ iss: IDP_A, xms_edov: true }), false);
     });
 });

@@ -4,6 +4,12 @@ export const USER_ROLES = ["dispatcher", "viewer"] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 
+/** What each role is called everywhere: team list, invitations, the log. */
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+    dispatcher: "Dispatcher",
+    viewer: "Nur lesen",
+};
+
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 
@@ -21,8 +27,21 @@ export type AuthUser = {
     company_name: string;
     role: UserRole;
     memberships: MembershipSummary[];
+    /** Invitations to other companies this person has not accepted or declined yet. */
+    invitations: number;
+    /** The person's own sign-in links (not a company's own login). */
+    sso_links: { google: boolean; microsoft: boolean };
     totp_enabled: boolean;
     import_prompt: boolean;
+};
+
+/** An invitation waiting for the signed-in person (`GET /api/auth/invitations`). */
+export type Invitation = {
+    company_id: number;
+    company_name: string;
+    role: UserRole;
+    invited_by_name: string | null;
+    created_at: string;
 };
 
 export type LoginInput = {

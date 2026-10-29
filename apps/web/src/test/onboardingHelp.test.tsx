@@ -69,6 +69,7 @@ const mockSignals = ({
                 name: `Person ${index + 1}`,
                 email: `p${index + 1}@example.com`,
                 role: "dispatcher",
+                invited: false,
             }),
         ),
     });

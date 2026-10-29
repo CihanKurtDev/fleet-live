@@ -62,17 +62,22 @@ function membershipRole(userId: number, companyId: number): UserRole | undefined
     return row?.role;
 }
 
+/**
+ * Registers a company with its first dispatcher. An address that already has
+ * an account comes back as `existing`, untouched: the answer to the visitor
+ * must not tell the two apart (the controller mails the owner instead).
+ */
 export function registerAccount(input: {
     company_name: string;
     name: string;
     email: string;
     password: string;
-}): UserRecord {
+}): { user: UserRecord; existing: boolean } {
     return withTransaction(() => {
-        if (UserModel.findByEmail(input.email)) {
-            throw new ConflictError("E-Mail ist bereits registriert.", {
-                email: "E-Mail ist bereits registriert.",
-            });
+        const existing = UserModel.findByEmail(input.email);
+
+        if (existing) {
+            return { user: existing, existing: true };
         }
 
         if (companyByName(input.company_name)) {
@@ -82,8 +87,7 @@ export function registerAccount(input: {
         }
 
         const companyId = insertCompany(input.company_name);
-
-        return UserModel.create({
+        const user = UserModel.create({
             name: input.name,
             email: input.email,
             password: input.password,
@@ -91,6 +95,8 @@ export function registerAccount(input: {
             role: "dispatcher",
             verified: false,
         });
+
+        return { user, existing: false };
     });
 }
 
@@ -147,60 +153,153 @@ export function resetPassword(token: string, password: string): number | undefin
     return row.user_id;
 }
 
+/** An account nobody has signed in to yet: it was created by an invitation. */
+function neverActivated(user: UserRecord): boolean {
+    return user.password_hash === null && user.email_verified_at === null;
+}
+
+function pendingInvite(companyId: number, userId: number) {
+    return stmt(
+        "SELECT role FROM company_invites WHERE company_id = ? AND user_id = ?",
+    ).get(companyId, userId) as { role: UserRole } | undefined;
+}
+
+/**
+ * Invites a person into a company. It never makes them a member: the invitation
+ * waits until they accept it. `activate` says the account has no password yet,
+ * so the mail must carry the link that sets one.
+ */
 export function inviteMember(
     companyId: number,
     email: string,
     role: UserRole,
-): { user: UserRecord; created: boolean } {
+    invitedBy: number,
+): { user: UserRecord; activate: boolean } {
     return withTransaction(() => {
-        const existing = UserModel.findByEmail(email);
+        const user =
+            UserModel.findByEmail(email) ??
+            UserModel.create({
+                name: email.split("@")[0] || "Eingeladen",
+                email,
+                password: null,
+                company_id: null,
+                verified: false,
+            });
 
-        if (existing && membershipRole(existing.id, companyId)) {
+        if (membershipRole(user.id, companyId)) {
             throw new ConflictError("Diese Person ist schon in der Firma.", {
                 email: "Diese Person ist schon in der Firma.",
             });
         }
 
-        if (existing) {
-            stmt(
-                `
-                INSERT INTO company_memberships (user_id, company_id, role)
-                VALUES (?, ?, ?)
-                `,
-            ).run(existing.id, companyId, role);
-
-            return { user: existing, created: false };
+        if (pendingInvite(companyId, user.id)) {
+            throw new ConflictError("Diese Person ist schon eingeladen.", {
+                email: "Diese Person ist schon eingeladen.",
+            });
         }
 
-        const user = UserModel.create({
-            name: email.split("@")[0] || "Eingeladen",
-            email,
-            password: null,
-            company_id: companyId,
-            role,
-            verified: false,
-        });
+        stmt(
+            `
+            INSERT INTO company_invites (company_id, user_id, role, invited_by)
+            VALUES (?, ?, ?, ?)
+            `,
+        ).run(companyId, user.id, role, invitedBy);
 
-        return { user, created: true };
+        return { user, activate: neverActivated(user) };
     });
 }
 
+/** Turns the invitation into a membership, with the role it was sent with. */
+function joinFromInvite(userId: number, companyId: number): boolean {
+    const invite = pendingInvite(companyId, userId);
+
+    if (!invite) {
+        return false;
+    }
+
+    stmt(
+        `
+        INSERT INTO company_memberships (user_id, company_id, role)
+        VALUES (?, ?, ?)
+        ON CONFLICT (user_id, company_id) DO NOTHING
+        `,
+    ).run(userId, companyId, invite.role);
+    stmt("DELETE FROM company_invites WHERE company_id = ? AND user_id = ?").run(
+        companyId,
+        userId,
+    );
+    return true;
+}
+
+/** The link in the invitation mail: sets name and password and accepts that invitation. */
 export function acceptInvite(input: {
     token: string;
     name: string;
     password: string;
 }): { userId: number; companyId: number } | undefined {
-    const row = AuthTokenModel.claim(input.token, "invite");
+    return withTransaction(() => {
+        const row = AuthTokenModel.claim(input.token, "invite");
 
-    if (!row?.user_id || !row.company_id) {
-        return undefined;
-    }
+        // A withdrawn invitation leaves its link without anything to accept.
+        if (!row?.user_id || !row.company_id || !joinFromInvite(row.user_id, row.company_id)) {
+            return undefined;
+        }
 
-    UserModel.setName(row.user_id, input.name);
-    UserModel.setPasswordHash(row.user_id, hashPassword(input.password));
-    UserModel.markEmailVerified(row.user_id);
+        UserModel.setName(row.user_id, input.name);
+        UserModel.setPasswordHash(row.user_id, hashPassword(input.password));
+        UserModel.markEmailVerified(row.user_id);
 
-    return { userId: row.user_id, companyId: row.company_id };
+        return { userId: row.user_id, companyId: row.company_id };
+    });
+}
+
+export type InvitationRow = {
+    company_id: number;
+    company_name: string;
+    role: UserRole;
+    invited_by_name: string | null;
+    created_at: string;
+};
+
+/** Invitations waiting for this person, oldest first. */
+export function listInvitations(userId: number): InvitationRow[] {
+    return stmt(
+        `
+        SELECT i.company_id, c.name AS company_name, i.role,
+               inviter.name AS invited_by_name, i.created_at
+        FROM company_invites i
+        JOIN companies c ON c.id = i.company_id
+        LEFT JOIN users inviter ON inviter.id = i.invited_by
+        WHERE i.user_id = ?
+        ORDER BY i.created_at, i.id
+        `,
+    ).all(userId) as InvitationRow[];
+}
+
+/** The signed-in person accepts; false when there is no such invitation. */
+export function acceptInvitation(userId: number, companyId: number): boolean {
+    return withTransaction(() => joinFromInvite(userId, companyId));
+}
+
+/** The signed-in person declines; false when there is no such invitation. */
+export function declineInvitation(userId: number, companyId: number): boolean {
+    const result = stmt(
+        "DELETE FROM company_invites WHERE company_id = ? AND user_id = ?",
+    ).run(companyId, userId);
+
+    return Number(result.changes) > 0;
+}
+
+/** The company takes its invitation back; its mail link then accepts nothing. */
+export function withdrawInvite(companyId: number, userId: number): boolean {
+    return withTransaction(() => {
+        const result = stmt(
+            "DELETE FROM company_invites WHERE company_id = ? AND user_id = ?",
+        ).run(companyId, userId);
+
+        AuthTokenModel.deleteInvites(userId, companyId);
+        return Number(result.changes) > 0;
+    });
 }
 
 export type MemberRow = {
@@ -208,18 +307,28 @@ export type MemberRow = {
     name: string;
     email: string;
     role: UserRole;
+    /** Invited and not accepted yet: no access to the company. */
+    invited: boolean;
 };
 
+/** Members first, then open invitations; each group by name. */
 export function listMembers(companyId: number): MemberRow[] {
-    return stmt(
+    const rows = stmt(
         `
-        SELECT u.id AS user_id, u.name, u.email, m.role
+        SELECT u.id AS user_id, u.name, u.email, m.role, 0 AS invited
         FROM company_memberships m
         JOIN users u ON u.id = m.user_id
         WHERE m.company_id = ?
-        ORDER BY u.name COLLATE NOCASE
+        UNION ALL
+        SELECT u.id AS user_id, u.name, u.email, i.role, 1 AS invited
+        FROM company_invites i
+        JOIN users u ON u.id = i.user_id
+        WHERE i.company_id = ?
+        ORDER BY invited, name COLLATE NOCASE
         `,
-    ).all(companyId) as MemberRow[];
+    ).all(companyId, companyId) as (Omit<MemberRow, "invited"> & { invited: number })[];
+
+    return rows.map((row) => ({ ...row, invited: row.invited === 1 }));
 }
 
 function assertDispatcherRemains(
@@ -440,21 +549,6 @@ export function pickLoginCompany(userId: number) {
     return rows.find((row) => row.sso_required === 0) ?? rows[0];
 }
 
-export function companyIdForLoginSso(email: string): number | undefined {
-    const user = UserModel.findByEmail(email);
-
-    if (!user?.email_verified_at) {
-        return undefined;
-    }
-
-    const ready = listMemberships(user.id).filter((row) =>
-        ssoClient(row.company_id),
-    );
-    const required = ready.find((row) => row.sso_required === 1);
-
-    return (required ?? ready[0])?.company_id;
-}
-
 export function replaceRecoveryCodes(userId: number, codes: string[]) {
     stmt("DELETE FROM totp_recovery_codes WHERE user_id = ?").run(userId);
 
@@ -579,6 +673,15 @@ export function linkSsoIdentity(input: {
 
         return "linked";
     });
+}
+
+/** The person's own link to Google or Microsoft; false when there was none. */
+export function unlinkSsoIdentity(userId: number, provider: "google" | "microsoft"): boolean {
+    const result = stmt(
+        "DELETE FROM sso_identities WHERE user_id = ? AND provider = ?",
+    ).run(userId, provider);
+
+    return Number(result.changes) > 0;
 }
 
 export function authUserFor(userId: number, companyId: number) {

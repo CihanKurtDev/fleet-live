@@ -392,7 +392,7 @@ async function realDriver(): Promise<OidcDriver> {
                 issuer: claims.iss,
                 subject: claims.sub,
                 email: email.toLowerCase(),
-                emailVerified: claims.email_verified === true,
+                emailVerified: emailVerifiedFrom(claims),
                 name,
             };
         },
@@ -429,6 +429,28 @@ export async function oidcCallback(
 }
 
 const ENTRA_ISSUER = /^https:\/\/login\.microsoftonline\.com\/[0-9a-f-]{36}\/v2\.0$/;
+
+/**
+ * Whether the provider vouches for the e-mail in the token. Most send
+ * `email_verified`. Entra ID rarely does; it sends `xms_edov` (the tenant's
+ * admin verified the e-mail's domain) once the app registration asks for it
+ * as an optional claim next to `email`. Only an Entra token counts for that.
+ */
+export function emailVerifiedFrom(claims: {
+    iss?: unknown;
+    email_verified?: unknown;
+    xms_edov?: unknown;
+}): boolean {
+    if (claims.email_verified === true) {
+        return true;
+    }
+
+    return (
+        typeof claims.iss === "string" &&
+        ENTRA_ISSUER.test(claims.iss) &&
+        claims.xms_edov === true
+    );
+}
 
 /**
  * Whether the validated `iss` of a token belongs to the provider the flow was

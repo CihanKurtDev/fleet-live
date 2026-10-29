@@ -1124,6 +1124,37 @@ function ensureTotpLastStep(database: DatabaseSync) {
  *   this fixes: they move to `sso_identities_legacy` untouched and are never
  *   used to sign in. Their owners link again, signed in, from the account page.
  */
+/**
+ * Invitations used to make the invitee a member at once. A membership of an
+ * account nobody has signed in to yet becomes the open invitation it was, so
+ * its mail link still works and the person still has to accept.
+ */
+export function ensureCompanyInvites(database: DatabaseSync) {
+    // schema.sql creates the table; a bare database in a migration test has none.
+    if (
+        !tableExists(database, "company_invites") ||
+        !tableExists(database, "company_memberships")
+    ) {
+        return;
+    }
+
+    database.exec(`
+        INSERT OR IGNORE INTO company_invites (company_id, user_id, role, created_at)
+        SELECT m.company_id, m.user_id, m.role, m.created_at
+        FROM company_memberships m
+        JOIN users u ON u.id = m.user_id
+        WHERE u.password_hash IS NULL
+          AND u.email_verified_at IS NULL;
+
+        DELETE FROM company_memberships
+        WHERE user_id IN (
+            SELECT id FROM users
+            WHERE password_hash IS NULL
+              AND email_verified_at IS NULL
+        );
+    `);
+}
+
 export function ensureAuthHardening(database: DatabaseSync) {
     addColumn(database, "sessions", "mfa", "INTEGER NOT NULL DEFAULT 0");
     addColumn(database, "sessions", "sso_company_id", "INTEGER");
@@ -1703,6 +1734,7 @@ export function migrate(database: DatabaseSync) {
     ensureSessionPersistent(database);
     ensureTotpLastStep(database);
     ensureAuthHardening(database);
+    ensureCompanyInvites(database);
     ensureTripEvents(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.

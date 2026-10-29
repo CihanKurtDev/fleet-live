@@ -46,6 +46,87 @@ CREATE TABLE IF NOT EXISTS company_memberships (
     UNIQUE (user_id, company_id)
 );
 
+-- An invitation is not a membership: it becomes one only when the invited
+-- person accepts it (the link in the mail, or Konto → Firmen when signed in).
+CREATE TABLE IF NOT EXISTS company_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('dispatcher', 'viewer')),
+    invited_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (invited_by)
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    UNIQUE (company_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_company_invites_user
+    ON company_invites(user_id);
+
+-- Who changed access to a company: invitations, roles, removals, sign-in rules.
+-- Names and the address are copied at the time, so a deleted or renamed
+-- account still reads as it was.
+CREATE TABLE IF NOT EXISTS audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    actor_user_id INTEGER,
+    actor_name TEXT,
+    target_user_id INTEGER,
+    target_name TEXT,
+    target_email TEXT,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (actor_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    FOREIGN KEY (target_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_events_company
+    ON audit_events(company_id, id);
+
+-- A domain a company proves with a DNS TXT record. The company login is
+-- found by the e-mail's domain, only for a confirmed one.
+CREATE TABLE IF NOT EXISTS company_domains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    domain TEXT NOT NULL,
+    token TEXT NOT NULL,
+    verified_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE,
+
+    UNIQUE (company_id, domain)
+);
+
+-- Several companies may claim a domain; only one can prove it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_company_domains_verified
+    ON company_domains(domain)
+    WHERE verified_at IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

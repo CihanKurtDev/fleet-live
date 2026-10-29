@@ -1,14 +1,18 @@
 import express from "express";
 import {
+    acceptInvitationHandler,
     acceptInviteHandler,
     changePassword,
     confirmTotp,
     createCompany,
     createInvite,
+    declineInvitationHandler,
     deleteMember,
     disableTotp,
     dismissImport,
     forgotPassword,
+    getAudit,
+    getInvitations,
     getMe,
     getMembers,
     getSecurity,
@@ -23,6 +27,7 @@ import {
     setupTotp,
     switchCompany,
     verifyEmail,
+    withdrawInviteHandler,
 } from "../controllers/auth.controller";
 import {
     finishSso,
@@ -31,12 +36,18 @@ import {
     startCompanySso,
     startSso,
     startSsoLink,
+    unlinkSso,
 } from "../controllers/authSso.controller";
+import {
+    addDomain,
+    listDomains,
+    removeDomain,
+    verifyDomain,
+} from "../controllers/companyDomain.controller";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireDispatcher } from "../middleware/requireDispatcher";
 import {
     authIpRateLimit,
-    loginAccountRateLimit,
     loginIpRateLimit,
     ssoStartRateLimit,
     tokenIpRateLimit,
@@ -47,7 +58,8 @@ const router = express.Router();
 router.post("/register", authIpRateLimit, register);
 router.post("/resend-verification", authIpRateLimit, resendVerification);
 router.post("/verify-email", tokenIpRateLimit, verifyEmail);
-router.post("/login", loginIpRateLimit, loginAccountRateLimit, login);
+// Wrong passwords per address slow down in the controller (lib/loginAttempts.ts).
+router.post("/login", loginIpRateLimit, login);
 router.post("/logout", logout);
 router.post("/logout-all", requireAuth, logoutAll);
 router.get("/me", getMe);
@@ -56,7 +68,16 @@ router.post("/reset-password", tokenIpRateLimit, resetPasswordHandler);
 router.post("/password", requireAuth, changePassword);
 router.post("/invites", requireAuth, requireDispatcher, createInvite);
 router.post("/invites/accept", tokenIpRateLimit, acceptInviteHandler);
+router.delete("/invites/:userId", requireAuth, requireDispatcher, withdrawInviteHandler);
+router.get("/invitations", requireAuth, getInvitations);
+router.post("/invitations/:companyId/accept", requireAuth, acceptInvitationHandler);
+router.delete("/invitations/:companyId", requireAuth, declineInvitationHandler);
 router.get("/members", requireAuth, requireDispatcher, getMembers);
+router.get("/audit", requireAuth, requireDispatcher, getAudit);
+router.get("/domains", requireAuth, requireDispatcher, listDomains);
+router.post("/domains", requireAuth, requireDispatcher, addDomain);
+router.post("/domains/:id/verify", requireAuth, requireDispatcher, verifyDomain);
+router.delete("/domains/:id", requireAuth, requireDispatcher, removeDomain);
 router.patch("/members/:userId", requireAuth, requireDispatcher, patchMember);
 router.delete("/members/:userId", requireAuth, requireDispatcher, deleteMember);
 router.post("/companies", requireAuth, createCompany);
@@ -72,6 +93,7 @@ router.get("/sso/providers", listSsoProviders);
 router.post("/sso/company/discover", authIpRateLimit, discoverCompanySso);
 router.get("/sso/company/start", ssoStartRateLimit, startCompanySso);
 router.post("/sso/link", ssoStartRateLimit, startSsoLink);
+router.delete("/sso/links/:provider", requireAuth, unlinkSso);
 router.get("/sso/company/callback", finishSso);
 router.get("/sso/:provider/start", ssoStartRateLimit, startSso);
 router.get("/sso/:provider/callback", finishSso);

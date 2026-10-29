@@ -180,6 +180,7 @@ export {
 
 export type {
     AuthUser,
+    Invitation,
     InviteInput,
     LoginChallenge,
     LoginInput,
@@ -193,10 +194,35 @@ export type {
     UserRole,
 } from "./models/auth";
 
+export type { CompanyDomain } from "./models/companyDomain";
+
+export {
+    DOMAIN_RECORD_PREFIX,
+    DOMAIN_RECORD_VALUE_PREFIX,
+    emailDomain,
+    parseDomainInput,
+} from "./models/companyDomain";
+
+export type {
+    AuditAction,
+    AuditDetails,
+    AuditEvent,
+    SecurityChange,
+} from "./models/audit";
+
+export {
+    AUDIT_ACTIONS,
+    AUDIT_PAGE_LIMIT,
+    SECURITY_CHANGES,
+    formatAuditEvent,
+    parseAuditListQuery,
+} from "./models/audit";
+
 export {
     PASSWORD_MAX_LENGTH,
     PASSWORD_MIN_LENGTH,
     USER_ROLES,
+    USER_ROLE_LABELS,
     isLoginChallenge,
     parseAcceptInviteInput,
     parseChangePasswordInput,

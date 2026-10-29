@@ -1,21 +1,41 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import QRCode from "qrcode";
-import type { UserRole } from "@fleet-live/shared";
 import {
+    USER_ROLE_LABELS as ROLE_LABEL,
+    formatAuditEvent,
+    type AuditEvent,
+    type CompanyDomain,
+    type Invitation,
+    type SsoProviders,
+    type UserRole,
+} from "@fleet-live/shared";
+import {
+    acceptInvitation,
+    addDomain,
     changePassword,
     confirmTotpSetup,
     disableTotp,
     createCompany,
+    declineInvitation,
     getSecurity,
+    getSsoProviders,
     inviteMember,
+    listAudit,
+    listDomains,
+    listInvitations,
     listMembers,
+    removeDomain,
     removeMember,
     setMemberRole,
     setupTotp,
     startSsoLink,
     switchCompany,
+    unlinkSso,
     updateSecurity,
+    verifyDomain,
+    withdrawInvite,
+    type AuditPage,
     type CompanySecurity,
     type Member,
 } from "../api/auth";
@@ -25,29 +45,49 @@ import { Checkbox } from "../components/ui/Checkbox/Checkbox";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
 import { Table } from "../components/ui/Table/Table";
+import { TablePagination } from "../components/ui/Table/TablePagination";
 import { useAuth } from "../hooks/useAuth";
 import { usePageTitle } from "../hooks/usePageTitle";
 import type { TableColumn } from "../types/table";
+import { formatShortStamp, formatTimestamp } from "../utils/dateTime";
 import authForm from "./LoginPage.module.scss";
 import styles from "./AccountPage.module.scss";
 import { Select } from "../components/ui/Select/Select";
 
 /** Bereich im URL-Hash, z. B. `/konto#team`. */
-type SectionId = "passwort" | "zwei-faktor" | "team" | "firmen-login" | "firmen";
+type SectionId =
+    | "passwort"
+    | "zwei-faktor"
+    | "anmeldung"
+    | "team"
+    | "firmen-login"
+    | "protokoll"
+    | "firmen";
 
-const OWN_SECTIONS: SectionId[] = ["passwort", "zwei-faktor", "firmen"];
+const OWN_SECTIONS: SectionId[] = ["passwort", "zwei-faktor", "anmeldung", "firmen"];
 /** Firmenverwaltung nur für Dispatcher, wie die API. */
-const DISPATCHER_SECTIONS: SectionId[] = [...OWN_SECTIONS, "team", "firmen-login"];
+const DISPATCHER_SECTIONS: SectionId[] = [...OWN_SECTIONS, "team", "firmen-login", "protokoll"];
 
 type Message = { section: SectionId; text: string };
 
-/** The answer of a company-login link (`/konto?sso=…`), set by the API. */
-const linkMessages = (result: string | null): { info: Message | null; error: Message | null } => {
+/**
+ * The answer of a link (`/konto?sso=…#section`), set by the API: the company
+ * login comes back to `#firmen-login`, Google and Microsoft to `#anmeldung`.
+ */
+const linkMessages = (
+    result: string | null,
+    hash: string,
+): { info: Message | null; error: Message | null } => {
+    const own = hash === "#anmeldung";
+    const section: SectionId = own ? "anmeldung" : "firmen-login";
+
     if (result === "linked") {
         return {
             info: {
-                section: "firmen-login",
-                text: "Dein Konto ist mit dem Firmen-Login verknüpft. Jetzt lässt er sich verlangen.",
+                section,
+                text: own
+                    ? "Verknüpft. Du kannst dich jetzt auch damit anmelden."
+                    : "Dein Konto ist mit dem Firmen-Login verknüpft. Jetzt lässt er sich verlangen.",
             },
             error: null,
         };
@@ -55,20 +95,23 @@ const linkMessages = (result: string | null): { info: Message | null; error: Mes
 
     const text =
         result === "taken"
-            ? "Dieser Firmen-Login gehört schon zu einem anderen Konto."
+            ? own
+                ? "Dieses Konto bei Google oder Microsoft gehört schon zu einem anderen fleet-live-Konto."
+                : "Dieser Firmen-Login gehört schon zu einem anderen Konto."
             : result === "mismatch"
-              ? "Der Firmen-Login meldet eine andere oder unbestätigte E-Mail."
+              ? own
+                  ? "Google oder Microsoft meldet eine andere oder unbestätigte E-Mail als dein Konto."
+                  : "Der Firmen-Login meldet eine andere oder unbestätigte E-Mail."
               : result === "error"
-                ? "Die Verknüpfung mit dem Firmen-Login ist fehlgeschlagen."
+                ? own
+                    ? "Die Verknüpfung ist fehlgeschlagen."
+                    : "Die Verknüpfung mit dem Firmen-Login ist fehlgeschlagen."
                 : null;
 
-    return { info: null, error: text ? { section: "firmen-login", text } : null };
+    return { info: null, error: text ? { section, text } : null };
 };
 
-const ROLE_LABEL: Record<UserRole, string> = {
-    dispatcher: "Dispatcher",
-    viewer: "Nur lesen",
-};
+const PROVIDER_LABEL = { google: "Google", microsoft: "Microsoft" } as const;
 
 const RoleOptions = () => (
     <>
@@ -82,12 +125,18 @@ export const AccountPage = () => {
     const { user, setUser } = useAuth();
     const { hash, search } = useLocation();
     const [members, setMembers] = useState<Member[]>([]);
+    const [invitations, setInvitations] = useState<Invitation[]>([]);
+    const [providers, setProviders] = useState<SsoProviders | null>(null);
+    const [domains, setDomains] = useState<CompanyDomain[] | null>(null);
+    const [newDomain, setNewDomain] = useState("");
+    const [auditPage, setAuditPage] = useState(1);
+    const [audit, setAudit] = useState<AuditPage | null>(null);
     const [security, setSecurity] = useState<CompanySecurity | null>(null);
     const [error, setError] = useState<Message | null>(
-        () => linkMessages(new URLSearchParams(search).get("sso")).error,
+        () => linkMessages(new URLSearchParams(search).get("sso"), hash).error,
     );
     const [info, setInfo] = useState<Message | null>(
-        () => linkMessages(new URLSearchParams(search).get("sso")).info,
+        () => linkMessages(new URLSearchParams(search).get("sso"), hash).info,
     );
     const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
     const [isRemoving, setIsRemoving] = useState(false);
@@ -133,6 +182,100 @@ export const AccountPage = () => {
                 }),
             );
     }, [user?.role, user?.company_id]);
+
+    const userId = user?.id;
+    const invitationCount = user?.invitations ?? 0;
+
+    // Asked on every visit of the page, not only when the count from the login
+    // says so: an invitation may have arrived while the session was open.
+    // Accepting or declining changes the count and loads the list again.
+    useEffect(() => {
+        if (userId === undefined) {
+            return;
+        }
+
+        const controller = new AbortController();
+        listInvitations(controller.signal)
+            .then((result) => setInvitations(result.data))
+            .catch((caught: unknown) => {
+                if (!controller.signal.aborted) {
+                    setError({
+                        section: "firmen",
+                        text:
+                            caught instanceof ApiError
+                                ? caught.message
+                                : "Einladungen konnten nicht geladen werden.",
+                    });
+                }
+            });
+
+        return () => controller.abort();
+    }, [userId, invitationCount]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        getSsoProviders(controller.signal)
+            .then(setProviders)
+            .catch(() => {
+                // Without the answer the section stays hidden; nothing else depends on it.
+            });
+
+        return () => controller.abort();
+    }, []);
+
+    const isDispatcherUser = user?.role === "dispatcher";
+    const companyId = user?.company_id;
+    const auditOpen = hash === "#protokoll";
+
+    const loginOpen = hash === "#firmen-login";
+
+    // The company's domains load with the company-login section.
+    useEffect(() => {
+        if (!isDispatcherUser || !loginOpen || companyId === undefined) {
+            return;
+        }
+
+        const controller = new AbortController();
+        listDomains(controller.signal)
+            .then((result) => setDomains(result.data))
+            .catch((caught: unknown) => {
+                if (!controller.signal.aborted) {
+                    setError({
+                        section: "firmen-login",
+                        text:
+                            caught instanceof ApiError
+                                ? caught.message
+                                : "Domains konnten nicht geladen werden.",
+                    });
+                }
+            });
+
+        return () => controller.abort();
+    }, [isDispatcherUser, loginOpen, companyId]);
+
+    // The log loads when its section is open, page by page.
+    useEffect(() => {
+        if (!isDispatcherUser || !auditOpen || companyId === undefined) {
+            return;
+        }
+
+        const controller = new AbortController();
+        listAudit(auditPage, controller.signal)
+            .then(setAudit)
+            .catch((caught: unknown) => {
+                if (!controller.signal.aborted) {
+                    setError({
+                        section: "protokoll",
+                        text:
+                            caught instanceof ApiError
+                                ? caught.message
+                                : "Das Protokoll konnte nicht geladen werden.",
+                    });
+                }
+            });
+
+        return () => controller.abort();
+    }, [isDispatcherUser, auditOpen, auditPage, companyId]);
 
     useEffect(() => {
         if (!otpauth) {
@@ -302,6 +445,115 @@ export const AccountPage = () => {
         }
     };
 
+    const linkOwn = async (provider: "google" | "microsoft") => {
+        clearMessages();
+
+        try {
+            const started = await startSsoLink({ provider });
+            window.location.assign(started.url);
+        } catch (caught: unknown) {
+            showError("anmeldung", caught, `${PROVIDER_LABEL[provider]} konnte nicht gestartet werden.`);
+        }
+    };
+
+    const unlinkOwn = async (provider: "google" | "microsoft") => {
+        clearMessages();
+
+        try {
+            setUser(await unlinkSso(provider));
+            setInfo({
+                section: "anmeldung",
+                text: `${PROVIDER_LABEL[provider]} ist nicht mehr mit deinem Konto verknüpft.`,
+            });
+        } catch (caught: unknown) {
+            showError("anmeldung", caught, "Die Verknüpfung bleibt bestehen.");
+        }
+    };
+
+    const submitDomain = async (event: FormEvent) => {
+        event.preventDefault();
+        clearMessages();
+
+        try {
+            const { data } = await addDomain(newDomain);
+            setDomains((current) => [...(current ?? []), data].sort((a, b) => a.domain.localeCompare(b.domain)));
+            setNewDomain("");
+            setInfo({
+                section: "firmen-login",
+                text: `${data.domain} eingetragen. Lege den TXT-Eintrag an und prüfe ihn dann.`,
+            });
+        } catch (caught: unknown) {
+            showError("firmen-login", caught, "Domain konnte nicht eingetragen werden.");
+        }
+    };
+
+    const checkDomain = async (domain: CompanyDomain) => {
+        clearMessages();
+
+        try {
+            const { data } = await verifyDomain(domain.id);
+            setDomains(data);
+            setInfo({
+                section: "firmen-login",
+                text: `${domain.domain} ist bestätigt. Die Anmeldeseite findet euren Firmen-Login jetzt über die E-Mail.`,
+            });
+        } catch (caught: unknown) {
+            showError("firmen-login", caught, "Die Domain konnte nicht geprüft werden.");
+        }
+    };
+
+    const dropDomain = async (domain: CompanyDomain) => {
+        clearMessages();
+
+        try {
+            const { data } = await removeDomain(domain.id);
+            setDomains(data);
+            setInfo({ section: "firmen-login", text: `${domain.domain} entfernt.` });
+        } catch (caught: unknown) {
+            showError("firmen-login", caught, "Die Domain bleibt.");
+        }
+    };
+
+    const withdraw = async (member: Member) => {
+        clearMessages();
+
+        try {
+            const listed = await withdrawInvite(member.user_id);
+            setMembers(listed.data);
+            setInfo({
+                section: "team",
+                text: `Einladung an ${member.email} zurückgezogen.`,
+            });
+        } catch (caught: unknown) {
+            showError("team", caught, "Einladung bleibt bestehen.");
+        }
+    };
+
+    const answerInvitation = async (invitation: Invitation, accept: boolean) => {
+        clearMessages();
+
+        try {
+            const next = accept
+                ? await acceptInvitation(invitation.company_id)
+                : await declineInvitation(invitation.company_id);
+            setUser(next);
+            setInfo({
+                section: "firmen",
+                text: accept
+                    ? `Du bist jetzt Mitglied bei ${invitation.company_name}. Du arbeitest weiter in ${user.company_name}; wechseln kannst du unter „Deine Firmen“.`
+                    : `Einladung von ${invitation.company_name} abgelehnt.`,
+            });
+        } catch (caught: unknown) {
+            showError(
+                "firmen",
+                caught,
+                accept
+                    ? "Einladung konnte nicht angenommen werden."
+                    : "Einladung konnte nicht abgelehnt werden.",
+            );
+        }
+    };
+
     const saveSecurity = async (event: FormEvent) => {
         event.preventDefault();
         if (!security) {
@@ -390,6 +642,9 @@ export const AccountPage = () => {
                     {row.user_id === user.id && (
                         <span className={styles.muted}> (du)</span>
                     )}
+                    {row.invited && (
+                        <span className={styles.stateOff}> · Einladung offen</span>
+                    )}
                 </span>
             ),
         },
@@ -402,35 +657,71 @@ export const AccountPage = () => {
             key: "role",
             displayText: "Rolle",
             width: "170px",
-            render: (role, { row }) => (
-                <Select
-                    size="sm"
-                    fullWidth
-                    aria-label={`Rolle von ${row.name}`}
-                    value={role}
-                    onChange={(event) =>
-                        changeRole(row, event.target.value as UserRole)
-                    }
-                >
-                    <RoleOptions />
-                </Select>
-            ),
+            render: (role, { row }) =>
+                row.invited ? (
+                    <span className={styles.muted}>{ROLE_LABEL[role]}</span>
+                ) : (
+                    <Select
+                        size="sm"
+                        fullWidth
+                        aria-label={`Rolle von ${row.name}`}
+                        value={role}
+                        onChange={(event) =>
+                            changeRole(row, event.target.value as UserRole)
+                        }
+                    >
+                        <RoleOptions />
+                    </Select>
+                ),
         },
         {
             key: "user_id",
             displayText: "Entfernen",
             headerText: "",
             width: "120px",
-            render: (_, { row }) => (
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setRemoveTarget(row)}
-                >
-                    Entfernen
-                </Button>
+            render: (_, { row }) =>
+                row.invited ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Einladung an ${row.email} zurückziehen`}
+                        onClick={() => withdraw(row)}
+                    >
+                        Zurückziehen
+                    </Button>
+                ) : (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRemoveTarget(row)}
+                    >
+                        Entfernen
+                    </Button>
+                ),
+        },
+    ];
+
+    const auditColumns: TableColumn<AuditEvent>[] = [
+        {
+            key: "created_at",
+            displayText: "Zeitpunkt",
+            width: "150px",
+            render: (createdAt) => (
+                <span className={styles.muted}>{formatTimestamp(createdAt)}</span>
             ),
+        },
+        {
+            key: "actor_name",
+            displayText: "Wer",
+            width: "200px",
+            render: (name) => <span className={styles.strong}>{name ?? "—"}</span>,
+        },
+        {
+            key: "action",
+            displayText: "Was",
+            render: (_, { row }) => formatAuditEvent(row),
         },
     ];
 
@@ -457,6 +748,9 @@ export const AccountPage = () => {
         </Link>
     );
 
+    const ownProviders = (["google", "microsoft"] as const).filter(
+        (provider) => providers?.[provider] === true,
+    );
     const sectionError = error?.section === section ? error.text : null;
     const sectionInfo = info?.section === section ? info.text : null;
     // Shown right under the form that caused them, so the answer is next to
@@ -502,6 +796,7 @@ export const AccountPage = () => {
                             text: user.totp_enabled ? "an" : "aus",
                             off: !user.totp_enabled,
                         })}
+                        {ownProviders.length > 0 && navLink("anmeldung", "Google und Microsoft")}
                     </div>
                     {isDispatcher && (
                         <div
@@ -514,6 +809,7 @@ export const AccountPage = () => {
                             </span>
                             {navLink("team", "Team und Einladungen")}
                             {navLink("firmen-login", "Firmen-Login")}
+                            {navLink("protokoll", "Protokoll")}
                         </div>
                     )}
                     <div
@@ -524,7 +820,19 @@ export const AccountPage = () => {
                         <span id="konto-nav-firmen" className={styles.groupLabel}>
                             Firmen
                         </span>
-                        {navLink("firmen", "Firma wechseln oder anlegen")}
+                        {navLink(
+                            "firmen",
+                            "Firma wechseln oder anlegen",
+                            invitations.length > 0
+                                ? {
+                                      text:
+                                          invitations.length === 1
+                                              ? "1 Einladung"
+                                              : `${invitations.length} Einladungen`,
+                                      off: true,
+                                  }
+                                : undefined,
+                        )}
                     </div>
                 </nav>
 
@@ -710,7 +1018,9 @@ export const AccountPage = () => {
                                 <div className={styles.panelHead}>
                                     <h2 className={styles.panelTitle}>
                                         Team{" "}
-                                        <span className={styles.count}>{members.length}</span>
+                                        <span className={styles.count}>
+                                            {members.filter((member) => !member.invited).length}
+                                        </span>
                                     </h2>
                                     <span className={styles.muted}>
                                         Mindestens ein Dispatcher bleibt
@@ -846,12 +1156,220 @@ export const AccountPage = () => {
                                 !sectionError && <p className={styles.help}>Laden…</p>
                             )}
                         </section>
+                        <section className={styles.panel}>
+                            <h2 className={styles.panelTitle}>Domains</h2>
+                            <p className={styles.help}>
+                                Mit einer bestätigten Domain findet die Anmeldeseite euren
+                                Firmen-Login über die E-Mail-Adresse (z. B. alle @firma.de).
+                                Bestätigt wird über einen TXT-Eintrag in eurem DNS.
+                            </p>
+                            {domains && domains.length > 0 && (
+                                <ul className={styles.companies}>
+                                    {domains.map((domain) => (
+                                        <li
+                                            key={domain.id}
+                                            className={`${styles.company} ${styles.invitation}`}
+                                        >
+                                            <span className={styles.invitationText}>
+                                                <span className={styles.strong}>{domain.domain}</span>
+                                                {domain.verified_at ? (
+                                                    <span className={styles.active}>Bestätigt</span>
+                                                ) : (
+                                                    <span className={styles.help}>
+                                                        TXT-Eintrag <code>{domain.record_name}</code>
+                                                        {" mit dem Wert "}
+                                                        <code className={styles.record}>{domain.record_value}</code>
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                aria-label={`${domain.domain} entfernen`}
+                                                onClick={() => dropDomain(domain)}
+                                            >
+                                                Entfernen
+                                            </Button>
+                                            {domain.verified_at ? (
+                                                <span aria-hidden="true" />
+                                            ) : (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    aria-label={`${domain.domain} prüfen`}
+                                                    onClick={() => checkDomain(domain)}
+                                                >
+                                                    Prüfen
+                                                </Button>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <form className={styles.domainRow} onSubmit={submitDomain}>
+                                <div className={authForm.field}>
+                                    <label htmlFor="company-domain">Domain</label>
+                                    <Input
+                                        id="company-domain"
+                                        size="md"
+                                        fullWidth
+                                        required
+                                        placeholder="firma.de"
+                                        value={newDomain}
+                                        onChange={(event) => setNewDomain(event.target.value)}
+                                    />
+                                </div>
+                                <Button type="submit" size="md">
+                                    Eintragen
+                                </Button>
+                            </form>
+                        </section>
                         {messages}
+                        </>
+                    )}
+
+                    {section === "anmeldung" && (
+                        <>
+                            <section className={styles.panel}>
+                                <h2 className={styles.panelTitle}>Google und Microsoft</h2>
+                                <p className={styles.muted}>
+                                    Verknüpfe ein Konto mit derselben E-Mail ({user.email}),
+                                    dann kannst du dich auch damit anmelden. Dein Passwort bleibt.
+                                </p>
+                                {ownProviders.length === 0 ? (
+                                    <p className={styles.muted}>
+                                        Auf diesem Server ist keine Anmeldung über Google oder
+                                        Microsoft eingerichtet.
+                                    </p>
+                                ) : (
+                                    <ul className={styles.companies}>
+                                        {ownProviders.map((provider) => {
+                                            const linked = user.sso_links[provider];
+
+                                            return (
+                                                <li key={provider} className={styles.company}>
+                                                    <span className={styles.strong}>
+                                                        {PROVIDER_LABEL[provider]}
+                                                    </span>
+                                                    <span
+                                                        className={
+                                                            linked ? styles.active : styles.muted
+                                                        }
+                                                    >
+                                                        {linked ? "Verknüpft" : "Nicht verknüpft"}
+                                                    </span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        aria-label={`${PROVIDER_LABEL[provider]} ${linked ? "trennen" : "verknüpfen"}`}
+                                                        onClick={() =>
+                                                            linked
+                                                                ? unlinkOwn(provider)
+                                                                : linkOwn(provider)
+                                                        }
+                                                    >
+                                                        {linked ? "Trennen" : "Verknüpfen"}
+                                                    </Button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </section>
+                            {messages}
+                        </>
+                    )}
+
+                    {section === "protokoll" && (
+                        <>
+                            <section className={`${styles.panel} ${styles.teamPanel}`}>
+                                <div className={styles.panelHead}>
+                                    <h2 className={styles.panelTitle}>
+                                        Protokoll{" "}
+                                        {audit && <span className={styles.count}>{audit.meta.total}</span>}
+                                    </h2>
+                                    <span className={styles.muted}>
+                                        Einladungen, Rollen und Anmelde-Regeln dieser Firma
+                                    </span>
+                                </div>
+                                <div className={styles.tableScroll}>
+                                    <Table
+                                        columns={auditColumns}
+                                        rows={audit?.data ?? []}
+                                        getRowKey={(event) => event.id}
+                                        caption="Änderungen am Zugang zur Firma"
+                                        className={styles.members}
+                                        emptyContent={audit ? "Noch keine Einträge" : "Wird geladen…"}
+                                    />
+                                </div>
+                                {audit && audit.meta.pageCount > 1 && (
+                                    <TablePagination
+                                        layout="footer"
+                                        page={audit.meta.page}
+                                        pageCount={audit.meta.pageCount}
+                                        limit={audit.meta.limit}
+                                        total={audit.meta.total}
+                                        onPageChange={setAuditPage}
+                                    />
+                                )}
+                            </section>
+                            {messages}
                         </>
                     )}
 
                     {section === "firmen" && (
                         <>
+                            {invitations.length > 0 && (
+                                <section className={styles.panel}>
+                                    <h2 className={styles.panelTitle}>
+                                        Einladungen{" "}
+                                        <span className={styles.count}>{invitations.length}</span>
+                                    </h2>
+                                    <p className={styles.muted}>
+                                        Erst wenn du annimmst, bist du in der Firma.
+                                    </p>
+                                    <ul className={styles.companies}>
+                                        {invitations.map((invitation) => (
+                                            <li
+                                                key={invitation.company_id}
+                                                className={`${styles.company} ${styles.invitation}`}
+                                            >
+                                                <span className={styles.invitationText}>
+                                                    <span className={styles.strong}>
+                                                        {invitation.company_name}
+                                                    </span>
+                                                    <span className={styles.muted}>
+                                                        {ROLE_LABEL[invitation.role]}
+                                                        {invitation.invited_by_name
+                                                            ? ` · von ${invitation.invited_by_name}`
+                                                            : ""}
+                                                        {` · ${formatShortStamp(invitation.created_at)}`}
+                                                    </span>
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    aria-label={`Einladung von ${invitation.company_name} ablehnen`}
+                                                    onClick={() => answerInvitation(invitation, false)}
+                                                >
+                                                    Ablehnen
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    aria-label={`Einladung von ${invitation.company_name} annehmen`}
+                                                    onClick={() => answerInvitation(invitation, true)}
+                                                >
+                                                    Annehmen
+                                                </Button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            )}
                             <section className={styles.panel}>
                                 <h2 className={styles.panelTitle}>Deine Firmen</h2>
                                 <ul className={styles.companies}>

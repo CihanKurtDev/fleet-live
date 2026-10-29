@@ -12,35 +12,57 @@ vi.mock("qrcode", () => ({
 }));
 
 vi.mock("../api/auth", () => ({
+    acceptInvitation: vi.fn(),
+    addDomain: vi.fn(),
     changePassword: vi.fn(),
     confirmTotpSetup: vi.fn(),
     createCompany: vi.fn(),
+    declineInvitation: vi.fn(),
     disableTotp: vi.fn(),
     getSecurity: vi.fn(),
+    getSsoProviders: vi.fn(),
     inviteMember: vi.fn(),
+    listAudit: vi.fn(),
+    listDomains: vi.fn(),
+    listInvitations: vi.fn(),
     listMembers: vi.fn(),
+    removeDomain: vi.fn(),
     removeMember: vi.fn(),
     setMemberRole: vi.fn(),
     setupTotp: vi.fn(),
     startSsoLink: vi.fn(),
     switchCompany: vi.fn(),
+    unlinkSso: vi.fn(),
     updateSecurity: vi.fn(),
+    verifyDomain: vi.fn(),
+    withdrawInvite: vi.fn(),
 }));
 
 import {
+    acceptInvitation,
+    addDomain,
     changePassword,
     confirmTotpSetup,
     createCompany,
+    declineInvitation,
     disableTotp,
     getSecurity,
+    getSsoProviders,
     inviteMember,
+    listAudit,
+    listDomains,
+    listInvitations,
     listMembers,
+    removeDomain,
     removeMember,
     setMemberRole,
     setupTotp,
     startSsoLink,
     switchCompany,
+    unlinkSso,
     updateSecurity,
+    verifyDomain,
+    withdrawInvite,
 } from "../api/auth";
 
 const members = [
@@ -49,12 +71,14 @@ const members = [
         name: "Cihan Kurt",
         email: "cihan@example.com",
         role: "dispatcher" as const,
+        invited: false,
     },
     {
         user_id: 2,
         name: "Viewer",
         email: "viewer@example.com",
         role: "viewer" as const,
+        invited: false,
     },
 ];
 
@@ -105,6 +129,13 @@ describe("account page", () => {
         };
         vi.mocked(removeMember).mockReset();
         vi.mocked(listMembers).mockResolvedValue({ data: members });
+        vi.mocked(listInvitations).mockResolvedValue({ data: [] });
+        vi.mocked(getSsoProviders).mockResolvedValue({ google: false, microsoft: false });
+        vi.mocked(listDomains).mockResolvedValue({ data: [] });
+        vi.mocked(listAudit).mockResolvedValue({
+            data: [],
+            meta: { page: 1, limit: 50, total: 0, pageCount: 1 },
+        });
         vi.mocked(getSecurity).mockResolvedValue(security);
         vi.mocked(changePassword).mockReset();
         vi.mocked(confirmTotpSetup).mockReset();
@@ -555,5 +586,245 @@ describe("account page", () => {
         ).toBeInTheDocument();
         expect(switchCompany).toHaveBeenCalledWith(9);
         expect(setUser).toHaveBeenCalledWith(next);
+    });
+
+    it("accepts an invitation into another company", async () => {
+        const user = authUser({ invitations: 1 });
+        vi.mocked(listInvitations).mockResolvedValue({
+            data: [
+                {
+                    company_id: 7,
+                    company_name: "Nord Logistik",
+                    role: "viewer",
+                    invited_by_name: "Ada",
+                    created_at: "2026-10-28 09:00:00",
+                },
+            ],
+        });
+        const next = authUser({
+            invitations: 0,
+            memberships: [
+                ...user.memberships,
+                { company_id: 7, company_name: "Nord Logistik", role: "viewer" },
+            ],
+        });
+        vi.mocked(acceptInvitation).mockResolvedValue(next);
+        const { setUser } = renderAuth(<AccountPage />, { user, route: "/konto#firmen" });
+
+        expect(await screen.findByText("Nur lesen · von Ada", { exact: false })).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: /1 Einladung/ })).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Einladung von Nord Logistik annehmen" }),
+        );
+
+        expect(
+            await screen.findByText(
+                "Du bist jetzt Mitglied bei Nord Logistik. Du arbeitest weiter in Rheinland Logistik; wechseln kannst du unter „Deine Firmen“.",
+            ),
+        ).toBeInTheDocument();
+        expect(acceptInvitation).toHaveBeenCalledWith(7);
+        expect(declineInvitation).not.toHaveBeenCalled();
+        expect(setUser).toHaveBeenCalledWith(next);
+    });
+
+    it("declines an invitation", async () => {
+        const user = authUser({ invitations: 1 });
+        vi.mocked(listInvitations).mockResolvedValue({
+            data: [
+                {
+                    company_id: 7,
+                    company_name: "Nord Logistik",
+                    role: "dispatcher",
+                    invited_by_name: null,
+                    created_at: "2026-10-28 09:00:00",
+                },
+            ],
+        });
+        vi.mocked(declineInvitation).mockResolvedValue(authUser({ invitations: 0 }));
+        renderAuth(<AccountPage />, { user, route: "/konto#firmen" });
+
+        fireEvent.click(
+            await screen.findByRole("button", { name: "Einladung von Nord Logistik ablehnen" }),
+        );
+
+        expect(
+            await screen.findByText("Einladung von Nord Logistik abgelehnt."),
+        ).toBeInTheDocument();
+        expect(declineInvitation).toHaveBeenCalledWith(7);
+        expect(acceptInvitation).not.toHaveBeenCalled();
+    });
+
+    it("shows open invitations in the team and takes one back", async () => {
+        const invited = {
+            user_id: 5,
+            name: "neu",
+            email: "neu@example.com",
+            role: "viewer" as const,
+            invited: true,
+        };
+        vi.mocked(listMembers).mockResolvedValue({ data: [...members, invited] });
+        vi.mocked(withdrawInvite).mockResolvedValue({ data: members });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#team" });
+
+        const row = await memberRow("neu@example.com");
+        expect(within(row).getByText("· Einladung offen", { exact: false })).toBeInTheDocument();
+        expect(within(row).queryByRole("combobox")).toBeNull();
+        expect(within(row).queryByRole("button", { name: "Entfernen" })).toBeNull();
+        fireEvent.click(
+            within(row).getByRole("button", { name: "Einladung an neu@example.com zurückziehen" }),
+        );
+
+        expect(
+            await screen.findByText("Einladung an neu@example.com zurückgezogen."),
+        ).toBeInTheDocument();
+        expect(withdrawInvite).toHaveBeenCalledWith(5);
+        expect(removeMember).not.toHaveBeenCalled();
+    });
+
+    it("shows the company log to a dispatcher", async () => {
+        vi.mocked(listAudit).mockResolvedValue({
+            data: [
+                {
+                    id: 2,
+                    created_at: "2026-10-28 09:00:00",
+                    action: "member_role_changed",
+                    actor_name: "Cihan Kurt",
+                    target_name: "Viewer",
+                    target_email: "viewer@example.com",
+                    details: { from: "viewer", to: "dispatcher" },
+                },
+                {
+                    id: 1,
+                    created_at: "2026-10-28 08:00:00",
+                    action: "invite_created",
+                    actor_name: "Cihan Kurt",
+                    target_name: "neu",
+                    target_email: "neu@example.com",
+                    details: { role: "viewer" },
+                },
+            ],
+            meta: { page: 1, limit: 50, total: 2, pageCount: 1 },
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#protokoll" });
+
+        expect(
+            await screen.findByText("Rolle von Viewer (viewer@example.com): Nur lesen → Dispatcher"),
+        ).toBeInTheDocument();
+        expect(screen.getByText("neu@example.com als Nur lesen eingeladen")).toBeInTheDocument();
+        expect(listAudit).toHaveBeenCalledWith(1, expect.any(AbortSignal));
+    });
+
+    it("keeps the log away from a viewer", async () => {
+        renderAuth(<AccountPage />, {
+            user: authUser({ role: "viewer" }),
+            route: "/konto#protokoll",
+        });
+
+        expect(await screen.findByRole("heading", { name: "Passwort ändern" })).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "Protokoll" })).toBeNull();
+        expect(listAudit).not.toHaveBeenCalled();
+    });
+
+    it("removes the own Google link", async () => {
+        vi.mocked(getSsoProviders).mockResolvedValue({ google: true, microsoft: true });
+        const next = authUser();
+        vi.mocked(unlinkSso).mockResolvedValue(next);
+        const { setUser } = renderAuth(<AccountPage />, {
+            user: authUser({ sso_links: { google: true, microsoft: false } }),
+            route: "/konto#anmeldung",
+        });
+
+        expect(await screen.findByText("Verknüpft")).toBeInTheDocument();
+        expect(screen.getByText("Nicht verknüpft")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Microsoft verknüpfen" })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Google trennen" }));
+
+        expect(
+            await screen.findByText("Google ist nicht mehr mit deinem Konto verknüpft."),
+        ).toBeInTheDocument();
+        expect(unlinkSso).toHaveBeenCalledWith("google");
+        expect(setUser).toHaveBeenCalledWith(next);
+    });
+
+    it("says on its own section when Google or Microsoft was linked", async () => {
+        vi.mocked(getSsoProviders).mockResolvedValue({ google: true, microsoft: false });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto?sso=linked#anmeldung" });
+
+        expect(
+            await screen.findByText("Verknüpft. Du kannst dich jetzt auch damit anmelden."),
+        ).toBeInTheDocument();
+    });
+
+    it("hides the section when the server has neither provider", async () => {
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#passwort" });
+
+        expect(await screen.findByRole("heading", { name: "Passwort ändern" })).toBeInTheDocument();
+        await waitFor(() => expect(getSsoProviders).toHaveBeenCalled());
+        expect(screen.queryByRole("link", { name: "Google und Microsoft" })).toBeNull();
+    });
+
+    it("adds a company domain and shows the record to create", async () => {
+        vi.mocked(addDomain).mockResolvedValue({ data: {
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            } });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
+
+        const field = await screen.findByLabelText("Domain");
+        fireEvent.change(field, { target: { value: "rheinland.de" } });
+        submit("Eintragen");
+
+        expect(
+            await screen.findByText("rheinland.de eingetragen. Lege den TXT-Eintrag an und prüfe ihn dann."),
+        ).toBeInTheDocument();
+        expect(addDomain).toHaveBeenCalledWith("rheinland.de");
+        expect(screen.getByText("_fleet-live.rheinland.de")).toBeInTheDocument();
+        expect(screen.getByText("fleet-live-verification=abc123")).toBeInTheDocument();
+    });
+
+    it("checks a domain and shows it confirmed", async () => {
+        vi.mocked(listDomains).mockResolvedValue({ data: [{
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            }] });
+        vi.mocked(verifyDomain).mockResolvedValue({
+            data: [{ ...{
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            }, verified_at: "2026-10-29 10:00:00" }],
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
+
+        fireEvent.click(await screen.findByRole("button", { name: "rheinland.de prüfen" }));
+
+        expect(await screen.findByText("Bestätigt")).toBeInTheDocument();
+        expect(verifyDomain).toHaveBeenCalledWith(3);
+        expect(screen.queryByRole("button", { name: "rheinland.de prüfen" })).toBeNull();
+    });
+
+    it("removes a domain", async () => {
+        vi.mocked(listDomains).mockResolvedValue({ data: [{
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            }] });
+        vi.mocked(removeDomain).mockResolvedValue({ data: [] });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
+
+        fireEvent.click(await screen.findByRole("button", { name: "rheinland.de entfernen" }));
+
+        expect(await screen.findByText("rheinland.de entfernt.")).toBeInTheDocument();
+        expect(removeDomain).toHaveBeenCalledWith(3);
     });
 });

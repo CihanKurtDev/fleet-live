@@ -8,7 +8,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 
 | Methode | Endpoint | Beschreibung |
 | ------- | -------- | ------------ |
-| `POST` | `/api/auth/register` | Firma plus erster Dispatcher. Keine Session, bis die E-Mail bestätigt ist |
+| `POST` | `/api/auth/register` | Firma plus erster Dispatcher. Keine Session, bis die E-Mail bestätigt ist. Eine schon registrierte E-Mail bekommt dieselbe Antwort; der Inhaber erhält eine Hinweis-Mail (unbestätigt: den Bestätigungslink neu), es entsteht keine Firma |
 | `POST` | `/api/auth/verify-email` | `{ token }` |
 | `POST` | `/api/auth/resend-verification` | `{ email }`, gleiche Antwort ob das Konto existiert |
 | `POST` | `/api/auth/login` | `{ email, password, remember? }`. Session, oder `{ step, challenge }` für Zwei-Faktor |
@@ -18,21 +18,27 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `POST` | `/api/auth/logout` | Löscht die Session |
 | `POST` | `/api/auth/logout-all` | Beendet alle Sessions der Person |
 | `POST` | `/api/auth/password` | Passwort ändern |
-| `GET`  | `/api/auth/me` | Aktueller Nutzer inklusive `company_name`, `memberships` oder `401` |
+| `GET`  | `/api/auth/me` | Aktueller Nutzer inklusive `company_name`, `memberships`, `invitations` (Zahl offener Einladungen) oder `401` |
 | `POST` | `/api/auth/company` | Aktive Firma wechseln |
 | `POST` | `/api/auth/companies` | Weitere Firma anlegen und dorthin wechseln |
-| `POST` | `/api/auth/invites` | Dispatcher lädt `{ email, role }` ein |
-| `POST` | `/api/auth/invites/accept` | Einladung annehmen |
-| `GET`, `PATCH`, `DELETE` | `/api/auth/members`, `/api/auth/members/:userId` | Team der Firma lesen, Rolle ändern, entfernen (Dispatcher). Eine Firma behält mindestens einen Dispatcher |
+| `POST` | `/api/auth/invites` | Dispatcher lädt `{ email, role }` ein. Daraus wird erst eine Mitgliedschaft, wenn die Person annimmt; eine zweite Einladung an dieselbe Person ist `409` |
+| `DELETE` | `/api/auth/invites/:userId` | Offene Einladung zurückziehen (Dispatcher); ihr Mail-Link gilt dann nicht mehr |
+| `POST` | `/api/auth/invites/accept` | Link aus der Mail für ein neues Konto: Name und Passwort setzen, Einladung annehmen |
+| `GET` | `/api/auth/invitations` | Offene Einladungen der angemeldeten Person |
+| `POST`, `DELETE` | `/api/auth/invitations/:companyId/accept`, `/api/auth/invitations/:companyId` | Einladung annehmen oder ablehnen |
+| `GET`, `PATCH`, `DELETE` | `/api/auth/members`, `/api/auth/members/:userId` | Team der Firma lesen (offene Einladungen mit `invited: true`), Rolle ändern, entfernen (Dispatcher). Eine Firma behält mindestens einen Dispatcher |
 | `GET`, `PATCH` | `/api/auth/security` | Firmen-Login (OIDC) lesen und setzen (Dispatcher) |
+| `GET` | `/api/auth/audit` | Protokoll der Firma: Einladungen, Rollen, Entfernen, Anmelde-Regeln, Verknüpfung mit dem Firmen-Login; neueste zuerst, 50 je Seite (`page`), nur Dispatcher |
 | `POST` | `/api/auth/totp/setup`, `/totp/confirm`, `/totp/disable` | Zwei-Faktor einrichten, bestätigen, ausschalten |
 | `POST` | `/api/auth/import-prompt/dismiss` | Die einmalige Frage nach dem Import schließen |
 | `GET`  | `/api/auth/sso/providers` | `{ google, microsoft }` — nur `true`, wenn Client-ID und Secret gesetzt sind |
 | `GET`  | `/api/auth/sso/google/start` | Weiterleitung zu Google. Microsoft (`/sso/microsoft/start`) analog; die Rückkehr ist `/sso/:provider/callback` |
-| `POST`, `GET` | `/api/auth/sso/company/discover`, `/sso/company/start`, `/sso/company/callback` | Firmen-IdP: Firma finden, Weiterleitung, Rückkehr |
-| `POST` | `/api/auth/sso/link` | `{ provider, company_id?, challenge? }` → `{ url }`. Verknüpft einen externen Login mit dem angemeldeten Konto, oder mit `challenge` (aus `SSO_REQUIRED`) den Firmen-Login nach Passwort und zweitem Faktor |
+| `POST`, `GET` | `/api/auth/sso/company/discover`, `/sso/company/start`, `/sso/company/callback` | Firmen-IdP: Firma finden (über die bestätigte Domain der E-Mail, nie über Mitgliedschaften), Weiterleitung, Rückkehr |
+| `GET`, `POST`, `DELETE` | `/api/auth/domains`, `/api/auth/domains/:id/verify`, `/api/auth/domains/:id` | Domains der Firma (Dispatcher): eintragen, per DNS-TXT-Eintrag `_fleet-live.<domain>` bestätigen, entfernen. Eine Domain kann nur eine Firma bestätigen (`409`) |
+| `POST` | `/api/auth/sso/link` | `{ provider, company_id?, challenge? }` → `{ url }`. Verknüpft einen externen Login mit dem angemeldeten Konto, oder mit `challenge` (aus `SSO_REQUIRED`) den Firmen-Login nach Passwort und zweitem Faktor. Zurück geht es auf `/konto?sso=…#anmeldung` (Google, Microsoft) bzw. `#firmen-login` |
+| `DELETE` | `/api/auth/sso/links/:provider` | Eigene Verknüpfung mit `google` oder `microsoft` trennen; der Firmen-Login lässt sich so nicht trennen. `GET /me` zeigt den Stand in `sso_links` |
 
-`remember: true` hält das Cookie sieben Tage. Sonst ist es ein Sitzungs-Cookie, und 15 Minuten ohne Nutzung beenden die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld. Passwort mindestens 12 und höchstens 128 Zeichen. Ohne `SMTP_URL` schreibt die Entwicklung den Reset-Link ins Server-Log und sagt das in der Antwort; es geht keine Mail raus. Produktion ohne SMTP antwortet `503`. Die Anmeldeseite zeigt Google und Microsoft nur, wenn die jeweiligen Client-Variablen gesetzt sind.
+`remember: true` hält das Cookie sieben Tage. Sonst ist es ein Sitzungs-Cookie, und 15 Minuten ohne Nutzung beenden die Sitzung. Falsches Passwort ist `401`, ohne zu sagen welches Feld. Ab dem sechsten falschen Versuch für eine Adresse muss der nächste Versuch warten (2, 4, 8 … höchstens 60 Sekunden); vorher kommt `429` `LOGIN_SLOW_DOWN` mit `Retry-After`. Danach geht das richtige Passwort wieder, und es setzt die Zählung zurück. Passwort mindestens 12 und höchstens 128 Zeichen. Ohne `SMTP_URL` schreibt die Entwicklung den Reset-Link ins Server-Log und sagt das in der Antwort; es geht keine Mail raus. Produktion ohne SMTP antwortet `503`. Die Anmeldeseite zeigt Google und Microsoft nur, wenn die jeweiligen Client-Variablen gesetzt sind.
 
 Ein externer Login meldet nur an, wenn ihn der Inhaber verknüpft hat (Issuer und Subject des Tokens; eine gleiche E-Mail allein genügt nie). Verlangt die Firma ihren eigenen Login, verknüpft die Anmeldeseite ihn nach Passwort und zweitem Faktor einmalig. Verlangen Konto oder Firma einen zweiten Faktor, fragt die Anmeldung auch nach Google, Microsoft oder dem Firmen-Login danach. Eine Sitzung aus dem Firmen-Login gilt nur in dieser Firma. Ändert eine Firma diese Regeln, enden die Sitzungen und Live-Verbindungen, die sie nicht erfüllen. Sicherheitsmodell, offene Punkte und Betriebsanforderungen: [`SECURITY.md`](../SECURITY.md), [`docs/security-remediation-plan.md`](security-remediation-plan.md).
 

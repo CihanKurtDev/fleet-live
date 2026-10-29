@@ -2,6 +2,7 @@ import type { UserRole } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { db } from "../db/database";
 import { hashPassword } from "../lib/password";
+import { resetLoginAttemptsForTests } from "../lib/loginAttempts";
 import { resetTotpAttemptsForTests } from "../lib/totpAttempts";
 
 export type UserRecord = {
@@ -45,7 +46,8 @@ export const UserModel = {
         name: string;
         email: string;
         password: string | null;
-        company_id: number;
+        /** Without a company the account starts with no membership (an invitee). */
+        company_id: number | null;
         role?: UserRole;
         verified?: boolean;
     }): UserRecord {
@@ -63,12 +65,14 @@ export const UserModel = {
         );
         const id = Number(result.lastInsertRowid);
 
-        stmt(
-            `
-            INSERT INTO company_memberships (user_id, company_id, role)
-            VALUES (?, ?, ?)
-            `,
-        ).run(id, input.company_id, input.role ?? "dispatcher");
+        if (input.company_id !== null) {
+            stmt(
+                `
+                INSERT INTO company_memberships (user_id, company_id, role)
+                VALUES (?, ?, ?)
+                `,
+            ).run(id, input.company_id, input.role ?? "dispatcher");
+        }
 
         const created = this.getById(id);
 
@@ -113,11 +117,15 @@ export const UserModel = {
 
     resetForTests() {
         resetTotpAttemptsForTests();
+        resetLoginAttemptsForTests();
         db.exec("DELETE FROM import_runs");
         db.exec("DELETE FROM sso_identities");
         db.exec("DELETE FROM totp_recovery_codes");
         db.exec("DELETE FROM auth_tokens");
         db.exec("DELETE FROM sessions");
+        db.exec("DELETE FROM company_invites");
+        db.exec("DELETE FROM audit_events");
+        db.exec("DELETE FROM company_domains");
         db.exec("DELETE FROM company_memberships");
         db.exec("DELETE FROM users");
         db.exec(
@@ -132,7 +140,7 @@ export const UserModel = {
             `,
         );
         db.exec(
-            "DELETE FROM sqlite_sequence WHERE name IN ('users', 'sessions', 'company_memberships', 'auth_tokens')",
+            "DELETE FROM sqlite_sequence WHERE name IN ('users', 'sessions', 'company_memberships', 'company_invites', 'audit_events', 'auth_tokens')",
         );
     },
 };

@@ -21,11 +21,14 @@ import {
 import { continueLogin, type LoginOutcome } from "../lib/openSession";
 import {
     findSsoUser,
+    authUserFor,
     linkSsoIdentity,
+    unlinkSsoIdentity,
     pickLoginCompany,
-    companyIdForLoginSso,
     ssoClient,
 } from "../models/account.model";
+import { AuditModel } from "../models/audit.model";
+import { CompanyDomainModel } from "../models/companyDomain.model";
 import { membershipRow } from "../models/authView";
 import { AuthTokenModel } from "../models/authToken.model";
 import { companyProvider } from "../models/loginPolicy";
@@ -58,8 +61,10 @@ function fail(res: Response, reason: string) {
     res.redirect(`${config.webOrigin}/login?sso=${reason}`);
 }
 
-function linkResult(res: Response, reason: string) {
-    res.redirect(`${config.webOrigin}/konto?sso=${reason}`);
+/** Back to the account page, on the section the link was started from. */
+function linkResult(res: Response, reason: string, provider: SsoProvider) {
+    const section = provider === "company" ? "firmen-login" : "anmeldung";
+    res.redirect(`${config.webOrigin}/konto?sso=${reason}#${section}`);
 }
 
 function envCredentials(
@@ -75,6 +80,25 @@ function envCredentials(
     }
 
     return undefined;
+}
+
+/** Removes the signed-in person's own Google or Microsoft link. */
+export function unlinkSso(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const provider = req.params.provider;
+
+    if (provider !== "google" && provider !== "microsoft") {
+        throw new NotFoundError("Verknüpfung nicht gefunden.");
+    }
+
+    if (!unlinkSsoIdentity(req.user.id, provider)) {
+        throw new NotFoundError("Verknüpfung nicht gefunden.");
+    }
+
+    res.json(authUserFor(req.user.id, req.user.company_id));
 }
 
 export function listSsoProviders(_req: Request, res: Response) {
@@ -148,9 +172,14 @@ export async function startSso(req: Request, res: Response) {
     res.redirect(started.url);
 }
 
+/**
+ * The company login for an e-mail address, found by its domain: only a
+ * domain a company confirmed counts, so the answer never says whether that
+ * person is a member anywhere.
+ */
 export function discoverCompanySso(req: Request, res: Response) {
     const { email } = parseEmailInput(req.body);
-    const companyId = companyIdForLoginSso(email);
+    const companyId = CompanyDomainModel.companyForEmail(email);
 
     if (!companyId) {
         throw new ValidationError(
@@ -383,7 +412,7 @@ export async function finishSso(req: Request, res: Response) {
 
 function failFlow(res: Response, payload: SsoPayload, reason: string) {
     if (payload.link?.via === "session") {
-        linkResult(res, reason);
+        linkResult(res, reason, payload.provider);
         return;
     }
 
@@ -406,7 +435,7 @@ function finishLink(
         const session = token ? SessionModel.findUser(token) : undefined;
 
         if (!owner || session?.id !== owner.id) {
-            linkResult(res, "error");
+            linkResult(res, "error", payload.provider);
             return;
         }
     }
@@ -430,8 +459,18 @@ function finishLink(
         subject: profile.subject,
     });
 
+    // A link to a company's own login is that company's business; Google and
+    // Microsoft belong to the account alone.
+    if (result === "linked" && payload.companyId !== null && key === companyProvider(payload.companyId)) {
+        AuditModel.record({
+            companyId: payload.companyId,
+            action: "sso_linked",
+            actorId: owner.id,
+        });
+    }
+
     if (link.via === "session") {
-        linkResult(res, result);
+        linkResult(res, result, payload.provider);
         return;
     }
 

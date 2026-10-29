@@ -292,6 +292,33 @@
     color: var(--success);
 }
 
+/* An invitation: company and who sent it, then Ablehnen and Annehmen. */
+.invitation {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.invitationText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* A domain and its button, the input taking the rest. */
+.domainRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+/* A DNS value to copy: long, no spaces, breaks anywhere. */
+.record {
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
 @media (min-width: 701px) {
     .page {
         padding: 0;
@@ -354,6 +381,7 @@
     }
 
     .inviteRow,
+    .domainRow,
     .pair {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -455,6 +483,19 @@
         > :last-child {
             grid-column: 1 / -1;
             justify-self: start;
+        }
+    }
+
+    /* Text on its own line, the two buttons side by side below it. */
+    .invitation {
+        grid-template-columns: auto auto minmax(0, 1fr);
+
+        > .invitationText {
+            grid-column: 1 / -1;
+        }
+
+        > :last-child {
+            grid-column: auto;
         }
     }
 }

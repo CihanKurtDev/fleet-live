@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import {
     parseAcceptInviteInput,
+    parseAuditListQuery,
     parseChangePasswordInput,
     parseCompanyInput,
     parseEmailInput,
@@ -13,17 +14,21 @@ import {
     parseSwitchCompanyInput,
     parseTokenInput,
     parseTotpCodeInput,
+    type SecurityChange,
 } from "@fleet-live/shared";
 import { config } from "../config";
 import {
+    acceptInvitation,
     acceptInvite,
     authUserFor,
     companySecurity,
     consumeRecoveryCode,
     createCompanyForUser,
+    declineInvitation,
     dismissImportPrompt,
     hasSsoIdentity,
     inviteMember,
+    listInvitations,
     listMembers,
     pickLoginCompany,
     publicSecurity,
@@ -36,8 +41,16 @@ import {
     userForPasswordReset,
     userForResend,
     verifyEmailToken,
+    withdrawInvite,
 } from "../models/account.model";
+import {
+    clearLoginFailures,
+    loginWaitSeconds,
+    recordLoginFailure,
+} from "../lib/loginAttempts";
+import { AuditModel } from "../models/audit.model";
 import { AuthTokenModel } from "../models/authToken.model";
+import { listMemberships, membershipRow } from "../models/authView";
 import { SessionModel } from "../models/session.model";
 import { UserModel } from "../models/user.model";
 import {
@@ -119,20 +132,36 @@ async function mailLink(input: {
 export async function register(req: Request, res: Response) {
     assertMailConfigured();
     const input = parseRegisterInput(req.body);
-    const user = registerAccount(input);
-    AuthTokenModel.deleteForUser(user.id, "verify_email");
-    const token = AuthTokenModel.issue({
-        userId: user.id,
-        purpose: "verify_email",
-        ttl: "+24 hours",
-    });
-    const delivery = await mailLink({
-        to: user.email,
-        subject: "E-Mail bestätigen",
-        text: "Bestätige deine E-Mail, danach kannst du dich anmelden.",
-        path: "/email-bestaetigen",
-        token,
-    });
+    const { user, existing } = registerAccount(input);
+    let delivery;
+
+    if (existing && user.password_hash && !user.email_verified_at) {
+        // Registered before and never confirmed: the confirmation again.
+        await spendPasswordTime(input.password);
+        delivery = await mailVerification(user.id, user.email);
+    } else if (existing) {
+        // The same answer as a new registration, and as slow (a new one
+        // hashes the password); the owner hears about it by mail.
+        await spendPasswordTime(input.password);
+        delivery = await sendMail({
+            to: user.email,
+            subject: "Registrierung mit deiner E-Mail bei fleet-live",
+            text: "Jemand wollte mit dieser E-Mail eine neue Firma bei fleet-live registrieren. Du hast hier schon ein Konto. Warst du das, melde dich an; ein vergessenes Passwort setzt du über „Passwort vergessen“ neu. Warst du es nicht, kannst du diese Mail ignorieren.",
+            link: `${config.webOrigin}/login`,
+        });
+    } else {
+        const company = listMemberships(user.id)[0];
+
+        if (company) {
+            AuditModel.record({
+                companyId: company.company_id,
+                action: "company_created",
+                actorId: user.id,
+            });
+        }
+
+        delivery = await mailVerification(user.id, user.email);
+    }
 
     res.status(201).json({
         email: user.email,
@@ -144,25 +173,31 @@ export async function register(req: Request, res: Response) {
     });
 }
 
+/** A fresh confirmation link; an older one stops working. */
+async function mailVerification(userId: number, email: string) {
+    AuthTokenModel.deleteForUser(userId, "verify_email");
+    const token = AuthTokenModel.issue({
+        userId,
+        purpose: "verify_email",
+        ttl: "+24 hours",
+    });
+
+    return mailLink({
+        to: email,
+        subject: "E-Mail bestätigen",
+        text: "Bestätige deine E-Mail, danach kannst du dich anmelden.",
+        path: "/email-bestaetigen",
+        token,
+    });
+}
+
 export async function resendVerification(req: Request, res: Response) {
     assertMailConfigured();
     const { email } = parseEmailInput(req.body);
     const user = userForResend(email);
 
     if (user) {
-        AuthTokenModel.deleteForUser(user.id, "verify_email");
-        const token = AuthTokenModel.issue({
-            userId: user.id,
-            purpose: "verify_email",
-            ttl: "+24 hours",
-        });
-        await mailLink({
-            to: user.email,
-            subject: "E-Mail bestätigen",
-            text: "Bestätige deine E-Mail, danach kannst du dich anmelden.",
-            path: "/email-bestaetigen",
-            token,
-        });
+        await mailVerification(user.id, user.email);
     }
 
     const delivery = deliveryMode();
@@ -187,18 +222,37 @@ export function verifyEmail(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
     const input = parseLoginInput(req.body);
+    const wait = loginWaitSeconds(input.email);
+
+    // Not checked at all while the address has to wait: a guess costs time,
+    // the real person gets in once the wait is over.
+    if (wait > 0) {
+        res.setHeader("Retry-After", String(wait));
+        throw new AppError(
+            429,
+            "LOGIN_SLOW_DOWN",
+            `Zu viele falsche Versuche. Bitte warte ${wait} Sekunden und versuche es dann erneut.`,
+            undefined,
+            { retry_after: wait },
+        );
+    }
+
     const user = UserModel.findByEmail(input.email);
 
     if (!user?.password_hash) {
         // The same wait as for a wrong password, so the answer does not
         // tell whether the email has an account.
         await spendPasswordTime(input.password);
+        recordLoginFailure(input.email);
         throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
     }
 
     if (!(await verifyPasswordAsync(input.password, user.password_hash))) {
+        recordLoginFailure(input.email);
         throw new UnauthorizedError("E-Mail oder Passwort ist falsch.");
     }
+
+    clearLoginFailures(input.email);
 
     if (needsRehash(user.password_hash)) {
         UserModel.setPasswordHash(
@@ -344,9 +398,22 @@ export async function createInvite(req: Request, res: Response) {
 
     assertMailConfigured();
     const input = parseInviteInput(req.body);
-    const result = inviteMember(req.user.company_id, input.email, input.role);
+    const company = req.user.company_name;
+    const result = inviteMember(
+        req.user.company_id,
+        input.email,
+        input.role,
+        req.user.id,
+    );
+    AuditModel.record({
+        companyId: req.user.company_id,
+        action: "invite_created",
+        actorId: req.user.id,
+        targetId: result.user.id,
+        details: { role: input.role },
+    });
 
-    if (result.created) {
+    if (result.activate) {
         const token = AuthTokenModel.issue({
             userId: result.user.id,
             purpose: "invite",
@@ -356,8 +423,8 @@ export async function createInvite(req: Request, res: Response) {
         });
         const delivery = await mailLink({
             to: result.user.email,
-            subject: "Einladung zu fleet-live",
-            text: "Du bist eingeladen. Lege dein Passwort fest, dann bist du in der Firma.",
+            subject: `Einladung zu ${company} in fleet-live`,
+            text: `${req.user.name} lädt dich zu ${company} ein. Lege dein Passwort fest, dann bist du in der Firma.`,
             path: "/einladung",
             token,
         });
@@ -365,13 +432,125 @@ export async function createInvite(req: Request, res: Response) {
         return;
     }
 
+    // An existing account decides itself: nothing changes until it accepts.
     const delivery = await sendMail({
         to: result.user.email,
-        subject: "Neue Firma in fleet-live",
-        text: "Du wurdest zu einer weiteren Firma hinzugefügt. Melde dich an und wechsle die Firma.",
-        link: `${config.webOrigin}/login`,
+        subject: `Einladung zu ${company} in fleet-live`,
+        text: `${req.user.name} lädt dich zu ${company} ein. Melde dich an und nimm die Einladung unter Konto → Firmen an oder lehne sie ab.`,
+        link: `${config.webOrigin}/konto#firmen`,
     });
     res.status(201).json({ email: result.user.email, delivery });
+}
+
+type SecurityRow = NonNullable<ReturnType<typeof companySecurity>>;
+
+/** What a save of the sign-in rules changed, for the log. */
+function securityChanges(before: SecurityRow, after: SecurityRow): SecurityChange[] {
+    const changes: SecurityChange[] = [];
+
+    if (before.totp_required !== after.totp_required) {
+        changes.push(after.totp_required === 1 ? "totp_required_on" : "totp_required_off");
+    }
+
+    if (before.sso_required !== after.sso_required) {
+        changes.push(after.sso_required === 1 ? "sso_required_on" : "sso_required_off");
+    }
+
+    if (before.sso_issuer !== after.sso_issuer || before.sso_client_id !== after.sso_client_id) {
+        changes.push("sso_settings");
+    }
+
+    if (before.sso_client_secret !== after.sso_client_secret) {
+        changes.push("sso_secret");
+    }
+
+    return changes;
+}
+
+export function getAudit(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const { page } = parseAuditListQuery(req.query);
+    res.json(AuditModel.list(req.user.company_id, page));
+}
+
+export function getInvitations(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    res.json({ data: listInvitations(req.user.id) });
+}
+
+function invitationCompanyId(req: Request): number {
+    const companyId = Number(req.params.companyId);
+
+    if (!Number.isInteger(companyId)) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    return companyId;
+}
+
+export function acceptInvitationHandler(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const companyId = invitationCompanyId(req);
+
+    if (!acceptInvitation(req.user.id, companyId)) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    AuditModel.record({
+        companyId,
+        action: "invite_accepted",
+        actorId: req.user.id,
+        details: { role: membershipRow(req.user.id, companyId)?.role },
+    });
+
+    // The session stays in its company; the new one is a switch away.
+    res.json(authUserFor(req.user.id, req.user.company_id));
+}
+
+export function declineInvitationHandler(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const companyId = invitationCompanyId(req);
+
+    if (!declineInvitation(req.user.id, companyId)) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    AuditModel.record({ companyId, action: "invite_declined", actorId: req.user.id });
+
+    res.json(authUserFor(req.user.id, req.user.company_id));
+}
+
+export function withdrawInviteHandler(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const userId = Number(req.params.userId);
+
+    if (!Number.isInteger(userId) || !withdrawInvite(req.user.company_id, userId)) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    AuditModel.record({
+        companyId: req.user.company_id,
+        action: "invite_withdrawn",
+        actorId: req.user.id,
+        targetId: userId,
+    });
+
+    res.json({ data: listMembers(req.user.company_id) });
 }
 
 export function acceptInviteHandler(req: Request, res: Response) {
@@ -381,6 +560,13 @@ export function acceptInviteHandler(req: Request, res: Response) {
     if (!accepted) {
         throw new ValidationError(INVALID_LINK);
     }
+
+    AuditModel.record({
+        companyId: accepted.companyId,
+        action: "invite_accepted",
+        actorId: accepted.userId,
+        details: { role: membershipRow(accepted.userId, accepted.companyId)?.role },
+    });
 
     // The invite proves the e-mail, not the factors the company requires.
     const proof = { mfa: false, ssoCompanyId: null };
@@ -410,9 +596,22 @@ export function patchMember(req: Request, res: Response) {
 
     const userId = Number(req.params.userId);
     const { role } = parseMemberRoleInput(req.body);
+    const before = Number.isInteger(userId)
+        ? membershipRow(userId, req.user.company_id)?.role
+        : undefined;
 
     if (!Number.isInteger(userId) || !setMemberRole(req.user.company_id, userId, role)) {
         throw new NotFoundError("Mitglied nicht gefunden.");
+    }
+
+    if (before !== role) {
+        AuditModel.record({
+            companyId: req.user.company_id,
+            action: "member_role_changed",
+            actorId: req.user.id,
+            targetId: userId,
+            details: { from: before, to: role },
+        });
     }
 
     // Open streams of that person in this company reconnect with the new role.
@@ -432,6 +631,12 @@ export function deleteMember(req: Request, res: Response) {
         throw new NotFoundError("Mitglied nicht gefunden.");
     }
 
+    AuditModel.record({
+        companyId: req.user.company_id,
+        action: userId === req.user.id ? "member_left" : "member_removed",
+        actorId: req.user.id,
+        targetId: userId === req.user.id ? null : userId,
+    });
     endStreams({ userId, companyId: req.user.company_id });
 
     if (userId === req.user.id) {
@@ -461,6 +666,7 @@ export function createCompany(req: Request, res: Response) {
     }
 
     const companyId = createCompanyForUser(req.user.id, name);
+    AuditModel.record({ companyId, action: "company_created", actorId: req.user.id });
     SessionModel.setCompany(token, companyId);
     endStreams({ token });
     const user = authUserFor(req.user.id, companyId);
@@ -597,6 +803,16 @@ export function patchSecurity(req: Request, res: Response) {
 
     updateSecurity(req.user.company_id, input);
     const next = companySecurity(req.user.company_id);
+    const changes = next ? securityChanges(current, next) : [];
+
+    if (changes.length > 0) {
+        AuditModel.record({
+            companyId: req.user.company_id,
+            action: "security_changed",
+            actorId: req.user.id,
+            details: { changes },
+        });
+    }
 
     // Sessions that no longer meet stricter rules end on their next request;
     // their streams end now.

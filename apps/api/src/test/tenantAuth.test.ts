@@ -111,7 +111,11 @@ describe("the active company", () => {
         assert.equal(invite.status, 201);
         const invited = UserModel.findByEmail("neu@example.com");
         assert.ok(invited);
-        assert.equal(roleIn(invited.id, 1), "viewer");
+        const invites = db
+            .prepare("SELECT company_id, role FROM company_invites WHERE user_id = ?")
+            .all(invited.id)
+            .map((row) => ({ ...row }));
+        assert.deepEqual(invites, [{ company_id: 1, role: "viewer" }]);
         assert.equal(roleIn(invited.id, 2), undefined);
     });
 
