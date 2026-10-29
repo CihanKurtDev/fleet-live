@@ -194,6 +194,15 @@ export type {
     UserRole,
 } from "./models/auth";
 
+export type { CompanyDomain } from "./models/companyDomain";
+
+export {
+    DOMAIN_RECORD_PREFIX,
+    DOMAIN_RECORD_VALUE_PREFIX,
+    emailDomain,
+    parseDomainInput,
+} from "./models/companyDomain";
+
 export type {
     AuditAction,
     AuditDetails,

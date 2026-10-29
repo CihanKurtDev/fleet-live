@@ -33,7 +33,8 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `POST` | `/api/auth/import-prompt/dismiss` | Die einmalige Frage nach dem Import schließen |
 | `GET`  | `/api/auth/sso/providers` | `{ google, microsoft }` — nur `true`, wenn Client-ID und Secret gesetzt sind |
 | `GET`  | `/api/auth/sso/google/start` | Weiterleitung zu Google. Microsoft (`/sso/microsoft/start`) analog; die Rückkehr ist `/sso/:provider/callback` |
-| `POST`, `GET` | `/api/auth/sso/company/discover`, `/sso/company/start`, `/sso/company/callback` | Firmen-IdP: Firma finden, Weiterleitung, Rückkehr |
+| `POST`, `GET` | `/api/auth/sso/company/discover`, `/sso/company/start`, `/sso/company/callback` | Firmen-IdP: Firma finden (über die bestätigte Domain der E-Mail, nie über Mitgliedschaften), Weiterleitung, Rückkehr |
+| `GET`, `POST`, `DELETE` | `/api/auth/domains`, `/api/auth/domains/:id/verify`, `/api/auth/domains/:id` | Domains der Firma (Dispatcher): eintragen, per DNS-TXT-Eintrag `_fleet-live.<domain>` bestätigen, entfernen. Eine Domain kann nur eine Firma bestätigen (`409`) |
 | `POST` | `/api/auth/sso/link` | `{ provider, company_id?, challenge? }` → `{ url }`. Verknüpft einen externen Login mit dem angemeldeten Konto, oder mit `challenge` (aus `SSO_REQUIRED`) den Firmen-Login nach Passwort und zweitem Faktor. Zurück geht es auf `/konto?sso=…#anmeldung` (Google, Microsoft) bzw. `#firmen-login` |
 | `DELETE` | `/api/auth/sso/links/:provider` | Eigene Verknüpfung mit `google` oder `microsoft` trennen; der Firmen-Login lässt sich so nicht trennen. `GET /me` zeigt den Stand in `sso_links` |
 

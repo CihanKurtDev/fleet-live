@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
 import { db } from "../db/database";
+import { setTxtLookupForTests } from "../lib/dnsTxt";
 import { takeMails } from "../lib/mailer";
 import { setOidcDriverForTests } from "../lib/oidc";
 import { base32Decode, totpCode } from "../lib/totp";
@@ -424,6 +425,14 @@ describe("totp and sso", () => {
         assert.equal(saved.body.sso_client_secret, undefined);
         // Requiring the company login needs a session of that login
         // (loginPolicy.test.ts); here only the refusal of the password counts.
+        // The sign-in page finds the company login by a confirmed domain.
+        const domain = await agent
+            .post("/api/auth/domains")
+            .send({ domain: "example.com" })
+            .expect(201);
+        setTxtLookupForTests(async () => [[domain.body.data.record_value]]);
+        await agent.post(`/api/auth/domains/${domain.body.data.id}/verify`).expect(200);
+        setTxtLookupForTests(null);
         db.prepare("UPDATE companies SET sso_required = 1 WHERE id = 1").run();
 
         const discovered = await request(app)

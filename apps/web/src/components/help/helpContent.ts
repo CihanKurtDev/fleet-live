@@ -280,7 +280,24 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Wie lade ich jemanden ein?",
                 answer:
-                    "Unter „Einladen“: E-Mail und Rolle. „Dispatcher“ darf ändern, „Nur lesen“ sieht die Firma, ändert aber nichts.",
+                    "Unter „Team und Einladungen“: E-Mail und Rolle. „Dispatcher“ darf ändern, „Nur lesen“ sieht die Firma, ändert aber nichts. In der Firma ist die Person erst, wenn sie annimmt; bis dahin steht sie mit „Einladung offen“ im Team, und du kannst die Einladung zurückziehen.",
+                dispatcherOnly: true,
+            },
+            {
+                question: "Ich wurde in eine weitere Firma eingeladen. Wo nehme ich an?",
+                answer:
+                    "Unter „Firma wechseln oder anlegen“ stehen deine Einladungen mit „Annehmen“ und „Ablehnen“. Die Zahl am Namen oben rechts zeigt, wie viele warten.",
+            },
+            {
+                question: "Was steht im Protokoll?",
+                answer:
+                    "Wer in dieser Firma eingeladen, Rollen geändert, jemanden entfernt, die Anmelde-Regeln oder Domains geändert hat, mit Zeitpunkt.",
+                dispatcherOnly: true,
+            },
+            {
+                question: "Wozu trage ich beim Firmen-Login eine Domain ein?",
+                answer:
+                    "Mit einer bestätigten Domain (z. B. firma.de) findet die Anmeldeseite euren Firmen-Login über die E-Mail-Adresse. Bestätigt wird mit einem TXT-Eintrag im DNS eurer Domain; danach „Prüfen“.",
                 dispatcherOnly: true,
             },
             {

@@ -13,6 +13,9 @@ export const AUDIT_ACTIONS = [
     "member_left",
     "security_changed",
     "sso_linked",
+    "domain_added",
+    "domain_verified",
+    "domain_removed",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -36,6 +39,8 @@ export type AuditDetails = {
     from?: UserRole;
     to?: UserRole;
     changes?: SecurityChange[];
+    /** The company domain of a domain_* entry. */
+    domain?: string;
 };
 
 export type AuditEvent = {
@@ -109,5 +114,11 @@ export function formatAuditEvent(event: AuditEvent): string {
                 "Anmelde-Einstellungen gespeichert";
         case "sso_linked":
             return "Konto mit dem Firmen-Login verknüpft";
+        case "domain_added":
+            return `Domain ${details.domain ?? "?"} eingetragen`;
+        case "domain_verified":
+            return `Domain ${details.domain ?? "?"} bestätigt`;
+        case "domain_removed":
+            return `Domain ${details.domain ?? "?"} entfernt`;
     }
 }

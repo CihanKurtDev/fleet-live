@@ -38,6 +38,12 @@ import {
     startSsoLink,
     unlinkSso,
 } from "../controllers/authSso.controller";
+import {
+    addDomain,
+    listDomains,
+    removeDomain,
+    verifyDomain,
+} from "../controllers/companyDomain.controller";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireDispatcher } from "../middleware/requireDispatcher";
 import {
@@ -68,6 +74,10 @@ router.post("/invitations/:companyId/accept", requireAuth, acceptInvitationHandl
 router.delete("/invitations/:companyId", requireAuth, declineInvitationHandler);
 router.get("/members", requireAuth, requireDispatcher, getMembers);
 router.get("/audit", requireAuth, requireDispatcher, getAudit);
+router.get("/domains", requireAuth, requireDispatcher, listDomains);
+router.post("/domains", requireAuth, requireDispatcher, addDomain);
+router.post("/domains/:id/verify", requireAuth, requireDispatcher, verifyDomain);
+router.delete("/domains/:id", requireAuth, requireDispatcher, removeDomain);
 router.patch("/members/:userId", requireAuth, requireDispatcher, patchMember);
 router.delete("/members/:userId", requireAuth, requireDispatcher, deleteMember);
 router.post("/companies", requireAuth, createCompany);

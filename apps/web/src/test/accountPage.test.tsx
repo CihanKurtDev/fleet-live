@@ -13,6 +13,7 @@ vi.mock("qrcode", () => ({
 
 vi.mock("../api/auth", () => ({
     acceptInvitation: vi.fn(),
+    addDomain: vi.fn(),
     changePassword: vi.fn(),
     confirmTotpSetup: vi.fn(),
     createCompany: vi.fn(),
@@ -22,8 +23,10 @@ vi.mock("../api/auth", () => ({
     getSsoProviders: vi.fn(),
     inviteMember: vi.fn(),
     listAudit: vi.fn(),
+    listDomains: vi.fn(),
     listInvitations: vi.fn(),
     listMembers: vi.fn(),
+    removeDomain: vi.fn(),
     removeMember: vi.fn(),
     setMemberRole: vi.fn(),
     setupTotp: vi.fn(),
@@ -31,11 +34,13 @@ vi.mock("../api/auth", () => ({
     switchCompany: vi.fn(),
     unlinkSso: vi.fn(),
     updateSecurity: vi.fn(),
+    verifyDomain: vi.fn(),
     withdrawInvite: vi.fn(),
 }));
 
 import {
     acceptInvitation,
+    addDomain,
     changePassword,
     confirmTotpSetup,
     createCompany,
@@ -45,8 +50,10 @@ import {
     getSsoProviders,
     inviteMember,
     listAudit,
+    listDomains,
     listInvitations,
     listMembers,
+    removeDomain,
     removeMember,
     setMemberRole,
     setupTotp,
@@ -54,6 +61,7 @@ import {
     switchCompany,
     unlinkSso,
     updateSecurity,
+    verifyDomain,
     withdrawInvite,
 } from "../api/auth";
 
@@ -123,6 +131,7 @@ describe("account page", () => {
         vi.mocked(listMembers).mockResolvedValue({ data: members });
         vi.mocked(listInvitations).mockResolvedValue({ data: [] });
         vi.mocked(getSsoProviders).mockResolvedValue({ google: false, microsoft: false });
+        vi.mocked(listDomains).mockResolvedValue({ data: [] });
         vi.mocked(listAudit).mockResolvedValue({
             data: [],
             meta: { page: 1, limit: 50, total: 0, pageCount: 1 },
@@ -752,5 +761,70 @@ describe("account page", () => {
         expect(await screen.findByRole("heading", { name: "Passwort ändern" })).toBeInTheDocument();
         await waitFor(() => expect(getSsoProviders).toHaveBeenCalled());
         expect(screen.queryByRole("link", { name: "Google und Microsoft" })).toBeNull();
+    });
+
+    it("adds a company domain and shows the record to create", async () => {
+        vi.mocked(addDomain).mockResolvedValue({ data: {
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            } });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
+
+        const field = await screen.findByLabelText("Domain");
+        fireEvent.change(field, { target: { value: "rheinland.de" } });
+        submit("Eintragen");
+
+        expect(
+            await screen.findByText("rheinland.de eingetragen. Lege den TXT-Eintrag an und prüfe ihn dann."),
+        ).toBeInTheDocument();
+        expect(addDomain).toHaveBeenCalledWith("rheinland.de");
+        expect(screen.getByText("_fleet-live.rheinland.de")).toBeInTheDocument();
+        expect(screen.getByText("fleet-live-verification=abc123")).toBeInTheDocument();
+    });
+
+    it("checks a domain and shows it confirmed", async () => {
+        vi.mocked(listDomains).mockResolvedValue({ data: [{
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            }] });
+        vi.mocked(verifyDomain).mockResolvedValue({
+            data: [{ ...{
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            }, verified_at: "2026-10-29 10:00:00" }],
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
+
+        fireEvent.click(await screen.findByRole("button", { name: "rheinland.de prüfen" }));
+
+        expect(await screen.findByText("Bestätigt")).toBeInTheDocument();
+        expect(verifyDomain).toHaveBeenCalledWith(3);
+        expect(screen.queryByRole("button", { name: "rheinland.de prüfen" })).toBeNull();
+    });
+
+    it("removes a domain", async () => {
+        vi.mocked(listDomains).mockResolvedValue({ data: [{
+                id: 3,
+                domain: "rheinland.de",
+                verified_at: null,
+                record_name: "_fleet-live.rheinland.de",
+                record_value: "fleet-live-verification=abc123",
+            }] });
+        vi.mocked(removeDomain).mockResolvedValue({ data: [] });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#firmen-login" });
+
+        fireEvent.click(await screen.findByRole("button", { name: "rheinland.de entfernen" }));
+
+        expect(await screen.findByText("rheinland.de entfernt.")).toBeInTheDocument();
+        expect(removeDomain).toHaveBeenCalledWith(3);
     });
 });

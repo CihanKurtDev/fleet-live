@@ -105,6 +105,28 @@ CREATE TABLE IF NOT EXISTS audit_events (
 CREATE INDEX IF NOT EXISTS idx_audit_events_company
     ON audit_events(company_id, id);
 
+-- A domain a company proves with a DNS TXT record. The company login is
+-- found by the e-mail's domain, only for a confirmed one.
+CREATE TABLE IF NOT EXISTS company_domains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    domain TEXT NOT NULL,
+    token TEXT NOT NULL,
+    verified_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE,
+
+    UNIQUE (company_id, domain)
+);
+
+-- Several companies may claim a domain; only one can prove it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_company_domains_verified
+    ON company_domains(domain)
+    WHERE verified_at IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

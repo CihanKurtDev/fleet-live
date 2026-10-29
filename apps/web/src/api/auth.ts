@@ -1,6 +1,7 @@
 import type {
     AuditEvent,
     AuthUser,
+    CompanyDomain,
     Invitation,
     LoginInput,
     LoginResponse,
@@ -134,6 +135,25 @@ export type Member = {
 
 export const withdrawInvite = (userId: number) =>
     request<{ data: Member[] }>(`/api/auth/invites/${userId}`, {
+        method: "DELETE",
+    });
+
+export const listDomains = (signal?: AbortSignal) =>
+    request<{ data: CompanyDomain[] }>("/api/auth/domains", { signal });
+
+export const addDomain = (domain: string) =>
+    request<{ data: CompanyDomain }>("/api/auth/domains", {
+        method: "POST",
+        body: { domain },
+    });
+
+export const verifyDomain = (id: number) =>
+    request<{ data: CompanyDomain[] }>(`/api/auth/domains/${id}/verify`, {
+        method: "POST",
+    });
+
+export const removeDomain = (id: number) =>
+    request<{ data: CompanyDomain[] }>(`/api/auth/domains/${id}`, {
         method: "DELETE",
     });
 

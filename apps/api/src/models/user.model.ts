@@ -125,6 +125,7 @@ export const UserModel = {
         db.exec("DELETE FROM sessions");
         db.exec("DELETE FROM company_invites");
         db.exec("DELETE FROM audit_events");
+        db.exec("DELETE FROM company_domains");
         db.exec("DELETE FROM company_memberships");
         db.exec("DELETE FROM users");
         db.exec(

@@ -5,12 +5,14 @@ import {
     USER_ROLE_LABELS as ROLE_LABEL,
     formatAuditEvent,
     type AuditEvent,
+    type CompanyDomain,
     type Invitation,
     type SsoProviders,
     type UserRole,
 } from "@fleet-live/shared";
 import {
     acceptInvitation,
+    addDomain,
     changePassword,
     confirmTotpSetup,
     disableTotp,
@@ -20,8 +22,10 @@ import {
     getSsoProviders,
     inviteMember,
     listAudit,
+    listDomains,
     listInvitations,
     listMembers,
+    removeDomain,
     removeMember,
     setMemberRole,
     setupTotp,
@@ -29,6 +33,7 @@ import {
     switchCompany,
     unlinkSso,
     updateSecurity,
+    verifyDomain,
     withdrawInvite,
     type AuditPage,
     type CompanySecurity,
@@ -122,6 +127,8 @@ export const AccountPage = () => {
     const [members, setMembers] = useState<Member[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [providers, setProviders] = useState<SsoProviders | null>(null);
+    const [domains, setDomains] = useState<CompanyDomain[] | null>(null);
+    const [newDomain, setNewDomain] = useState("");
     const [auditPage, setAuditPage] = useState(1);
     const [audit, setAudit] = useState<AuditPage | null>(null);
     const [security, setSecurity] = useState<CompanySecurity | null>(null);
@@ -219,6 +226,32 @@ export const AccountPage = () => {
     const isDispatcherUser = user?.role === "dispatcher";
     const companyId = user?.company_id;
     const auditOpen = hash === "#protokoll";
+
+    const loginOpen = hash === "#firmen-login";
+
+    // The company's domains load with the company-login section.
+    useEffect(() => {
+        if (!isDispatcherUser || !loginOpen || companyId === undefined) {
+            return;
+        }
+
+        const controller = new AbortController();
+        listDomains(controller.signal)
+            .then((result) => setDomains(result.data))
+            .catch((caught: unknown) => {
+                if (!controller.signal.aborted) {
+                    setError({
+                        section: "firmen-login",
+                        text:
+                            caught instanceof ApiError
+                                ? caught.message
+                                : "Domains konnten nicht geladen werden.",
+                    });
+                }
+            });
+
+        return () => controller.abort();
+    }, [isDispatcherUser, loginOpen, companyId]);
 
     // The log loads when its section is open, page by page.
     useEffect(() => {
@@ -434,6 +467,50 @@ export const AccountPage = () => {
             });
         } catch (caught: unknown) {
             showError("anmeldung", caught, "Die Verknüpfung bleibt bestehen.");
+        }
+    };
+
+    const submitDomain = async (event: FormEvent) => {
+        event.preventDefault();
+        clearMessages();
+
+        try {
+            const { data } = await addDomain(newDomain);
+            setDomains((current) => [...(current ?? []), data].sort((a, b) => a.domain.localeCompare(b.domain)));
+            setNewDomain("");
+            setInfo({
+                section: "firmen-login",
+                text: `${data.domain} eingetragen. Lege den TXT-Eintrag an und prüfe ihn dann.`,
+            });
+        } catch (caught: unknown) {
+            showError("firmen-login", caught, "Domain konnte nicht eingetragen werden.");
+        }
+    };
+
+    const checkDomain = async (domain: CompanyDomain) => {
+        clearMessages();
+
+        try {
+            const { data } = await verifyDomain(domain.id);
+            setDomains(data);
+            setInfo({
+                section: "firmen-login",
+                text: `${domain.domain} ist bestätigt. Die Anmeldeseite findet euren Firmen-Login jetzt über die E-Mail.`,
+            });
+        } catch (caught: unknown) {
+            showError("firmen-login", caught, "Die Domain konnte nicht geprüft werden.");
+        }
+    };
+
+    const dropDomain = async (domain: CompanyDomain) => {
+        clearMessages();
+
+        try {
+            const { data } = await removeDomain(domain.id);
+            setDomains(data);
+            setInfo({ section: "firmen-login", text: `${domain.domain} entfernt.` });
+        } catch (caught: unknown) {
+            showError("firmen-login", caught, "Die Domain bleibt.");
         }
     };
 
@@ -1078,6 +1155,75 @@ export const AccountPage = () => {
                             ) : (
                                 !sectionError && <p className={styles.help}>Laden…</p>
                             )}
+                        </section>
+                        <section className={styles.panel}>
+                            <h2 className={styles.panelTitle}>Domains</h2>
+                            <p className={styles.help}>
+                                Mit einer bestätigten Domain findet die Anmeldeseite euren
+                                Firmen-Login über die E-Mail-Adresse (z. B. alle @firma.de).
+                                Bestätigt wird über einen TXT-Eintrag in eurem DNS.
+                            </p>
+                            {domains && domains.length > 0 && (
+                                <ul className={styles.companies}>
+                                    {domains.map((domain) => (
+                                        <li
+                                            key={domain.id}
+                                            className={`${styles.company} ${styles.invitation}`}
+                                        >
+                                            <span className={styles.invitationText}>
+                                                <span className={styles.strong}>{domain.domain}</span>
+                                                {domain.verified_at ? (
+                                                    <span className={styles.active}>Bestätigt</span>
+                                                ) : (
+                                                    <span className={styles.help}>
+                                                        TXT-Eintrag <code>{domain.record_name}</code>
+                                                        {" mit dem Wert "}
+                                                        <code className={styles.record}>{domain.record_value}</code>
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                aria-label={`${domain.domain} entfernen`}
+                                                onClick={() => dropDomain(domain)}
+                                            >
+                                                Entfernen
+                                            </Button>
+                                            {domain.verified_at ? (
+                                                <span aria-hidden="true" />
+                                            ) : (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    aria-label={`${domain.domain} prüfen`}
+                                                    onClick={() => checkDomain(domain)}
+                                                >
+                                                    Prüfen
+                                                </Button>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            <form className={styles.domainRow} onSubmit={submitDomain}>
+                                <div className={authForm.field}>
+                                    <label htmlFor="company-domain">Domain</label>
+                                    <Input
+                                        id="company-domain"
+                                        size="md"
+                                        fullWidth
+                                        required
+                                        placeholder="firma.de"
+                                        value={newDomain}
+                                        onChange={(event) => setNewDomain(event.target.value)}
+                                    />
+                                </div>
+                                <Button type="submit" size="md">
+                                    Eintragen
+                                </Button>
+                            </form>
                         </section>
                         {messages}
                         </>

@@ -25,10 +25,10 @@ import {
     linkSsoIdentity,
     unlinkSsoIdentity,
     pickLoginCompany,
-    companyIdForLoginSso,
     ssoClient,
 } from "../models/account.model";
 import { AuditModel } from "../models/audit.model";
+import { CompanyDomainModel } from "../models/companyDomain.model";
 import { membershipRow } from "../models/authView";
 import { AuthTokenModel } from "../models/authToken.model";
 import { companyProvider } from "../models/loginPolicy";
@@ -172,9 +172,14 @@ export async function startSso(req: Request, res: Response) {
     res.redirect(started.url);
 }
 
+/**
+ * The company login for an e-mail address, found by its domain: only a
+ * domain a company confirmed counts, so the answer never says whether that
+ * person is a member anywhere.
+ */
 export function discoverCompanySso(req: Request, res: Response) {
     const { email } = parseEmailInput(req.body);
-    const companyId = companyIdForLoginSso(email);
+    const companyId = CompanyDomainModel.companyForEmail(email);
 
     if (!companyId) {
         throw new ValidationError(

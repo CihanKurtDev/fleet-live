@@ -549,21 +549,6 @@ export function pickLoginCompany(userId: number) {
     return rows.find((row) => row.sso_required === 0) ?? rows[0];
 }
 
-export function companyIdForLoginSso(email: string): number | undefined {
-    const user = UserModel.findByEmail(email);
-
-    if (!user?.email_verified_at) {
-        return undefined;
-    }
-
-    const ready = listMemberships(user.id).filter((row) =>
-        ssoClient(row.company_id),
-    );
-    const required = ready.find((row) => row.sso_required === 1);
-
-    return (required ?? ready[0])?.company_id;
-}
-
 export function replaceRecoveryCodes(userId: number, codes: string[]) {
     stmt("DELETE FROM totp_recovery_codes WHERE user_id = ?").run(userId);
 
