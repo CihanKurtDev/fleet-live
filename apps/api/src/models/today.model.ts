@@ -91,7 +91,13 @@ const shareSlots = (
  * /alerts?type=OFFLINE.
  */
 export class TodayModel {
-    static forCompany(companyId: number, limit: number): TodayResponse {
+    /** `driverTalk: false` leaves out the drivers to talk to (names kept from viewers). */
+    static forCompany(
+        companyId: number,
+        limit: number,
+        options: { driverTalk?: boolean } = {},
+    ): TodayResponse {
+        const withTalk = options.driverTalk !== false;
         const dueRows = DueModel.rowsForCompany(companyId);
         const overdue = dueRows
             .filter((row) => row.state === "overdue")
@@ -133,7 +139,7 @@ export class TodayModel {
             deadline_overdue: overdue
                 .slice(0, limit)
                 .map((row, index) => deadlineItem("deadline_overdue", row, index)),
-            driver_talk: talk.data.map((driver) => ({
+            driver_talk: (withTalk ? talk.data : []).map((driver) => ({
                 ...emptyItem,
                 kind: "driver_talk",
                 key: `driver_talk:${driver.id}`,
@@ -166,7 +172,7 @@ export class TodayModel {
 
         const counts: TodayCounts = {
             deadline_overdue: overdue.length,
-            driver_talk: talk.meta.total,
+            driver_talk: withTalk ? talk.meta.total : 0,
             offline: offline.meta.total,
             low_fuel: lowFuel.meta.total,
             deadline_soon: soon.length,

@@ -120,6 +120,8 @@ export const AppHeader = ({
         user && user.invitations > 0 ? (
             <span className={styles.badge}>{formatCount(user.invitations)}</span>
         ) : null;
+    // A company can keep the driver pages to dispatchers (Konto → Datenschutz).
+    const shown = (item: NavItem) => !(item.to === "/drivers" && user?.driver_names_hidden);
     const badgeFor = (item: NavItem) =>
         item.badge === "alerts" ? alertBadge : item.badge === "invitations" ? inviteBadge : null;
 
@@ -145,7 +147,7 @@ export const AppHeader = ({
                                 aria-label="Hauptnavigation"
                             >
                                 {NAV_ITEMS.filter(
-                                    (item) => !item.drawerOnly,
+                                    (item) => !item.drawerOnly && shown(item),
                                 ).map((item) => (
                                     <NavLink
                                         key={item.to}
@@ -249,7 +251,7 @@ export const AppHeader = ({
                             className={styles.drawerNav}
                             aria-label="Hauptnavigation"
                         >
-                            {NAV_ITEMS.map((item) => (
+                            {NAV_ITEMS.filter(shown).map((item) => (
                                 <NavLink
                                     key={item.to}
                                     viewTransition

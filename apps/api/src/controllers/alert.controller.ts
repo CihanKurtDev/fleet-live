@@ -8,7 +8,8 @@ import {
 import { AlertModel } from "../models/alert.model";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
-import { NotFoundError } from "../lib/errors";
+import { DRIVER_NAMES_HIDDEN, hidesDriverNames, withoutDriver } from "../lib/driverNames";
+import { AppError, NotFoundError } from "../lib/errors";
 import { notifyVehiclesChanged, parseId, sessionCompany } from "../lib/http";
 
 function parseAlertId(value: string | string[] | undefined): number {
@@ -33,8 +34,15 @@ export function getAlerts(req: Request, res: Response) {
         throw new NotFoundError();
     }
 
+    const hidden = hidesDriverNames(req);
+
+    if (hidden && query.driver_id !== undefined) {
+        throw new AppError(403, "DRIVER_NAMES_HIDDEN", DRIVER_NAMES_HIDDEN);
+    }
+
     const started = performance.now();
-    const result = AlertModel.listForCompany(companyId, query);
+    const listed = AlertModel.listForCompany(companyId, query);
+    const result = hidden ? { ...listed, data: listed.data.map(withoutDriver) } : listed;
     const duration = performance.now() - started;
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");

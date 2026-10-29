@@ -301,6 +301,12 @@ const PAGES: Record<string, HelpPage> = {
                 dispatcherOnly: true,
             },
             {
+                question: "Wer sieht, welcher Fahrer zu schnell war?",
+                answer:
+                    "Dispatcher immer. Viewer nur, solange unter „Datenschutz“ „Viewer sehen Fahrernamen bei Verstößen“ an ist; sonst fehlen ihnen die Namen an Warnungen und Fahrten und die Fahrer-Seiten.",
+                dispatcherOnly: true,
+            },
+            {
                 question: "Wie lange bewahrt fleet-live Fahrten und Warnungen auf?",
                 answer:
                     "Unter „Datenschutz“ stellt ihr ein, nach wie vielen Tagen Fahrten, erledigte Warnungen und das Protokoll gelöscht werden (leer = Standard). Meist legt das eine Betriebsvereinbarung fest. Was älter ist, wird beim Speichern sofort gelöscht.",

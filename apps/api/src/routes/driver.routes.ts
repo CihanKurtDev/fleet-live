@@ -1,4 +1,5 @@
 import express from "express";
+import { requireDriverNames } from "../lib/driverNames";
 import { requireDispatcher } from "../middleware/requireDispatcher";
 import {
     assignDriverVehicle,
@@ -13,9 +14,10 @@ import {
 
 const router = express.Router();
 
-router.get("/", getDrivers);
+// A company can keep the driver pages (each driver's violation history) to dispatchers.
+router.get("/", requireDriverNames, getDrivers);
 router.post("/", requireDispatcher, createDriver);
-router.get("/:id", getDriverById);
+router.get("/:id", requireDriverNames, getDriverById);
 router.patch("/:id", requireDispatcher, updateDriver);
 router.delete("/:id", requireDispatcher, deleteDriver);
 router.post("/:id/vehicles", requireDispatcher, assignDriverVehicle);

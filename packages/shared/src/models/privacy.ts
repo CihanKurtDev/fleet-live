@@ -30,7 +30,13 @@ export const RETENTION_LABELS: Record<RetentionKind, string> = {
 };
 
 /** Stored company values (`null` = default) and the days the app uses. */
-export type RetentionSettings = {
+export type PrivacySettings = {
+    /**
+     * Whether viewers see who drove: driver names on Tempo warnings and trips,
+     * and the driver pages (each driver's violation history). Dispatchers
+     * always do. Who drives which vehicle right now stays visible.
+     */
+    viewer_driver_names: boolean;
     trips_days: number | null;
     alerts_days: number | null;
     audit_days: number | null;
@@ -52,14 +58,15 @@ const days = (kind: RetentionKind) => {
         .max(max, `Höchstens ${max} Tage.`);
 };
 
-const retentionPatchSchema = z.object({
+const privacyPatchSchema = z.object({
+    viewer_driver_names: z.boolean({ error: "Ja oder nein." }).optional(),
     trips_days: z.union([z.null(), days("trips")]).optional(),
     alerts_days: z.union([z.null(), days("alerts")]).optional(),
     audit_days: z.union([z.null(), days("audit")]).optional(),
 });
 
-export type RetentionPatch = z.infer<typeof retentionPatchSchema>;
+export type PrivacyPatch = z.infer<typeof privacyPatchSchema>;
 
-export function parseRetentionPatch(input: unknown): RetentionPatch {
-    return retentionPatchSchema.parse(input);
+export function parsePrivacyPatch(input: unknown): PrivacyPatch {
+    return privacyPatchSchema.parse(input);
 }

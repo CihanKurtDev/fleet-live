@@ -1,3 +1,4 @@
+import { MissingDriver } from "../drivers/MissingDriver";
 import type { Trip, TripEvent } from "@fleet-live/shared";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -134,7 +135,7 @@ export const TripPanel = ({
                                 {trip.driver_name}
                             </Link>
                         ) : (
-                            <span className={styles.muted}>nicht erfasst</span>
+                            <MissingDriver className={styles.muted} fallback="nicht erfasst" />
                         )}
                     </dd>
                 </div>

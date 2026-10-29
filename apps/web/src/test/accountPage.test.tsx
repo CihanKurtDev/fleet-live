@@ -19,7 +19,7 @@ vi.mock("../api/auth", () => ({
     createCompany: vi.fn(),
     declineInvitation: vi.fn(),
     disableTotp: vi.fn(),
-    getRetention: vi.fn(),
+    getPrivacy: vi.fn(),
     getSecurity: vi.fn(),
     getSsoProviders: vi.fn(),
     inviteMember: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock("../api/auth", () => ({
     listMembers: vi.fn(),
     removeDomain: vi.fn(),
     removeMember: vi.fn(),
-    saveRetention: vi.fn(),
+    savePrivacy: vi.fn(),
     setMemberRole: vi.fn(),
     setupTotp: vi.fn(),
     startSsoLink: vi.fn(),
@@ -48,7 +48,7 @@ import {
     createCompany,
     declineInvitation,
     disableTotp,
-    getRetention,
+    getPrivacy,
     getSecurity,
     getSsoProviders,
     inviteMember,
@@ -58,7 +58,7 @@ import {
     listMembers,
     removeDomain,
     removeMember,
-    saveRetention,
+    savePrivacy,
     setMemberRole,
     setupTotp,
     startSsoLink,
@@ -833,7 +833,8 @@ describe("account page", () => {
     });
 
     it("saves the retention and says what was deleted", async () => {
-        vi.mocked(getRetention).mockResolvedValue({ data: {
+        vi.mocked(getPrivacy).mockResolvedValue({ data: {
+            viewer_driver_names: true,
             trips_days: null,
             alerts_days: null,
             audit_days: null,
@@ -842,8 +843,9 @@ describe("account page", () => {
             audit: 365,
             defaults: { trips: 90, alerts: 90, audit: 365 },
         } });
-        vi.mocked(saveRetention).mockResolvedValue({
+        vi.mocked(savePrivacy).mockResolvedValue({
             data: { ...{
+            viewer_driver_names: true,
             trips_days: null,
             alerts_days: null,
             audit_days: null,
@@ -864,10 +866,41 @@ describe("account page", () => {
         expect(
             await screen.findByText("Gespeichert. Gelöscht, weil älter: 12 Fahrten, 1 Protokoll-Eintrag."),
         ).toBeInTheDocument();
-        expect(saveRetention).toHaveBeenCalledWith({
+        expect(savePrivacy).toHaveBeenCalledWith({
             trips_days: 30,
             alerts_days: null,
             audit_days: null,
         });
+    });
+
+    it("keeps driver names to dispatchers with one switch", async () => {
+        const settings = {
+            viewer_driver_names: true,
+            trips_days: null,
+            alerts_days: null,
+            audit_days: null,
+            trips: 90,
+            alerts: 90,
+            audit: 365,
+            defaults: { trips: 90, alerts: 90, audit: 365 },
+        };
+        vi.mocked(getPrivacy).mockResolvedValue({ data: settings });
+        vi.mocked(savePrivacy).mockResolvedValue({
+            data: { ...settings, viewer_driver_names: false },
+            deleted: { trips: 0, alerts: 0, audit: 0 },
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
+
+        const toggle = await screen.findByRole("checkbox", {
+            name: "Viewer sehen Fahrernamen bei Verstößen",
+        });
+        expect(toggle).toBeChecked();
+        fireEvent.click(toggle);
+
+        expect(
+            await screen.findByText("Fahrernamen sind jetzt Dispatchern vorbehalten."),
+        ).toBeInTheDocument();
+        expect(savePrivacy).toHaveBeenCalledWith({ viewer_driver_names: false });
+        expect(toggle).not.toBeChecked();
     });
 });

@@ -15,7 +15,7 @@ import {
     formatStamp,
     parseDetails,
 } from "./export.model";
-import { RetentionModel } from "./retention.model";
+import { PrivacyModel } from "./privacy.model";
 
 type DriverRow = {
     id: number;
@@ -138,7 +138,7 @@ export function driverExport(
         resolved_at: string | null;
     }[];
 
-    const retention = RetentionModel.get(companyId);
+    const retention = PrivacyModel.get(companyId);
     const exportedAt = formatStamp(new Date().toISOString());
     const routes = {
         type: "FeatureCollection",

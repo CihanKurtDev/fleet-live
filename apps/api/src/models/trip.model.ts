@@ -10,7 +10,7 @@ import {
     encodePoints,
     encodePolyline,
 } from "@fleet-live/shared";
-import { RetentionModel } from "./retention.model";
+import { PrivacyModel } from "./privacy.model";
 import { stmt } from "../db/statements";
 import { EVENT_COUNT_SQL } from "../db/tripEvents";
 import { haversineMeters, simplifyPath } from "../lib/geo";
@@ -376,7 +376,7 @@ export class TripModel {
      * Offene Fahrten und andere Firmen bleiben. Kein `company_id` auf `trips`.
      */
     static pruneClosedForCompany(companyId: number): number {
-        const days = RetentionModel.tripDays(companyId);
+        const days = PrivacyModel.tripDays(companyId);
 
         if (days <= 0) {
             return 0;

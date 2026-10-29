@@ -1130,8 +1130,8 @@ function ensureTotpLastStep(database: DatabaseSync) {
  * account nobody has signed in to yet becomes the open invitation it was, so
  * its mail link still works and the person still has to accept.
  */
-/** Retention days a company sets itself (privacy settings). */
-export function ensureRetentionColumns(database: DatabaseSync) {
+/** Privacy settings a company sets itself: retention days, driver names for viewers. */
+export function ensurePrivacyColumns(database: DatabaseSync) {
     if (!tableExists(database, "companies")) {
         return;
     }
@@ -1139,6 +1139,7 @@ export function ensureRetentionColumns(database: DatabaseSync) {
     addColumn(database, "companies", "trip_retention_days", "INTEGER");
     addColumn(database, "companies", "alert_retention_days", "INTEGER");
     addColumn(database, "companies", "audit_retention_days", "INTEGER");
+    addColumn(database, "companies", "viewer_driver_names", "INTEGER NOT NULL DEFAULT 1");
 }
 
 export function ensureCompanyInvites(database: DatabaseSync) {
@@ -1747,7 +1748,7 @@ export function migrate(database: DatabaseSync) {
     ensureTotpLastStep(database);
     ensureAuthHardening(database);
     ensureCompanyInvites(database);
-    ensureRetentionColumns(database);
+    ensurePrivacyColumns(database);
     ensureTripEvents(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.

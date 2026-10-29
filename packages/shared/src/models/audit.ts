@@ -16,7 +16,7 @@ export const AUDIT_ACTIONS = [
     "domain_added",
     "domain_verified",
     "domain_removed",
-    "retention_changed",
+    "privacy_changed",
     "driver_exported",
 ] as const;
 
@@ -43,8 +43,10 @@ export type AuditDetails = {
     changes?: SecurityChange[];
     /** The company domain of a domain_* entry. */
     domain?: string;
-    /** New retention days of a retention_changed entry; null = default. */
+    /** New retention days of a privacy_changed entry; null = default. */
     retention?: Partial<Record<"trips" | "alerts" | "audit", number | null>>;
+    /** New visibility of driver names for viewers (privacy_changed). */
+    viewer_driver_names?: boolean;
     /** The driver whose data was exported (driver_exported). */
     driver?: string;
 };
@@ -130,9 +132,19 @@ export function formatAuditEvent(event: AuditEvent): string {
             return `Domain ${details.domain ?? "?"} entfernt`;
         case "driver_exported":
             return `Auskunft über ${details.driver ?? "einen Fahrer"} exportiert`;
-        case "retention_changed":
-            return `Aufbewahrung geändert: ${Object.entries(details.retention ?? {})
-                .map(([kind, days]) => `${RETENTION_NAMES[kind as keyof typeof RETENTION_NAMES]} ${days === null ? "Standard" : `${days} Tage`}`)
-                .join(", ")}`;
+        case "privacy_changed":
+            return `Datenschutz geändert: ${[
+                ...Object.entries(details.retention ?? {}).map(
+                    ([kind, days]) =>
+                        `${RETENTION_NAMES[kind as keyof typeof RETENTION_NAMES]} ${days === null ? "Standard" : `${days} Tage`}`,
+                ),
+                ...(details.viewer_driver_names === undefined
+                    ? []
+                    : [
+                          details.viewer_driver_names
+                              ? "Fahrernamen für Viewer sichtbar"
+                              : "Fahrernamen nur für Dispatcher",
+                      ]),
+            ].join(", ")}`;
     }
 }

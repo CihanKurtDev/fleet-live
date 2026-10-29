@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS companies (
     -- Retention in days set by the company; NULL is the default (shared RETENTION_*).
     trip_retention_days INTEGER,
     alert_retention_days INTEGER,
-    audit_retention_days INTEGER
+    audit_retention_days INTEGER,
+    -- 0: driver names on warnings, trips and the driver pages are for dispatchers only.
+    viewer_driver_names INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_name_nocase

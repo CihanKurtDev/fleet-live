@@ -196,15 +196,15 @@ export type {
 
 export type { CompanyDomain } from "./models/companyDomain";
 
-export type { RetentionKind, RetentionPatch, RetentionSettings } from "./models/retention";
+export type { RetentionKind, PrivacyPatch, PrivacySettings } from "./models/privacy";
 
 export {
     RETENTION_FALLBACK,
     RETENTION_KINDS,
     RETENTION_LABELS,
     RETENTION_LIMITS,
-    parseRetentionPatch,
-} from "./models/retention";
+    parsePrivacyPatch,
+} from "./models/privacy";
 
 export {
     DOMAIN_RECORD_PREFIX,

@@ -162,4 +162,16 @@ describe("phone menu", () => {
         await vi.waitFor(() => expect(setUser).toHaveBeenCalledWith(null));
         expect(logout).toHaveBeenCalledOnce();
     });
+
+    it("leaves out the driver pages for a viewer the company keeps names from", () => {
+        renderAuth(<AppHeader />, {
+            user: authUser({ role: "viewer", driver_names_hidden: true }),
+            route: "/vehicles",
+        });
+
+        const nav = screen.getAllByRole("navigation", { name: "Hauptnavigation" })[0];
+        expect(nav).toBeDefined();
+        expect(within(nav as HTMLElement).queryByRole("link", { name: "Fahrer" })).toBeNull();
+        expect(within(nav as HTMLElement).getByRole("link", { name: "Fahrzeuge" })).toBeInTheDocument();
+    });
 });

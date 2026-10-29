@@ -139,7 +139,8 @@ export const UserModel = {
                 sso_required = 0,
                 trip_retention_days = NULL,
                 alert_retention_days = NULL,
-                audit_retention_days = NULL
+                audit_retention_days = NULL,
+                viewer_driver_names = 1
             `,
         );
         db.exec(

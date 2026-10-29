@@ -11,7 +11,7 @@ import {
     type CompanyDomain,
     type Invitation,
     type RetentionKind,
-    type RetentionSettings,
+    type PrivacySettings,
     type SsoProviders,
     type UserRole,
 } from "@fleet-live/shared";
@@ -23,7 +23,7 @@ import {
     disableTotp,
     createCompany,
     declineInvitation,
-    getRetention,
+    getPrivacy,
     getSecurity,
     getSsoProviders,
     inviteMember,
@@ -33,7 +33,7 @@ import {
     listMembers,
     removeDomain,
     removeMember,
-    saveRetention,
+    savePrivacy,
     setMemberRole,
     setupTotp,
     startSsoLink,
@@ -144,7 +144,7 @@ export const AccountPage = () => {
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [providers, setProviders] = useState<SsoProviders | null>(null);
     const [domains, setDomains] = useState<CompanyDomain[] | null>(null);
-    const [retention, setRetention] = useState<RetentionSettings | null>(null);
+    const [retention, setRetention] = useState<PrivacySettings | null>(null);
     const [retentionDraft, setRetentionDraft] = useState<Record<RetentionKind, string> | null>(null);
     const [retentionErrors, setRetentionErrors] = useState<Record<string, string>>({});
     const [newDomain, setNewDomain] = useState("");
@@ -280,7 +280,7 @@ export const AccountPage = () => {
         }
 
         const controller = new AbortController();
-        getRetention(controller.signal)
+        getPrivacy(controller.signal)
             .then((result) => setRetention(result.data))
             .catch((caught: unknown) => {
                 if (!controller.signal.aborted) {
@@ -539,7 +539,7 @@ export const AccountPage = () => {
         const days = (value: string) => (value.trim() === "" ? null : Number(value));
 
         try {
-            const { data, deleted } = await saveRetention({
+            const { data, deleted } = await savePrivacy({
                 trips_days: days(retentionValues.trips),
                 alerts_days: days(retentionValues.alerts),
                 audit_days: days(retentionValues.audit),
@@ -567,6 +567,23 @@ export const AccountPage = () => {
             }
 
             showError("datenschutz", caught, "Die Aufbewahrung wurde nicht gespeichert.");
+        }
+    };
+
+    const toggleDriverNames = async (visible: boolean) => {
+        clearMessages();
+
+        try {
+            const { data } = await savePrivacy({ viewer_driver_names: visible });
+            setRetention(data);
+            setInfo({
+                section: "datenschutz",
+                text: visible
+                    ? "Viewer sehen Fahrernamen wieder."
+                    : "Fahrernamen sind jetzt Dispatchern vorbehalten.",
+            });
+        } catch (caught: unknown) {
+            showError("datenschutz", caught, "Die Einstellung wurde nicht gespeichert.");
         }
     };
 
@@ -1435,6 +1452,26 @@ export const AccountPage = () => {
                                     !sectionError && <p className={styles.help}>Laden…</p>
                                 )}
                             </section>
+                            {retention && (
+                                <section className={styles.panel}>
+                                    <h2 className={styles.panelTitle}>Fahrernamen</h2>
+                                    <p className={styles.help}>
+                                        Wer gefahren ist, steht an Tempo-Warnungen und Fahrten; die
+                                        Fahrer-Seiten zeigen die Verstöße je Person. Aus, sehen das nur
+                                        Dispatcher. Welches Fahrzeug wer gerade fährt, bleibt für alle
+                                        sichtbar.
+                                    </p>
+                                    <label className={authForm.remember}>
+                                        <Checkbox
+                                            checked={retention.viewer_driver_names}
+                                            onChange={(event) =>
+                                                void toggleDriverNames(event.target.checked)
+                                            }
+                                        />
+                                        Viewer sehen Fahrernamen bei Verstößen
+                                    </label>
+                                </section>
+                            )}
                             <section className={styles.panel}>
                                 <h2 className={styles.panelTitle}>Was sonst gilt</h2>
                                 <ul className={styles.facts}>

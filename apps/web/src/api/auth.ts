@@ -2,8 +2,8 @@ import type {
     AuditEvent,
     AuthUser,
     CompanyDomain,
-    RetentionPatch,
-    RetentionSettings,
+    PrivacyPatch,
+    PrivacySettings,
     Invitation,
     LoginInput,
     LoginResponse,
@@ -140,15 +140,15 @@ export const withdrawInvite = (userId: number) =>
         method: "DELETE",
     });
 
-export const getRetention = (signal?: AbortSignal) =>
-    request<{ data: RetentionSettings }>("/api/auth/retention", { signal });
+export const getPrivacy = (signal?: AbortSignal) =>
+    request<{ data: PrivacySettings }>("/api/auth/privacy", { signal });
 
-export const saveRetention = (patch: RetentionPatch) =>
+export const savePrivacy = (patch: PrivacyPatch) =>
     request<{
-        data: RetentionSettings;
+        data: PrivacySettings;
         /** Rows deleted because of this change. */
         deleted: { trips: number; alerts: number; audit: number };
-    }>("/api/auth/retention", {
+    }>("/api/auth/privacy", {
         method: "PATCH",
         body: patch,
     });
