@@ -227,6 +227,57 @@ describe("SPEEDING events", () => {
         assert.equal(afterEnd.body.active_alerts, 1);
     });
 
+    it("reports the place furthest over its limit, not the top speed", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 31",
+            driver_name: "Ortsdurchfahrt",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+        const start = 6_600_000;
+
+        // Just over on the motorway, then 20 over in town: town is worse.
+        patchAt(vehicle.id, 1, 121, start, 120);
+        patchAt(vehicle.id, 1, 121, start + SPEEDING_OPEN_AFTER_MS, 120);
+        patchAt(vehicle.id, 1, 70, start + SPEEDING_OPEN_AFTER_MS + 3_000, 50);
+        patchAt(vehicle.id, 1, 65, start + SPEEDING_OPEN_AFTER_MS + 6_000, 50);
+
+        const open = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(open.body.data[0].details.max_speed_kmh, 70);
+        assert.equal(open.body.data[0].details.limit_kmh, 50);
+        assert.match(open.body.data[0].message, /70 km\/h bei Limit 50/);
+
+        const trip = await api.get(`/api/vehicles/${vehicle.id}/trips/latest`);
+        assert.equal(trip.body.data.events[0].max_speed_kmh, 70);
+        assert.equal(trip.body.data.events[0].limit_kmh, 50);
+    });
+
+    it("reports the limit of the worst place, not the limit of now", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 3",
+            driver_name: "Ausfahrt",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+        const start = 6_500_000;
+
+        // Too fast on the motorway, still too fast on the exit into town.
+        patchAt(vehicle.id, 1, 135, start, 120);
+        patchAt(vehicle.id, 1, 144, start + SPEEDING_OPEN_AFTER_MS, 120);
+        patchAt(vehicle.id, 1, 70, start + SPEEDING_OPEN_AFTER_MS + 3_000, 50);
+
+        const open = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(open.body.data[0].details.max_speed_kmh, 144);
+        assert.equal(open.body.data[0].details.limit_kmh, 120);
+        assert.match(open.body.data[0].message, /144 km\/h bei Limit 120/);
+
+        const trip = await api.get(`/api/vehicles/${vehicle.id}/trips/latest`);
+        assert.equal(trip.body.data.events[0].max_speed_kmh, 144);
+        assert.equal(trip.body.data.events[0].limit_kmh, 120);
+    });
+
     it("ends an open event that gets no tick for a minute, not before", async () => {
         const vehicle = VehicleModel.create({
             license_plate: "K-SP 9",
@@ -320,16 +371,65 @@ describe("SPEEDING events", () => {
 });
 
 describe("one SPEEDING warning per trip", () => {
-    const episode = (vehicleId: number, start: number, speed: number, seconds: number) => {
-        patchAt(vehicleId, 1, speed, start);
-        patchAt(vehicleId, 1, speed, start + SPEEDING_OPEN_AFTER_MS);
-        patchAt(vehicleId, 1, speed, start + seconds * 1000);
+    const episode = (
+        vehicleId: number,
+        start: number,
+        speed: number,
+        seconds: number,
+        limitKmh = CITY_LIMIT,
+    ) => {
+        patchAt(vehicleId, 1, speed, start, limitKmh);
+        patchAt(vehicleId, 1, speed, start + SPEEDING_OPEN_AFTER_MS, limitKmh);
+        patchAt(vehicleId, 1, speed, start + seconds * 1000, limitKmh);
         const below = start + seconds * 1000 + TICK_MS;
-        patchAt(vehicleId, 1, CITY_LIMIT, below);
-        patchAt(vehicleId, 1, CITY_LIMIT, below + SPEEDING_HYSTERESIS_MS);
+        patchAt(vehicleId, 1, limitKmh, below, limitKmh);
+        patchAt(vehicleId, 1, limitKmh, below + SPEEDING_HYSTERESIS_MS, limitKmh);
 
         return below + SPEEDING_HYSTERESIS_MS;
     };
+
+    it("keeps the place furthest over its limit when overshoots join", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 24",
+            driver_name: "Autobahn und Stadt",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+
+        // +10 on the motorway, +20 in town, +5 on the motorway: town is worst,
+        // though 130 and 125 are the higher speeds.
+        const afterMotorway = episode(vehicle.id, 6_000_000, 130, 10, 120);
+        const afterCity = episode(vehicle.id, afterMotorway + 120_000, 70, 12);
+        episode(vehicle.id, afterCity + 120_000, 125, 10, 120);
+
+        const all = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(all.body.data.length, 1);
+        assert.equal(all.body.data[0].details.event_count, 3);
+        assert.equal(all.body.data[0].details.max_speed_kmh, 70);
+        assert.equal(all.body.data[0].details.limit_kmh, 50);
+        assert.match(all.body.data[0].message, /70 km\/h bei Limit 50/);
+    });
+
+    it("keeps the motorway overshoot when it is the worst", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 23",
+            driver_name: "Stadt und Autobahn",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+
+        const afterCity = episode(vehicle.id, 6_000_000, OVER_CITY, 10);
+        const afterMotorway = episode(vehicle.id, afterCity + 120_000, 150, 12, 120);
+        episode(vehicle.id, afterMotorway + 120_000, OVER_CITY, 10);
+
+        const all = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(all.body.data.length, 1);
+        assert.equal(all.body.data[0].details.max_speed_kmh, 150);
+        assert.equal(all.body.data[0].details.limit_kmh, 120);
+        assert.match(all.body.data[0].message, /150 km\/h bei Limit 120/);
+    });
 
     it("joins later overshoots of the same trip into the one warning", async () => {
         const vehicle = VehicleModel.create({

@@ -12,7 +12,7 @@ import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
 import { withTransaction } from "../db/database";
 import { SELF_CLOSING_TYPES_SQL } from "../db/stateAlerts";
 import { stmt } from "../db/statements";
-import { speedingSeverity } from "../lib/speeding";
+import { overLimitKmh, speedingSeverity } from "../lib/speeding";
 import { nowSqlite } from "../lib/sqlTime";
 import { pagedQuery } from "../lib/pagination";
 
@@ -265,6 +265,18 @@ function toAlert(row: AlertSqlRow): Alert {
     };
 }
 
+type SpeedingPlace = Pick<SpeedingAlertDetails, "max_speed_kmh" | "limit_kmh">;
+
+/** Of two places, the one further over its limit; the first wins a tie. */
+function worstPlace(first: SpeedingPlace, second: SpeedingPlace): SpeedingPlace {
+    const pick =
+        overLimitKmh(second.max_speed_kmh, second.limit_kmh) >
+        overLimitKmh(first.max_speed_kmh, first.limit_kmh)
+            ? second
+            : first;
+    return { max_speed_kmh: pick.max_speed_kmh, limit_kmh: pick.limit_kmh };
+}
+
 export function speedingDetailsJson(details: SpeedingAlertDetails): string {
     return JSON.stringify(details);
 }
@@ -513,12 +525,15 @@ export class AlertModel {
         if (same && isSpeedingAlertDetails(before)) {
             const total = before.duration_s;
             const merged: SpeedingAlertDetails = {
-                limit_kmh: input.details.limit_kmh,
-                max_speed_kmh: Math.max(before.max_speed_kmh, input.details.max_speed_kmh),
+                ...worstPlace(
+                    { max_speed_kmh: before.max_speed_kmh, limit_kmh: before.limit_kmh },
+                    input.details,
+                ),
                 duration_s: total + input.details.duration_s,
                 event_count: (before.event_count ?? 1) + 1,
                 carried_duration_s: total,
                 carried_max_kmh: before.max_speed_kmh,
+                carried_limit_kmh: before.limit_kmh,
             };
 
             stmt(REOPEN_SPEEDING).run(
@@ -557,14 +572,16 @@ export class AlertModel {
         const merged: SpeedingAlertDetails = carried?.carried_duration_s !== undefined
             ? {
                   ...details,
-                  max_speed_kmh: Math.max(
-                      carried.carried_max_kmh ?? 0,
-                      details.max_speed_kmh,
-                  ),
+                  // The running overshoot wins a tie: its place is the newer.
+                  ...worstPlace(details, {
+                      max_speed_kmh: carried.carried_max_kmh ?? 0,
+                      limit_kmh: carried.carried_limit_kmh ?? carried.limit_kmh,
+                  }),
                   duration_s: carried.carried_duration_s + details.duration_s,
                   event_count: carried.event_count,
                   carried_duration_s: carried.carried_duration_s,
                   carried_max_kmh: carried.carried_max_kmh,
+                  carried_limit_kmh: carried.carried_limit_kmh,
               }
             : details;
 
