@@ -20,10 +20,18 @@ const BRIEFING_VEHICLE_CONCEPTS = [
     "low_fuel",
     "in_depot",
     "speeding",
+    "in_workshop",
 ] as const;
 
 type VehicleCountRow = Record<
-    "driving" | "idle" | "stopped" | "offline" | "low_fuel" | "in_depot" | "speeding",
+    | "driving"
+    | "idle"
+    | "stopped"
+    | "offline"
+    | "low_fuel"
+    | "in_depot"
+    | "speeding"
+    | "in_workshop",
     number
 >;
 
@@ -207,6 +215,7 @@ export class BriefingModel {
             low_fuel: Number(vehicles.low_fuel),
             in_depot: Number(vehicles.in_depot),
             speeding: Number(vehicles.speeding),
+            in_workshop: Number(vehicles.in_workshop),
         };
 
         return {

@@ -27,6 +27,12 @@ export const VEHICLE_FILTERS = [
     "in_depot",
     /** Laufende Tempoüberschreitung (`speeding_open`). */
     "speeding",
+    /** Steht in der Werkstatt (offener Aufenthalt, angekommen). */
+    "in_workshop",
+    /** Werkstatt heute dran: Termin heute oder früher, oder Rückgabe überfällig. */
+    "workshop_due",
+    /** Außer Dienst gestellt. */
+    "out_of_service",
 ] as const;
 
 export const VEHICLE_PAGE_LIMITS = [10, 25, 50, 100] as const;
@@ -93,6 +99,9 @@ export type VehicleListCounts = {
     stopped: number;
     in_depot: number;
     speeding: number;
+    in_workshop: number;
+    workshop_due: number;
+    out_of_service: number;
 };
 
 export type VehicleListMeta = {

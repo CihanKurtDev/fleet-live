@@ -1,0 +1,270 @@
+/* Werkstatt strip on the vehicle page and the workshop dialogs. */
+
+/* One row: title, state or the empty line, then Verlauf and the actions. */
+.header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    min-height: var(--control-sm);
+}
+
+.title {
+    margin: 0;
+    font-size: 20px;
+}
+
+.line {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin: 0;
+    font-size: 13px;
+    color: var(--text);
+
+    &[data-tone="error"] {
+        color: var(--danger);
+    }
+}
+
+.spacer {
+    flex: 1 1 0;
+}
+
+.link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+
+    &:hover {
+        color: var(--accent);
+    }
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px 14px;
+    margin: 0;
+
+    @media (max-width: 700px) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    dt {
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--text);
+    }
+
+    dd {
+        margin: 2px 0 0;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-h);
+        overflow-wrap: anywhere;
+    }
+}
+
+.late {
+    color: var(--danger) !important;
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Dialogs */
+
+.context {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+
+    @media (max-width: 700px) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.reasons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+
+    legend {
+        margin-bottom: 6px;
+        padding: 0;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-h);
+    }
+}
+
+.reasonRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.reason {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: var(--control-sm);
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+
+    input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+    }
+
+    &:has(input:focus-visible) {
+        outline: var(--focus-width) solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    &[data-checked] {
+        border-color: var(--accent-border);
+        background: var(--accent-bg);
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    fieldset:disabled & {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+}
+
+.check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--text-h);
+    cursor: pointer;
+}
+
+.callout {
+    padding: 14px;
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius);
+    background: var(--accent-bg);
+}
+
+.month {
+    width: 180px;
+    max-width: 100%;
+}
+
+.history {
+    display: flex;
+    flex-direction: column;
+    margin: 0 -20px;
+}
+
+.historyHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    margin: 0;
+    padding: 0 20px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-well);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 400;
+    text-transform: none;
+    color: var(--text);
+
+    b {
+        font-weight: 650;
+        color: var(--text-h);
+    }
+}
+
+.historyList {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.historyRow {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text);
+
+    @media (max-width: 700px) {
+        grid-template-columns: minmax(0, 1fr) auto;
+        padding-block: 8px;
+
+        .time {
+            grid-column: 1 / -1;
+        }
+    }
+}
+
+.time {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.what {
+    color: var(--text-h);
+}
+
+.muted {
+    color: var(--text);
+}
+
+.cost {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-h);
+}
+
+.historyNote {
+    margin: 0;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text);
+
+    b {
+        font-weight: 500;
+        color: var(--text-h);
+    }
+}

@@ -30,6 +30,8 @@ const vehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({
     open_alert_types: [],
     created_at: "2026-10-01 08:00:00",
     current_driver_id: 7,
+    availability: "READY",
+    workshop: null,
     ...overrides,
 });
 

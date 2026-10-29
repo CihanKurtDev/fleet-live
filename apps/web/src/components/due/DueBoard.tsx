@@ -32,6 +32,7 @@ export const DueBoard = () => {
     const { query, apiQuery, tableState, setSearch, setFilter, setKind, setPage, setLimit } =
         useDueListQuery();
     const [reloadKey, setReloadKey] = useState(0);
+    const [notice, setNotice] = useState("");
     const summary = useDueList({ ...apiQuery, kind: undefined, page: 1, limit: 10 });
     const meta = summary.meta;
     const leadDays = meta?.lead_days ?? DUE_SOON_DAYS;
@@ -52,9 +53,15 @@ export const DueBoard = () => {
             <header className={styles.head}>
                 <div>
                     <h1 className={styles.title}>Fristen</h1>
-                    <p className={styles.lead}>
-                        Je Art eine Gruppe mit ihrer Regel, darin das Dringendste oben.
-                    </p>
+                    {notice ? (
+                        <p className={styles.lead} role="status">
+                            {notice}
+                        </p>
+                    ) : (
+                        <p className={styles.lead}>
+                            Je Art eine Gruppe mit ihrer Regel, darin das Dringendste oben.
+                        </p>
+                    )}
                 </div>
                 <Input
                     type="search"
@@ -112,6 +119,7 @@ export const DueBoard = () => {
                         checkMonths={checkMonths}
                         onPageChange={setPage}
                         onLimitChange={setLimit}
+                        onNotice={setNotice}
                     />
                 ) : (
                     <DueOverview
@@ -120,6 +128,7 @@ export const DueBoard = () => {
                         today={today}
                         checkMonths={checkMonths}
                         onShowAll={(kind) => setKind(kind)}
+                        onNotice={setNotice}
                     />
                 )}
             </div>

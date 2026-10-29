@@ -46,6 +46,7 @@ const driverVehicle = (id: number, plate: string, isCurrent = false) => ({
     status: "IDLE" as const,
     active_alerts: 0,
     is_current: isCurrent,
+    availability: "READY" as const,
 });
 
 const driverDetail = {

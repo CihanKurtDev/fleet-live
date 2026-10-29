@@ -9,6 +9,7 @@ import {
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { CompanyModel } from "./company.model";
+import { WorkshopModel } from "./workshop.model";
 
 const VEHICLES = `
     SELECT id, license_plate, active, hu_due_on, uvv_due_on, uvv_checked_on
@@ -92,8 +93,17 @@ export class DueModel {
             query,
         );
 
+        const open = WorkshopModel.openByVehicle(companyId);
+        // A vehicle has one open stay at most: an HU or UVV row shows it
+        // whatever its reason, so the row does not offer a second one.
+        const workshopOf = (row: DueListItem) =>
+            (row.kind === "hu" || row.kind === "uvv") && row.vehicle_id !== null
+                ? (open.get(row.vehicle_id) ?? null)
+                : null;
+
         return {
             ...listed,
+            data: listed.data.map((row) => ({ ...row, workshop: workshopOf(row) })),
             meta: {
                 ...listed.meta,
                 lead_days: window.lead_days,

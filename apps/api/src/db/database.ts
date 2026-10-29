@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { berlinTodayIso } from "@fleet-live/shared";
 import { config } from "../config";
 import { ensureDevAccounts } from "./devAccounts";
 import { migrate } from "./migrate";
@@ -13,6 +14,10 @@ if (!isMemoryDatabase) {
 }
 
 export const db = new DatabaseSync(config.databasePath);
+
+// Today in Europe/Berlin for SQL, the same day `GET /api/due` counts with
+// (workshop stays due today). Not deterministic: it changes at midnight.
+db.function("berlin_today", { deterministic: false }, () => berlinTodayIso());
 
 let transactionDepth = 0;
 

@@ -14,6 +14,11 @@ import {
     replaceVehicle,
     updateVehicle,
 } from "../controllers/vehicle.controller";
+import {
+    createVehicleWorkshop,
+    getVehicleWorkshop,
+    patchVehicleAvailability,
+} from "../controllers/workshop.controller";
 
 const router = express.Router();
 
@@ -24,6 +29,9 @@ router.get("/:id/telemetry", getVehicleTelemetry);
 router.get("/:id/trips/latest", getVehicleTrip);
 router.get("/:id/trips/:tripId", getVehicleTripById);
 router.get("/:id/trips", getVehicleTrips);
+router.get("/:id/workshop", getVehicleWorkshop);
+router.post("/:id/workshop", requireDispatcher, createVehicleWorkshop);
+router.patch("/:id/availability", requireDispatcher, patchVehicleAvailability);
 router.get("/:id", getVehicleById);
 router.post("/", requireDispatcher, createVehicle);
 router.put("/:id", requireDispatcher, replaceVehicle);

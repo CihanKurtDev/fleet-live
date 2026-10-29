@@ -248,6 +248,8 @@ CREATE TABLE IF NOT EXISTS vehicles (
     last_telemetry_id INTEGER,
     active_alerts INTEGER NOT NULL DEFAULT 0,
     speed_limit_kmh REAL,
+    -- Set by the dispatcher: not given to drivers until set back (NULL = in service).
+    out_of_service_since TEXT,
     search_text TEXT GENERATED ALWAYS AS (
         lower(license_plate || ' ' || coalesce(driver_name, ''))
     ) VIRTUAL,
@@ -366,6 +368,66 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_per_type
     ON alerts(vehicle_id, type)
     WHERE ended_at IS NULL;
+
+-- A vehicle's stay in a workshop: planned, there, finished or cancelled.
+-- No company_id: access is visit → vehicle → company, like alerts.
+CREATE TABLE IF NOT EXISTS workshop_visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER NOT NULL,
+    reason TEXT NOT NULL
+        CHECK (reason IN ('HU', 'UVV', 'MAINTENANCE', 'DAMAGE', 'OTHER')),
+    state TEXT NOT NULL
+        CHECK (state IN ('PLANNED', 'IN_WORKSHOP', 'DONE', 'CANCELLED')),
+    place TEXT NOT NULL,
+    planned_on TEXT NOT NULL,
+    expected_on TEXT,
+    assignee_user_id INTEGER,
+    note TEXT,
+    -- Day it got there (Europe/Berlin); the event log keeps the time.
+    arrived_on TEXT,
+    finished_on TEXT,
+    cost_cents INTEGER,
+    result_note TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (vehicle_id)
+        REFERENCES vehicles(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (assignee_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+);
+
+-- At most one open stay per vehicle.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workshop_visits_open
+    ON workshop_visits(vehicle_id)
+    WHERE state IN ('PLANNED', 'IN_WORKSHOP');
+
+CREATE INDEX IF NOT EXISTS idx_workshop_visits_vehicle
+    ON workshop_visits(vehicle_id, id);
+
+-- Every change of a stay; the name is copied, so a deleted account still reads.
+CREATE TABLE IF NOT EXISTS workshop_visit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    visit_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    actor_user_id INTEGER,
+    actor_name TEXT,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (visit_id)
+        REFERENCES workshop_visits(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (actor_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_visit_events_visit
+    ON workshop_visit_events(visit_id, id);
 
 -- Ein Profil pro Firma: Spalten- und Statuszuordnung der letzten Exporte.
 CREATE TABLE IF NOT EXISTS import_mapping_profiles (

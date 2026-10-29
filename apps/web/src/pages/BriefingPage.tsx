@@ -88,6 +88,13 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
             to: "/vehicles?filter=idle",
         },
         {
+            key: "in_workshop",
+            label: "Werkstatt",
+            hint: "Fahrzeuge",
+            tone: "neutral",
+            to: "/vehicles?filter=in_workshop",
+        },
+        {
             key: "low_fuel",
             label: "Wenig Tank",
             tone: "warning",
@@ -158,7 +165,7 @@ const DueKpis = ({
             key: "missing",
             label: "Datum fehlt",
             value: missingFields(due),
-            hint: "HU, UVV, Führerschein",
+            hint: "nicht prüfbar",
             tone: "neutral",
             to: "/fristen?state=missing",
         },

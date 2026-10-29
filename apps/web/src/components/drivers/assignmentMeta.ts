@@ -57,4 +57,5 @@ export const canAutoCurrentDriver = (driver: Driver | undefined): boolean =>
     driver === undefined || driver.current_vehicle_status !== "DRIVING";
 
 export const canAutoCurrentVehicle = (vehicle: Vehicle | undefined): boolean =>
-    vehicle === undefined || vehicle.status !== "DRIVING";
+    vehicle === undefined ||
+    (vehicle.status !== "DRIVING" && vehicle.availability === "READY");

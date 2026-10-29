@@ -12,6 +12,7 @@ export function getToday(req: Request, res: Response) {
     res.json(
         TodayModel.forCompany(sessionCompany(req), limit, {
             driverTalk: !hidesDriverNames(req),
+            userId: req.user?.id,
         }),
     );
 }

@@ -58,6 +58,10 @@ const dueHintsFor = (vehicle: Vehicle): DueHint[] => {
     });
 };
 
+/** The open stay that takes care of this HU or UVV, if any. */
+const stayFor = (vehicle: Vehicle, kind: DueHint["kind"]) =>
+    vehicle.workshop?.reason === (kind === "hu" ? "HU" : "UVV") ? vehicle.workshop : null;
+
 const dueHintText = (hint: DueHint): string =>
     hint.state === "missing"
         ? `${DUE_KIND_LABELS[hint.kind]}-Datum fehlt`
@@ -117,7 +121,13 @@ export const VehicleHintsPanel = ({
                             <p className={styles.message}>
                                 {dueHintText(hint)}
                             </p>
-                            {canWrite && onEditMaster ? (
+                            {stayFor(vehicle, hint.kind) ? (
+                                <span className={styles.stay}>
+                                    {stayFor(vehicle, hint.kind)?.state === "IN_WORKSHOP"
+                                        ? "In der Werkstatt"
+                                        : `Termin am ${formatIsoDate(stayFor(vehicle, hint.kind)?.planned_on)}`}
+                                </span>
+                            ) : canWrite && onEditMaster ? (
                                 <Button
                                     variant="ghost"
                                     size="row"

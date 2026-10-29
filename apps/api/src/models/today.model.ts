@@ -17,6 +17,7 @@ import { CompanyModel } from "./company.model";
 import { DriverModel } from "./driver.model";
 import { DueModel } from "./due.model";
 import { VehicleModel } from "./vehicle.model";
+import { WorkshopModel } from "./workshop.model";
 
 const emptyItem = {
     vehicle_id: null,
@@ -27,6 +28,7 @@ const emptyItem = {
     since: null,
     open_warnings: null,
     fuel_level: null,
+    workshop: null,
 } satisfies Partial<TodayItem>;
 
 /** Never-set dates first (a licence never checked), then the oldest. */
@@ -86,18 +88,22 @@ const shareSlots = (
 
 /**
  * The Schicht task list. It only reads the lists that already exist (deadlines,
- * vehicles, drivers, open alerts), so every count equals the list its chip
- * opens: /fristen?state=…, /vehicles?filter=…, /drivers?min_open_warnings=…,
- * /alerts?type=OFFLINE.
+ * vehicles, drivers, open alerts, workshop stays), so every count equals the
+ * list its chip opens: /fristen?state=…, /vehicles?filter=…,
+ * /drivers?min_open_warnings=…, /alerts?type=OFFLINE.
  */
 export class TodayModel {
-    /** `driverTalk: false` leaves out the drivers to talk to (names kept from viewers). */
+    /**
+     * `driverTalk: false` leaves out the drivers to talk to (names kept from
+     * viewers). Workshop stays assigned to `userId` come first in their kind.
+     */
     static forCompany(
         companyId: number,
         limit: number,
-        options: { driverTalk?: boolean } = {},
+        options: { driverTalk?: boolean; userId?: number } = {},
     ): TodayResponse {
         const withTalk = options.driverTalk !== false;
+        const workshop = WorkshopModel.dueForCompany(companyId, options.userId ?? null);
         const dueRows = DueModel.rowsForCompany(companyId);
         const overdue = dueRows
             .filter((row) => row.state === "overdue")
@@ -139,6 +145,14 @@ export class TodayModel {
             deadline_overdue: overdue
                 .slice(0, limit)
                 .map((row, index) => deadlineItem("deadline_overdue", row, index)),
+            workshop_due: workshop.slice(0, limit).map((visit) => ({
+                ...emptyItem,
+                kind: "workshop_due",
+                key: `workshop_due:${visit.id}`,
+                vehicle_id: visit.vehicle_id,
+                subject: visit.license_plate,
+                workshop: visit,
+            })),
             driver_talk: (withTalk ? talk.data : []).map((driver) => ({
                 ...emptyItem,
                 kind: "driver_talk",
@@ -172,6 +186,7 @@ export class TodayModel {
 
         const counts: TodayCounts = {
             deadline_overdue: overdue.length,
+            workshop_due: workshop.length,
             driver_talk: withTalk ? talk.meta.total : 0,
             offline: offline.meta.total,
             low_fuel: lowFuel.meta.total,

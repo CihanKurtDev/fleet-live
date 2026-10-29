@@ -14,6 +14,7 @@ import {
 } from "./dueRules";
 import { emptyToUndefined, firstQueryString } from "./queryPreprocess";
 import { VEHICLE_PAGE_LIMITS } from "./vehicleQuery";
+import type { WorkshopSummary } from "./workshop";
 
 export const DUE_SOON_DAYS = 30;
 export const LICENCE_CHECK_MONTHS = 6;
@@ -85,6 +86,8 @@ export type DueListItem = {
     label: string;
     /** Wie das Datum zustande kommt. Fehlt bei der alten Listenrechnung. */
     explanation?: DueExplanation;
+    /** HU/UVV-Zeilen: offener Werkstatt-Aufenthalt des Fahrzeugs (jeder Grund), sonst `null`. */
+    workshop?: WorkshopSummary | null;
 };
 
 export type DueListCounts = {

@@ -149,6 +149,40 @@ export {
 
 export type { Site, SiteInput, SiteListResponse, SitePatch } from "./models/site";
 
+export type {
+    VehicleAvailability,
+    VehicleWorkshop,
+    VehicleWorkshopResponse,
+    WorkshopCreateInput,
+    WorkshopEvent,
+    WorkshopEventAction,
+    WorkshopFinishInput,
+    WorkshopPatch,
+    WorkshopReason,
+    WorkshopState,
+    WorkshopSummary,
+    WorkshopVisit,
+} from "./models/workshop";
+
+export {
+    VEHICLE_AVAILABILITIES,
+    VEHICLE_AVAILABILITY_LABELS,
+    WORKSHOP_COST_MAX_CENTS,
+    WORKSHOP_EVENT_ACTIONS,
+    WORKSHOP_NOTE_MAX,
+    WORKSHOP_PAST_LIMIT,
+    WORKSHOP_PLACE_MAX,
+    WORKSHOP_REASONS,
+    WORKSHOP_REASON_LABELS,
+    WORKSHOP_STATES,
+    WORKSHOP_STATE_LABELS,
+    parseEuroCents,
+    parseVehicleAvailabilityPatch,
+    parseWorkshopCreate,
+    parseWorkshopFinish,
+    parseWorkshopPatch,
+} from "./models/workshop";
+
 export {
     DEPOT_RADIUS_DEFAULT_M,
     DEPOT_RADIUS_MAX_M,

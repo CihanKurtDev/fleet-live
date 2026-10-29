@@ -43,7 +43,15 @@ import { VehicleMoreMenu } from "../components/vehicles/VehicleMoreMenu";
 import type { PlaybackFix } from "../components/vehicles/vehiclePlayback";
 import { pathLength, toLatLngs } from "../components/vehicles/mapGeometry";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
-import { VehicleStatusChip } from "../components/vehicles/VehicleStatusChip";
+import {
+    AvailabilityChip,
+    VehicleStatusChip,
+} from "../components/vehicles/VehicleStatusChip";
+import {
+    WorkshopPanel,
+    type PageNotice,
+} from "../components/vehicles/WorkshopPanel";
+import { setVehicleOutOfService } from "../api/workshop";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
@@ -96,8 +104,13 @@ const PLAYBACK_HISTORY_LIMIT = 10;
 export const VehicleDetailPage = () => {
     const { id } = useParams();
     const { from, navigate } = useDetailBack("/vehicles");
-    const { updateVehicle, deleteVehicles, subscribeTripPath, listEpoch } =
-        useVehicles();
+    const {
+        updateVehicle,
+        deleteVehicles,
+        subscribeTripPath,
+        listEpoch,
+        refetchLists,
+    } = useVehicles();
     const { user } = useAuth();
     const canWrite = user?.role === "dispatcher";
 
@@ -109,6 +122,10 @@ export const VehicleDetailPage = () => {
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEditingMaster, setIsEditingMaster] = useState(false);
+    const [notice, setNotice] = useState<PageNotice>(null);
+    const [confirmOutOfService, setConfirmOutOfService] = useState(false);
+    const [isChangingService, setIsChangingService] = useState(false);
+    const [serviceError, setServiceError] = useState<string | null>(null);
     const [masterField, setMasterField] = useState<VehicleFormField | undefined>();
     const [tripVehicleId, setTripVehicleId] = useState(parsedId);
     const [livePath, setLivePath] = useState("");
@@ -559,13 +576,52 @@ export const VehicleDetailPage = () => {
         setConfirmDelete(true);
     };
 
+    const changeService = async (outOfService: boolean) => {
+        setNotice(null);
+        setServiceError(null);
+        setIsChangingService(true);
+
+        try {
+            await setVehicleOutOfService(vehicle.id, outOfService);
+            setConfirmOutOfService(false);
+            setNotice({
+                text: outOfService
+                    ? `${vehicle.license_plate} ist außer Dienst.`
+                    : `${vehicle.license_plate} ist wieder in Dienst.`,
+                tone: "ok",
+            });
+            refetchLists();
+        } catch (caught: unknown) {
+            const message =
+                caught instanceof Error ? caught.message : "Das hat nicht geklappt.";
+            if (outOfService) {
+                setServiceError(message);
+            } else {
+                setNotice({ text: message, tone: "error" });
+            }
+        } finally {
+            setIsChangingService(false);
+        }
+    };
+
     return (
         <section className={styles.page}>
             <header className={styles.header}>
                 <DetailBackLink fallback="/vehicles" />
                 <h1 className={styles.title}>{vehicle.license_plate}</h1>
                 <VehicleStatusChip status={vehicle.status} />
-                <p className={styles.summary}>{summary.join(" · ")}</p>
+                <AvailabilityChip availability={vehicle.availability} />
+                {notice ? (
+                    <p
+                        className={styles.summary}
+                        data-tone={notice.tone}
+                        role={notice.tone === "error" ? "alert" : "status"}
+                    >
+                        {notice.text}
+                    </p>
+                ) : (
+                    <p className={styles.summary}>{summary.join(" · ")}</p>
+                )}
 
                 {canWrite && (
                     <div className={styles.actions}>
@@ -579,7 +635,19 @@ export const VehicleDetailPage = () => {
                         >
                             Bearbeiten
                         </Button>
-                        <VehicleMoreMenu onDelete={requestDelete} />
+                        <VehicleMoreMenu
+                            availability={vehicle.availability}
+                            onOutOfService={(outOfService) => {
+                                setNotice(null);
+                                if (outOfService) {
+                                    setServiceError(null);
+                                    setConfirmOutOfService(true);
+                                } else {
+                                    void changeService(false);
+                                }
+                            }}
+                            onDelete={requestDelete}
+                        />
                     </div>
                 )}
             </header>
@@ -763,6 +831,13 @@ export const VehicleDetailPage = () => {
                 </div>
 
                 <div className={styles.main}>
+                    <section className={styles.panel} aria-label="Werkstatt">
+                        <WorkshopPanel
+                            vehicle={vehicle}
+                            canWrite={canWrite}
+                            onNotice={setNotice}
+                        />
+                    </section>
                     <section className={`${styles.panel} ${styles.mapPanel}`}>
                         <div className={styles.panelHeader}>
                             <h2 className={styles.panelTitle}>Position</h2>
@@ -895,6 +970,38 @@ export const VehicleDetailPage = () => {
                     onCancel={() => setIsEditingMaster(false)}
                 />
             </Modal>
+
+            <ConfirmDialog
+                open={canWrite && confirmOutOfService}
+                onClose={() => {
+                    setConfirmOutOfService(false);
+                    setServiceError(null);
+                }}
+                title="Außer Dienst stellen?"
+                confirmLabel="Außer Dienst stellen"
+                confirmVariant="primary"
+                busyLabel="Wird gespeichert…"
+                isBusy={isChangingService}
+                onConfirm={() => changeService(true)}
+                items={[
+                    {
+                        key: vehicle.id,
+                        name: vehicle.license_plate,
+                        detail: vehicle.driver_name
+                            ? `aktuell ${vehicle.driver_name}`
+                            : vehicleStatusLabel(vehicle.status),
+                    },
+                ]}
+                error={serviceError}
+            >
+                <p>
+                    Das Fahrzeug wird keinem Fahrer mehr zugewiesen, bis du es
+                    wieder in Dienst stellst.
+                    {vehicle.driver_name
+                        ? ` ${vehicle.driver_name} ist danach frei.`
+                        : ""}
+                </p>
+            </ConfirmDialog>
 
             <ConfirmDialog
                 open={canWrite && confirmDelete}

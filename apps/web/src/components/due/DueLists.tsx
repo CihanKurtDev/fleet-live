@@ -24,6 +24,8 @@ interface ListProps {
     query: DueListQuery;
     today: string;
     checkMonths: number;
+    /** The page's status line after a write in a group. */
+    onNotice?: (text: string) => void;
 }
 
 /** All kinds; rows are handed out so the list fills its height. */
@@ -32,6 +34,7 @@ export const DueOverview = ({
     today,
     checkMonths,
     onShowAll,
+    onNotice,
 }: ListProps & { onShowAll: (kind: DueKind) => void }) => {
     const { ref, height } = useBoundHeight();
     const { user } = useAuth();
@@ -121,6 +124,7 @@ export const DueOverview = ({
                         error={list.error}
                         onRetry={list.retry}
                         onShowAll={() => onShowAll(group.kind)}
+                        onNotice={onNotice}
                     />
                 );
             })}
@@ -150,6 +154,7 @@ export const DueFullList = ({
     kind,
     onPageChange,
     onLimitChange,
+    onNotice,
 }: ListProps & {
     kind: DueKind;
     onPageChange: (page: number) => void;
@@ -171,6 +176,7 @@ export const DueFullList = ({
                 isFetching={list.isFetching}
                 error={list.error}
                 onRetry={list.retry}
+                onNotice={onNotice}
                 footer={
                     !list.isLoading && list.total === 0 ? (
                         <p className={styles.calm}>

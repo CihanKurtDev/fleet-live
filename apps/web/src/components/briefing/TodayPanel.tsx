@@ -5,7 +5,14 @@ import {
     TODAY_KINDS,
     type TodayItem,
     type TodayKind,
+    type WorkshopVisit,
 } from "@fleet-live/shared";
+
+import { ApiError } from "../../api/client";
+import { arriveWorkshopVisit } from "../../api/workshop";
+import { useVehicles } from "../../context/vehiclesContext";
+import { WorkshopFinishDialog } from "../vehicles/WorkshopFinishDialog";
+import { isReturnLate, todayWorkshopLine } from "../vehicles/workshopText";
 
 import { useAuth } from "../../hooks/useAuth";
 import { useBoundHeight } from "../../hooks/useBoundHeight";
@@ -33,6 +40,14 @@ const KIND: Record<
         to: "/fristen?state=overdue",
         tone: "critical",
         tile: true,
+    },
+    // The tag says which: „Rückgabe“ (late, critical) or „Termin“ (today).
+    workshop_due: {
+        tag: "Termin",
+        chip: "Werkstatt fällig",
+        to: "/vehicles?filter=workshop_due",
+        tone: "warning",
+        tile: false,
     },
     driver_talk: {
         tag: "Gespräch",
@@ -70,7 +85,7 @@ const formatDue = (value: string) => {
     return day ? `${day}.${month}.${year}` : `${month}.${year}`;
 };
 
-const reason = (item: TodayItem): string => {
+const reason = (item: TodayItem, meId?: number): string => {
     switch (item.kind) {
         case "deadline_overdue":
         case "deadline_soon": {
@@ -88,8 +103,14 @@ const reason = (item: TodayItem): string => {
             return `Meldet sich nicht · Warnung ${formatRelativeTimestamp(item.since)}`;
         case "low_fuel":
             return `Tankstand ${Math.round(item.fuel_level ?? 0)} %`;
+        case "workshop_due":
+            return item.workshop ? todayWorkshopLine(item.workshop, meId) : "";
     }
 };
+
+/** Late returns are critical; an appointment today is a warning. */
+const lateReturn = (item: TodayItem) =>
+    item.kind === "workshop_due" && item.workshop !== null && isReturnLate(item.workshop);
 
 /**
  * "Heute dran" on Schicht: the most urgent tasks across the fleet, one row
@@ -111,11 +132,36 @@ export const TodayPanel = ({
     const limit = height > 0 ? Math.max(1, Math.floor(height / ROW_HEIGHT)) : 6;
     const { data, error, reload } = useToday(limit);
     const [editing, setEditing] = useState<TodayItem | null>(null);
+    const [finishing, setFinishing] = useState<WorkshopVisit | null>(null);
+    const [arriving, setArriving] = useState<number | null>(null);
     const [notice, setNotice] = useState("");
+    const { refetchLists } = useVehicles();
 
     const soonLabel = data ? dueSoonLabel(data.meta.lead_days) : "Bald";
-    const tagOf = (kind: TodayKind) =>
-        kind === "deadline_soon" ? soonLabel : KIND[kind].tag;
+    const tagOf = (item: TodayItem) =>
+        item.kind === "deadline_soon"
+            ? soonLabel
+            : lateReturn(item)
+              ? "Rückgabe"
+              : KIND[item.kind].tag;
+    const toneOf = (item: TodayItem) =>
+        lateReturn(item) ? "critical" : KIND[item.kind].tone;
+
+    const arrive = async (item: TodayItem) => {
+        if (!item.workshop) return;
+        setNotice("");
+        setArriving(item.workshop.id);
+        try {
+            await arriveWorkshopVisit(item.workshop.id);
+            setNotice(`${item.subject} ist in der Werkstatt.`);
+            reload();
+            refetchLists();
+        } catch (caught) {
+            setNotice(caught instanceof ApiError ? caught.message : "Das hat nicht geklappt.");
+        } finally {
+            setArriving(null);
+        }
+    };
     const chipOf = (kind: TodayKind) =>
         kind === "deadline_soon"
             ? `Fristen ${soonLabel.charAt(0).toLowerCase()}${soonLabel.slice(1)}`
@@ -154,6 +200,36 @@ export const TodayPanel = ({
                     }}
                 >
                     Eintragen
+                </Button>
+            );
+        }
+
+        if (item.kind === "workshop_due" && item.workshop) {
+            const visit = item.workshop;
+            return visit.state === "PLANNED" ? (
+                <Button
+                    variant="secondary"
+                    size="row"
+                    busy={arriving === visit.id}
+                    busyLabel="Wird eingetragen…"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        void arrive(item);
+                    }}
+                >
+                    Angekommen
+                </Button>
+            ) : (
+                <Button
+                    variant="secondary"
+                    size="row"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setNotice("");
+                        setFinishing(visit);
+                    }}
+                >
+                    Fertig melden
                 </Button>
             );
         }
@@ -222,19 +298,19 @@ export const TodayPanel = ({
                         className={styles.row}
                         role="link"
                         tabIndex={0}
-                        aria-label={`${item.subject}: ${reason(item)}`}
+                        aria-label={`${item.subject}: ${reason(item, user?.id)}`}
                         onClick={() => open(item)}
                         onKeyDown={(event) => onRowKey(event, item)}
                     >
                         <span
                             className={styles.tag}
-                            data-tone={KIND[item.kind].tone}
+                            data-tone={toneOf(item)}
                         >
-                            {tagOf(item.kind)}
+                            {tagOf(item)}
                         </span>
                         <span className={styles.what}>
                             <b>{item.subject}</b>
-                            <span>{reason(item)}</span>
+                            <span>{reason(item, user?.id)}</span>
                         </span>
                         <span className={styles.action}>{action(item)}</span>
                     </li>
@@ -249,6 +325,17 @@ export const TodayPanel = ({
                         : " "}
                 </p>
             )}
+
+            <WorkshopFinishDialog
+                visit={finishing}
+                onClose={() => setFinishing(null)}
+                onSaved={(_visit, message) => {
+                    setFinishing(null);
+                    setNotice(message);
+                    reload();
+                    refetchLists();
+                }}
+            />
 
             <DeadlineEditDialog
                 item={editing}

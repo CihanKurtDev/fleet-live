@@ -50,6 +50,8 @@ const vehicle = (overrides: Partial<Vehicle> & { id: number }): Vehicle => ({
     open_alert_types: [],
     created_at: "2026-10-01 08:00:00",
     current_driver_id: null,
+    availability: "READY",
+    workshop: null,
     ...overrides,
 });
 
@@ -77,6 +79,9 @@ const listResponse = (data: Vehicle[]): VehicleListResponse => ({
             stopped: 7,
             in_depot: 7,
             speeding: 2,
+            in_workshop: 1,
+            workshop_due: 0,
+            out_of_service: 0,
         },
     },
 });
