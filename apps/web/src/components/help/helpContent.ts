@@ -295,6 +295,12 @@ const PAGES: Record<string, HelpPage> = {
                 dispatcherOnly: true,
             },
             {
+                question: "Wie lange bewahrt fleet-live Fahrten und Warnungen auf?",
+                answer:
+                    "Unter „Datenschutz“ stellt ihr ein, nach wie vielen Tagen Fahrten, erledigte Warnungen und das Protokoll gelöscht werden (leer = Standard). Meist legt das eine Betriebsvereinbarung fest. Was älter ist, wird beim Speichern sofort gelöscht.",
+                dispatcherOnly: true,
+            },
+            {
                 question: "Wozu trage ich beim Firmen-Login eine Domain ein?",
                 answer:
                     "Mit einer bestätigten Domain (z. B. firma.de) findet die Anmeldeseite euren Firmen-Login über die E-Mail-Adresse. Bestätigt wird mit einem TXT-Eintrag im DNS eurer Domain; danach „Prüfen“.",

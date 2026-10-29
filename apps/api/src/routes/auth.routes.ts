@@ -44,6 +44,7 @@ import {
     removeDomain,
     verifyDomain,
 } from "../controllers/companyDomain.controller";
+import { getRetention, patchRetention } from "../controllers/retention.controller";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireDispatcher } from "../middleware/requireDispatcher";
 import {
@@ -74,6 +75,8 @@ router.post("/invitations/:companyId/accept", requireAuth, acceptInvitationHandl
 router.delete("/invitations/:companyId", requireAuth, declineInvitationHandler);
 router.get("/members", requireAuth, requireDispatcher, getMembers);
 router.get("/audit", requireAuth, requireDispatcher, getAudit);
+router.get("/retention", requireAuth, requireDispatcher, getRetention);
+router.patch("/retention", requireAuth, requireDispatcher, patchRetention);
 router.get("/domains", requireAuth, requireDispatcher, listDomains);
 router.post("/domains", requireAuth, requireDispatcher, addDomain);
 router.post("/domains/:id/verify", requireAuth, requireDispatcher, verifyDomain);

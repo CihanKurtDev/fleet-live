@@ -10,7 +10,7 @@ import {
     encodePoints,
     encodePolyline,
 } from "@fleet-live/shared";
-import { config } from "../config";
+import { RetentionModel } from "./retention.model";
 import { stmt } from "../db/statements";
 import { EVENT_COUNT_SQL } from "../db/tripEvents";
 import { haversineMeters, simplifyPath } from "../lib/geo";
@@ -371,16 +371,19 @@ export class TripModel {
     }
 
     /**
-     * Löscht geschlossene Fahrten älter als `TRIP_RETENTION_DAYS` dieser Firma.
+     * Löscht geschlossene Fahrten dieser Firma, die älter sind als ihre
+     * Aufbewahrung (Firmenwert, sonst `TRIP_RETENTION_DAYS`; 0 = behalten).
      * Offene Fahrten und andere Firmen bleiben. Kein `company_id` auf `trips`.
      */
     static pruneClosedForCompany(companyId: number): number {
-        if (config.tripRetentionDays <= 0) {
+        const days = RetentionModel.tripDays(companyId);
+
+        if (days <= 0) {
             return 0;
         }
 
         const result = stmt(PRUNE_CLOSED_FOR_COMPANY).run(
-            sqliteDaysAgo(config.tripRetentionDays),
+            sqliteDaysAgo(days),
             companyId,
         );
 

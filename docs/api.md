@@ -28,6 +28,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `POST`, `DELETE` | `/api/auth/invitations/:companyId/accept`, `/api/auth/invitations/:companyId` | Einladung annehmen oder ablehnen |
 | `GET`, `PATCH`, `DELETE` | `/api/auth/members`, `/api/auth/members/:userId` | Team der Firma lesen (offene Einladungen mit `invited: true`), Rolle ändern, entfernen (Dispatcher). Eine Firma behält mindestens einen Dispatcher |
 | `GET`, `PATCH` | `/api/auth/security` | Firmen-Login (OIDC) lesen und setzen (Dispatcher) |
+| `GET`, `PATCH` | `/api/auth/retention` | Aufbewahrung der Firma (Dispatcher): `trips_days`, `alerts_days`, `audit_days` in Tagen oder `null` für den Standard. `PATCH` löscht sofort, was älter ist, und nennt die Zahl in `deleted` |
 | `GET` | `/api/auth/audit` | Protokoll der Firma: Einladungen, Rollen, Entfernen, Anmelde-Regeln, Verknüpfung mit dem Firmen-Login; neueste zuerst, 50 je Seite (`page`), nur Dispatcher |
 | `POST` | `/api/auth/totp/setup`, `/totp/confirm`, `/totp/disable` | Zwei-Faktor einrichten, bestätigen, ausschalten |
 | `POST` | `/api/auth/import-prompt/dismiss` | Die einmalige Frage nach dem Import schließen |

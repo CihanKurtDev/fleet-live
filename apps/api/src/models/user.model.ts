@@ -136,7 +136,10 @@ export const UserModel = {
                 sso_issuer = NULL,
                 sso_client_id = NULL,
                 sso_client_secret = NULL,
-                sso_required = 0
+                sso_required = 0,
+                trip_retention_days = NULL,
+                alert_retention_days = NULL,
+                audit_retention_days = NULL
             `,
         );
         db.exec(

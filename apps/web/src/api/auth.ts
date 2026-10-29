@@ -2,6 +2,8 @@ import type {
     AuditEvent,
     AuthUser,
     CompanyDomain,
+    RetentionPatch,
+    RetentionSettings,
     Invitation,
     LoginInput,
     LoginResponse,
@@ -136,6 +138,19 @@ export type Member = {
 export const withdrawInvite = (userId: number) =>
     request<{ data: Member[] }>(`/api/auth/invites/${userId}`, {
         method: "DELETE",
+    });
+
+export const getRetention = (signal?: AbortSignal) =>
+    request<{ data: RetentionSettings }>("/api/auth/retention", { signal });
+
+export const saveRetention = (patch: RetentionPatch) =>
+    request<{
+        data: RetentionSettings;
+        /** Rows deleted because of this change. */
+        deleted: { trips: number; alerts: number; audit: number };
+    }>("/api/auth/retention", {
+        method: "PATCH",
+        body: patch,
     });
 
 export const listDomains = (signal?: AbortSignal) =>

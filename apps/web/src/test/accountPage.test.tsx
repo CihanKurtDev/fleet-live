@@ -19,6 +19,7 @@ vi.mock("../api/auth", () => ({
     createCompany: vi.fn(),
     declineInvitation: vi.fn(),
     disableTotp: vi.fn(),
+    getRetention: vi.fn(),
     getSecurity: vi.fn(),
     getSsoProviders: vi.fn(),
     inviteMember: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("../api/auth", () => ({
     listMembers: vi.fn(),
     removeDomain: vi.fn(),
     removeMember: vi.fn(),
+    saveRetention: vi.fn(),
     setMemberRole: vi.fn(),
     setupTotp: vi.fn(),
     startSsoLink: vi.fn(),
@@ -46,6 +48,7 @@ import {
     createCompany,
     declineInvitation,
     disableTotp,
+    getRetention,
     getSecurity,
     getSsoProviders,
     inviteMember,
@@ -55,6 +58,7 @@ import {
     listMembers,
     removeDomain,
     removeMember,
+    saveRetention,
     setMemberRole,
     setupTotp,
     startSsoLink,
@@ -826,5 +830,44 @@ describe("account page", () => {
 
         expect(await screen.findByText("rheinland.de entfernt.")).toBeInTheDocument();
         expect(removeDomain).toHaveBeenCalledWith(3);
+    });
+
+    it("saves the retention and says what was deleted", async () => {
+        vi.mocked(getRetention).mockResolvedValue({ data: {
+            trips_days: null,
+            alerts_days: null,
+            audit_days: null,
+            trips: 90,
+            alerts: 90,
+            audit: 365,
+            defaults: { trips: 90, alerts: 90, audit: 365 },
+        } });
+        vi.mocked(saveRetention).mockResolvedValue({
+            data: { ...{
+            trips_days: null,
+            alerts_days: null,
+            audit_days: null,
+            trips: 90,
+            alerts: 90,
+            audit: 365,
+            defaults: { trips: 90, alerts: 90, audit: 365 },
+        }, trips_days: 30, trips: 30 },
+            deleted: { trips: 12, alerts: 0, audit: 1 },
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
+
+        const trips = await screen.findByLabelText("Fahrten (Tage)");
+        expect(screen.getByText("7–365 Tage · Standard 90 Tage")).toBeInTheDocument();
+        fireEvent.change(trips, { target: { value: "30" } });
+        submit("Aufbewahrung speichern");
+
+        expect(
+            await screen.findByText("Gespeichert. Gelöscht, weil älter: 12 Fahrten, 1 Protokoll-Eintrag."),
+        ).toBeInTheDocument();
+        expect(saveRetention).toHaveBeenCalledWith({
+            trips_days: 30,
+            alerts_days: null,
+            audit_days: null,
+        });
     });
 });

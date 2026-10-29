@@ -16,6 +16,7 @@ export const AUDIT_ACTIONS = [
     "domain_added",
     "domain_verified",
     "domain_removed",
+    "retention_changed",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -41,6 +42,8 @@ export type AuditDetails = {
     changes?: SecurityChange[];
     /** The company domain of a domain_* entry. */
     domain?: string;
+    /** New retention days of a retention_changed entry; null = default. */
+    retention?: Partial<Record<"trips" | "alerts" | "audit", number | null>>;
 };
 
 export type AuditEvent = {
@@ -76,6 +79,8 @@ const SECURITY_CHANGE_TEXT: Record<SecurityChange, string> = {
     sso_settings: "Firmen-Login-Daten geändert",
     sso_secret: "Client-Geheimnis ersetzt",
 };
+
+const RETENTION_NAMES = { trips: "Fahrten", alerts: "Warnungen", audit: "Protokoll" } as const;
 
 const role = (value: UserRole | undefined) => (value ? USER_ROLE_LABELS[value] : "?");
 
@@ -120,5 +125,9 @@ export function formatAuditEvent(event: AuditEvent): string {
             return `Domain ${details.domain ?? "?"} bestätigt`;
         case "domain_removed":
             return `Domain ${details.domain ?? "?"} entfernt`;
+        case "retention_changed":
+            return `Aufbewahrung geändert: ${Object.entries(details.retention ?? {})
+                .map(([kind, days]) => `${RETENTION_NAMES[kind as keyof typeof RETENTION_NAMES]} ${days === null ? "Standard" : `${days} Tage`}`)
+                .join(", ")}`;
     }
 }

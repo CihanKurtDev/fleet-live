@@ -11,7 +11,11 @@ CREATE TABLE IF NOT EXISTS companies (
     sso_issuer TEXT,
     sso_client_id TEXT,
     sso_client_secret TEXT,
-    sso_required INTEGER NOT NULL DEFAULT 0
+    sso_required INTEGER NOT NULL DEFAULT 0,
+    -- Retention in days set by the company; NULL is the default (shared RETENTION_*).
+    trip_retention_days INTEGER,
+    alert_retention_days INTEGER,
+    audit_retention_days INTEGER
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_name_nocase
