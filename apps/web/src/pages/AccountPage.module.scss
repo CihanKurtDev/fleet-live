@@ -292,6 +292,18 @@
     color: var(--success);
 }
 
+/* An invitation: company and who sent it, then Ablehnen and Annehmen. */
+.invitation {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.invitationText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
 @media (min-width: 701px) {
     .page {
         padding: 0;
@@ -455,6 +467,19 @@
         > :last-child {
             grid-column: 1 / -1;
             justify-self: start;
+        }
+    }
+
+    /* Text on its own line, the two buttons side by side below it. */
+    .invitation {
+        grid-template-columns: auto auto minmax(0, 1fr);
+
+        > .invitationText {
+            grid-column: 1 / -1;
+        }
+
+        > :last-child {
+            grid-column: auto;
         }
     }
 }

@@ -180,6 +180,7 @@ export {
 
 export type {
     AuthUser,
+    Invitation,
     InviteInput,
     LoginChallenge,
     LoginInput,

@@ -19,6 +19,7 @@ export const authUser = (overrides: Partial<AuthUser> = {}): AuthUser => ({
             role: "dispatcher",
         },
     ],
+    invitations: 0,
     totp_enabled: false,
     import_prompt: false,
     ...overrides,

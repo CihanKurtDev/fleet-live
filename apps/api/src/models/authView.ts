@@ -59,6 +59,11 @@ export function presentUser(
         company_name: active.company_name,
         role: active.role,
         memberships: summary,
+        invitations: (
+            stmt("SELECT COUNT(*) AS n FROM company_invites WHERE user_id = ?").get(
+                user.id,
+            ) as { n: number }
+        ).n,
         totp_enabled: user.totp_enabled === 1,
         import_prompt:
             active.role === "dispatcher" &&

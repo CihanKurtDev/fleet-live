@@ -18,12 +18,15 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `POST` | `/api/auth/logout` | Löscht die Session |
 | `POST` | `/api/auth/logout-all` | Beendet alle Sessions der Person |
 | `POST` | `/api/auth/password` | Passwort ändern |
-| `GET`  | `/api/auth/me` | Aktueller Nutzer inklusive `company_name`, `memberships` oder `401` |
+| `GET`  | `/api/auth/me` | Aktueller Nutzer inklusive `company_name`, `memberships`, `invitations` (Zahl offener Einladungen) oder `401` |
 | `POST` | `/api/auth/company` | Aktive Firma wechseln |
 | `POST` | `/api/auth/companies` | Weitere Firma anlegen und dorthin wechseln |
-| `POST` | `/api/auth/invites` | Dispatcher lädt `{ email, role }` ein |
-| `POST` | `/api/auth/invites/accept` | Einladung annehmen |
-| `GET`, `PATCH`, `DELETE` | `/api/auth/members`, `/api/auth/members/:userId` | Team der Firma lesen, Rolle ändern, entfernen (Dispatcher). Eine Firma behält mindestens einen Dispatcher |
+| `POST` | `/api/auth/invites` | Dispatcher lädt `{ email, role }` ein. Daraus wird erst eine Mitgliedschaft, wenn die Person annimmt; eine zweite Einladung an dieselbe Person ist `409` |
+| `DELETE` | `/api/auth/invites/:userId` | Offene Einladung zurückziehen (Dispatcher); ihr Mail-Link gilt dann nicht mehr |
+| `POST` | `/api/auth/invites/accept` | Link aus der Mail für ein neues Konto: Name und Passwort setzen, Einladung annehmen |
+| `GET` | `/api/auth/invitations` | Offene Einladungen der angemeldeten Person |
+| `POST`, `DELETE` | `/api/auth/invitations/:companyId/accept`, `/api/auth/invitations/:companyId` | Einladung annehmen oder ablehnen |
+| `GET`, `PATCH`, `DELETE` | `/api/auth/members`, `/api/auth/members/:userId` | Team der Firma lesen (offene Einladungen mit `invited: true`), Rolle ändern, entfernen (Dispatcher). Eine Firma behält mindestens einen Dispatcher |
 | `GET`, `PATCH` | `/api/auth/security` | Firmen-Login (OIDC) lesen und setzen (Dispatcher) |
 | `POST` | `/api/auth/totp/setup`, `/totp/confirm`, `/totp/disable` | Zwei-Faktor einrichten, bestätigen, ausschalten |
 | `POST` | `/api/auth/import-prompt/dismiss` | Die einmalige Frage nach dem Import schließen |

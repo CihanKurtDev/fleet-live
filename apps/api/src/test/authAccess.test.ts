@@ -217,7 +217,7 @@ describe("memberships", () => {
             .expect(200);
     });
 
-    it("adds a membership when the email already has an account", async () => {
+    it("adds a membership only when an existing account accepts", async () => {
         UserModel.create({
             name: "Bestehend",
             email: "bestehend@example.com",
@@ -235,12 +235,28 @@ describe("memberships", () => {
             .send({ email: "bestehend@example.com", role: "dispatcher" })
             .expect(201);
 
-        const login = await request(app).post("/api/auth/login").send({
+        const invitee = request.agent(app);
+        const login = await invitee.post("/api/auth/login").send({
             email: "bestehend@example.com",
             password: PASSWORD,
         });
         assert.equal(login.status, 200);
-        assert.equal(login.body.memberships.length, 2);
+        assert.equal(login.body.memberships.length, 1);
+        assert.equal(login.body.invitations, 1);
+
+        const open = await invitee.get("/api/auth/invitations").expect(200);
+        assert.equal(open.body.data.length, 1);
+        const [invitation] = open.body.data;
+        assert.equal(invitation.company_name, "Zweite Mitgliedschaft");
+        assert.equal(invitation.role, "dispatcher");
+        assert.equal(invitation.invited_by_name, "Dispatcher 1");
+
+        const accepted = await invitee
+            .post(`/api/auth/invitations/${invitation.company_id}/accept`)
+            .expect(200);
+        assert.equal(accepted.body.memberships.length, 2);
+        assert.equal(accepted.body.invitations, 0);
+        assert.equal(accepted.body.company_id, 1);
     });
 });
 

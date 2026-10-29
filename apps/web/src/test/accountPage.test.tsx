@@ -12,12 +12,15 @@ vi.mock("qrcode", () => ({
 }));
 
 vi.mock("../api/auth", () => ({
+    acceptInvitation: vi.fn(),
     changePassword: vi.fn(),
     confirmTotpSetup: vi.fn(),
     createCompany: vi.fn(),
+    declineInvitation: vi.fn(),
     disableTotp: vi.fn(),
     getSecurity: vi.fn(),
     inviteMember: vi.fn(),
+    listInvitations: vi.fn(),
     listMembers: vi.fn(),
     removeMember: vi.fn(),
     setMemberRole: vi.fn(),
@@ -25,15 +28,19 @@ vi.mock("../api/auth", () => ({
     startSsoLink: vi.fn(),
     switchCompany: vi.fn(),
     updateSecurity: vi.fn(),
+    withdrawInvite: vi.fn(),
 }));
 
 import {
+    acceptInvitation,
     changePassword,
     confirmTotpSetup,
     createCompany,
+    declineInvitation,
     disableTotp,
     getSecurity,
     inviteMember,
+    listInvitations,
     listMembers,
     removeMember,
     setMemberRole,
@@ -41,6 +48,7 @@ import {
     startSsoLink,
     switchCompany,
     updateSecurity,
+    withdrawInvite,
 } from "../api/auth";
 
 const members = [
@@ -49,12 +57,14 @@ const members = [
         name: "Cihan Kurt",
         email: "cihan@example.com",
         role: "dispatcher" as const,
+        invited: false,
     },
     {
         user_id: 2,
         name: "Viewer",
         email: "viewer@example.com",
         role: "viewer" as const,
+        invited: false,
     },
 ];
 
@@ -105,6 +115,7 @@ describe("account page", () => {
         };
         vi.mocked(removeMember).mockReset();
         vi.mocked(listMembers).mockResolvedValue({ data: members });
+        vi.mocked(listInvitations).mockResolvedValue({ data: [] });
         vi.mocked(getSecurity).mockResolvedValue(security);
         vi.mocked(changePassword).mockReset();
         vi.mocked(confirmTotpSetup).mockReset();
@@ -555,5 +566,98 @@ describe("account page", () => {
         ).toBeInTheDocument();
         expect(switchCompany).toHaveBeenCalledWith(9);
         expect(setUser).toHaveBeenCalledWith(next);
+    });
+
+    it("accepts an invitation into another company", async () => {
+        const user = authUser({ invitations: 1 });
+        vi.mocked(listInvitations).mockResolvedValue({
+            data: [
+                {
+                    company_id: 7,
+                    company_name: "Nord Logistik",
+                    role: "viewer",
+                    invited_by_name: "Ada",
+                    created_at: "2026-10-28 09:00:00",
+                },
+            ],
+        });
+        const next = authUser({
+            invitations: 0,
+            memberships: [
+                ...user.memberships,
+                { company_id: 7, company_name: "Nord Logistik", role: "viewer" },
+            ],
+        });
+        vi.mocked(acceptInvitation).mockResolvedValue(next);
+        const { setUser } = renderAuth(<AccountPage />, { user, route: "/konto#firmen" });
+
+        expect(await screen.findByText("Nur lesen · von Ada", { exact: false })).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: /1 Einladung/ })).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("button", { name: "Einladung von Nord Logistik annehmen" }),
+        );
+
+        expect(
+            await screen.findByText(
+                "Du bist jetzt Mitglied bei Nord Logistik. Du arbeitest weiter in Rheinland Logistik; wechseln kannst du unter „Deine Firmen“.",
+            ),
+        ).toBeInTheDocument();
+        expect(acceptInvitation).toHaveBeenCalledWith(7);
+        expect(declineInvitation).not.toHaveBeenCalled();
+        expect(setUser).toHaveBeenCalledWith(next);
+    });
+
+    it("declines an invitation", async () => {
+        const user = authUser({ invitations: 1 });
+        vi.mocked(listInvitations).mockResolvedValue({
+            data: [
+                {
+                    company_id: 7,
+                    company_name: "Nord Logistik",
+                    role: "dispatcher",
+                    invited_by_name: null,
+                    created_at: "2026-10-28 09:00:00",
+                },
+            ],
+        });
+        vi.mocked(declineInvitation).mockResolvedValue(authUser({ invitations: 0 }));
+        renderAuth(<AccountPage />, { user, route: "/konto#firmen" });
+
+        fireEvent.click(
+            await screen.findByRole("button", { name: "Einladung von Nord Logistik ablehnen" }),
+        );
+
+        expect(
+            await screen.findByText("Einladung von Nord Logistik abgelehnt."),
+        ).toBeInTheDocument();
+        expect(declineInvitation).toHaveBeenCalledWith(7);
+        expect(acceptInvitation).not.toHaveBeenCalled();
+    });
+
+    it("shows open invitations in the team and takes one back", async () => {
+        const invited = {
+            user_id: 5,
+            name: "neu",
+            email: "neu@example.com",
+            role: "viewer" as const,
+            invited: true,
+        };
+        vi.mocked(listMembers).mockResolvedValue({ data: [...members, invited] });
+        vi.mocked(withdrawInvite).mockResolvedValue({ data: members });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#team" });
+
+        const row = await memberRow("neu@example.com");
+        expect(within(row).getByText("· Einladung offen", { exact: false })).toBeInTheDocument();
+        expect(within(row).queryByRole("combobox")).toBeNull();
+        expect(within(row).queryByRole("button", { name: "Entfernen" })).toBeNull();
+        fireEvent.click(
+            within(row).getByRole("button", { name: "Einladung an neu@example.com zurückziehen" }),
+        );
+
+        expect(
+            await screen.findByText("Einladung an neu@example.com zurückgezogen."),
+        ).toBeInTheDocument();
+        expect(withdrawInvite).toHaveBeenCalledWith(5);
+        expect(removeMember).not.toHaveBeenCalled();
     });
 });

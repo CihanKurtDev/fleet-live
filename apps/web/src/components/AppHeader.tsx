@@ -26,17 +26,18 @@ type NavItem = {
     ariaLabel?: string;
     /** Only in the phone drawer; on desktop the brand and the name link there. */
     drawerOnly?: boolean;
-    badge?: boolean;
+    /** Count beside the label: open warnings, or invitations waiting for this person. */
+    badge?: "alerts" | "invitations";
 };
 
 const NAV_ITEMS: NavItem[] = [
     { to: "/", label: "Schicht", drawerOnly: true },
     { to: "/vehicles", label: "Fahrzeuge" },
     { to: "/fleet", label: "Karte", ariaLabel: "Flottenkarte" },
-    { to: "/alerts", label: "Warnungen", badge: true },
+    { to: "/alerts", label: "Warnungen", badge: "alerts" },
     { to: "/fristen", label: "Fristen" },
     { to: "/drivers", label: "Fahrer" },
-    { to: "/konto", label: "Konto", drawerOnly: true },
+    { to: "/konto", label: "Konto", drawerOnly: true, badge: "invitations" },
 ];
 
 const isInSection = (pathname: string, to: string) =>
@@ -115,6 +116,12 @@ export const AppHeader = ({
         openAlertCount !== undefined && openAlertCount > 0 ? (
             <span className={styles.badge}>{formatCount(openAlertCount)}</span>
         ) : null;
+    const inviteBadge =
+        user && user.invitations > 0 ? (
+            <span className={styles.badge}>{formatCount(user.invitations)}</span>
+        ) : null;
+    const badgeFor = (item: NavItem) =>
+        item.badge === "alerts" ? alertBadge : item.badge === "invitations" ? inviteBadge : null;
 
     return (
         <>
@@ -148,7 +155,7 @@ export const AppHeader = ({
                                         className={navClassName}
                                     >
                                         {item.label}
-                                        {item.badge ? alertBadge : null}
+                                        {badgeFor(item)}
                                     </NavLink>
                                 ))}
                             </nav>
@@ -158,7 +165,7 @@ export const AppHeader = ({
                         {user && <HelpButton />}
                         <ThemeToggle />
                         {user && user.role === "dispatcher" && <SimToggle />}
-                        <SessionMenu />
+                        <SessionMenu badge={inviteBadge} />
                     </div>
                 </div>
 
@@ -253,7 +260,7 @@ export const AppHeader = ({
                                     onClick={closeMenu}
                                 >
                                     {item.label}
-                                    {item.badge ? alertBadge : null}
+                                    {badgeFor(item)}
                                 </NavLink>
                             ))}
                         </nav>

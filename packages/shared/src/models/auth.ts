@@ -21,8 +21,19 @@ export type AuthUser = {
     company_name: string;
     role: UserRole;
     memberships: MembershipSummary[];
+    /** Invitations to other companies this person has not accepted or declined yet. */
+    invitations: number;
     totp_enabled: boolean;
     import_prompt: boolean;
+};
+
+/** An invitation waiting for the signed-in person (`GET /api/auth/invitations`). */
+export type Invitation = {
+    company_id: number;
+    company_name: string;
+    role: UserRole;
+    invited_by_name: string | null;
+    created_at: string;
 };
 
 export type LoginInput = {

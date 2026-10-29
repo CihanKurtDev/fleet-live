@@ -1,14 +1,17 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import QRCode from "qrcode";
-import type { UserRole } from "@fleet-live/shared";
+import type { Invitation, UserRole } from "@fleet-live/shared";
 import {
+    acceptInvitation,
     changePassword,
     confirmTotpSetup,
     disableTotp,
     createCompany,
+    declineInvitation,
     getSecurity,
     inviteMember,
+    listInvitations,
     listMembers,
     removeMember,
     setMemberRole,
@@ -16,6 +19,7 @@ import {
     startSsoLink,
     switchCompany,
     updateSecurity,
+    withdrawInvite,
     type CompanySecurity,
     type Member,
 } from "../api/auth";
@@ -28,6 +32,7 @@ import { Table } from "../components/ui/Table/Table";
 import { useAuth } from "../hooks/useAuth";
 import { usePageTitle } from "../hooks/usePageTitle";
 import type { TableColumn } from "../types/table";
+import { formatShortStamp } from "../utils/dateTime";
 import authForm from "./LoginPage.module.scss";
 import styles from "./AccountPage.module.scss";
 import { Select } from "../components/ui/Select/Select";
@@ -82,6 +87,7 @@ export const AccountPage = () => {
     const { user, setUser } = useAuth();
     const { hash, search } = useLocation();
     const [members, setMembers] = useState<Member[]>([]);
+    const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [security, setSecurity] = useState<CompanySecurity | null>(null);
     const [error, setError] = useState<Message | null>(
         () => linkMessages(new URLSearchParams(search).get("sso")).error,
@@ -133,6 +139,35 @@ export const AccountPage = () => {
                 }),
             );
     }, [user?.role, user?.company_id]);
+
+    const userId = user?.id;
+    const invitationCount = user?.invitations ?? 0;
+
+    // Asked on every visit of the page, not only when the count from the login
+    // says so: an invitation may have arrived while the session was open.
+    // Accepting or declining changes the count and loads the list again.
+    useEffect(() => {
+        if (userId === undefined) {
+            return;
+        }
+
+        const controller = new AbortController();
+        listInvitations(controller.signal)
+            .then((result) => setInvitations(result.data))
+            .catch((caught: unknown) => {
+                if (!controller.signal.aborted) {
+                    setError({
+                        section: "firmen",
+                        text:
+                            caught instanceof ApiError
+                                ? caught.message
+                                : "Einladungen konnten nicht geladen werden.",
+                    });
+                }
+            });
+
+        return () => controller.abort();
+    }, [userId, invitationCount]);
 
     useEffect(() => {
         if (!otpauth) {
@@ -302,6 +337,46 @@ export const AccountPage = () => {
         }
     };
 
+    const withdraw = async (member: Member) => {
+        clearMessages();
+
+        try {
+            const listed = await withdrawInvite(member.user_id);
+            setMembers(listed.data);
+            setInfo({
+                section: "team",
+                text: `Einladung an ${member.email} zurückgezogen.`,
+            });
+        } catch (caught: unknown) {
+            showError("team", caught, "Einladung bleibt bestehen.");
+        }
+    };
+
+    const answerInvitation = async (invitation: Invitation, accept: boolean) => {
+        clearMessages();
+
+        try {
+            const next = accept
+                ? await acceptInvitation(invitation.company_id)
+                : await declineInvitation(invitation.company_id);
+            setUser(next);
+            setInfo({
+                section: "firmen",
+                text: accept
+                    ? `Du bist jetzt Mitglied bei ${invitation.company_name}. Du arbeitest weiter in ${user.company_name}; wechseln kannst du unter „Deine Firmen“.`
+                    : `Einladung von ${invitation.company_name} abgelehnt.`,
+            });
+        } catch (caught: unknown) {
+            showError(
+                "firmen",
+                caught,
+                accept
+                    ? "Einladung konnte nicht angenommen werden."
+                    : "Einladung konnte nicht abgelehnt werden.",
+            );
+        }
+    };
+
     const saveSecurity = async (event: FormEvent) => {
         event.preventDefault();
         if (!security) {
@@ -390,6 +465,9 @@ export const AccountPage = () => {
                     {row.user_id === user.id && (
                         <span className={styles.muted}> (du)</span>
                     )}
+                    {row.invited && (
+                        <span className={styles.stateOff}> · Einladung offen</span>
+                    )}
                 </span>
             ),
         },
@@ -402,35 +480,49 @@ export const AccountPage = () => {
             key: "role",
             displayText: "Rolle",
             width: "170px",
-            render: (role, { row }) => (
-                <Select
-                    size="sm"
-                    fullWidth
-                    aria-label={`Rolle von ${row.name}`}
-                    value={role}
-                    onChange={(event) =>
-                        changeRole(row, event.target.value as UserRole)
-                    }
-                >
-                    <RoleOptions />
-                </Select>
-            ),
+            render: (role, { row }) =>
+                row.invited ? (
+                    <span className={styles.muted}>{ROLE_LABEL[role]}</span>
+                ) : (
+                    <Select
+                        size="sm"
+                        fullWidth
+                        aria-label={`Rolle von ${row.name}`}
+                        value={role}
+                        onChange={(event) =>
+                            changeRole(row, event.target.value as UserRole)
+                        }
+                    >
+                        <RoleOptions />
+                    </Select>
+                ),
         },
         {
             key: "user_id",
             displayText: "Entfernen",
             headerText: "",
             width: "120px",
-            render: (_, { row }) => (
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setRemoveTarget(row)}
-                >
-                    Entfernen
-                </Button>
-            ),
+            render: (_, { row }) =>
+                row.invited ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Einladung an ${row.email} zurückziehen`}
+                        onClick={() => withdraw(row)}
+                    >
+                        Zurückziehen
+                    </Button>
+                ) : (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRemoveTarget(row)}
+                    >
+                        Entfernen
+                    </Button>
+                ),
         },
     ];
 
@@ -524,7 +616,19 @@ export const AccountPage = () => {
                         <span id="konto-nav-firmen" className={styles.groupLabel}>
                             Firmen
                         </span>
-                        {navLink("firmen", "Firma wechseln oder anlegen")}
+                        {navLink(
+                            "firmen",
+                            "Firma wechseln oder anlegen",
+                            invitations.length > 0
+                                ? {
+                                      text:
+                                          invitations.length === 1
+                                              ? "1 Einladung"
+                                              : `${invitations.length} Einladungen`,
+                                      off: true,
+                                  }
+                                : undefined,
+                        )}
                     </div>
                 </nav>
 
@@ -710,7 +814,9 @@ export const AccountPage = () => {
                                 <div className={styles.panelHead}>
                                     <h2 className={styles.panelTitle}>
                                         Team{" "}
-                                        <span className={styles.count}>{members.length}</span>
+                                        <span className={styles.count}>
+                                            {members.filter((member) => !member.invited).length}
+                                        </span>
                                     </h2>
                                     <span className={styles.muted}>
                                         Mindestens ein Dispatcher bleibt
@@ -852,6 +958,55 @@ export const AccountPage = () => {
 
                     {section === "firmen" && (
                         <>
+                            {invitations.length > 0 && (
+                                <section className={styles.panel}>
+                                    <h2 className={styles.panelTitle}>
+                                        Einladungen{" "}
+                                        <span className={styles.count}>{invitations.length}</span>
+                                    </h2>
+                                    <p className={styles.muted}>
+                                        Erst wenn du annimmst, bist du in der Firma.
+                                    </p>
+                                    <ul className={styles.companies}>
+                                        {invitations.map((invitation) => (
+                                            <li
+                                                key={invitation.company_id}
+                                                className={`${styles.company} ${styles.invitation}`}
+                                            >
+                                                <span className={styles.invitationText}>
+                                                    <span className={styles.strong}>
+                                                        {invitation.company_name}
+                                                    </span>
+                                                    <span className={styles.muted}>
+                                                        {ROLE_LABEL[invitation.role]}
+                                                        {invitation.invited_by_name
+                                                            ? ` · von ${invitation.invited_by_name}`
+                                                            : ""}
+                                                        {` · ${formatShortStamp(invitation.created_at)}`}
+                                                    </span>
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    aria-label={`Einladung von ${invitation.company_name} ablehnen`}
+                                                    onClick={() => answerInvitation(invitation, false)}
+                                                >
+                                                    Ablehnen
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    aria-label={`Einladung von ${invitation.company_name} annehmen`}
+                                                    onClick={() => answerInvitation(invitation, true)}
+                                                >
+                                                    Annehmen
+                                                </Button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            )}
                             <section className={styles.panel}>
                                 <h2 className={styles.panelTitle}>Deine Firmen</h2>
                                 <ul className={styles.companies}>

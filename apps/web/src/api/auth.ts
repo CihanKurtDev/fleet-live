@@ -1,5 +1,6 @@
 import type {
     AuthUser,
+    Invitation,
     LoginInput,
     LoginResponse,
     MailDelivery,
@@ -122,7 +123,27 @@ export type Member = {
     name: string;
     email: string;
     role: UserRole;
+    /** Invited, not accepted yet: no access to the company. */
+    invited: boolean;
 };
+
+export const withdrawInvite = (userId: number) =>
+    request<{ data: Member[] }>(`/api/auth/invites/${userId}`, {
+        method: "DELETE",
+    });
+
+export const listInvitations = (signal?: AbortSignal) =>
+    request<{ data: Invitation[] }>("/api/auth/invitations", { signal });
+
+export const acceptInvitation = (companyId: number) =>
+    request<AuthUser>(`/api/auth/invitations/${companyId}/accept`, {
+        method: "POST",
+    });
+
+export const declineInvitation = (companyId: number) =>
+    request<AuthUser>(`/api/auth/invitations/${companyId}`, {
+        method: "DELETE",
+    });
 
 export const listMembers = () =>
     request<{ data: Member[] }>("/api/auth/members");

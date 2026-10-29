@@ -1,14 +1,17 @@
 import express from "express";
 import {
+    acceptInvitationHandler,
     acceptInviteHandler,
     changePassword,
     confirmTotp,
     createCompany,
     createInvite,
+    declineInvitationHandler,
     deleteMember,
     disableTotp,
     dismissImport,
     forgotPassword,
+    getInvitations,
     getMe,
     getMembers,
     getSecurity,
@@ -23,6 +26,7 @@ import {
     setupTotp,
     switchCompany,
     verifyEmail,
+    withdrawInviteHandler,
 } from "../controllers/auth.controller";
 import {
     finishSso,
@@ -56,6 +60,10 @@ router.post("/reset-password", tokenIpRateLimit, resetPasswordHandler);
 router.post("/password", requireAuth, changePassword);
 router.post("/invites", requireAuth, requireDispatcher, createInvite);
 router.post("/invites/accept", tokenIpRateLimit, acceptInviteHandler);
+router.delete("/invites/:userId", requireAuth, requireDispatcher, withdrawInviteHandler);
+router.get("/invitations", requireAuth, getInvitations);
+router.post("/invitations/:companyId/accept", requireAuth, acceptInvitationHandler);
+router.delete("/invitations/:companyId", requireAuth, declineInvitationHandler);
 router.get("/members", requireAuth, requireDispatcher, getMembers);
 router.patch("/members/:userId", requireAuth, requireDispatcher, patchMember);
 router.delete("/members/:userId", requireAuth, requireDispatcher, deleteMember);

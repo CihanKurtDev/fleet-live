@@ -46,6 +46,34 @@ CREATE TABLE IF NOT EXISTS company_memberships (
     UNIQUE (user_id, company_id)
 );
 
+-- An invitation is not a membership: it becomes one only when the invited
+-- person accepts it (the link in the mail, or Konto → Firmen when signed in).
+CREATE TABLE IF NOT EXISTS company_invites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('dispatcher', 'viewer')),
+    invited_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (invited_by)
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    UNIQUE (company_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_company_invites_user
+    ON company_invites(user_id);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

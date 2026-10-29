@@ -16,14 +16,17 @@ import {
 } from "@fleet-live/shared";
 import { config } from "../config";
 import {
+    acceptInvitation,
     acceptInvite,
     authUserFor,
     companySecurity,
     consumeRecoveryCode,
     createCompanyForUser,
+    declineInvitation,
     dismissImportPrompt,
     hasSsoIdentity,
     inviteMember,
+    listInvitations,
     listMembers,
     pickLoginCompany,
     publicSecurity,
@@ -36,6 +39,7 @@ import {
     userForPasswordReset,
     userForResend,
     verifyEmailToken,
+    withdrawInvite,
 } from "../models/account.model";
 import { AuthTokenModel } from "../models/authToken.model";
 import { SessionModel } from "../models/session.model";
@@ -344,9 +348,15 @@ export async function createInvite(req: Request, res: Response) {
 
     assertMailConfigured();
     const input = parseInviteInput(req.body);
-    const result = inviteMember(req.user.company_id, input.email, input.role);
+    const company = req.user.company_name;
+    const result = inviteMember(
+        req.user.company_id,
+        input.email,
+        input.role,
+        req.user.id,
+    );
 
-    if (result.created) {
+    if (result.activate) {
         const token = AuthTokenModel.issue({
             userId: result.user.id,
             purpose: "invite",
@@ -356,8 +366,8 @@ export async function createInvite(req: Request, res: Response) {
         });
         const delivery = await mailLink({
             to: result.user.email,
-            subject: "Einladung zu fleet-live",
-            text: "Du bist eingeladen. Lege dein Passwort fest, dann bist du in der Firma.",
+            subject: `Einladung zu ${company} in fleet-live`,
+            text: `${req.user.name} lädt dich zu ${company} ein. Lege dein Passwort fest, dann bist du in der Firma.`,
             path: "/einladung",
             token,
         });
@@ -365,13 +375,71 @@ export async function createInvite(req: Request, res: Response) {
         return;
     }
 
+    // An existing account decides itself: nothing changes until it accepts.
     const delivery = await sendMail({
         to: result.user.email,
-        subject: "Neue Firma in fleet-live",
-        text: "Du wurdest zu einer weiteren Firma hinzugefügt. Melde dich an und wechsle die Firma.",
-        link: `${config.webOrigin}/login`,
+        subject: `Einladung zu ${company} in fleet-live`,
+        text: `${req.user.name} lädt dich zu ${company} ein. Melde dich an und nimm die Einladung unter Konto → Firmen an oder lehne sie ab.`,
+        link: `${config.webOrigin}/konto#firmen`,
     });
     res.status(201).json({ email: result.user.email, delivery });
+}
+
+export function getInvitations(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    res.json({ data: listInvitations(req.user.id) });
+}
+
+function invitationCompanyId(req: Request): number {
+    const companyId = Number(req.params.companyId);
+
+    if (!Number.isInteger(companyId)) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    return companyId;
+}
+
+export function acceptInvitationHandler(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    if (!acceptInvitation(req.user.id, invitationCompanyId(req))) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    // The session stays in its company; the new one is a switch away.
+    res.json(authUserFor(req.user.id, req.user.company_id));
+}
+
+export function declineInvitationHandler(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    if (!declineInvitation(req.user.id, invitationCompanyId(req))) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    res.json(authUserFor(req.user.id, req.user.company_id));
+}
+
+export function withdrawInviteHandler(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const userId = Number(req.params.userId);
+
+    if (!Number.isInteger(userId) || !withdrawInvite(req.user.company_id, userId)) {
+        throw new NotFoundError("Einladung nicht gefunden.");
+    }
+
+    res.json({ data: listMembers(req.user.company_id) });
 }
 
 export function acceptInviteHandler(req: Request, res: Response) {
