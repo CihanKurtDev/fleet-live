@@ -2,7 +2,7 @@
 
 Eine Leitstelle für Fuhrparks. Disponenten sehen auf einen Blick, wo jedes Fahrzeug gerade ist, wer zu schnell fährt, welche Prüffristen ablaufen und was heute zu tun ist.
 
-Ich habe fleet-live allein gebaut: Datenmodell, API, Oberfläche, Simulator und Tests. Die App läuft lokal. Die GPS-Daten kommen aus einem eingebauten Simulator, damit die Demo ohne Hardware und ohne Cloud läuft.
+fleet-live ist ein Ein-Personen-Projekt, gebaut mit KI-Unterstützung: Datenmodell, API, Oberfläche, Simulator und Tests. Die App läuft lokal. Die GPS-Daten kommen aus einem eingebauten Simulator, damit die Demo ohne Hardware und ohne Cloud läuft.
 
 <p align="center">
   <img src="docs/screenshots/tour.gif" width="900" alt="Rundgang durch die App: Schichtüberblick, Live-Karte, eine Tempo-Warnung, die Fahrzeugseite, eine Fahrt wird nachgespielt, Wechsel ins helle Design">
