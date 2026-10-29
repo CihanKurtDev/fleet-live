@@ -132,30 +132,36 @@ async function mailLink(input: {
 export async function register(req: Request, res: Response) {
     assertMailConfigured();
     const input = parseRegisterInput(req.body);
-    const user = registerAccount(input);
-    const company = listMemberships(user.id)[0];
+    const { user, existing } = registerAccount(input);
+    let delivery;
 
-    if (company) {
-        AuditModel.record({
-            companyId: company.company_id,
-            action: "company_created",
-            actorId: user.id,
+    if (existing && user.password_hash && !user.email_verified_at) {
+        // Registered before and never confirmed: the confirmation again.
+        await spendPasswordTime(input.password);
+        delivery = await mailVerification(user.id, user.email);
+    } else if (existing) {
+        // The same answer as a new registration, and as slow (a new one
+        // hashes the password); the owner hears about it by mail.
+        await spendPasswordTime(input.password);
+        delivery = await sendMail({
+            to: user.email,
+            subject: "Registrierung mit deiner E-Mail bei fleet-live",
+            text: "Jemand wollte mit dieser E-Mail eine neue Firma bei fleet-live registrieren. Du hast hier schon ein Konto. Warst du das, melde dich an; ein vergessenes Passwort setzt du über „Passwort vergessen“ neu. Warst du es nicht, kannst du diese Mail ignorieren.",
+            link: `${config.webOrigin}/login`,
         });
-    }
+    } else {
+        const company = listMemberships(user.id)[0];
 
-    AuthTokenModel.deleteForUser(user.id, "verify_email");
-    const token = AuthTokenModel.issue({
-        userId: user.id,
-        purpose: "verify_email",
-        ttl: "+24 hours",
-    });
-    const delivery = await mailLink({
-        to: user.email,
-        subject: "E-Mail bestätigen",
-        text: "Bestätige deine E-Mail, danach kannst du dich anmelden.",
-        path: "/email-bestaetigen",
-        token,
-    });
+        if (company) {
+            AuditModel.record({
+                companyId: company.company_id,
+                action: "company_created",
+                actorId: user.id,
+            });
+        }
+
+        delivery = await mailVerification(user.id, user.email);
+    }
 
     res.status(201).json({
         email: user.email,
@@ -167,25 +173,31 @@ export async function register(req: Request, res: Response) {
     });
 }
 
+/** A fresh confirmation link; an older one stops working. */
+async function mailVerification(userId: number, email: string) {
+    AuthTokenModel.deleteForUser(userId, "verify_email");
+    const token = AuthTokenModel.issue({
+        userId,
+        purpose: "verify_email",
+        ttl: "+24 hours",
+    });
+
+    return mailLink({
+        to: email,
+        subject: "E-Mail bestätigen",
+        text: "Bestätige deine E-Mail, danach kannst du dich anmelden.",
+        path: "/email-bestaetigen",
+        token,
+    });
+}
+
 export async function resendVerification(req: Request, res: Response) {
     assertMailConfigured();
     const { email } = parseEmailInput(req.body);
     const user = userForResend(email);
 
     if (user) {
-        AuthTokenModel.deleteForUser(user.id, "verify_email");
-        const token = AuthTokenModel.issue({
-            userId: user.id,
-            purpose: "verify_email",
-            ttl: "+24 hours",
-        });
-        await mailLink({
-            to: user.email,
-            subject: "E-Mail bestätigen",
-            text: "Bestätige deine E-Mail, danach kannst du dich anmelden.",
-            path: "/email-bestaetigen",
-            token,
-        });
+        await mailVerification(user.id, user.email);
     }
 
     const delivery = deliveryMode();

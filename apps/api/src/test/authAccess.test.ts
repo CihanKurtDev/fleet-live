@@ -66,6 +66,79 @@ describe("registration and email confirmation", () => {
         assert.equal(login.body.import_prompt, true);
     });
 
+    it("answers a registration with a taken e-mail like a new one", async () => {
+        UserModel.create({
+            name: "Bestehend",
+            email: "known@example.com",
+            password: PASSWORD,
+            company_id: 1,
+        });
+        const companies = () =>
+            (db.prepare("SELECT COUNT(*) AS n FROM companies").get() as { n: number }).n;
+        const before = companies();
+
+        const taken = await request(app).post("/api/auth/register").send({
+            company_name: "Fremd GmbH",
+            name: "Fremd",
+            email: "Known@Example.com",
+            password: "another-password-1",
+        });
+        const fresh = await request(app).post("/api/auth/register").send({
+            company_name: "Neu GmbH",
+            name: "Neu",
+            email: "fresh@example.com",
+            password: "another-password-1",
+        });
+
+        assert.equal(taken.status, 201);
+        assert.equal(fresh.status, 201);
+        assert.deepEqual(Object.keys(taken.body).sort(), Object.keys(fresh.body).sort());
+        assert.equal(taken.body.message, fresh.body.message);
+        // Only the new registration made a company.
+        assert.equal(companies(), before + 1);
+
+        const mails = takeMails();
+        const hint = mails.find((mail) => mail.to === "known@example.com");
+        assert.ok(hint);
+        assert.match(hint.subject, /Registrierung mit deiner E-Mail/);
+        assert.doesNotMatch(hint.link, /token=/);
+        // The existing account keeps its password.
+        await request(app)
+            .post("/api/auth/login")
+            .send({ email: "known@example.com", password: PASSWORD })
+            .expect(200);
+    });
+
+    it("sends the confirmation again when an unconfirmed address registers again", async () => {
+        const first = {
+            company_name: "Zweimal GmbH",
+            name: "Zweimal",
+            email: "zweimal@example.com",
+            password: PASSWORD,
+        };
+        await request(app).post("/api/auth/register").send(first).expect(201);
+        const [firstMail] = takeMails();
+        assert.ok(firstMail);
+
+        await request(app)
+            .post("/api/auth/register")
+            .send({ ...first, company_name: "Zweimal Andere GmbH" })
+            .expect(201);
+        const [again] = takeMails();
+        assert.ok(again);
+        assert.equal(again.subject, "E-Mail bestätigen");
+
+        // The older link is used up by the new one; the new one confirms.
+        await request(app)
+            .post("/api/auth/verify-email")
+            .send({ token: tokenFrom(firstMail.link) })
+            .expect(400);
+        await request(app)
+            .post("/api/auth/verify-email")
+            .send({ token: tokenFrom(again.link) })
+            .expect(204);
+    });
+
     it("uses the same forgot-password answer when the email is unknown", async () => {
         UserModel.create({
             name: "Known",

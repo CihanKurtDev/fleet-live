@@ -62,17 +62,22 @@ function membershipRole(userId: number, companyId: number): UserRole | undefined
     return row?.role;
 }
 
+/**
+ * Registers a company with its first dispatcher. An address that already has
+ * an account comes back as `existing`, untouched: the answer to the visitor
+ * must not tell the two apart (the controller mails the owner instead).
+ */
 export function registerAccount(input: {
     company_name: string;
     name: string;
     email: string;
     password: string;
-}): UserRecord {
+}): { user: UserRecord; existing: boolean } {
     return withTransaction(() => {
-        if (UserModel.findByEmail(input.email)) {
-            throw new ConflictError("E-Mail ist bereits registriert.", {
-                email: "E-Mail ist bereits registriert.",
-            });
+        const existing = UserModel.findByEmail(input.email);
+
+        if (existing) {
+            return { user: existing, existing: true };
         }
 
         if (companyByName(input.company_name)) {
@@ -82,8 +87,7 @@ export function registerAccount(input: {
         }
 
         const companyId = insertCompany(input.company_name);
-
-        return UserModel.create({
+        const user = UserModel.create({
             name: input.name,
             email: input.email,
             password: input.password,
@@ -91,6 +95,8 @@ export function registerAccount(input: {
             role: "dispatcher",
             verified: false,
         });
+
+        return { user, existing: false };
     });
 }
 

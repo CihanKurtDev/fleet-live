@@ -8,7 +8,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 
 | Methode | Endpoint | Beschreibung |
 | ------- | -------- | ------------ |
-| `POST` | `/api/auth/register` | Firma plus erster Dispatcher. Keine Session, bis die E-Mail bestätigt ist |
+| `POST` | `/api/auth/register` | Firma plus erster Dispatcher. Keine Session, bis die E-Mail bestätigt ist. Eine schon registrierte E-Mail bekommt dieselbe Antwort; der Inhaber erhält eine Hinweis-Mail (unbestätigt: den Bestätigungslink neu), es entsteht keine Firma |
 | `POST` | `/api/auth/verify-email` | `{ token }` |
 | `POST` | `/api/auth/resend-verification` | `{ email }`, gleiche Antwort ob das Konto existiert |
 | `POST` | `/api/auth/login` | `{ email, password, remember? }`. Session, oder `{ step, challenge }` für Zwei-Faktor |
