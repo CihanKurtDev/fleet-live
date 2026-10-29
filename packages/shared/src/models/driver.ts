@@ -4,6 +4,7 @@ import { emptyToUndefined, firstQueryString } from "./queryPreprocess";
 import { isValidIsoDate, type VehicleStatus } from "./vehicle";
 import { DRIVER_NAME_MAX } from "./vehicle";
 import { LIST_PAGE_LIMIT_MAX } from "./vehicleQuery";
+import type { VehicleAvailability } from "./workshop";
 
 export const DRIVER_PHONE_MAX = 32;
 
@@ -43,6 +44,8 @@ export type DriverVehicle = {
     status: VehicleStatus;
     active_alerts: number;
     is_current: boolean;
+    /** Not `READY`: the vehicle cannot be made the driver's current one. */
+    availability: VehicleAvailability;
 };
 
 export type DriverDetail = Driver & {

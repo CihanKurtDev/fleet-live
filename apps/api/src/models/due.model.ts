@@ -94,13 +94,12 @@ export class DueModel {
         );
 
         const open = WorkshopModel.openByVehicle(companyId);
-        const workshopOf = (row: DueListItem) => {
-            const visit = row.vehicle_id === null ? undefined : open.get(row.vehicle_id);
-            const matches =
-                (row.kind === "hu" && visit?.reason === "HU") ||
-                (row.kind === "uvv" && visit?.reason === "UVV");
-            return matches && visit ? visit : null;
-        };
+        // A vehicle has one open stay at most: an HU or UVV row shows it
+        // whatever its reason, so the row does not offer a second one.
+        const workshopOf = (row: DueListItem) =>
+            (row.kind === "hu" || row.kind === "uvv") && row.vehicle_id !== null
+                ? (open.get(row.vehicle_id) ?? null)
+                : null;
 
         return {
             ...listed,

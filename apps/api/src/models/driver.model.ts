@@ -10,6 +10,7 @@ import type {
     VehicleStatus,
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
+import { VEHICLE_AVAILABILITY_SQL } from "../db/vehicleConcepts";
 import { withTransaction } from "../db/database";
 import {
     AppError,
@@ -200,7 +201,8 @@ function loadAssignedVehicles(
             v.license_plate,
             v.status,
             v.active_alerts,
-            CASE WHEN v.current_driver_id = ? THEN 1 ELSE 0 END AS is_current
+            CASE WHEN v.current_driver_id = ? THEN 1 ELSE 0 END AS is_current,
+            ${VEHICLE_AVAILABILITY_SQL} AS availability
         FROM driver_vehicles dv
         INNER JOIN vehicles v ON v.id = dv.vehicle_id
         WHERE dv.driver_id = ?
@@ -217,6 +219,7 @@ function mapAssigned(rows: DriverVehicleRow[]): DriverVehicle[] {
         status: row.status,
         active_alerts: Number(row.active_alerts),
         is_current: Boolean(row.is_current),
+        availability: row.availability,
     }));
 }
 

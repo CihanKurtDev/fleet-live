@@ -86,7 +86,7 @@ export type DueListItem = {
     label: string;
     /** Wie das Datum zustande kommt. Fehlt bei der alten Listenrechnung. */
     explanation?: DueExplanation;
-    /** Offener Werkstatt-Aufenthalt für diese HU/UVV (gleicher Grund), sonst `null`. */
+    /** HU/UVV-Zeilen: offener Werkstatt-Aufenthalt des Fahrzeugs (jeder Grund), sonst `null`. */
     workshop?: WorkshopSummary | null;
 };
 

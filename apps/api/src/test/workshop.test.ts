@@ -341,6 +341,15 @@ describe("workshop counts", () => {
         assert.equal(row.workshop.id, visit.id);
         assert.equal(row.workshop.state, "PLANNED");
     });
+
+    it("shows a stay for another reason on the HU row too, so no second one is offered", async () => {
+        const car = vehicle("K-HU 10");
+        await plan(car.id, { reason: "MAINTENANCE" });
+
+        const due = (await api.get("/api/due?state=overdue&kind=hu")).body;
+        const row = due.data.find((entry: { label: string }) => entry.label === "K-HU 10");
+        assert.equal(row.workshop.reason, "MAINTENANCE");
+    });
 });
 
 describe("out of service", () => {
