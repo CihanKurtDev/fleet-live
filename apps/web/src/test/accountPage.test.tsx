@@ -863,6 +863,15 @@ describe("account page", () => {
         fireEvent.change(trips, { target: { value: "30" } });
         submit("Aufbewahrung speichern");
 
+        // Shorter means deleting at once: it asks first.
+        const dialog = await screen.findByRole("dialog", {
+            name: "Aufbewahrung verkürzen?",
+            hidden: true,
+        });
+        expect(savePrivacy).not.toHaveBeenCalled();
+        expect(within(dialog).getByText(/sofort gelöscht.*Fahrten./)).toBeInTheDocument();
+        fireEvent.click(within(dialog).getByRole("button", { name: "Speichern und löschen" }));
+
         expect(
             await screen.findByText("Gespeichert. Gelöscht, weil älter: 12 Fahrten, 1 Protokoll-Eintrag."),
         ).toBeInTheDocument();
@@ -902,5 +911,34 @@ describe("account page", () => {
         ).toBeInTheDocument();
         expect(savePrivacy).toHaveBeenCalledWith({ viewer_driver_names: false });
         expect(toggle).not.toBeChecked();
+    });
+
+    it("saves nothing when shortening is cancelled", async () => {
+        vi.mocked(getPrivacy).mockResolvedValue({
+            data: {
+                viewer_driver_names: true,
+                trips_days: null,
+                alerts_days: null,
+                audit_days: null,
+                trips: 90,
+                alerts: 90,
+                audit: 365,
+                defaults: { trips: 90, alerts: 90, audit: 365 },
+            },
+        });
+        vi.mocked(savePrivacy).mockReset();
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
+
+        fireEvent.change(await screen.findByLabelText("Protokoll (Tage)"), {
+            target: { value: "100" },
+        });
+        submit("Aufbewahrung speichern");
+        const dialog = await screen.findByRole("dialog", {
+            name: "Aufbewahrung verkürzen?",
+            hidden: true,
+        });
+        fireEvent.click(within(dialog).getByRole("button", { name: "Abbrechen" }));
+
+        expect(savePrivacy).not.toHaveBeenCalled();
     });
 });

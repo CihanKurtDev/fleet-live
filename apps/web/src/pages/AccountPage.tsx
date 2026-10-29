@@ -147,6 +147,9 @@ export const AccountPage = () => {
     const [retention, setRetention] = useState<PrivacySettings | null>(null);
     const [retentionDraft, setRetentionDraft] = useState<Record<RetentionKind, string> | null>(null);
     const [retentionErrors, setRetentionErrors] = useState<Record<string, string>>({});
+    /** Kinds whose period gets shorter: saving deletes at once, so it asks first. */
+    const [shorter, setShorter] = useState<RetentionKind[] | null>(null);
+    const [isSavingRetention, setIsSavingRetention] = useState(false);
     const [newDomain, setNewDomain] = useState("");
     const [auditPage, setAuditPage] = useState(1);
     const [audit, setAudit] = useState<AuditPage | null>(null);
@@ -527,16 +530,44 @@ export const AccountPage = () => {
             audit: retentionStored.audit === null ? "" : String(retentionStored.audit),
         });
 
-    const submitRetention = async (event: FormEvent) => {
+    const retentionDays = (value: string) => (value.trim() === "" ? null : Number(value));
+
+    /** Days that will be used for a field: its number, or the default when empty (0 = unlimited). */
+    const effectiveDays = (kind: RetentionKind, value: string) => {
+        const days = retentionDays(value) ?? retention?.defaults[kind] ?? 0;
+        return days > 0 ? days : Number.POSITIVE_INFINITY;
+    };
+
+    const submitRetention = (event: FormEvent) => {
         event.preventDefault();
 
+        if (!retentionValues || !retention) {
+            return;
+        }
+
+        const shorterKinds = RETENTION_KINDS.filter(
+            (kind) =>
+                effectiveDays(kind, retentionValues[kind]) <
+                (retention[kind] > 0 ? retention[kind] : Number.POSITIVE_INFINITY),
+        );
+
+        if (shorterKinds.length > 0) {
+            setShorter(shorterKinds);
+            return;
+        }
+
+        void storeRetention();
+    };
+
+    const storeRetention = async () => {
         if (!retentionValues) {
             return;
         }
 
         clearMessages();
         setRetentionErrors({});
-        const days = (value: string) => (value.trim() === "" ? null : Number(value));
+        setIsSavingRetention(true);
+        const days = retentionDays;
 
         try {
             const { data, deleted } = await savePrivacy({
@@ -567,6 +598,9 @@ export const AccountPage = () => {
             }
 
             showError("datenschutz", caught, "Die Aufbewahrung wurde nicht gespeichert.");
+        } finally {
+            setIsSavingRetention(false);
+            setShorter(null);
         }
     };
 
@@ -1640,6 +1674,22 @@ export const AccountPage = () => {
 
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={shorter !== null}
+                onClose={() => setShorter(null)}
+                title="Aufbewahrung verkürzen?"
+                confirmLabel="Speichern und löschen"
+                busyLabel="Wird gespeichert…"
+                isBusy={isSavingRetention}
+                onConfirm={() => storeRetention()}
+            >
+                {shorter
+                    ? `Was älter ist als die neue Frist, wird sofort gelöscht und lässt sich nicht wiederherstellen: ${shorter
+                          .map((kind) => RETENTION_LABELS[kind])
+                          .join(", ")}.`
+                    : null}
+            </ConfirmDialog>
 
             <ConfirmDialog
                 open={removeTarget !== null}
