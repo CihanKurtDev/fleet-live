@@ -72,3 +72,4 @@ Dann `http://localhost:5173` öffnen und anmelden:
 - [API](docs/api.md): alle Endpunkte, mit Beispiel
 - [Lokale Entwicklung](docs/entwicklung.md): Skripte, Umgebungsvariablen, Login über Google, Microsoft und Firmen-IdP
 - [Sicherheit](SECURITY.md): Sicherheitsmodell und offene Punkte
+- [Datenschutz-Infoblatt](docs/datenschutz-infoblatt.md): welche Daten über Fahrer gespeichert werden, wie lange und wer sie sieht (Entwurf)
