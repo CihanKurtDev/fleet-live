@@ -236,6 +236,12 @@ const PAGES: Record<string, HelpPage> = {
                 answer:
                     "Nur Tempo-Warnungen. Tank und Kein Signal hängen am Fahrzeug.",
             },
+            {
+                question: "Ein Fahrer will wissen, was über ihn gespeichert ist. Was tue ich?",
+                answer:
+                    "Hier unter „⋯“ → „Auskunft exportieren“. Die ZIP-Datei enthält Stammdaten, Fahrzeuge, Fahrten mit Strecke, Verstöße und Warnungen und erklärt in liesmich.txt, was drin ist. Der Export steht im Protokoll.",
+                dispatcherOnly: true,
+            },
         ],
     },
     import: {

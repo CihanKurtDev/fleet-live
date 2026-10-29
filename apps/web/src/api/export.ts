@@ -42,3 +42,31 @@ export async function downloadExport(kind: ExportKind): Promise<void> {
     anchor.remove();
     URL.revokeObjectURL(url);
 }
+
+/** Everything about one driver as a zip (Auskunft); the file name comes from the server. */
+export async function downloadDriverExport(driverId: number): Promise<void> {
+    const response = await fetch(`/api/export/drivers/${driverId}`, {
+        credentials: "include",
+    });
+
+    if (response.status === 401) {
+        notifyUnauthorized();
+        throw new ApiError("Anmeldung erforderlich.", 401, undefined, "UNAUTHORIZED");
+    }
+
+    if (!response.ok) {
+        throw new ApiError("Die Auskunft konnte nicht erstellt werden.", response.status);
+    }
+
+    const name =
+        /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ??
+        "auskunft.zip";
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = name;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+}

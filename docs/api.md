@@ -88,6 +88,7 @@ Ein externer Login meldet nur an, wenn ihn der Inhaber verknüpft hat (Issuer un
 | `GET`, `PUT` | `/api/import/profile`        | Gespeicherte Spaltenzuordnung der Firma |
 | `GET`    | `/api/import/runs`               | Import-Log der Firma |
 | `GET`    | `/api/export/vehicles`, `/alerts`, `/trips`, `/period` | CSV der Firma (Semikolon, deutsche Köpfe), nur `dispatcher`. `/period?month=JJJJ-MM` ist ein Monat |
+| `GET` | `/api/export/drivers/:id` | Auskunft über einen Fahrer als ZIP (Dispatcher): Stammdaten, Fahrzeuge, Fahrten, Strecken als GeoJSON, Ereignisse, Warnungen und ein Liesmich. Steht im Protokoll |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
 `GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `unassigned`, `driving`, `idle`, `stopped`, `offline`, `in_depot`, `speeding`).

@@ -1,11 +1,12 @@
 import { MenuButton } from "../ui/Menu/MenuButton";
 
 interface DriverMoreMenuProps {
+    onExport: () => void;
     onDelete: () => void;
 }
 
-/** "⋯" next to Bearbeiten. Holds the rare, destructive driver actions. */
-export const DriverMoreMenu = ({ onDelete }: DriverMoreMenuProps) => (
+/** "⋯" next to Bearbeiten. Holds the rare driver actions: the Auskunft and deleting. */
+export const DriverMoreMenu = ({ onExport, onDelete }: DriverMoreMenuProps) => (
     <MenuButton
         label={<span aria-hidden="true">⋯</span>}
         ariaLabel="Weitere Aktionen"
@@ -13,6 +14,11 @@ export const DriverMoreMenu = ({ onDelete }: DriverMoreMenuProps) => (
         caret={false}
         size="toolbar"
         items={[
+            {
+                key: "export",
+                label: "Auskunft exportieren",
+                onSelect: onExport,
+            },
             {
                 key: "delete",
                 label: "Fahrer löschen",

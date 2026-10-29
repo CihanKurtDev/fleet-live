@@ -10,13 +10,13 @@ import {
 import { stmt } from "../db/statements";
 import { toCsv } from "../lib/csv";
 
-const ALERT_TYPE_LABELS = {
+export const ALERT_TYPE_LABELS = {
     SPEEDING: "Geschwindigkeit",
     LOW_FUEL: "Wenig Tank",
     OFFLINE: "Kein Signal",
 } as const;
 
-const ALERT_SEVERITY_LABELS = {
+export const ALERT_SEVERITY_LABELS = {
     LOW: "Niedrig",
     MEDIUM: "Mittel",
     HIGH: "Hoch",
@@ -284,7 +284,7 @@ function vehicleTypeLabel(value: string | null): string {
     return value ?? "";
 }
 
-function parseDetails(value: string | null): AlertDetails | null {
+export function parseDetails(value: string | null): AlertDetails | null {
     if (!value) {
         return null;
     }
@@ -296,7 +296,7 @@ function parseDetails(value: string | null): AlertDetails | null {
     }
 }
 
-function formatStamp(value: string | null): string {
+export function formatStamp(value: string | null): string {
     if (!value) {
         return "";
     }
@@ -310,7 +310,7 @@ function formatStamp(value: string | null): string {
     return stamp.format(date);
 }
 
-function formatKm(meters: number | null): string {
+export function formatKm(meters: number | null): string {
     return formatLiters(meters === null ? 0 : meters / 1000);
 }
 

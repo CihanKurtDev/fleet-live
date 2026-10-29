@@ -9,6 +9,8 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { deleteDriver } from "../api/drivers";
+import { downloadDriverExport } from "../api/export";
+import { ApiError } from "../api/client";
 import { DriverAssignmentPanel } from "../components/drivers/DriverAssignmentPanel";
 import { DriverEditForm } from "../components/drivers/DriverEditForm";
 import { DriverHintsPanel } from "../components/drivers/DriverHintsPanel";
@@ -56,6 +58,7 @@ export const DriverDetailPage = () => {
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [exportNotice, setExportNotice] = useState<string | null>(null);
 
     // The speed only exists on the vehicle, and only while it drives.
     const currentVehicleId =
@@ -122,6 +125,19 @@ export const DriverDetailPage = () => {
 
     const backLink = from.startsWith("/drivers") ? "← Fahrer" : backLabel(from);
 
+    const exportData = async () => {
+        setExportNotice(null);
+
+        try {
+            await downloadDriverExport(driver.id);
+            setExportNotice(`Auskunft über ${driver.name} heruntergeladen.`);
+        } catch (caught: unknown) {
+            setExportNotice(
+                caught instanceof ApiError ? caught.message : "Die Auskunft konnte nicht erstellt werden.",
+            );
+        }
+    };
+
     const requestDelete = () => {
         setDeleteError(null);
         setConfirmDelete(true);
@@ -153,6 +169,11 @@ export const DriverDetailPage = () => {
                 <h1 className={styles.title}>{driver.name}</h1>
                 <DriverOpenWarningsPill count={driver.open_warnings} />
                 <p className={styles.summary}>{summary.join(" · ")}</p>
+                {exportNotice && (
+                    <p className={styles.summary} role="status">
+                        {exportNotice}
+                    </p>
+                )}
                 {canWrite && (
                     <div className={styles.actions}>
                         <Button
@@ -165,7 +186,7 @@ export const DriverDetailPage = () => {
                         >
                             Bearbeiten
                         </Button>
-                        <DriverMoreMenu onDelete={requestDelete} />
+                        <DriverMoreMenu onExport={() => void exportData()} onDelete={requestDelete} />
                     </div>
                 )}
             </header>
