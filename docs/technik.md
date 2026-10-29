@@ -36,7 +36,7 @@ Routes und Controller machen HTTP. Models machen SQL. Der Browser fasst die Date
 
 ## Fahrzeugmodell
 
-Was ein Mensch pflegt: Kennzeichen, VIN, Typ, HU- und UVV-Fälligkeit, Depot, Kostenstelle. Am Fahrer: Telefon, Führerschein gültig bis, letzte Kontrolle. Tankstand, wenn das Fahrzeug nicht fährt. Wer fahren darf und wer es gerade hat, hängt an der Fahrer-API, nicht am Fahrzeugformular. `status` kommt vom Fahrzeug (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) und ist kein Formularfeld. `fuel_level` wird während `DRIVING` gemessen, sonst von Hand.
+Was ein Mensch pflegt: Kennzeichen, VIN, Typ, HU- und UVV-Fälligkeit, Depot, Kostenstelle. Am Fahrer: Telefon, Führerschein gültig bis, letzte Kontrolle. Tankstand, wenn das Fahrzeug nicht fährt. Wer fahren darf und wer es gerade hat, hängt an der Fahrer-API, nicht am Fahrzeugformular. `status` kommt vom Fahrzeug (`DRIVING`, `IDLE`, `STOPPED`, `OFFLINE`) und ist kein Formularfeld. `fuel_level` meldet während `DRIVING` das Fahrzeug (das Formular sperrt das Feld), sonst pflegt man ihn von Hand. Der Simulator meldet den gespeicherten Wert unverändert, in der Demo bleibt der Tank also stehen.
 
 Zusätzlich in der Antwort: Position, Geschwindigkeit, `speed_limit_kmh`, `recorded_at`, `active_alerts`, `speeding_open`, `created_at`.
 
@@ -83,7 +83,7 @@ Anlegen, bearbeiten, löschen. Status als Badge. Tank während der Fahrt nur les
 
 ### Flottenkarte
 
-`/fleet` lädt die Positionen der eigenen Firma einmal (bis 5000 Einzelpunkte). Bis Zoom 14 fasst die Karte nahe Fahrzeuge zu Gruppen zusammen (Supercluster im Browser), ab Zoom 15 ist jedes Fahrzeug ein eigener Punkt. Schwenken lädt nicht neu. Die Leiste zeigt, wie viele Fahrzeuge im Ausschnitt liegen, wie viele der Filter trifft und wie viele keine Position haben. Der Fahrer-Picker ist ein Filter, kein Muss. Über 5000 Treffer mit Position werden Dichtekreise. Übereinanderliegende Fahrzeuge öffnen eine Liste. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (bis zu 3000 im Fokus, das gewählte zuerst). Spuren gibt es hier nicht, die liegen auf der Detailseite.
+`/fleet` lädt die Positionen der eigenen Firma einmal (bis 5000 Einzelpunkte). Jedes Fahrzeug im Ausschnitt ist ein eigener Punkt, das Gruppieren ist vorerst ausgeschaltet. Schwenken lädt nicht neu. Die Leiste zeigt, wie viele Fahrzeuge im Ausschnitt liegen, wie viele der Filter trifft und wie viele keine Position haben. Der Fahrer-Picker ist ein Filter, kein Muss. Über 5000 Treffer mit Position werden Dichtekreise. Übereinanderliegende Fahrzeuge öffnen eine Liste. Ein eindeutiges Kennzeichen holt das Fahrzeug auch von außerhalb. Fahrende Fahrzeuge im Positionsmodus kriegen SSE (bis zu 3000 im Fokus, das gewählte zuerst). Spuren gibt es hier nicht, die liegen auf der Detailseite.
 
 Tabellenkomponente: [apps/docs/table.md](../apps/docs/table.md).
 

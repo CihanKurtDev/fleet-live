@@ -52,9 +52,3 @@ Fahrzeuge und Fahrer aus Excel oder CSV. Vor dem Schreiben prüft eine Vorschau 
 * Dispatcher und Viewer einladen, zwischen eigenen Firmen wechseln
 * Zwei-Faktor (Authenticator-App) und Anmeldung über Google, Microsoft oder einen Firmen-OIDC
 * Leere Firma fragt einmal, ob Stammdaten importiert werden sollen
-
-## Als Nächstes
-
-* Tempo-Warnungen älterer Fahrten, die noch einzeln in der Datenbank stehen, je Fahrt zusammenführen
-* Prüfung von Firmen-SSO und Einladungen durch eine zweite Stelle
-* Feierabend als Kachel auf der Schicht

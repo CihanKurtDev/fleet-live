@@ -5,8 +5,7 @@
 ## Claude Code
 
 - Rules live in `.claude/rules/` and load on their own; rules with `paths` load when you work on matching files.
-- `.claude/ROADMAP.md`, `.claude/MIGRATION_REPORT.md` and `.claude/archive/` are private and gitignored. Never commit them or copy their content into README, PRs, issues, or published artifacts.
-- `TODO.md` is an old local learning plan, not a rule source.
+- `.claude/ROADMAP.md` is the only plan: what comes next, in which order, when a step is done. Remove finished items there instead of ticking them; do not start a second list elsewhere. It and `.claude/archive/` (old reports and plans, no longer planning) are private and gitignored. Never commit them or copy their content into README, PRs, issues, or published artifacts.
 - Where a rule and the code disagree, the code wins (AGENTS.md). Check the code before relying on a rule, and fix the rule in the same change.
 
 ## Working with the user
@@ -22,8 +21,8 @@
 - `npm test` — API tests (`node:test` + SuperTest)
 - `npm run test:web` — web tests (Vitest)
 - `npm run typecheck`, `npm run build -w web`
-- `npm run lint` — currently fails on older errors outside recent work; lint the files you change (`npx eslint <file>` in the app folder). A hook runs ESLint on every TypeScript file Claude edits in `apps/web` or `apps/api`. Other hooks block `db:seed` on the dev data (`rules/backend.md`, Dev data) and flag `prefers-color-scheme` in web sources (the header switch sets `data-theme`).
-- `npm run verify` — typecheck, tests, lint and build; fails until the old lint errors are fixed.
+- `npm run lint` — passes (0 errors, 2 warnings in `FleetMap.tsx`); lint the files you change (`npx eslint <file>` in the app folder). A hook runs ESLint on every TypeScript file Claude edits in `apps/web` or `apps/api`. Other hooks block `db:seed` on the dev data (`rules/backend.md`, Dev data) and flag `prefers-color-scheme` in web sources (the header switch sets `data-theme`).
+- `npm run verify` — typecheck, tests, lint and build.
 
 ## Slash commands
 
