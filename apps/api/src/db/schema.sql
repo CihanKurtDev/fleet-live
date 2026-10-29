@@ -74,6 +74,37 @@ CREATE TABLE IF NOT EXISTS company_invites (
 CREATE INDEX IF NOT EXISTS idx_company_invites_user
     ON company_invites(user_id);
 
+-- Who changed access to a company: invitations, roles, removals, sign-in rules.
+-- Names and the address are copied at the time, so a deleted or renamed
+-- account still reads as it was.
+CREATE TABLE IF NOT EXISTS audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    actor_user_id INTEGER,
+    actor_name TEXT,
+    target_user_id INTEGER,
+    target_name TEXT,
+    target_email TEXT,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (actor_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL,
+
+    FOREIGN KEY (target_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_events_company
+    ON audit_events(company_id, id);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

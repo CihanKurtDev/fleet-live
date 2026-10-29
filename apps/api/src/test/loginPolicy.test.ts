@@ -7,6 +7,7 @@ import { db } from "../db/database";
 import { takeMails } from "../lib/mailer";
 import { seal } from "../lib/secretBox";
 import { base32Decode, base32Encode, randomTotpSecret, totpCode } from "../lib/totp";
+import { AuditModel } from "../models/audit.model";
 import { UserModel } from "../models/user.model";
 import {
     addMembership,
@@ -314,6 +315,17 @@ describe("the company security settings", () => {
         idp.next = profile({ email: "linked-admin@example.com", issuer: IDP_A, subject: "admin" });
         const done = await finish(await startLogin("company", 1));
         assert.ok(cookieValue(done.headers["set-cookie"], "fleet_session"));
+
+        // The company's log tells both steps, newest first.
+        const { data } = AuditModel.list(1, 1);
+        assert.deepEqual(
+            data.slice(0, 2).map((row) => [row.action, row.details]),
+            [
+                ["security_changed", { changes: ["sso_required_on"] }],
+                ["sso_linked", null],
+            ],
+        );
+        assert.equal(data[1]?.actor_name, "linked-admin@example.com");
     });
 
     it("does not count a link to an earlier issuer", async () => {

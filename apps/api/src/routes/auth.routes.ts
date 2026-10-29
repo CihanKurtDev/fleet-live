@@ -11,6 +11,7 @@ import {
     disableTotp,
     dismissImport,
     forgotPassword,
+    getAudit,
     getInvitations,
     getMe,
     getMembers,
@@ -65,6 +66,7 @@ router.get("/invitations", requireAuth, getInvitations);
 router.post("/invitations/:companyId/accept", requireAuth, acceptInvitationHandler);
 router.delete("/invitations/:companyId", requireAuth, declineInvitationHandler);
 router.get("/members", requireAuth, requireDispatcher, getMembers);
+router.get("/audit", requireAuth, requireDispatcher, getAudit);
 router.patch("/members/:userId", requireAuth, requireDispatcher, patchMember);
 router.delete("/members/:userId", requireAuth, requireDispatcher, deleteMember);
 router.post("/companies", requireAuth, createCompany);

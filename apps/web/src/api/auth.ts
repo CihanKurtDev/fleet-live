@@ -1,4 +1,5 @@
 import type {
+    AuditEvent,
     AuthUser,
     Invitation,
     LoginInput,
@@ -131,6 +132,14 @@ export const withdrawInvite = (userId: number) =>
     request<{ data: Member[] }>(`/api/auth/invites/${userId}`, {
         method: "DELETE",
     });
+
+export type AuditPage = {
+    data: AuditEvent[];
+    meta: { page: number; limit: number; total: number; pageCount: number };
+};
+
+export const listAudit = (page: number, signal?: AbortSignal) =>
+    request<AuditPage>(`/api/auth/audit?page=${page}`, { signal });
 
 export const listInvitations = (signal?: AbortSignal) =>
     request<{ data: Invitation[] }>("/api/auth/invitations", { signal });

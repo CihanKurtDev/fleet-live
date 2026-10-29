@@ -122,6 +122,7 @@ export const UserModel = {
         db.exec("DELETE FROM auth_tokens");
         db.exec("DELETE FROM sessions");
         db.exec("DELETE FROM company_invites");
+        db.exec("DELETE FROM audit_events");
         db.exec("DELETE FROM company_memberships");
         db.exec("DELETE FROM users");
         db.exec(
@@ -136,7 +137,7 @@ export const UserModel = {
             `,
         );
         db.exec(
-            "DELETE FROM sqlite_sequence WHERE name IN ('users', 'sessions', 'company_memberships', 'company_invites', 'auth_tokens')",
+            "DELETE FROM sqlite_sequence WHERE name IN ('users', 'sessions', 'company_memberships', 'company_invites', 'audit_events', 'auth_tokens')",
         );
     },
 };

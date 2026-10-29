@@ -26,6 +26,7 @@ import {
     companyIdForLoginSso,
     ssoClient,
 } from "../models/account.model";
+import { AuditModel } from "../models/audit.model";
 import { membershipRow } from "../models/authView";
 import { AuthTokenModel } from "../models/authToken.model";
 import { companyProvider } from "../models/loginPolicy";
@@ -429,6 +430,16 @@ function finishLink(
         issuer: profile.issuer,
         subject: profile.subject,
     });
+
+    // A link to a company's own login is that company's business; Google and
+    // Microsoft belong to the account alone.
+    if (result === "linked" && payload.companyId !== null && key === companyProvider(payload.companyId)) {
+        AuditModel.record({
+            companyId: payload.companyId,
+            action: "sso_linked",
+            actorId: owner.id,
+        });
+    }
 
     if (link.via === "session") {
         linkResult(res, result);

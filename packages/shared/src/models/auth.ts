@@ -4,6 +4,12 @@ export const USER_ROLES = ["dispatcher", "viewer"] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 
+/** What each role is called everywhere: team list, invitations, the log. */
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+    dispatcher: "Dispatcher",
+    viewer: "Nur lesen",
+};
+
 export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 128;
 

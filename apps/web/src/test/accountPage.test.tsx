@@ -20,6 +20,7 @@ vi.mock("../api/auth", () => ({
     disableTotp: vi.fn(),
     getSecurity: vi.fn(),
     inviteMember: vi.fn(),
+    listAudit: vi.fn(),
     listInvitations: vi.fn(),
     listMembers: vi.fn(),
     removeMember: vi.fn(),
@@ -40,6 +41,7 @@ import {
     disableTotp,
     getSecurity,
     inviteMember,
+    listAudit,
     listInvitations,
     listMembers,
     removeMember,
@@ -116,6 +118,10 @@ describe("account page", () => {
         vi.mocked(removeMember).mockReset();
         vi.mocked(listMembers).mockResolvedValue({ data: members });
         vi.mocked(listInvitations).mockResolvedValue({ data: [] });
+        vi.mocked(listAudit).mockResolvedValue({
+            data: [],
+            meta: { page: 1, limit: 50, total: 0, pageCount: 1 },
+        });
         vi.mocked(getSecurity).mockResolvedValue(security);
         vi.mocked(changePassword).mockReset();
         vi.mocked(confirmTotpSetup).mockReset();
@@ -659,5 +665,49 @@ describe("account page", () => {
         ).toBeInTheDocument();
         expect(withdrawInvite).toHaveBeenCalledWith(5);
         expect(removeMember).not.toHaveBeenCalled();
+    });
+
+    it("shows the company log to a dispatcher", async () => {
+        vi.mocked(listAudit).mockResolvedValue({
+            data: [
+                {
+                    id: 2,
+                    created_at: "2026-10-28 09:00:00",
+                    action: "member_role_changed",
+                    actor_name: "Cihan Kurt",
+                    target_name: "Viewer",
+                    target_email: "viewer@example.com",
+                    details: { from: "viewer", to: "dispatcher" },
+                },
+                {
+                    id: 1,
+                    created_at: "2026-10-28 08:00:00",
+                    action: "invite_created",
+                    actor_name: "Cihan Kurt",
+                    target_name: "neu",
+                    target_email: "neu@example.com",
+                    details: { role: "viewer" },
+                },
+            ],
+            meta: { page: 1, limit: 50, total: 2, pageCount: 1 },
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#protokoll" });
+
+        expect(
+            await screen.findByText("Rolle von Viewer (viewer@example.com): Nur lesen → Dispatcher"),
+        ).toBeInTheDocument();
+        expect(screen.getByText("neu@example.com als Nur lesen eingeladen")).toBeInTheDocument();
+        expect(listAudit).toHaveBeenCalledWith(1, expect.any(AbortSignal));
+    });
+
+    it("keeps the log away from a viewer", async () => {
+        renderAuth(<AccountPage />, {
+            user: authUser({ role: "viewer" }),
+            route: "/konto#protokoll",
+        });
+
+        expect(await screen.findByRole("heading", { name: "Passwort ändern" })).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "Protokoll" })).toBeNull();
+        expect(listAudit).not.toHaveBeenCalled();
     });
 });

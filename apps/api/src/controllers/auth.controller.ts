@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import {
     parseAcceptInviteInput,
+    parseAuditListQuery,
     parseChangePasswordInput,
     parseCompanyInput,
     parseEmailInput,
@@ -13,6 +14,7 @@ import {
     parseSwitchCompanyInput,
     parseTokenInput,
     parseTotpCodeInput,
+    type SecurityChange,
 } from "@fleet-live/shared";
 import { config } from "../config";
 import {
@@ -41,7 +43,9 @@ import {
     verifyEmailToken,
     withdrawInvite,
 } from "../models/account.model";
+import { AuditModel } from "../models/audit.model";
 import { AuthTokenModel } from "../models/authToken.model";
+import { listMemberships, membershipRow } from "../models/authView";
 import { SessionModel } from "../models/session.model";
 import { UserModel } from "../models/user.model";
 import {
@@ -124,6 +128,16 @@ export async function register(req: Request, res: Response) {
     assertMailConfigured();
     const input = parseRegisterInput(req.body);
     const user = registerAccount(input);
+    const company = listMemberships(user.id)[0];
+
+    if (company) {
+        AuditModel.record({
+            companyId: company.company_id,
+            action: "company_created",
+            actorId: user.id,
+        });
+    }
+
     AuthTokenModel.deleteForUser(user.id, "verify_email");
     const token = AuthTokenModel.issue({
         userId: user.id,
@@ -355,6 +369,13 @@ export async function createInvite(req: Request, res: Response) {
         input.role,
         req.user.id,
     );
+    AuditModel.record({
+        companyId: req.user.company_id,
+        action: "invite_created",
+        actorId: req.user.id,
+        targetId: result.user.id,
+        details: { role: input.role },
+    });
 
     if (result.activate) {
         const token = AuthTokenModel.issue({
@@ -385,6 +406,40 @@ export async function createInvite(req: Request, res: Response) {
     res.status(201).json({ email: result.user.email, delivery });
 }
 
+type SecurityRow = NonNullable<ReturnType<typeof companySecurity>>;
+
+/** What a save of the sign-in rules changed, for the log. */
+function securityChanges(before: SecurityRow, after: SecurityRow): SecurityChange[] {
+    const changes: SecurityChange[] = [];
+
+    if (before.totp_required !== after.totp_required) {
+        changes.push(after.totp_required === 1 ? "totp_required_on" : "totp_required_off");
+    }
+
+    if (before.sso_required !== after.sso_required) {
+        changes.push(after.sso_required === 1 ? "sso_required_on" : "sso_required_off");
+    }
+
+    if (before.sso_issuer !== after.sso_issuer || before.sso_client_id !== after.sso_client_id) {
+        changes.push("sso_settings");
+    }
+
+    if (before.sso_client_secret !== after.sso_client_secret) {
+        changes.push("sso_secret");
+    }
+
+    return changes;
+}
+
+export function getAudit(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const { page } = parseAuditListQuery(req.query);
+    res.json(AuditModel.list(req.user.company_id, page));
+}
+
 export function getInvitations(req: Request, res: Response) {
     if (!req.user) {
         throw new UnauthorizedError();
@@ -408,9 +463,18 @@ export function acceptInvitationHandler(req: Request, res: Response) {
         throw new UnauthorizedError();
     }
 
-    if (!acceptInvitation(req.user.id, invitationCompanyId(req))) {
+    const companyId = invitationCompanyId(req);
+
+    if (!acceptInvitation(req.user.id, companyId)) {
         throw new NotFoundError("Einladung nicht gefunden.");
     }
+
+    AuditModel.record({
+        companyId,
+        action: "invite_accepted",
+        actorId: req.user.id,
+        details: { role: membershipRow(req.user.id, companyId)?.role },
+    });
 
     // The session stays in its company; the new one is a switch away.
     res.json(authUserFor(req.user.id, req.user.company_id));
@@ -421,9 +485,13 @@ export function declineInvitationHandler(req: Request, res: Response) {
         throw new UnauthorizedError();
     }
 
-    if (!declineInvitation(req.user.id, invitationCompanyId(req))) {
+    const companyId = invitationCompanyId(req);
+
+    if (!declineInvitation(req.user.id, companyId)) {
         throw new NotFoundError("Einladung nicht gefunden.");
     }
+
+    AuditModel.record({ companyId, action: "invite_declined", actorId: req.user.id });
 
     res.json(authUserFor(req.user.id, req.user.company_id));
 }
@@ -439,6 +507,13 @@ export function withdrawInviteHandler(req: Request, res: Response) {
         throw new NotFoundError("Einladung nicht gefunden.");
     }
 
+    AuditModel.record({
+        companyId: req.user.company_id,
+        action: "invite_withdrawn",
+        actorId: req.user.id,
+        targetId: userId,
+    });
+
     res.json({ data: listMembers(req.user.company_id) });
 }
 
@@ -449,6 +524,13 @@ export function acceptInviteHandler(req: Request, res: Response) {
     if (!accepted) {
         throw new ValidationError(INVALID_LINK);
     }
+
+    AuditModel.record({
+        companyId: accepted.companyId,
+        action: "invite_accepted",
+        actorId: accepted.userId,
+        details: { role: membershipRow(accepted.userId, accepted.companyId)?.role },
+    });
 
     // The invite proves the e-mail, not the factors the company requires.
     const proof = { mfa: false, ssoCompanyId: null };
@@ -478,9 +560,22 @@ export function patchMember(req: Request, res: Response) {
 
     const userId = Number(req.params.userId);
     const { role } = parseMemberRoleInput(req.body);
+    const before = Number.isInteger(userId)
+        ? membershipRow(userId, req.user.company_id)?.role
+        : undefined;
 
     if (!Number.isInteger(userId) || !setMemberRole(req.user.company_id, userId, role)) {
         throw new NotFoundError("Mitglied nicht gefunden.");
+    }
+
+    if (before !== role) {
+        AuditModel.record({
+            companyId: req.user.company_id,
+            action: "member_role_changed",
+            actorId: req.user.id,
+            targetId: userId,
+            details: { from: before, to: role },
+        });
     }
 
     // Open streams of that person in this company reconnect with the new role.
@@ -500,6 +595,12 @@ export function deleteMember(req: Request, res: Response) {
         throw new NotFoundError("Mitglied nicht gefunden.");
     }
 
+    AuditModel.record({
+        companyId: req.user.company_id,
+        action: userId === req.user.id ? "member_left" : "member_removed",
+        actorId: req.user.id,
+        targetId: userId === req.user.id ? null : userId,
+    });
     endStreams({ userId, companyId: req.user.company_id });
 
     if (userId === req.user.id) {
@@ -529,6 +630,7 @@ export function createCompany(req: Request, res: Response) {
     }
 
     const companyId = createCompanyForUser(req.user.id, name);
+    AuditModel.record({ companyId, action: "company_created", actorId: req.user.id });
     SessionModel.setCompany(token, companyId);
     endStreams({ token });
     const user = authUserFor(req.user.id, companyId);
@@ -665,6 +767,16 @@ export function patchSecurity(req: Request, res: Response) {
 
     updateSecurity(req.user.company_id, input);
     const next = companySecurity(req.user.company_id);
+    const changes = next ? securityChanges(current, next) : [];
+
+    if (changes.length > 0) {
+        AuditModel.record({
+            companyId: req.user.company_id,
+            action: "security_changed",
+            actorId: req.user.id,
+            details: { changes },
+        });
+    }
 
     // Sessions that no longer meet stricter rules end on their next request;
     // their streams end now.

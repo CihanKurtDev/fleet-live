@@ -1,7 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import QRCode from "qrcode";
-import type { Invitation, UserRole } from "@fleet-live/shared";
+import {
+    USER_ROLE_LABELS as ROLE_LABEL,
+    formatAuditEvent,
+    type AuditEvent,
+    type Invitation,
+    type UserRole,
+} from "@fleet-live/shared";
 import {
     acceptInvitation,
     changePassword,
@@ -11,6 +17,7 @@ import {
     declineInvitation,
     getSecurity,
     inviteMember,
+    listAudit,
     listInvitations,
     listMembers,
     removeMember,
@@ -20,6 +27,7 @@ import {
     switchCompany,
     updateSecurity,
     withdrawInvite,
+    type AuditPage,
     type CompanySecurity,
     type Member,
 } from "../api/auth";
@@ -29,20 +37,21 @@ import { Checkbox } from "../components/ui/Checkbox/Checkbox";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
 import { Input } from "../components/ui/Input/Input";
 import { Table } from "../components/ui/Table/Table";
+import { TablePagination } from "../components/ui/Table/TablePagination";
 import { useAuth } from "../hooks/useAuth";
 import { usePageTitle } from "../hooks/usePageTitle";
 import type { TableColumn } from "../types/table";
-import { formatShortStamp } from "../utils/dateTime";
+import { formatShortStamp, formatTimestamp } from "../utils/dateTime";
 import authForm from "./LoginPage.module.scss";
 import styles from "./AccountPage.module.scss";
 import { Select } from "../components/ui/Select/Select";
 
 /** Bereich im URL-Hash, z. B. `/konto#team`. */
-type SectionId = "passwort" | "zwei-faktor" | "team" | "firmen-login" | "firmen";
+type SectionId = "passwort" | "zwei-faktor" | "team" | "firmen-login" | "protokoll" | "firmen";
 
 const OWN_SECTIONS: SectionId[] = ["passwort", "zwei-faktor", "firmen"];
 /** Firmenverwaltung nur für Dispatcher, wie die API. */
-const DISPATCHER_SECTIONS: SectionId[] = [...OWN_SECTIONS, "team", "firmen-login"];
+const DISPATCHER_SECTIONS: SectionId[] = [...OWN_SECTIONS, "team", "firmen-login", "protokoll"];
 
 type Message = { section: SectionId; text: string };
 
@@ -70,11 +79,6 @@ const linkMessages = (result: string | null): { info: Message | null; error: Mes
     return { info: null, error: text ? { section: "firmen-login", text } : null };
 };
 
-const ROLE_LABEL: Record<UserRole, string> = {
-    dispatcher: "Dispatcher",
-    viewer: "Nur lesen",
-};
-
 const RoleOptions = () => (
     <>
         <option value="dispatcher">{ROLE_LABEL.dispatcher}</option>
@@ -88,6 +92,8 @@ export const AccountPage = () => {
     const { hash, search } = useLocation();
     const [members, setMembers] = useState<Member[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
+    const [auditPage, setAuditPage] = useState(1);
+    const [audit, setAudit] = useState<AuditPage | null>(null);
     const [security, setSecurity] = useState<CompanySecurity | null>(null);
     const [error, setError] = useState<Message | null>(
         () => linkMessages(new URLSearchParams(search).get("sso")).error,
@@ -168,6 +174,34 @@ export const AccountPage = () => {
 
         return () => controller.abort();
     }, [userId, invitationCount]);
+
+    const isDispatcherUser = user?.role === "dispatcher";
+    const companyId = user?.company_id;
+    const auditOpen = hash === "#protokoll";
+
+    // The log loads when its section is open, page by page.
+    useEffect(() => {
+        if (!isDispatcherUser || !auditOpen || companyId === undefined) {
+            return;
+        }
+
+        const controller = new AbortController();
+        listAudit(auditPage, controller.signal)
+            .then(setAudit)
+            .catch((caught: unknown) => {
+                if (!controller.signal.aborted) {
+                    setError({
+                        section: "protokoll",
+                        text:
+                            caught instanceof ApiError
+                                ? caught.message
+                                : "Das Protokoll konnte nicht geladen werden.",
+                    });
+                }
+            });
+
+        return () => controller.abort();
+    }, [isDispatcherUser, auditOpen, auditPage, companyId]);
 
     useEffect(() => {
         if (!otpauth) {
@@ -526,6 +560,28 @@ export const AccountPage = () => {
         },
     ];
 
+    const auditColumns: TableColumn<AuditEvent>[] = [
+        {
+            key: "created_at",
+            displayText: "Zeitpunkt",
+            width: "150px",
+            render: (createdAt) => (
+                <span className={styles.muted}>{formatTimestamp(createdAt)}</span>
+            ),
+        },
+        {
+            key: "actor_name",
+            displayText: "Wer",
+            width: "200px",
+            render: (name) => <span className={styles.strong}>{name ?? "—"}</span>,
+        },
+        {
+            key: "action",
+            displayText: "Was",
+            render: (_, { row }) => formatAuditEvent(row),
+        },
+    ];
+
     const navLink = (
         id: SectionId,
         label: string,
@@ -606,6 +662,7 @@ export const AccountPage = () => {
                             </span>
                             {navLink("team", "Team und Einladungen")}
                             {navLink("firmen-login", "Firmen-Login")}
+                            {navLink("protokoll", "Protokoll")}
                         </div>
                     )}
                     <div
@@ -953,6 +1010,43 @@ export const AccountPage = () => {
                             )}
                         </section>
                         {messages}
+                        </>
+                    )}
+
+                    {section === "protokoll" && (
+                        <>
+                            <section className={`${styles.panel} ${styles.teamPanel}`}>
+                                <div className={styles.panelHead}>
+                                    <h2 className={styles.panelTitle}>
+                                        Protokoll{" "}
+                                        {audit && <span className={styles.count}>{audit.meta.total}</span>}
+                                    </h2>
+                                    <span className={styles.muted}>
+                                        Einladungen, Rollen und Anmelde-Regeln dieser Firma
+                                    </span>
+                                </div>
+                                <div className={styles.tableScroll}>
+                                    <Table
+                                        columns={auditColumns}
+                                        rows={audit?.data ?? []}
+                                        getRowKey={(event) => event.id}
+                                        caption="Änderungen am Zugang zur Firma"
+                                        className={styles.members}
+                                        emptyContent={audit ? "Noch keine Einträge" : "Wird geladen…"}
+                                    />
+                                </div>
+                                {audit && audit.meta.pageCount > 1 && (
+                                    <TablePagination
+                                        layout="footer"
+                                        page={audit.meta.page}
+                                        pageCount={audit.meta.pageCount}
+                                        limit={audit.meta.limit}
+                                        total={audit.meta.total}
+                                        onPageChange={setAuditPage}
+                                    />
+                                )}
+                            </section>
+                            {messages}
                         </>
                     )}
 
