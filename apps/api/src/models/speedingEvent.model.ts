@@ -44,6 +44,7 @@ function hydrate(vehicleId: number): SpeedingTracker | undefined {
         writtenMaxSpeed: open.details?.max_speed_kmh,
         writtenDurationS: open.details?.duration_s,
         writtenLimitKmh: open.details?.limit_kmh,
+        limitAtWorst: open.details?.limit_kmh,
     };
 }
 
@@ -53,7 +54,7 @@ function detailsFor(
     limitKmh: number,
 ) {
     return {
-        limit_kmh: limitKmh,
+        limit_kmh: state.limitAtWorst ?? limitKmh,
         max_speed_kmh: state.maxSpeed,
         duration_s: speedingDurationS(state.startedAtMs, nowMs),
     };
@@ -66,12 +67,16 @@ function applyAction(
     nowMs: number,
     limitKmh: number,
 ): { speedingOpen: boolean; notify: boolean } {
+    // The worst place and its limit, not the limit of now: a run that leaves
+    // the motorway would read "144 km/h at 50".
+    const limitAtWorst = step.state?.limitAtWorst ?? limitKmh;
+
     if (step.action === "open" && step.state) {
         const details = detailsFor(step.state, nowMs, limitKmh);
         const alertId = AlertModel.openSpeeding({
             vehicleId,
             createdAt: sqliteFromMs(step.state.startedAtMs),
-            severity: speedingSeverity(step.state.maxSpeed, limitKmh),
+            severity: speedingSeverity(step.state.maxSpeed, limitAtWorst),
             details,
         });
         trackers.set(vehicleId, {
@@ -86,7 +91,7 @@ function applyAction(
             startedAt: sqliteFromMs(step.state.startedAtMs),
             fromM: step.state.fromM,
             maxSpeedKmh: step.state.maxSpeed,
-            limitKmh,
+            limitKmh: limitAtWorst,
         });
         return { speedingOpen: true, notify: true };
     }
@@ -98,7 +103,7 @@ function applyAction(
             const details = detailsFor(step.state, nowMs, limitKmh);
             AlertModel.updateSpeeding(
                 alertId,
-                speedingSeverity(step.state.maxSpeed, limitKmh),
+                speedingSeverity(step.state.maxSpeed, limitAtWorst),
                 details,
             );
             trackers.set(vehicleId, {
@@ -117,7 +122,7 @@ function applyAction(
             alertId,
             startedAt: sqliteFromMs(nowMs),
             maxSpeedKmh: step.state.maxSpeed,
-            limitKmh,
+            limitKmh: limitAtWorst,
         });
 
         return { speedingOpen: true, notify: false };

@@ -30,7 +30,16 @@ export const CITY_LIMIT_KMH = 50;
 export const HIGHWAY_LIMIT_KMH = 120;
 /** Jedes 8. Fahrzeug darf über dem Klassenlimit fahren, sonst gibt es nie SPEEDING. */
 export const SIM_OVERSPEED_EVERY = 8;
-export const SIM_OVERSPEED_FACTOR = 1.2;
+/**
+ * Auch ein Raser fährt nicht die ganze Strecke zu schnell: die Straße ist in
+ * Abschnitte dieser Länge geteilt, und auf jedem fährt er mit dieser
+ * Wahrscheinlichkeit drüber, je Fahrt anders.
+ */
+export const SIM_OVERSPEED_STRETCH_M = 4_000;
+export const SIM_OVERSPEED_SHARE = 0.2;
+/** Wie weit über dem Limit, je Abschnitt verschieden (Stadt 54–68, Autobahn 130–162). */
+export const SIM_OVERSPEED_MIN_FACTOR = 1.08;
+export const SIM_OVERSPEED_MAX_FACTOR = 1.35;
 
 const ROUTE_META: Array<{ id: string; from: string; to: string }> = [
     { id: "koeln-duesseldorf", from: "Köln", to: "Düsseldorf" },
@@ -59,6 +68,8 @@ type Progress = {
     routeId: string;
     frac: number;
     direction: 1 | -1;
+    /** Fahrten dieses Fahrzeugs auf der Strecke; jede rast woanders. */
+    lap: number;
 };
 
 const progressByVehicle = new Map<number, Progress>();
@@ -73,8 +84,9 @@ export function seedSimProgress(
     routeId: string,
     frac: number,
     direction: 1 | -1 = 1,
+    lap = 0,
 ) {
-    progressByVehicle.set(vehicleId, { routeId, frac, direction });
+    progressByVehicle.set(vehicleId, { routeId, frac, direction, lap });
 }
 
 export function routeLengthMeters(points: LatLng[]): number {
@@ -419,10 +431,48 @@ export function simExceedsClassLimit(vehicleId: number): boolean {
     return vehicleId % SIM_OVERSPEED_EVERY === 0;
 }
 
-export function simSpeedCapKmh(limit: number, vehicleId: number): number {
-    return simExceedsClassLimit(vehicleId)
-        ? Math.round(limit * SIM_OVERSPEED_FACTOR)
-        : limit;
+/** 0 ≤ Ergebnis < 1, immer gleich für dieselben Zahlen. */
+function unitHash(...parts: number[]): number {
+    let hash = 0x9e3779b9;
+
+    for (const part of parts) {
+        hash = Math.imul(hash ^ part, 0x85ebca6b);
+        hash ^= hash >>> 13;
+        hash = Math.imul(hash, 0xc2b2ae35);
+        hash ^= hash >>> 16;
+    }
+
+    return (hash >>> 0) / 2 ** 32;
+}
+
+/**
+ * Faktor über dem Limit an dieser Stelle der Strecke: 1 für alle, die nicht
+ * rasen, und für einen Raser außerhalb seiner Abschnitte.
+ */
+export function simOverspeedFactor(
+    vehicleId: number,
+    routeId: string,
+    direction: 1 | -1,
+    lap: number,
+    metresFromStart: number,
+): number {
+    if (!simExceedsClassLimit(vehicleId)) {
+        return 1;
+    }
+
+    const route = SIM_ROUTES.findIndex((entry) => entry.id === routeId);
+    const stretch = Math.floor(metresFromStart / SIM_OVERSPEED_STRETCH_M);
+    const key = [vehicleId, route, direction === 1 ? 1 : 2, lap, stretch];
+
+    if (unitHash(...key) >= SIM_OVERSPEED_SHARE) {
+        return 1;
+    }
+
+    return (
+        SIM_OVERSPEED_MIN_FACTOR +
+        (SIM_OVERSPEED_MAX_FACTOR - SIM_OVERSPEED_MIN_FACTOR) *
+            unitHash(...key, 1)
+    );
 }
 
 function nextDisplaySpeed(
@@ -603,11 +653,12 @@ export function nextSimTick(
         );
         relocated = spread !== null;
         state = spread
-            ? spread
+            ? { ...spread, lap: 0 }
             : {
                   routeId: picked.id,
                   frac,
                   direction: frac <= 0.5 ? 1 : -1,
+                  lap: 0,
               };
     }
 
@@ -615,11 +666,15 @@ export function nextSimTick(
         SIM_ROUTES.find((entry) => entry.id === state.routeId) ??
         pickRoute(vehicleId, current);
     let { frac, direction } = state;
+    const { lap } = state;
     const fromFrac = frac;
-    const limit = speedLimitKmh(frac);
-    const cap = simSpeedCapKmh(limit, vehicleId);
-    const speed = nextDisplaySpeed(currentSpeed, limit, cap);
     const length = routeLengthMeters(route.points);
+    const limit = speedLimitKmh(frac);
+    const cap = Math.round(
+        limit *
+            simOverspeedFactor(vehicleId, route.id, direction, lap, frac * length),
+    );
+    const speed = nextDisplaySpeed(currentSpeed, limit, cap);
     const meters = (speed * elapsedS * TIME_SCALE) / 3.6;
     const deltaFrac = length === 0 ? 0 : meters / length;
     const previousDirection = direction;
@@ -641,6 +696,7 @@ export function nextSimTick(
         routeId: route.id,
         frac,
         direction,
+        lap: turnedAround ? lap + 1 : lap,
     });
 
     const point = pointAtFraction(route.points, frac);

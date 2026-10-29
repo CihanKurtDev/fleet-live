@@ -16,13 +16,18 @@ import {
     CITY_LIMIT_KMH,
     HIGHWAY_LIMIT_KMH,
     SIM_OVERSPEED_EVERY,
+    SIM_OVERSPEED_MAX_FACTOR,
+    SIM_OVERSPEED_MIN_FACTOR,
+    SIM_OVERSPEED_STRETCH_M,
     SIM_PING_SECONDS,
     SIM_ROUTES,
     TIME_SCALE,
     haversineMeters,
     nextSimTick,
     resetSimProgress,
+    routeLengthMeters,
     seedSimProgress,
+    simOverspeedFactor,
     speedLimitKmh,
     verticesBetween,
 } from "../sim/routes";
@@ -2030,7 +2035,7 @@ describe("telemetry route simulation", () => {
         assert.equal(highway.speed_limit_kmh, HIGHWAY_LIMIT_KMH);
     });
 
-    it("lets every 8th vehicle exceed the class limit", () => {
+    it("lets every 8th vehicle exceed the class limit on some stretches only", () => {
         const created = Array.from({ length: SIM_OVERSPEED_EVERY }, (_, index) =>
             VehicleModel.create({
                 license_plate: `K-OV ${index + 1}`,
@@ -2041,13 +2046,75 @@ describe("telemetry route simulation", () => {
         const aggressive = created.find(
             (vehicle) => vehicle.id % SIM_OVERSPEED_EVERY === 0,
         );
-        assert.ok(aggressive);
-        seedSimProgress(aggressive.id, "koeln-duesseldorf", 0.5);
+        const calm = created.find(
+            (vehicle) => vehicle.id % SIM_OVERSPEED_EVERY !== 0,
+        );
+        assert.ok(aggressive && calm);
 
-        const [patch] = TelemetryModel.tickDrivingVehicles([aggressive.id]);
-        assert.ok(patch);
-        assert.ok(patch.speed > HIGHWAY_LIMIT_KMH);
-        assert.equal(patch.speed_limit_kmh, HIGHWAY_LIMIT_KMH);
+        const routeId = "koeln-duesseldorf";
+        const route = SIM_ROUTES.find((entry) => entry.id === routeId)!;
+        const length = routeLengthMeters(route.points);
+        const stretches = Math.floor(length / SIM_OVERSPEED_STRETCH_M);
+        const at = (vehicleId: number, lap: number, stretch: number) =>
+            simOverspeedFactor(
+                vehicleId,
+                routeId,
+                1,
+                lap,
+                (stretch + 0.5) * SIM_OVERSPEED_STRETCH_M,
+            );
+        const laps = Array.from({ length: 20 }, (_, lap) =>
+            Array.from({ length: stretches }, (_, stretch) =>
+                at(aggressive.id, lap, stretch),
+            ),
+        );
+        const factors = laps.flat();
+        const over = factors.filter((factor) => factor > 1);
+
+        // Red stretches, not a red trip: most of the road is within the limit.
+        assert.ok(over.length > 0);
+        assert.ok(over.length < factors.length / 2, `${over.length} of ${factors.length}`);
+        assert.ok(
+            over.every(
+                (factor) =>
+                    factor >= SIM_OVERSPEED_MIN_FACTOR &&
+                    factor <= SIM_OVERSPEED_MAX_FACTOR,
+            ),
+        );
+        assert.ok(new Set(over.map((factor) => factor.toFixed(3))).size > 1);
+        assert.ok(new Set(laps.map((lap) => lap.join())).size > 1, "each trip speeds elsewhere");
+        assert.ok(
+            Array.from({ length: stretches }, (_, stretch) => at(calm.id, 0, stretch)).every(
+                (factor) => factor === 1,
+            ),
+        );
+
+        // On the motorway part: a clear overshoot stretch, and one without.
+        const motorway = (stretch: number) => {
+            const frac = ((stretch + 0.5) * SIM_OVERSPEED_STRETCH_M) / length;
+            return frac > 0.2 && frac < 0.8;
+        };
+        const find = (match: (factor: number) => boolean) => {
+            for (let lap = 0; lap < laps.length; lap += 1) {
+                const stretch = laps[lap]!.findIndex(
+                    (factor, index) => motorway(index) && match(factor),
+                );
+                if (stretch >= 0) {
+                    return { lap, frac: ((stretch + 0.5) * SIM_OVERSPEED_STRETCH_M) / length };
+                }
+            }
+            throw new Error("no such stretch");
+        };
+        const tickAt = ({ lap, frac }: { lap: number; frac: number }) => {
+            seedSimProgress(aggressive.id, routeId, frac, 1, lap);
+            const [patch] = TelemetryModel.tickDrivingVehicles([aggressive.id]);
+            assert.ok(patch);
+            assert.equal(patch.speed_limit_kmh, HIGHWAY_LIMIT_KMH);
+            return patch.speed;
+        };
+
+        assert.ok(tickAt(find((factor) => factor >= 1.2)) > HIGHWAY_LIMIT_KMH);
+        assert.ok(tickAt(find((factor) => factor === 1)) <= HIGHWAY_LIMIT_KMH);
         assert.equal(
             VehicleModel.getById(aggressive.id, 1)?.speed_limit_kmh,
             HIGHWAY_LIMIT_KMH,

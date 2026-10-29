@@ -19,9 +19,10 @@ const INSERT_EVENT = `
     VALUES (?, ?, ?, ?, ?, ?, ?)
 `;
 
+// Speed and limit are one pair, the worst place of the run so far.
 const UPDATE_SPEEDING = `
     UPDATE trip_events
-    SET max_speed_kmh = MAX(COALESCE(max_speed_kmh, 0), ?),
+    SET max_speed_kmh = ?,
         limit_kmh = ?,
         alert_id = COALESCE(alert_id, ?)
     WHERE id = ?

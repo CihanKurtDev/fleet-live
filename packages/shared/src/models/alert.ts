@@ -19,8 +19,9 @@ export type AlertFilterId = (typeof ALERT_FILTERS)[number];
 export type AlertSortKey = (typeof ALERT_SORT_KEYS)[number];
 export type AlertPageLimit = (typeof VEHICLE_PAGE_LIMITS)[number];
 
-/** SPEEDING-Ereignis: Limit, Spitze, Dauer. Andere Typen haben ein anderes Shape. */
+/** SPEEDING-Ereignis: schlimmste Stelle, Dauer. Andere Typen haben ein anderes Shape. */
 export type SpeedingAlertDetails = {
+    /** Tempo und Limit an der Stelle mit den meisten km/h über dem Limit. */
     limit_kmh: number;
     max_speed_kmh: number;
     /** Zeit über dem Limit, alle Überschreitungen der Fahrt zusammen. */
@@ -30,6 +31,7 @@ export type SpeedingAlertDetails = {
     /** Stand der früheren Überschreitungen dieser Fahrt (Server). */
     carried_duration_s?: number;
     carried_max_kmh?: number;
+    carried_limit_kmh?: number;
 };
 
 export type LowFuelAlertDetails = {

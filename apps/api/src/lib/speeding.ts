@@ -9,12 +9,15 @@ import {
 export type SpeedingTracker = {
     phase: "candidate" | "open";
     startedAtMs: number;
+    /** Speed at the worst place of the run: the most km/h over its limit. */
     maxSpeed: number;
     alertId?: number;
     belowSinceMs?: number;
     writtenDurationS?: number;
     writtenMaxSpeed?: number;
     writtenLimitKmh?: number;
+    /** The limit at that place: a warning reports that pair. */
+    limitAtWorst?: number;
     /** Metres into the running trip where the vehicle first went over. */
     fromM?: number;
 };
@@ -40,6 +43,28 @@ export function speedingDurationS(
     nowMs: number,
 ): number {
     return Math.max(0, Math.round((nowMs - startedAtMs) / 1000));
+}
+
+/** How far a place was over its limit, in km/h; the fine catalogue counts the same. */
+export function overLimitKmh(
+    speed: number,
+    limitKmh: number | null | undefined,
+): number {
+    return limitKmh === null || limitKmh === undefined
+        ? Number.NEGATIVE_INFINITY
+        : speed - limitKmh;
+}
+
+/** The worst place so far: 70 at 50 beats 121 at 120. */
+function atWorst(
+    state: SpeedingTracker,
+    speed: number,
+    limitKmh: number | null | undefined,
+): Pick<SpeedingTracker, "maxSpeed" | "limitAtWorst"> {
+    return overLimitKmh(speed, limitKmh) >
+        overLimitKmh(state.maxSpeed, state.limitAtWorst)
+        ? { maxSpeed: speed, limitAtWorst: limitKmh ?? undefined }
+        : { maxSpeed: state.maxSpeed, limitAtWorst: state.limitAtWorst };
 }
 
 export function stepSpeeding(
@@ -68,6 +93,7 @@ export function stepSpeeding(
                 phase: "candidate",
                 startedAtMs: input.nowMs,
                 maxSpeed: input.speed,
+                limitAtWorst: input.limit_kmh ?? undefined,
             },
         };
     }
@@ -79,7 +105,7 @@ export function stepSpeeding(
 
         const next: SpeedingTracker = {
             ...state,
-            maxSpeed: Math.max(state.maxSpeed, input.speed),
+            ...atWorst(state, input.speed, input.limit_kmh),
         };
 
         if (input.nowMs - state.startedAtMs >= SPEEDING_OPEN_AFTER_MS) {
@@ -94,16 +120,17 @@ export function stepSpeeding(
     }
 
     if (exceeding && input.speed !== null) {
-        const maxSpeed = Math.max(state.maxSpeed, input.speed);
+        const worst = atWorst(state, input.speed, input.limit_kmh);
         const durationS = speedingDurationS(state.startedAtMs, input.nowMs);
-        const limitKmh = input.limit_kmh ?? state.writtenLimitKmh;
+        const limitKmh =
+            worst.limitAtWorst ?? input.limit_kmh ?? state.writtenLimitKmh;
         const unchanged =
-            maxSpeed === state.writtenMaxSpeed &&
+            worst.maxSpeed === state.writtenMaxSpeed &&
             durationS === state.writtenDurationS &&
             limitKmh === state.writtenLimitKmh;
         const next: SpeedingTracker = {
             ...state,
-            maxSpeed,
+            ...worst,
             belowSinceMs: undefined,
         };
 
