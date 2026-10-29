@@ -43,6 +43,7 @@ Fahrzeuge und Fahrer aus Excel oder CSV. Vor dem Schreiben prüft eine Vorschau 
 * Letzte Spaltenzuordnung bleibt pro Firma gespeichert, jeder Import steht im Log
 * Hof-Stammdaten am Fahrzeug: VIN, Typ, HU- und UVV-Fälligkeit, Depot, Kostenstelle
 * Fristen: HU, UVV, Führerschein-Ablauf und Führerscheinkontrolle. Die Startseite zählt überfällig, in 30 Tagen und leere Felder. Die Liste unter Fristen zeigt dieselben Zeilen. Eine fehlende Kontrolle ist überfällig. Keine neuen Inbox-Typen.
+* Werkstatt-Aufenthalt: Termin planen (aus der HU/UVV-Zeile unter Fristen oder am Fahrzeug), „Angekommen“, „Fertig melden“ mit Datum und Kosten; eine HU bekommt dabei den neuen Monat, eine UVV das Prüfdatum. Jede Änderung steht im Verlauf. Ein Fahrzeug in der Werkstatt oder außer Dienst bekommt keinen Fahrer. Schicht, Fahrzeugliste und Karte zählen „Werkstatt“ gleich; „Heute dran“ zeigt Termine von heute und überfällige Rückgaben, die eigenen zuerst
 * Import-Spalte Depot (auch Standort) setzt den Stammstandort und eine Startposition am Hof, mit kleinem Versatz. Ohne Angabe gilt das Standarddepot, ohne Depot eine Fallback-Koordinate. Lat/Lng in der Datei sind ein Sonderfall und haben Vorrang. Ein zweiter Import verschiebt vorhandene Positionen nicht.
 * Fahrer mit Telefon, Umbenennen ohne Fahrzeugformular, Liste mit auffälligen Fahrern zuerst
 * Depots als benannte Kreise auf der Flottenkarte, Stammstandort am Fahrzeug, Filter „Im Depot“

@@ -55,6 +55,14 @@ Ein externer Login meldet nur an, wenn ihn der Inhaber verknüpft hat (Issuer un
 | `GET`    | `/api/vehicles/:id/trips/latest` | Laufende Fahrt, sonst die letzte abgeschlossene. `data: null` wenn nie gefahren |
 | `GET`    | `/api/vehicles/:id/trips`        | Archiv ohne `path` |
 | `GET`    | `/api/vehicles/:id/trips/:tripId`| Eine Fahrt inklusive `path`. `404` wenn weg oder andere Firma |
+| `GET`    | `/api/vehicles/:id/workshop`     | Offener Werkstatt-Aufenthalt mit Verlauf und frühere Aufenthalte (höchstens 20). Auch als Viewer |
+| `POST`   | `/api/vehicles/:id/workshop`     | `{ reason, place, planned_on, expected_on?, assignee_user_id, note?, arrived? }`, `dispatcher`. `409` bei schon offenem Aufenthalt oder (mit `arrived`) auf Fahrt |
+| `PATCH`  | `/api/vehicles/:id/availability` | `{ out_of_service }`, `dispatcher`. `409` in der Werkstatt oder auf Fahrt |
+| `PATCH`  | `/api/workshop/:visitId`         | Offenen Aufenthalt ändern (Grund und Termin nur, solange er geplant ist), `dispatcher` |
+| `POST`   | `/api/workshop/:visitId/arrive`  | Geplant → In der Werkstatt; `409` auf Fahrt. Der aktuelle Fahrer wird frei, `dispatcher` |
+| `POST`   | `/api/workshop/:visitId/finish`  | `{ finished_on, cost?, result_note?, hu_due_on? }` (HU: `hu_due_on` Pflicht), `dispatcher` |
+| `POST`   | `/api/workshop/:visitId/cancel`  | Geplanten Aufenthalt absagen, `dispatcher` |
+| `GET`    | `/api/workshop/places`           | Werkstätten früherer Aufenthalte der Firma, `dispatcher` |
 | `POST`   | `/api/vehicles`                  | Anlegen, `Location` bei `201`. `company_id` aus der Session |
 | `PUT`    | `/api/vehicles/:id`              | Ersetzen |
 | `PATCH`  | `/api/vehicles/:id`              | Aktualisieren |
@@ -91,13 +99,13 @@ Ein externer Login meldet nur an, wenn ihn der Inhaber verknüpft hat (Issuer un
 | `GET` | `/api/export/drivers/:id` | Auskunft über einen Fahrer als ZIP (Dispatcher): Stammdaten, Fahrzeuge, Fahrten, Strecken als GeoJSON, Ereignisse, Warnungen und ein Liesmich. Steht im Protokoll |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
-`GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `unassigned`, `driving`, `idle`, `stopped`, `offline`, `in_depot`, `speeding`).
+`GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `unassigned`, `driving`, `idle`, `stopped`, `offline`, `in_depot`, `speeding`, `in_workshop`, `workshop_due`, `out_of_service`). Jedes Fahrzeug trägt `availability` (`READY`, `WORKSHOP`, `OUT_OF_SERVICE`) und `workshop` (offener Aufenthalt oder `null`).
 
 `GET /api/alerts` gibt Warnungen mit Kennzeichen und dem Fahrer zum Zeitpunkt des Öffnens (`driver_id` / `driver_name`). Dazu `ended_at` und `details` (SPEEDING: `{ limit_kmh, max_speed_kmh, duration_s, event_count }`). Standardfilter `open` heißt `resolved_at IS NULL`. `ended_at` spielt dafür keine Rolle. `type` optional: `SPEEDING`, `LOW_FUEL`, `OFFLINE`. `meta.counts` ist `open` / `resolved` / `all` und ignoriert `type`. `meta.type_counts` hängt am Filter. `vehicle_id` oder `driver_id` optional, sonst 404 wenn fremd. Umbesetzung ändert alte Zeilen nicht.
 
 `GET /api/drivers` listet Fahrer der Session-Firma. `counts` und `open_warnings` zählen nur SPEEDING (über den Snapshot `alerts.driver_id`). `vehicle_plate` nur wenn genau ein freigegebenes Fahrzeug. `current_vehicle_plate` ist das Fahrzeug mit `current_driver_id`. Mit `vehicle_id` kommen die Fahrer, die für dieses Fahrzeug frei sind. `min_open_warnings` lässt nur Fahrer mit mindestens so vielen offenen SPEEDING-Warnungen durch, `without_vehicle=true` nur Fahrer ohne aktuelles Fahrzeug; `meta.total` zählt nach Filter. `last_warning_at` ist die neueste offene SPEEDING-Warnung. `GET /api/drivers/:id` hängt `vehicles` (`is_current`) und `current_vehicle` an.
 
-`GET /api/briefing` gibt Statuszähler (`driving`, `idle`, `offline`), Inbox `open`, `low_fuel`, `in_depot`, monatliche `history` und `due` als Zähler (überfällig, in 30 Tagen, fehlende Felder). `GET /api/due` gibt dieselben Fristen seitenweise (`state`, optional `kind`, `search`). `viewer` darf lesen.
+`GET /api/briefing` gibt Statuszähler (`driving`, `idle`, `offline`), Inbox `open`, `low_fuel`, `in_depot`, `in_workshop`, monatliche `history` und `due` als Zähler (überfällig, in 30 Tagen, fehlende Felder). `GET /api/due` gibt dieselben Fristen seitenweise (`state`, optional `kind`, `search`); HU- und UVV-Zeilen tragen den offenen Werkstatt-Aufenthalt des Fahrzeugs (`workshop`). `GET /api/today` hat die Art `workshop_due`: Termin heute oder früher, noch nicht angekommen, oder Rückgabe überfällig; dem Anfragenden zugewiesene zuerst. Ihre Zahl ist die des Filters `workshop_due`. `viewer` darf lesen.
 
 `GET /api/vehicles/positions` ist entweder `positions` oder `density`, plus `meta.total`, `meta.matched` und `meta.without_position`. `matched` zählt die Filtertreffer der Firma ohne Kartenausschnitt, inklusive Fahrzeuge ohne Position. Jede Zeile hat `has_position`. Ohne Telemetrie sind Koordinaten null; `without_position` ignoriert den Kartenausschnitt. `bbox=west,south,east,north` optional und gilt nur für Zeilen mit Position. `search` schränkt die Zeilen nicht ein. Kennzeichen und aktueller Fahrer werden in dem geladenen Bestand gesucht. `drivers` filtert die Ansicht. Bis `FLEET_POSITIONS_MAX` (5000) kommen Einzelpositionen. Die Karte lädt diesen Bestand einmal. Darüber höchstens 32 mal 20 Dichtezellen.
 
