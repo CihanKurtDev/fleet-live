@@ -8,6 +8,6 @@ Write a pull request title and body for the current branch.
 2. Check that the branch is pushed (`git status -sb`). If not, say so and ask before pushing.
 3. Title: English, conventional style (`feat:`, `fix:`, `docs:`), under 70 characters.
 4. Body in English with sections: what changed (user-visible first), Checked (only checks that actually ran in this session or that you run now, with numbers), Not checked (honest), and a last line `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
-5. Never mention private files (`.claude/ROADMAP.md`, `.claude/MIGRATION_REPORT.md`, `.claude/archive/`).
+5. Never mention private files (`.claude/ROADMAP.md`, `.claude/archive/`).
 
 Answer in German with the compare link `https://github.com/CihanKurtDev/fleet-live/compare/main...<branch>`, then the title and the body each in their own code block.

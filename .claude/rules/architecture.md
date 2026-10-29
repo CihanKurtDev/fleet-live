@@ -29,7 +29,7 @@ Data flow: React `--HTTP + SSE /api-->` Express (`app.ts` + `routes/`) → contr
 
 **Not implemented — do not treat as present:** hosting (a sim pause that survives restart, production boot). Deadline rows are not SPEEDING/LOW_FUEL/OFFLINE inbox types.
 
-A mid-session 401 returns the UI to `/login` (`api/client.ts`, `AuthProvider`). **Next:** see `.claude/ROADMAP.md`. Do not start CI/CD. Do not treat sim 50/120 as legal OSM limits. Details: `.claude/ROADMAP.md`.
+A mid-session 401 returns the UI to `/login` (`api/client.ts`, `AuthProvider`). What comes next: `.claude/ROADMAP.md`. Do not start CI/CD. Do not treat sim 50/120 as legal OSM limits.
 
 Git branches never start with `cursor/` or `claude/`. See `.claude/rules/git-branches.md`.
 
@@ -55,7 +55,7 @@ Unauthenticated vehicle, stream, sim, alert, driver, briefing, due, export, and 
 - `status` is what the vehicle reports. The UI shows it read-only. Do not offer start/stop trip in the frontend — a real fleet does not decide that, and the simulator already drives `DRIVING` vehicles. Pause **this company's** simulation with `PATCH /api/sim` (not the whole process).
 - `DRIVING` opens a trip, any other status closes it (`syncTrip` in the vehicle controller). `TripModel.appendPoints` also opens one lazily, so seeded or imported driving vehicles still get a path.
 - Ending a trip writes a final telemetry point with speed `0` (`TelemetryModel.recordStandstill`) and ends an open SPEEDING event (`SpeedingEventModel.endForVehicle`).
-- `fuel_level` is measured while `DRIVING` (simulator) and manually maintainable otherwise. Do not overwrite a measured value with a stale form value.
+- `fuel_level` is what the device reports while `DRIVING` (the form locks the field and keeps the reported value) and manually maintainable otherwise; the import writes it too. Do not overwrite a reported value with a stale form value. The simulator reports the stored value unchanged, so the tank does not move in the demo (`TelemetryModel.tickDrivingVehicles`).
 - A vehicle drives only with a current driver. The API refuses `DRIVING` without one (409), import downgrades such rows to `IDLE`, and `migrate.ts` (`demoteDrivingWithoutDriver`) fixes any leftover at every boot (IDLE, speed 0, open trip and open SPEEDING ended). The seeds follow the same rules; `demoDataInvariants.test.ts` checks them.
 - A trip has no per-point speed or time by design. Do not add parallel arrays; aggregates (`distance_m`, `max_speed`) live on the trip.
 
@@ -63,7 +63,7 @@ The `users` table backs login. Role and company live on `company_memberships`: o
 
 ## Source of truth
 
-- Code is what exists. If README and code disagree, code wins. README describes the running system and user-visible upcoming work. The engineering plan is `.claude/ROADMAP.md` (local, not committed).
+- Code is what exists. If README and code disagree, code wins. README and `docs/` describe the running system only. The only plan is `.claude/ROADMAP.md` (local, not committed).
 - `apps/docs/table.md` describes the table component, not a feature backlog.
 
 ## New work
