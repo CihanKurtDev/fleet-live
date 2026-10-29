@@ -75,6 +75,13 @@ export function presentUser(
             ) as { n: number }
         ).n,
         sso_links: ssoLinks(user.id),
+        driver_names_hidden:
+            active.role === "viewer" &&
+            (
+                stmt("SELECT viewer_driver_names FROM companies WHERE id = ?").get(
+                    active.company_id,
+                ) as { viewer_driver_names: number } | undefined
+            )?.viewer_driver_names === 0,
         totp_enabled: user.totp_enabled === 1,
         import_prompt:
             active.role === "dispatcher" &&

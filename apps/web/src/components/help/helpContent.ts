@@ -236,6 +236,12 @@ const PAGES: Record<string, HelpPage> = {
                 answer:
                     "Nur Tempo-Warnungen. Tank und Kein Signal hängen am Fahrzeug.",
             },
+            {
+                question: "Ein Fahrer will wissen, was über ihn gespeichert ist. Was tue ich?",
+                answer:
+                    "Hier unter „⋯“ → „Auskunft exportieren“. Die ZIP-Datei enthält Stammdaten, Fahrzeuge, Fahrten mit Strecke, Verstöße und Warnungen und erklärt in liesmich.txt, was drin ist. Der Export steht im Protokoll.",
+                dispatcherOnly: true,
+            },
         ],
     },
     import: {
@@ -292,6 +298,18 @@ const PAGES: Record<string, HelpPage> = {
                 question: "Was steht im Protokoll?",
                 answer:
                     "Wer in dieser Firma eingeladen, Rollen geändert, jemanden entfernt, die Anmelde-Regeln oder Domains geändert hat, mit Zeitpunkt.",
+                dispatcherOnly: true,
+            },
+            {
+                question: "Wer sieht, welcher Fahrer zu schnell war?",
+                answer:
+                    "Dispatcher immer. Viewer nur, solange unter „Datenschutz“ „Viewer sehen Fahrernamen bei Verstößen“ an ist; sonst fehlen ihnen die Namen an Warnungen und Fahrten und die Fahrer-Seiten.",
+                dispatcherOnly: true,
+            },
+            {
+                question: "Wie lange bewahrt fleet-live Fahrten und Warnungen auf?",
+                answer:
+                    "Unter „Datenschutz“ stellt ihr ein, nach wie vielen Tagen Fahrten, erledigte Warnungen und das Protokoll gelöscht werden (leer = Standard). Meist legt das eine Betriebsvereinbarung fest. Was älter ist, wird beim Speichern sofort gelöscht.",
                 dispatcherOnly: true,
             },
             {

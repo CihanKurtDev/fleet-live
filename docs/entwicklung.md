@@ -46,7 +46,7 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `PING_INTERVAL_MS` | `5000` | Abstand der Meldungen je Fahrzeug (60 bis 160 % davon) |
 | `TELEMETRY_BATCH_SIZE` | `3000` | Höchstens so viele Meldungen pro Tick |
 | `TELEMETRY_KEEP_PER_VEHICLE` | `100` | Nur Live-Puffer |
-| `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das, pro Firma. `0` aus |
+| `TRIP_RETENTION_DAYS` | `90` | Abgeschlossene Fahrten älter als das werden gelöscht, solange die Firma unter Konto → Datenschutz nichts eingestellt hat. `0` behält sie |
 | `IMPORT_FALLBACK_LATITUDE` | `50.9375` | Startpunkt beim Import, wenn die Firma kein Depot hat (Köln) |
 | `IMPORT_FALLBACK_LONGITUDE` | `6.9603` | |
 | `LOG_LEVEL` | `info` | |

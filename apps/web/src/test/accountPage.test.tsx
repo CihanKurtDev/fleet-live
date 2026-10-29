@@ -19,6 +19,7 @@ vi.mock("../api/auth", () => ({
     createCompany: vi.fn(),
     declineInvitation: vi.fn(),
     disableTotp: vi.fn(),
+    getPrivacy: vi.fn(),
     getSecurity: vi.fn(),
     getSsoProviders: vi.fn(),
     inviteMember: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("../api/auth", () => ({
     listMembers: vi.fn(),
     removeDomain: vi.fn(),
     removeMember: vi.fn(),
+    savePrivacy: vi.fn(),
     setMemberRole: vi.fn(),
     setupTotp: vi.fn(),
     startSsoLink: vi.fn(),
@@ -46,6 +48,7 @@ import {
     createCompany,
     declineInvitation,
     disableTotp,
+    getPrivacy,
     getSecurity,
     getSsoProviders,
     inviteMember,
@@ -55,6 +58,7 @@ import {
     listMembers,
     removeDomain,
     removeMember,
+    savePrivacy,
     setMemberRole,
     setupTotp,
     startSsoLink,
@@ -826,5 +830,115 @@ describe("account page", () => {
 
         expect(await screen.findByText("rheinland.de entfernt.")).toBeInTheDocument();
         expect(removeDomain).toHaveBeenCalledWith(3);
+    });
+
+    it("saves the retention and says what was deleted", async () => {
+        vi.mocked(getPrivacy).mockResolvedValue({ data: {
+            viewer_driver_names: true,
+            trips_days: null,
+            alerts_days: null,
+            audit_days: null,
+            trips: 90,
+            alerts: 90,
+            audit: 365,
+            defaults: { trips: 90, alerts: 90, audit: 365 },
+        } });
+        vi.mocked(savePrivacy).mockResolvedValue({
+            data: { ...{
+            viewer_driver_names: true,
+            trips_days: null,
+            alerts_days: null,
+            audit_days: null,
+            trips: 90,
+            alerts: 90,
+            audit: 365,
+            defaults: { trips: 90, alerts: 90, audit: 365 },
+        }, trips_days: 30, trips: 30 },
+            deleted: { trips: 12, alerts: 0, audit: 1 },
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
+
+        const trips = await screen.findByLabelText("Fahrten (Tage)");
+        expect(screen.getByText("7–365 Tage · Standard 90 Tage")).toBeInTheDocument();
+        fireEvent.change(trips, { target: { value: "30" } });
+        submit("Aufbewahrung speichern");
+
+        // Shorter means deleting at once: it asks first.
+        const dialog = await screen.findByRole("dialog", {
+            name: "Aufbewahrung verkürzen?",
+            hidden: true,
+        });
+        expect(savePrivacy).not.toHaveBeenCalled();
+        expect(within(dialog).getByText(/sofort gelöscht.*Fahrten./)).toBeInTheDocument();
+        fireEvent.click(within(dialog).getByRole("button", { name: "Speichern und löschen" }));
+
+        expect(
+            await screen.findByText("Gespeichert. Gelöscht, weil älter: 12 Fahrten, 1 Protokoll-Eintrag."),
+        ).toBeInTheDocument();
+        expect(savePrivacy).toHaveBeenCalledWith({
+            trips_days: 30,
+            alerts_days: null,
+            audit_days: null,
+        });
+    });
+
+    it("keeps driver names to dispatchers with one switch", async () => {
+        const settings = {
+            viewer_driver_names: true,
+            trips_days: null,
+            alerts_days: null,
+            audit_days: null,
+            trips: 90,
+            alerts: 90,
+            audit: 365,
+            defaults: { trips: 90, alerts: 90, audit: 365 },
+        };
+        vi.mocked(getPrivacy).mockResolvedValue({ data: settings });
+        vi.mocked(savePrivacy).mockResolvedValue({
+            data: { ...settings, viewer_driver_names: false },
+            deleted: { trips: 0, alerts: 0, audit: 0 },
+        });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
+
+        const toggle = await screen.findByRole("checkbox", {
+            name: "Viewer sehen Fahrernamen bei Verstößen",
+        });
+        expect(toggle).toBeChecked();
+        fireEvent.click(toggle);
+
+        expect(
+            await screen.findByText("Fahrernamen sind jetzt Dispatchern vorbehalten."),
+        ).toBeInTheDocument();
+        expect(savePrivacy).toHaveBeenCalledWith({ viewer_driver_names: false });
+        expect(toggle).not.toBeChecked();
+    });
+
+    it("saves nothing when shortening is cancelled", async () => {
+        vi.mocked(getPrivacy).mockResolvedValue({
+            data: {
+                viewer_driver_names: true,
+                trips_days: null,
+                alerts_days: null,
+                audit_days: null,
+                trips: 90,
+                alerts: 90,
+                audit: 365,
+                defaults: { trips: 90, alerts: 90, audit: 365 },
+            },
+        });
+        vi.mocked(savePrivacy).mockReset();
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
+
+        fireEvent.change(await screen.findByLabelText("Protokoll (Tage)"), {
+            target: { value: "100" },
+        });
+        submit("Aufbewahrung speichern");
+        const dialog = await screen.findByRole("dialog", {
+            name: "Aufbewahrung verkürzen?",
+            hidden: true,
+        });
+        fireEvent.click(within(dialog).getByRole("button", { name: "Abbrechen" }));
+
+        expect(savePrivacy).not.toHaveBeenCalled();
     });
 });

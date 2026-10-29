@@ -28,6 +28,7 @@ Fahrzeug, Stream und Sim brauchen eine Session. `GET /api/health` nicht. `error`
 | `POST`, `DELETE` | `/api/auth/invitations/:companyId/accept`, `/api/auth/invitations/:companyId` | Einladung annehmen oder ablehnen |
 | `GET`, `PATCH`, `DELETE` | `/api/auth/members`, `/api/auth/members/:userId` | Team der Firma lesen (offene Einladungen mit `invited: true`), Rolle ändern, entfernen (Dispatcher). Eine Firma behält mindestens einen Dispatcher |
 | `GET`, `PATCH` | `/api/auth/security` | Firmen-Login (OIDC) lesen und setzen (Dispatcher) |
+| `GET`, `PATCH` | `/api/auth/privacy` | Datenschutz der Firma (Dispatcher): `viewer_driver_names` (ob Viewer sehen, wer gefahren ist) und die Aufbewahrung `trips_days`, `alerts_days`, `audit_days` in Tagen oder `null` für den Standard. `PATCH` löscht sofort, was älter ist, und nennt die Zahl in `deleted` |
 | `GET` | `/api/auth/audit` | Protokoll der Firma: Einladungen, Rollen, Entfernen, Anmelde-Regeln, Verknüpfung mit dem Firmen-Login; neueste zuerst, 50 je Seite (`page`), nur Dispatcher |
 | `POST` | `/api/auth/totp/setup`, `/totp/confirm`, `/totp/disable` | Zwei-Faktor einrichten, bestätigen, ausschalten |
 | `POST` | `/api/auth/import-prompt/dismiss` | Die einmalige Frage nach dem Import schließen |
@@ -87,6 +88,7 @@ Ein externer Login meldet nur an, wenn ihn der Inhaber verknüpft hat (Issuer un
 | `GET`, `PUT` | `/api/import/profile`        | Gespeicherte Spaltenzuordnung der Firma |
 | `GET`    | `/api/import/runs`               | Import-Log der Firma |
 | `GET`    | `/api/export/vehicles`, `/alerts`, `/trips`, `/period` | CSV der Firma (Semikolon, deutsche Köpfe), nur `dispatcher`. `/period?month=JJJJ-MM` ist ein Monat |
+| `GET` | `/api/export/drivers/:id` | Auskunft über einen Fahrer als ZIP (Dispatcher): Stammdaten, Fahrzeuge, Fahrten, Strecken als GeoJSON, Ereignisse, Warnungen und ein Liesmich. Steht im Protokoll |
 | `GET`    | `/api/health`                    | `{ status: "ok" }` |
 
 `GET /api/vehicles` gibt `{ data, meta }`. In `meta`: `total`, `pageCount`, Facetten `counts` (`all`, `alerts`, `low_fuel`, `unassigned`, `driving`, `idle`, `stopped`, `offline`, `in_depot`, `speeding`).

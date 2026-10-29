@@ -30,10 +30,10 @@ Fahrzeuge und Fahrer aus Excel oder CSV. Vor dem Schreiben prüft eine Vorschau 
 
 ## Was die App heute kann
 
-* Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt. Eine Warnung je Fahrt: weitere Überschreitungen derselben Fahrt zählen dazu (Anzahl, Höchsttempo, Summe der Dauer). Beendete, nicht erledigte Tempo-Warnungen werden nach 7 Tagen Verlauf
+* Geschwindigkeitswarnung, solange ein Fahrzeug über dem Streckenlimit liegt. Eine Warnung je Fahrt: weitere Überschreitungen derselben Fahrt zählen dazu (Anzahl, schlimmste Stelle, Summe der Dauer). Beendete, nicht erledigte Tempo-Warnungen werden nach 7 Tagen Verlauf
 * Niedriger Tankstand (unter 15 %) ist eine Warnung, die von selbst verschwindet, sobald getankt ist
 * Kein Signal, wenn ein Fahrzeug verstummt oder offline gemeldet ist. Die Warnung schließt sich selbst, sobald es wieder meldet
-* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Kein Signal. Erledigte Warnungen werden nach 90 Tagen gelöscht, die Monatssummen der Schicht-Diagramme bleiben
+* Warnungen offen oder erledigt, Filter nach Geschwindigkeit, Tank, Kein Signal. Erledigte Warnungen werden nach der Aufbewahrung der Firma gelöscht (Standard 90 Tage), die Monatssummen der Schicht-Diagramme bleiben
 * Kurze Tipps auf Schicht, Fristen, Fahrzeuge, Warnungen, Fahrer und Karte (einmal je Person, über „?“ wieder abrufbar)
 * Fahrer-Filter auf der Karte: einzelne Fahrer wählen oder alle Treffer einer Suche filtern
 * Schichtüberblick auf der Startseite, offene Warnungen in der Navigation
@@ -49,6 +49,10 @@ Fahrzeuge und Fahrer aus Excel oder CSV. Vor dem Schreiben prüft eine Vorschau 
 * CSV der Firma: Fahrzeuge, Warnungen und Fahrten. Nur der Dispatcher. Die Datei nimmt den ganzen Bestand, nicht die aktuelle Seite
 * Monat auf der Schicht als CSV: Kilometer, in dem Monat angelegte Warnungen (offen und erledigt) und Verbrauch. 25 Liter je 100 km aus der gefahrenen Strecke. Der Tankzeiger bleibt die Messung
 * Firma registrieren, E-Mail bestätigen, Passwort zurücksetzen und ändern
-* Dispatcher und Viewer einladen, zwischen eigenen Firmen wechseln
-* Zwei-Faktor (Authenticator-App) und Anmeldung über Google, Microsoft oder einen Firmen-OIDC
+* Dispatcher und Viewer einladen. In der Firma ist die Person erst, wenn sie annimmt; offene Einladungen stehen im Team und lassen sich zurückziehen. Zwischen eigenen Firmen wechseln
+* Zwei-Faktor (Authenticator-App) und Anmeldung über Google, Microsoft oder einen Firmen-OIDC. Google und Microsoft verknüpft und trennt jede Person unter Konto. Den Firmen-Login findet die Anmeldeseite über eine Domain, die die Firma per DNS bestätigt hat
+* Falsche Passwörter sperren nicht: ab dem sechsten Versuch wartet der nächste einige Sekunden, höchstens eine Minute
+* Protokoll für Dispatcher: wer eingeladen, Rollen geändert, jemanden entfernt, Anmelde-Regeln, Domains oder Datenschutz geändert und wer eine Auskunft exportiert hat
+* Datenschutz je Firma: wie lange Fahrten, erledigte Warnungen und das Protokoll aufbewahrt werden, und ob Viewer sehen, welcher Fahrer zu schnell war
+* Auskunft über einen Fahrer als ZIP: Stammdaten, Fahrzeuge, Fahrten mit Strecke, Verstöße und Warnungen
 * Leere Firma fragt einmal, ob Stammdaten importiert werden sollen

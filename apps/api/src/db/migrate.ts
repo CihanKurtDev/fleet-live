@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { isValidIsoDate } from "@fleet-live/shared";
 import { pruneResolvedAlerts } from "./alertRetention";
+import { pruneAuditEvents } from "./auditRetention";
 import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
 import { backfillTripHistory, ensureTripEvents } from "./tripEvents";
 
@@ -1129,6 +1130,18 @@ function ensureTotpLastStep(database: DatabaseSync) {
  * account nobody has signed in to yet becomes the open invitation it was, so
  * its mail link still works and the person still has to accept.
  */
+/** Privacy settings a company sets itself: retention days, driver names for viewers. */
+export function ensurePrivacyColumns(database: DatabaseSync) {
+    if (!tableExists(database, "companies")) {
+        return;
+    }
+
+    addColumn(database, "companies", "trip_retention_days", "INTEGER");
+    addColumn(database, "companies", "alert_retention_days", "INTEGER");
+    addColumn(database, "companies", "audit_retention_days", "INTEGER");
+    addColumn(database, "companies", "viewer_driver_names", "INTEGER NOT NULL DEFAULT 1");
+}
+
 export function ensureCompanyInvites(database: DatabaseSync) {
     // schema.sql creates the table; a bare database in a migration test has none.
     if (
@@ -1735,12 +1748,14 @@ export function migrate(database: DatabaseSync) {
     ensureTotpLastStep(database);
     ensureAuthHardening(database);
     ensureCompanyInvites(database);
+    ensurePrivacyColumns(database);
     ensureTripEvents(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.
     syncStateAlerts(database);
     archiveStaleSpeeding(database);
     pruneResolvedAlerts(database);
+    pruneAuditEvents(database);
 
     if (currentVersion < SCHEMA_VERSION) {
         database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);

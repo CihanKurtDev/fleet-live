@@ -304,6 +304,19 @@
     min-width: 0;
 }
 
+/* Plain facts under a panel title. */
+.facts {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text);
+
+    li + li {
+        margin-top: 4px;
+    }
+}
+
 /* A domain and its button, the input taking the rest. */
 .domainRow {
     display: grid;

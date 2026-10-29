@@ -1,5 +1,6 @@
 import { db } from "../db/database";
 import { pruneResolvedAlerts } from "../db/alertRetention";
+import { pruneAuditEvents } from "../db/auditRetention";
 import { archiveStaleSpeeding } from "../db/stateAlerts";
 import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
@@ -83,6 +84,7 @@ export function startTelemetryTicker(ms: number) {
                 }
 
                 pruneResolvedAlerts(db);
+                pruneAuditEvents(db);
             }
 
             broadcastPatches(patches);

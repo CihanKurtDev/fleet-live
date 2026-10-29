@@ -1,14 +1,22 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ALERT_RETENTION_DAYS } from "@fleet-live/shared";
 
-const PRUNABLE = `
-    a.resolved_at IS NOT NULL
-    AND a.resolved_at < datetime('now', '-${ALERT_RETENTION_DAYS} days')
+/** Resolved warnings past their company's retention (`alert_retention_days`, else the default). */
+const PRUNABLE_IDS = `
+    SELECT a.id
+    FROM alerts a
+    INNER JOIN vehicles v ON v.id = a.vehicle_id
+    INNER JOIN companies c ON c.id = v.company_id
+    WHERE a.resolved_at IS NOT NULL
+      AND a.resolved_at < datetime(
+          'now',
+          '-' || COALESCE(c.alert_retention_days, ${ALERT_RETENTION_DAYS}) || ' days'
+      )
 `;
 
 /**
- * Resolved warnings are kept `ALERT_RETENTION_DAYS` days after they were
- * resolved. The Schicht charts read whole months from the warnings, so the
+ * Resolved warnings are kept as many days after they were resolved as the
+ * company set (`ALERT_RETENTION_DAYS` without a value). The Schicht charts read whole months from the warnings, so the
  * sums of a month are written to `alert_month_stats` first, from every warning
  * of that month (deleted or not). A month that has its sums is read from there.
  *
@@ -16,7 +24,7 @@ const PRUNABLE = `
  */
 export function pruneResolvedAlerts(database: DatabaseSync): number {
     const due = database
-        .prepare(`SELECT 1 FROM alerts a WHERE ${PRUNABLE} LIMIT 1`)
+        .prepare(`SELECT 1 FROM alerts a WHERE a.id IN (${PRUNABLE_IDS}) LIMIT 1`)
         .get();
 
     if (!due) {
@@ -33,7 +41,7 @@ export function pruneResolvedAlerts(database: DatabaseSync): number {
                             strftime('%Y-%m', a.created_at) AS month
                      FROM alerts a
                      INNER JOIN vehicles v ON v.id = a.vehicle_id
-                     WHERE ${PRUNABLE}
+                     WHERE a.id IN (${PRUNABLE_IDS})
                  )
                  INSERT OR IGNORE INTO alert_month_stats (
                      company_id, month, speeding_drivers, speeding_events,
@@ -59,7 +67,7 @@ export function pruneResolvedAlerts(database: DatabaseSync): number {
         const result = database
             .prepare(
                 `DELETE FROM alerts
-                 WHERE id IN (SELECT a.id FROM alerts a WHERE ${PRUNABLE})`,
+                 WHERE id IN (${PRUNABLE_IDS})`,
             )
             .run();
 

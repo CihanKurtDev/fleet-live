@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { hidesDriverNames, withoutDriver } from "../lib/driverNames";
 import {
     parseFleetDriversQuery,
     parseFleetPositionsQuery,
@@ -246,7 +247,8 @@ export function getVehicleTrip(req: Request, res: Response) {
     }
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
-    res.json({ data: TripModel.latestForVehicle(id, sessionCompany(req)) });
+    const trip = TripModel.latestForVehicle(id, sessionCompany(req));
+    res.json({ data: trip && hidesDriverNames(req) ? withoutDriver(trip) : trip });
 }
 
 export function getVehicleTrips(req: Request, res: Response) {
@@ -259,7 +261,8 @@ export function getVehicleTrips(req: Request, res: Response) {
 
     const query = parseTripListQuery(req.query);
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
-    res.json(TripModel.listForVehicle(id, companyId, query));
+    const listed = TripModel.listForVehicle(id, companyId, query);
+    res.json(hidesDriverNames(req) ? { ...listed, data: listed.data.map(withoutDriver) } : listed);
 }
 
 export function getVehicleTripById(req: Request, res: Response) {
@@ -277,7 +280,7 @@ export function getVehicleTripById(req: Request, res: Response) {
     }
 
     res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
-    res.json({ data: trip });
+    res.json({ data: hidesDriverNames(req) ? withoutDriver(trip) : trip });
 }
 
 export function createVehicle(req: Request, res: Response) {

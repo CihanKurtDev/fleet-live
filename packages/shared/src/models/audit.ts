@@ -16,6 +16,8 @@ export const AUDIT_ACTIONS = [
     "domain_added",
     "domain_verified",
     "domain_removed",
+    "privacy_changed",
+    "driver_exported",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -41,6 +43,12 @@ export type AuditDetails = {
     changes?: SecurityChange[];
     /** The company domain of a domain_* entry. */
     domain?: string;
+    /** New retention days of a privacy_changed entry; null = default. */
+    retention?: Partial<Record<"trips" | "alerts" | "audit", number | null>>;
+    /** New visibility of driver names for viewers (privacy_changed). */
+    viewer_driver_names?: boolean;
+    /** The driver whose data was exported (driver_exported). */
+    driver?: string;
 };
 
 export type AuditEvent = {
@@ -76,6 +84,8 @@ const SECURITY_CHANGE_TEXT: Record<SecurityChange, string> = {
     sso_settings: "Firmen-Login-Daten geändert",
     sso_secret: "Client-Geheimnis ersetzt",
 };
+
+const RETENTION_NAMES = { trips: "Fahrten", alerts: "Warnungen", audit: "Protokoll" } as const;
 
 const role = (value: UserRole | undefined) => (value ? USER_ROLE_LABELS[value] : "?");
 
@@ -120,5 +130,21 @@ export function formatAuditEvent(event: AuditEvent): string {
             return `Domain ${details.domain ?? "?"} bestätigt`;
         case "domain_removed":
             return `Domain ${details.domain ?? "?"} entfernt`;
+        case "driver_exported":
+            return `Auskunft über ${details.driver ?? "einen Fahrer"} exportiert`;
+        case "privacy_changed":
+            return `Datenschutz geändert: ${[
+                ...Object.entries(details.retention ?? {}).map(
+                    ([kind, days]) =>
+                        `${RETENTION_NAMES[kind as keyof typeof RETENTION_NAMES]} ${days === null ? "Standard" : `${days} Tage`}`,
+                ),
+                ...(details.viewer_driver_names === undefined
+                    ? []
+                    : [
+                          details.viewer_driver_names
+                              ? "Fahrernamen für Viewer sichtbar"
+                              : "Fahrernamen nur für Dispatcher",
+                      ]),
+            ].join(", ")}`;
     }
 }

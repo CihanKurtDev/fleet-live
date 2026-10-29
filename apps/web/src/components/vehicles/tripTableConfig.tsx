@@ -1,3 +1,4 @@
+import { MissingDriver } from "../drivers/MissingDriver";
 import type { TripListItem } from "@fleet-live/shared";
 import { WarningChip } from "../alerts/WarningChip";
 import type { TableColumn } from "../../types/table";
@@ -24,7 +25,7 @@ export const tripColumns: TableColumn<TripListItem>[] = [
         key: "driver_name",
         displayText: "Fahrer",
         render: (value) =>
-            value ?? <span className={styles.muted}>nicht erfasst</span>,
+            value ?? <MissingDriver className={styles.muted} fallback="nicht erfasst" />,
     },
     {
         key: "distance_m",

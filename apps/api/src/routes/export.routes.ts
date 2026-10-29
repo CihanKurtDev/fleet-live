@@ -1,6 +1,7 @@
 import express from "express";
 import {
     exportAlerts,
+    exportDriver,
     exportPeriod,
     exportTrips,
     exportVehicles,
@@ -13,5 +14,6 @@ router.get("/vehicles", requireDispatcher, exportVehicles);
 router.get("/alerts", requireDispatcher, exportAlerts);
 router.get("/trips", requireDispatcher, exportTrips);
 router.get("/period", requireDispatcher, exportPeriod);
+router.get("/drivers/:id", requireDispatcher, exportDriver);
 
 export default router;

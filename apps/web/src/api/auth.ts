@@ -2,6 +2,8 @@ import type {
     AuditEvent,
     AuthUser,
     CompanyDomain,
+    PrivacyPatch,
+    PrivacySettings,
     Invitation,
     LoginInput,
     LoginResponse,
@@ -136,6 +138,19 @@ export type Member = {
 export const withdrawInvite = (userId: number) =>
     request<{ data: Member[] }>(`/api/auth/invites/${userId}`, {
         method: "DELETE",
+    });
+
+export const getPrivacy = (signal?: AbortSignal) =>
+    request<{ data: PrivacySettings }>("/api/auth/privacy", { signal });
+
+export const savePrivacy = (patch: PrivacyPatch) =>
+    request<{
+        data: PrivacySettings;
+        /** Rows deleted because of this change. */
+        deleted: { trips: number; alerts: number; audit: number };
+    }>("/api/auth/privacy", {
+        method: "PATCH",
+        body: patch,
     });
 
 export const listDomains = (signal?: AbortSignal) =>

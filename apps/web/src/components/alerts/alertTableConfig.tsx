@@ -1,3 +1,4 @@
+import { MissingDriver } from "../drivers/MissingDriver";
 import {
     formatAlertEvent,
     isSelfClosingAlertType,
@@ -105,7 +106,7 @@ export const alertColumns: TableColumn<Alert>[] = [
                     data-part="driver"
                     title={row.driver_name ?? undefined}
                 >
-                    {row.driver_name ?? "ohne Fahrer"}
+                    {row.driver_name ?? <MissingDriver fallback="ohne Fahrer" />}
                 </span>
             </span>
         ),

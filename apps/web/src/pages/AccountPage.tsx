@@ -2,11 +2,16 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import QRCode from "qrcode";
 import {
+    RETENTION_KINDS,
+    RETENTION_LABELS,
+    RETENTION_LIMITS,
     USER_ROLE_LABELS as ROLE_LABEL,
     formatAuditEvent,
     type AuditEvent,
     type CompanyDomain,
     type Invitation,
+    type RetentionKind,
+    type PrivacySettings,
     type SsoProviders,
     type UserRole,
 } from "@fleet-live/shared";
@@ -18,6 +23,7 @@ import {
     disableTotp,
     createCompany,
     declineInvitation,
+    getPrivacy,
     getSecurity,
     getSsoProviders,
     inviteMember,
@@ -27,6 +33,7 @@ import {
     listMembers,
     removeDomain,
     removeMember,
+    savePrivacy,
     setMemberRole,
     setupTotp,
     startSsoLink,
@@ -43,6 +50,8 @@ import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button/Button";
 import { Checkbox } from "../components/ui/Checkbox/Checkbox";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
+import { FieldError } from "../components/ui/FieldError/FieldError";
+import { fieldAria } from "../components/ui/FieldError/fieldAria";
 import { Input } from "../components/ui/Input/Input";
 import { Table } from "../components/ui/Table/Table";
 import { TablePagination } from "../components/ui/Table/TablePagination";
@@ -62,11 +71,18 @@ type SectionId =
     | "team"
     | "firmen-login"
     | "protokoll"
+    | "datenschutz"
     | "firmen";
 
 const OWN_SECTIONS: SectionId[] = ["passwort", "zwei-faktor", "anmeldung", "firmen"];
 /** Firmenverwaltung nur für Dispatcher, wie die API. */
-const DISPATCHER_SECTIONS: SectionId[] = [...OWN_SECTIONS, "team", "firmen-login", "protokoll"];
+const DISPATCHER_SECTIONS: SectionId[] = [
+    ...OWN_SECTIONS,
+    "team",
+    "firmen-login",
+    "protokoll",
+    "datenschutz",
+];
 
 type Message = { section: SectionId; text: string };
 
@@ -128,6 +144,12 @@ export const AccountPage = () => {
     const [invitations, setInvitations] = useState<Invitation[]>([]);
     const [providers, setProviders] = useState<SsoProviders | null>(null);
     const [domains, setDomains] = useState<CompanyDomain[] | null>(null);
+    const [retention, setRetention] = useState<PrivacySettings | null>(null);
+    const [retentionDraft, setRetentionDraft] = useState<Record<RetentionKind, string> | null>(null);
+    const [retentionErrors, setRetentionErrors] = useState<Record<string, string>>({});
+    /** Kinds whose period gets shorter: saving deletes at once, so it asks first. */
+    const [shorter, setShorter] = useState<RetentionKind[] | null>(null);
+    const [isSavingRetention, setIsSavingRetention] = useState(false);
     const [newDomain, setNewDomain] = useState("");
     const [auditPage, setAuditPage] = useState(1);
     const [audit, setAudit] = useState<AuditPage | null>(null);
@@ -252,6 +274,31 @@ export const AccountPage = () => {
 
         return () => controller.abort();
     }, [isDispatcherUser, loginOpen, companyId]);
+
+    const privacyOpen = hash === "#datenschutz";
+
+    useEffect(() => {
+        if (!isDispatcherUser || !privacyOpen || companyId === undefined) {
+            return;
+        }
+
+        const controller = new AbortController();
+        getPrivacy(controller.signal)
+            .then((result) => setRetention(result.data))
+            .catch((caught: unknown) => {
+                if (!controller.signal.aborted) {
+                    setError({
+                        section: "datenschutz",
+                        text:
+                            caught instanceof ApiError
+                                ? caught.message
+                                : "Die Aufbewahrung konnte nicht geladen werden.",
+                    });
+                }
+            });
+
+        return () => controller.abort();
+    }, [isDispatcherUser, privacyOpen, companyId]);
 
     // The log loads when its section is open, page by page.
     useEffect(() => {
@@ -467,6 +514,110 @@ export const AccountPage = () => {
             });
         } catch (caught: unknown) {
             showError("anmeldung", caught, "Die Verknüpfung bleibt bestehen.");
+        }
+    };
+
+    const retentionStored: Record<RetentionKind, number | null> | null = retention && {
+        trips: retention.trips_days,
+        alerts: retention.alerts_days,
+        audit: retention.audit_days,
+    };
+    const retentionValues: Record<RetentionKind, string> | null =
+        retentionDraft ??
+        (retentionStored && {
+            trips: retentionStored.trips === null ? "" : String(retentionStored.trips),
+            alerts: retentionStored.alerts === null ? "" : String(retentionStored.alerts),
+            audit: retentionStored.audit === null ? "" : String(retentionStored.audit),
+        });
+
+    const retentionDays = (value: string) => (value.trim() === "" ? null : Number(value));
+
+    /** Days that will be used for a field: its number, or the default when empty (0 = unlimited). */
+    const effectiveDays = (kind: RetentionKind, value: string) => {
+        const days = retentionDays(value) ?? retention?.defaults[kind] ?? 0;
+        return days > 0 ? days : Number.POSITIVE_INFINITY;
+    };
+
+    const submitRetention = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (!retentionValues || !retention) {
+            return;
+        }
+
+        const shorterKinds = RETENTION_KINDS.filter(
+            (kind) =>
+                effectiveDays(kind, retentionValues[kind]) <
+                (retention[kind] > 0 ? retention[kind] : Number.POSITIVE_INFINITY),
+        );
+
+        if (shorterKinds.length > 0) {
+            setShorter(shorterKinds);
+            return;
+        }
+
+        void storeRetention();
+    };
+
+    const storeRetention = async () => {
+        if (!retentionValues) {
+            return;
+        }
+
+        clearMessages();
+        setRetentionErrors({});
+        setIsSavingRetention(true);
+        const days = retentionDays;
+
+        try {
+            const { data, deleted } = await savePrivacy({
+                trips_days: days(retentionValues.trips),
+                alerts_days: days(retentionValues.alerts),
+                audit_days: days(retentionValues.audit),
+            });
+            setRetention(data);
+            setRetentionDraft(null);
+            const gone = [
+                deleted.trips > 0 ? `${deleted.trips} ${deleted.trips === 1 ? "Fahrt" : "Fahrten"}` : null,
+                deleted.alerts > 0
+                    ? `${deleted.alerts} ${deleted.alerts === 1 ? "erledigte Warnung" : "erledigte Warnungen"}`
+                    : null,
+                deleted.audit > 0
+                    ? `${deleted.audit} ${deleted.audit === 1 ? "Protokoll-Eintrag" : "Protokoll-Einträge"}`
+                    : null,
+            ].filter(Boolean);
+            setInfo({
+                section: "datenschutz",
+                text: gone.length > 0
+                    ? `Gespeichert. Gelöscht, weil älter: ${gone.join(", ")}.`
+                    : "Gespeichert. Nichts war älter als die neuen Fristen.",
+            });
+        } catch (caught: unknown) {
+            if (caught instanceof ApiError && caught.fields) {
+                setRetentionErrors(caught.fields);
+            }
+
+            showError("datenschutz", caught, "Die Aufbewahrung wurde nicht gespeichert.");
+        } finally {
+            setIsSavingRetention(false);
+            setShorter(null);
+        }
+    };
+
+    const toggleDriverNames = async (visible: boolean) => {
+        clearMessages();
+
+        try {
+            const { data } = await savePrivacy({ viewer_driver_names: visible });
+            setRetention(data);
+            setInfo({
+                section: "datenschutz",
+                text: visible
+                    ? "Viewer sehen Fahrernamen wieder."
+                    : "Fahrernamen sind jetzt Dispatchern vorbehalten.",
+            });
+        } catch (caught: unknown) {
+            showError("datenschutz", caught, "Die Einstellung wurde nicht gespeichert.");
         }
     };
 
@@ -810,6 +961,7 @@ export const AccountPage = () => {
                             {navLink("team", "Team und Einladungen")}
                             {navLink("firmen-login", "Firmen-Login")}
                             {navLink("protokoll", "Protokoll")}
+                            {navLink("datenschutz", "Datenschutz")}
                         </div>
                     )}
                     <div
@@ -1282,6 +1434,97 @@ export const AccountPage = () => {
                         </>
                     )}
 
+                    {section === "datenschutz" && (
+                        <>
+                            <section className={styles.panel}>
+                                <h2 className={styles.panelTitle}>Aufbewahrung</h2>
+                                <p className={styles.help}>
+                                    Wie lange fleet-live aufbewahrt, was es über eure Fahrer
+                                    aufzeichnet. Meist legt das eine Betriebsvereinbarung fest.
+                                    Leer heißt Standard. Was älter ist, wird gelöscht, auch
+                                    sofort beim Speichern.
+                                </p>
+                                {retention && retentionValues ? (
+                                    <form className={styles.form} onSubmit={submitRetention}>
+                                        {RETENTION_KINDS.map((kind) => {
+                                            const id = `retention-${kind}`;
+                                            const errorKey = `${kind}_days`;
+                                            const { min, max } = RETENTION_LIMITS[kind];
+                                            const fallback = retention.defaults[kind];
+
+                                            return (
+                                                <div key={kind} className={authForm.field}>
+                                                    <label htmlFor={id}>{RETENTION_LABELS[kind]} (Tage)</label>
+                                                    <Input
+                                                        id={id}
+                                                        type="number"
+                                                        size="md"
+                                                        inputMode="numeric"
+                                                        min={min}
+                                                        max={max}
+                                                        placeholder={fallback > 0 ? String(fallback) : "unbegrenzt"}
+                                                        {...fieldAria(id, retentionErrors[errorKey], `${id}-hint`)}
+                                                        value={retentionValues[kind]}
+                                                        onChange={(event) =>
+                                                            setRetentionDraft({
+                                                                ...retentionValues,
+                                                                [kind]: event.target.value,
+                                                            })
+                                                        }
+                                                    />
+                                                    <span id={`${id}-hint`} className={styles.muted}>
+                                                        {min}–{max} Tage · Standard{" "}
+                                                        {fallback > 0 ? `${fallback} Tage` : "unbegrenzt"}
+                                                    </span>
+                                                    <FieldError fieldId={id}>{retentionErrors[errorKey]}</FieldError>
+                                                </div>
+                                            );
+                                        })}
+                                        <Button type="submit">Aufbewahrung speichern</Button>
+                                    </form>
+                                ) : (
+                                    !sectionError && <p className={styles.help}>Laden…</p>
+                                )}
+                            </section>
+                            {retention && (
+                                <section className={styles.panel}>
+                                    <h2 className={styles.panelTitle}>Fahrernamen</h2>
+                                    <p className={styles.help}>
+                                        Wer gefahren ist, steht an Tempo-Warnungen und Fahrten; die
+                                        Fahrer-Seiten zeigen die Verstöße je Person. Aus, sehen das nur
+                                        Dispatcher. Welches Fahrzeug wer gerade fährt, bleibt für alle
+                                        sichtbar.
+                                    </p>
+                                    <label className={authForm.remember}>
+                                        <Checkbox
+                                            checked={retention.viewer_driver_names}
+                                            onChange={(event) =>
+                                                void toggleDriverNames(event.target.checked)
+                                            }
+                                        />
+                                        Viewer sehen Fahrernamen bei Verstößen
+                                    </label>
+                                </section>
+                            )}
+                            <section className={styles.panel}>
+                                <h2 className={styles.panelTitle}>Was sonst gilt</h2>
+                                <ul className={styles.facts}>
+                                    <li>
+                                        Live-Positionen: nur die letzten 100 Meldungen je Fahrzeug,
+                                        ältere werden laufend überschrieben.
+                                    </li>
+                                    <li>Offene Warnungen und laufende Fahrten werden nie gelöscht.</li>
+                                    <li>
+                                        Die Monatszahlen der Schicht bleiben, auch wenn die einzelnen
+                                        Warnungen und Fahrten gelöscht sind.
+                                    </li>
+                                    <li>Jede Änderung hier steht im Protokoll.</li>
+                                </ul>
+                            </section>
+                            {messages}
+                        </>
+                    )}
+
                     {section === "protokoll" && (
                         <>
                             <section className={`${styles.panel} ${styles.teamPanel}`}>
@@ -1431,6 +1674,22 @@ export const AccountPage = () => {
 
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={shorter !== null}
+                onClose={() => setShorter(null)}
+                title="Aufbewahrung verkürzen?"
+                confirmLabel="Speichern und löschen"
+                busyLabel="Wird gespeichert…"
+                isBusy={isSavingRetention}
+                onConfirm={() => storeRetention()}
+            >
+                {shorter
+                    ? `Was älter ist als die neue Frist, wird sofort gelöscht und lässt sich nicht wiederherstellen: ${shorter
+                          .map((kind) => RETENTION_LABELS[kind])
+                          .join(", ")}.`
+                    : null}
+            </ConfirmDialog>
 
             <ConfirmDialog
                 open={removeTarget !== null}

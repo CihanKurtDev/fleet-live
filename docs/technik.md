@@ -109,7 +109,7 @@ Jede Position kommt an `trips.path` als [kodierte Polyline](https://developers.g
 
 Zugriff: `trip → vehicle → company`. Kein `company_id` auf `trips`, kein `GET /api/trips/:id`. Die Liste lässt `path` weg. Die Linie kommt mit `GET /api/vehicles/:id/trips/:tripId`.
 
-Abgeschlossene Fahrten älter als `TRIP_RETENTION_DAYS` (90) werden pro Firma gelöscht. Offene bleiben. Prune nach Trip-Close und nach Ticks für die Firmen im Batch. `TRIP_RETENTION_DAYS=0` schaltet das aus.
+Abgeschlossene Fahrten werden pro Firma nach ihrer Aufbewahrung gelöscht (Konto → Datenschutz, sonst `TRIP_RETENTION_DAYS`, 90). Offene bleiben. Prune nach Trip-Close und nach Ticks für die Firmen im Batch. `TRIP_RETENTION_DAYS=0` behält Fahrten, solange die Firma nichts einstellt. Erledigte Warnungen (Standard 90 Tage) und das Protokoll (365 Tage) folgen ebenfalls der Firma.
 
 Kompromisse:
 
