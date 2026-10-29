@@ -11,7 +11,13 @@ import type {
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { withTransaction } from "../db/database";
-import { ConflictError, NotFoundError, isUniqueConstraintError } from "../lib/errors";
+import {
+    AppError,
+    ConflictError,
+    NotFoundError,
+    isUniqueConstraintError,
+} from "../lib/errors";
+import { WorkshopModel } from "./workshop.model";
 import { pagedQuery, type SqlParam } from "../lib/pagination";
 
 const INSERT_OR_IGNORE = `
@@ -700,6 +706,13 @@ export class DriverModel {
                 const message = `${assigned.license_plate} ist unterwegs. Aktueller Fahrer lässt sich erst nach der Fahrt wechseln.`;
                 throw new ConflictError(message, {
                     vehicle_id: message,
+                });
+            }
+
+            const unavailable = WorkshopModel.unavailableReason(vehicleId);
+            if (unavailable) {
+                throw new AppError(409, "VEHICLE_UNAVAILABLE", unavailable, {
+                    vehicle_id: unavailable,
                 });
             }
         }

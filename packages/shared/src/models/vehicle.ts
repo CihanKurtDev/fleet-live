@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AlertType } from "./alert";
 import type { VehicleFilterId } from "./vehicleQuery";
+import type { VehicleAvailability, WorkshopSummary } from "./workshop";
 
 export const VEHICLE_STATUSES = [
     "IDLE",
@@ -122,6 +123,10 @@ export type Vehicle = {
     open_alert_types: AlertType[];
     created_at: string;
     current_driver_id: number | null;
+    /** In der Werkstatt (open stay arrived), außer Dienst, or einsatzbereit. */
+    availability: VehicleAvailability;
+    /** The open workshop stay, planned or arrived; `null` without one. */
+    workshop: WorkshopSummary | null;
 };
 
 /** Die vom Client beschreibbaren Felder eines Fahrzeugs. */

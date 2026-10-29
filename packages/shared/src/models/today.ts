@@ -2,14 +2,17 @@ import { z } from "zod";
 
 import type { DueKind } from "./dueDates";
 import { emptyToUndefined } from "./queryPreprocess";
+import type { WorkshopVisit } from "./workshop";
 
 /**
  * What needs doing today, most urgent kind first. The order is the product
- * decision: legal deadlines, drivers due for a talk, vehicles without signal,
- * low fuel, deadlines coming up.
+ * decision: legal deadlines, workshop stays due today (an appointment today or
+ * earlier, a return that is late), drivers due for a talk, vehicles without
+ * signal, low fuel, deadlines coming up.
  */
 export const TODAY_KINDS = [
     "deadline_overdue",
+    "workshop_due",
     "driver_talk",
     "offline",
     "low_fuel",
@@ -35,6 +38,8 @@ export type TodayItem = {
     since: string | null;
     open_warnings: number | null;
     fuel_level: number | null;
+    /** The stay for `workshop_due` rows. */
+    workshop: WorkshopVisit | null;
 };
 
 export type TodayCounts = Record<TodayKind, number>;

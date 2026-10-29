@@ -12,6 +12,7 @@ import type {
     VehicleListQuery,
     VehicleListResponse,
     VehicleSortKey,
+    WorkshopSummary,
 } from "@fleet-live/shared";
 import {
     ALERT_TYPES,
@@ -27,7 +28,11 @@ import { SpeedingEventModel } from "./speedingEvent.model";
 import { ExceptionEventModel } from "./exceptionEvent.model";
 import { config } from "../config";
 import { stmt } from "../db/statements";
-import { VEHICLE_CONCEPT_SQL, conceptCountsSql } from "../db/vehicleConcepts";
+import {
+    VEHICLE_AVAILABILITY_SQL,
+    VEHICLE_CONCEPT_SQL,
+    conceptCountsSql,
+} from "../db/vehicleConcepts";
 import { db } from "../db/database";
 import { pagedQuery } from "../lib/pagination";
 import { ConflictError, isUniqueConstraintError } from "../lib/errors";
@@ -85,6 +90,19 @@ const OPEN_ALERT_TYPES_SQL = `(
         )
     ) AS open_alert_types`;
 
+/** The open stay (at most one, `idx_workshop_visits_open`). */
+const OPEN_WORKSHOP_JOIN = `LEFT JOIN workshop_visits ow
+        ON ow.vehicle_id = v.id
+       AND ow.state IN ('PLANNED', 'IN_WORKSHOP')`;
+
+const WORKSHOP_COLUMNS_SQL = `${VEHICLE_AVAILABILITY_SQL} AS availability,
+        ow.id AS workshop_id,
+        ow.state AS workshop_state,
+        ow.reason AS workshop_reason,
+        ow.place AS workshop_place,
+        ow.planned_on AS workshop_planned_on,
+        ow.expected_on AS workshop_expected_on`;
+
 const SELECT_ONE = `
     SELECT
         v.id,
@@ -110,9 +128,11 @@ const SELECT_ONE = `
         v.active_alerts,
         ${SPEEDING_OPEN_SQL},
         ${OPEN_ALERT_TYPES_SQL},
-        v.created_at
+        v.created_at,
+        ${WORKSHOP_COLUMNS_SQL}
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
+    ${OPEN_WORKSHOP_JOIN}
     WHERE v.id = ?
 `;
 
@@ -183,9 +203,15 @@ const FACET_SQL = `
       AND ${LIST_SEARCH_SQL}
 `;
 
-type ListRow = Omit<Vehicle, "speeding_open" | "open_alert_types"> & {
+type ListRow = Omit<Vehicle, "speeding_open" | "open_alert_types" | "workshop"> & {
     speeding_open: number | boolean;
     open_alert_types: string | null;
+    workshop_id: number | null;
+    workshop_state: WorkshopSummary["state"] | null;
+    workshop_reason: WorkshopSummary["reason"] | null;
+    workshop_place: string | null;
+    workshop_planned_on: string | null;
+    workshop_expected_on: string | null;
     total: number;
 };
 
@@ -218,6 +244,9 @@ type FacetRow = {
     stopped: number;
     in_depot: number;
     speeding: number;
+    in_workshop: number;
+    workshop_due: number;
+    out_of_service: number;
 };
 
 function toLikePattern(search: string): string {
@@ -254,10 +283,32 @@ function runUnique(run: () => ReturnType<ReturnType<typeof stmt>["run"]>) {
 }
 
 function toVehicle(row: ListRow): Vehicle {
-    const { total: _total, speeding_open, open_alert_types, active, ...vehicle } =
-        row;
+    const {
+        total: _total,
+        speeding_open,
+        open_alert_types,
+        active,
+        workshop_id,
+        workshop_state,
+        workshop_reason,
+        workshop_place,
+        workshop_planned_on,
+        workshop_expected_on,
+        ...vehicle
+    } = row;
     return {
         ...vehicle,
+        workshop:
+            workshop_id === null || workshop_id === undefined
+                ? null
+                : {
+                      id: Number(workshop_id),
+                      state: workshop_state as WorkshopSummary["state"],
+                      reason: workshop_reason as WorkshopSummary["reason"],
+                      place: String(workshop_place),
+                      planned_on: String(workshop_planned_on),
+                      expected_on: workshop_expected_on ?? null,
+                  },
         active: Number(active) === 1,
         speeding_open: Boolean(speeding_open),
         open_alert_types: parseOpenAlertTypes(open_alert_types),
@@ -319,9 +370,11 @@ export class VehicleModel {
                 ${SPEEDING_OPEN_SQL},
                 ${OPEN_ALERT_TYPES_SQL},
                 v.created_at,
+                ${WORKSHOP_COLUMNS_SQL},
                 COUNT(*) OVER () AS total
             FROM vehicles v
             LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
+            ${OPEN_WORKSHOP_JOIN}
             WHERE v.company_id = ?
               AND ${LIST_SEARCH_SQL}
               ${filterSql}
@@ -370,6 +423,9 @@ export class VehicleModel {
                     stopped: Number(counts.stopped),
                     in_depot: Number(counts.in_depot),
                     speeding: Number(counts.speeding),
+                    in_workshop: Number(counts.in_workshop),
+                    workshop_due: Number(counts.workshop_due),
+                    out_of_service: Number(counts.out_of_service),
                 },
             },
         };

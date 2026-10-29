@@ -9,6 +9,7 @@ import {
 } from "@fleet-live/shared";
 import { stmt } from "../db/statements";
 import { CompanyModel } from "./company.model";
+import { WorkshopModel } from "./workshop.model";
 
 const VEHICLES = `
     SELECT id, license_plate, active, hu_due_on, uvv_due_on, uvv_checked_on
@@ -92,8 +93,18 @@ export class DueModel {
             query,
         );
 
+        const open = WorkshopModel.openByVehicle(companyId);
+        const workshopOf = (row: DueListItem) => {
+            const visit = row.vehicle_id === null ? undefined : open.get(row.vehicle_id);
+            const matches =
+                (row.kind === "hu" && visit?.reason === "HU") ||
+                (row.kind === "uvv" && visit?.reason === "UVV");
+            return matches && visit ? visit : null;
+        };
+
         return {
             ...listed,
+            data: listed.data.map((row) => ({ ...row, workshop: workshopOf(row) })),
             meta: {
                 ...listed.meta,
                 lead_days: window.lead_days,

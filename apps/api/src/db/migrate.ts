@@ -1131,6 +1131,14 @@ function ensureTotpLastStep(database: DatabaseSync) {
  * its mail link still works and the person still has to accept.
  */
 /** Privacy settings a company sets itself: retention days, driver names for viewers. */
+export function ensureVehicleService(database: DatabaseSync) {
+    if (!tableExists(database, "vehicles")) {
+        return;
+    }
+
+    addColumn(database, "vehicles", "out_of_service_since", "TEXT");
+}
+
 export function ensurePrivacyColumns(database: DatabaseSync) {
     if (!tableExists(database, "companies")) {
         return;
@@ -1749,6 +1757,7 @@ export function migrate(database: DatabaseSync) {
     ensureAuthHardening(database);
     ensureCompanyInvites(database);
     ensurePrivacyColumns(database);
+    ensureVehicleService(database);
     ensureTripEvents(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.

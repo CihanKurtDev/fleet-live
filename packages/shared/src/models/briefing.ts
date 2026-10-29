@@ -45,6 +45,8 @@ export type BriefingCounts = {
     in_depot: number;
     /** Fahrzeuge mit laufender Tempoüberschreitung (`speeding_open`). */
     speeding: number;
+    /** Fahrzeuge in der Werkstatt (Filter `in_workshop`). */
+    in_workshop: number;
 };
 
 export type BriefingData = {
