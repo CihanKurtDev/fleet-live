@@ -36,6 +36,7 @@ import {
     startCompanySso,
     startSso,
     startSsoLink,
+    unlinkSso,
 } from "../controllers/authSso.controller";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireDispatcher } from "../middleware/requireDispatcher";
@@ -82,6 +83,7 @@ router.get("/sso/providers", listSsoProviders);
 router.post("/sso/company/discover", authIpRateLimit, discoverCompanySso);
 router.get("/sso/company/start", ssoStartRateLimit, startCompanySso);
 router.post("/sso/link", ssoStartRateLimit, startSsoLink);
+router.delete("/sso/links/:provider", requireAuth, unlinkSso);
 router.get("/sso/company/callback", finishSso);
 router.get("/sso/:provider/start", ssoStartRateLimit, startSso);
 router.get("/sso/:provider/callback", finishSso);

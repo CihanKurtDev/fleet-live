@@ -20,6 +20,7 @@ export const authUser = (overrides: Partial<AuthUser> = {}): AuthUser => ({
         },
     ],
     invitations: 0,
+    sso_links: { google: false, microsoft: false },
     totp_enabled: false,
     import_prompt: false,
     ...overrides,

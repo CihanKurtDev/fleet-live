@@ -46,6 +46,10 @@ export const startSsoLink = (input: {
         body: input,
     });
 
+/** Removes the person's own Google or Microsoft link. */
+export const unlinkSso = (provider: "google" | "microsoft") =>
+    request<AuthUser>(`/api/auth/sso/links/${provider}`, { method: "DELETE" });
+
 export const discoverCompanySso = (email: string) =>
     request<{ company_id: number }>("/api/auth/sso/company/discover", {
         method: "POST",

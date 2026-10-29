@@ -34,6 +34,16 @@ export function listMemberships(userId: number): MembershipRow[] {
     return stmt(MEMBERSHIPS).all(userId) as MembershipRow[];
 }
 
+/** Which of Google and Microsoft the person has linked to their own account. */
+function ssoLinks(userId: number): AuthUser["sso_links"] {
+    const rows = stmt(
+        "SELECT DISTINCT provider FROM sso_identities WHERE user_id = ? AND provider IN ('google', 'microsoft')",
+    ).all(userId) as { provider: string }[];
+    const linked = new Set(rows.map((row) => row.provider));
+
+    return { google: linked.has("google"), microsoft: linked.has("microsoft") };
+}
+
 export function presentUser(
     user: { id: number; name: string; email: string; totp_enabled: number },
     companyId: number,
@@ -64,6 +74,7 @@ export function presentUser(
                 user.id,
             ) as { n: number }
         ).n,
+        sso_links: ssoLinks(user.id),
         totp_enabled: user.totp_enabled === 1,
         import_prompt:
             active.role === "dispatcher" &&

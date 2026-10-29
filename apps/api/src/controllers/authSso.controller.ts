@@ -21,7 +21,9 @@ import {
 import { continueLogin, type LoginOutcome } from "../lib/openSession";
 import {
     findSsoUser,
+    authUserFor,
     linkSsoIdentity,
+    unlinkSsoIdentity,
     pickLoginCompany,
     companyIdForLoginSso,
     ssoClient,
@@ -59,8 +61,10 @@ function fail(res: Response, reason: string) {
     res.redirect(`${config.webOrigin}/login?sso=${reason}`);
 }
 
-function linkResult(res: Response, reason: string) {
-    res.redirect(`${config.webOrigin}/konto?sso=${reason}`);
+/** Back to the account page, on the section the link was started from. */
+function linkResult(res: Response, reason: string, provider: SsoProvider) {
+    const section = provider === "company" ? "firmen-login" : "anmeldung";
+    res.redirect(`${config.webOrigin}/konto?sso=${reason}#${section}`);
 }
 
 function envCredentials(
@@ -76,6 +80,25 @@ function envCredentials(
     }
 
     return undefined;
+}
+
+/** Removes the signed-in person's own Google or Microsoft link. */
+export function unlinkSso(req: Request, res: Response) {
+    if (!req.user) {
+        throw new UnauthorizedError();
+    }
+
+    const provider = req.params.provider;
+
+    if (provider !== "google" && provider !== "microsoft") {
+        throw new NotFoundError("Verknüpfung nicht gefunden.");
+    }
+
+    if (!unlinkSsoIdentity(req.user.id, provider)) {
+        throw new NotFoundError("Verknüpfung nicht gefunden.");
+    }
+
+    res.json(authUserFor(req.user.id, req.user.company_id));
 }
 
 export function listSsoProviders(_req: Request, res: Response) {
@@ -384,7 +407,7 @@ export async function finishSso(req: Request, res: Response) {
 
 function failFlow(res: Response, payload: SsoPayload, reason: string) {
     if (payload.link?.via === "session") {
-        linkResult(res, reason);
+        linkResult(res, reason, payload.provider);
         return;
     }
 
@@ -407,7 +430,7 @@ function finishLink(
         const session = token ? SessionModel.findUser(token) : undefined;
 
         if (!owner || session?.id !== owner.id) {
-            linkResult(res, "error");
+            linkResult(res, "error", payload.provider);
             return;
         }
     }
@@ -442,7 +465,7 @@ function finishLink(
     }
 
     if (link.via === "session") {
-        linkResult(res, result);
+        linkResult(res, result, payload.provider);
         return;
     }
 

@@ -6,6 +6,7 @@ import {
     formatAuditEvent,
     type AuditEvent,
     type Invitation,
+    type SsoProviders,
     type UserRole,
 } from "@fleet-live/shared";
 import {
@@ -16,6 +17,7 @@ import {
     createCompany,
     declineInvitation,
     getSecurity,
+    getSsoProviders,
     inviteMember,
     listAudit,
     listInvitations,
@@ -25,6 +27,7 @@ import {
     setupTotp,
     startSsoLink,
     switchCompany,
+    unlinkSso,
     updateSecurity,
     withdrawInvite,
     type AuditPage,
@@ -47,21 +50,39 @@ import styles from "./AccountPage.module.scss";
 import { Select } from "../components/ui/Select/Select";
 
 /** Bereich im URL-Hash, z. B. `/konto#team`. */
-type SectionId = "passwort" | "zwei-faktor" | "team" | "firmen-login" | "protokoll" | "firmen";
+type SectionId =
+    | "passwort"
+    | "zwei-faktor"
+    | "anmeldung"
+    | "team"
+    | "firmen-login"
+    | "protokoll"
+    | "firmen";
 
-const OWN_SECTIONS: SectionId[] = ["passwort", "zwei-faktor", "firmen"];
+const OWN_SECTIONS: SectionId[] = ["passwort", "zwei-faktor", "anmeldung", "firmen"];
 /** Firmenverwaltung nur für Dispatcher, wie die API. */
 const DISPATCHER_SECTIONS: SectionId[] = [...OWN_SECTIONS, "team", "firmen-login", "protokoll"];
 
 type Message = { section: SectionId; text: string };
 
-/** The answer of a company-login link (`/konto?sso=…`), set by the API. */
-const linkMessages = (result: string | null): { info: Message | null; error: Message | null } => {
+/**
+ * The answer of a link (`/konto?sso=…#section`), set by the API: the company
+ * login comes back to `#firmen-login`, Google and Microsoft to `#anmeldung`.
+ */
+const linkMessages = (
+    result: string | null,
+    hash: string,
+): { info: Message | null; error: Message | null } => {
+    const own = hash === "#anmeldung";
+    const section: SectionId = own ? "anmeldung" : "firmen-login";
+
     if (result === "linked") {
         return {
             info: {
-                section: "firmen-login",
-                text: "Dein Konto ist mit dem Firmen-Login verknüpft. Jetzt lässt er sich verlangen.",
+                section,
+                text: own
+                    ? "Verknüpft. Du kannst dich jetzt auch damit anmelden."
+                    : "Dein Konto ist mit dem Firmen-Login verknüpft. Jetzt lässt er sich verlangen.",
             },
             error: null,
         };
@@ -69,15 +90,23 @@ const linkMessages = (result: string | null): { info: Message | null; error: Mes
 
     const text =
         result === "taken"
-            ? "Dieser Firmen-Login gehört schon zu einem anderen Konto."
+            ? own
+                ? "Dieses Konto bei Google oder Microsoft gehört schon zu einem anderen fleet-live-Konto."
+                : "Dieser Firmen-Login gehört schon zu einem anderen Konto."
             : result === "mismatch"
-              ? "Der Firmen-Login meldet eine andere oder unbestätigte E-Mail."
+              ? own
+                  ? "Google oder Microsoft meldet eine andere oder unbestätigte E-Mail als dein Konto."
+                  : "Der Firmen-Login meldet eine andere oder unbestätigte E-Mail."
               : result === "error"
-                ? "Die Verknüpfung mit dem Firmen-Login ist fehlgeschlagen."
+                ? own
+                    ? "Die Verknüpfung ist fehlgeschlagen."
+                    : "Die Verknüpfung mit dem Firmen-Login ist fehlgeschlagen."
                 : null;
 
-    return { info: null, error: text ? { section: "firmen-login", text } : null };
+    return { info: null, error: text ? { section, text } : null };
 };
+
+const PROVIDER_LABEL = { google: "Google", microsoft: "Microsoft" } as const;
 
 const RoleOptions = () => (
     <>
@@ -92,14 +121,15 @@ export const AccountPage = () => {
     const { hash, search } = useLocation();
     const [members, setMembers] = useState<Member[]>([]);
     const [invitations, setInvitations] = useState<Invitation[]>([]);
+    const [providers, setProviders] = useState<SsoProviders | null>(null);
     const [auditPage, setAuditPage] = useState(1);
     const [audit, setAudit] = useState<AuditPage | null>(null);
     const [security, setSecurity] = useState<CompanySecurity | null>(null);
     const [error, setError] = useState<Message | null>(
-        () => linkMessages(new URLSearchParams(search).get("sso")).error,
+        () => linkMessages(new URLSearchParams(search).get("sso"), hash).error,
     );
     const [info, setInfo] = useState<Message | null>(
-        () => linkMessages(new URLSearchParams(search).get("sso")).info,
+        () => linkMessages(new URLSearchParams(search).get("sso"), hash).info,
     );
     const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
     const [isRemoving, setIsRemoving] = useState(false);
@@ -174,6 +204,17 @@ export const AccountPage = () => {
 
         return () => controller.abort();
     }, [userId, invitationCount]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        getSsoProviders(controller.signal)
+            .then(setProviders)
+            .catch(() => {
+                // Without the answer the section stays hidden; nothing else depends on it.
+            });
+
+        return () => controller.abort();
+    }, []);
 
     const isDispatcherUser = user?.role === "dispatcher";
     const companyId = user?.company_id;
@@ -368,6 +409,31 @@ export const AccountPage = () => {
         } finally {
             setIsRemoving(false);
             setRemoveTarget(null);
+        }
+    };
+
+    const linkOwn = async (provider: "google" | "microsoft") => {
+        clearMessages();
+
+        try {
+            const started = await startSsoLink({ provider });
+            window.location.assign(started.url);
+        } catch (caught: unknown) {
+            showError("anmeldung", caught, `${PROVIDER_LABEL[provider]} konnte nicht gestartet werden.`);
+        }
+    };
+
+    const unlinkOwn = async (provider: "google" | "microsoft") => {
+        clearMessages();
+
+        try {
+            setUser(await unlinkSso(provider));
+            setInfo({
+                section: "anmeldung",
+                text: `${PROVIDER_LABEL[provider]} ist nicht mehr mit deinem Konto verknüpft.`,
+            });
+        } catch (caught: unknown) {
+            showError("anmeldung", caught, "Die Verknüpfung bleibt bestehen.");
         }
     };
 
@@ -605,6 +671,9 @@ export const AccountPage = () => {
         </Link>
     );
 
+    const ownProviders = (["google", "microsoft"] as const).filter(
+        (provider) => providers?.[provider] === true,
+    );
     const sectionError = error?.section === section ? error.text : null;
     const sectionInfo = info?.section === section ? info.text : null;
     // Shown right under the form that caused them, so the answer is next to
@@ -650,6 +719,7 @@ export const AccountPage = () => {
                             text: user.totp_enabled ? "an" : "aus",
                             off: !user.totp_enabled,
                         })}
+                        {ownProviders.length > 0 && navLink("anmeldung", "Google und Microsoft")}
                     </div>
                     {isDispatcher && (
                         <div
@@ -1010,6 +1080,59 @@ export const AccountPage = () => {
                             )}
                         </section>
                         {messages}
+                        </>
+                    )}
+
+                    {section === "anmeldung" && (
+                        <>
+                            <section className={styles.panel}>
+                                <h2 className={styles.panelTitle}>Google und Microsoft</h2>
+                                <p className={styles.muted}>
+                                    Verknüpfe ein Konto mit derselben E-Mail ({user.email}),
+                                    dann kannst du dich auch damit anmelden. Dein Passwort bleibt.
+                                </p>
+                                {ownProviders.length === 0 ? (
+                                    <p className={styles.muted}>
+                                        Auf diesem Server ist keine Anmeldung über Google oder
+                                        Microsoft eingerichtet.
+                                    </p>
+                                ) : (
+                                    <ul className={styles.companies}>
+                                        {ownProviders.map((provider) => {
+                                            const linked = user.sso_links[provider];
+
+                                            return (
+                                                <li key={provider} className={styles.company}>
+                                                    <span className={styles.strong}>
+                                                        {PROVIDER_LABEL[provider]}
+                                                    </span>
+                                                    <span
+                                                        className={
+                                                            linked ? styles.active : styles.muted
+                                                        }
+                                                    >
+                                                        {linked ? "Verknüpft" : "Nicht verknüpft"}
+                                                    </span>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        aria-label={`${PROVIDER_LABEL[provider]} ${linked ? "trennen" : "verknüpfen"}`}
+                                                        onClick={() =>
+                                                            linked
+                                                                ? unlinkOwn(provider)
+                                                                : linkOwn(provider)
+                                                        }
+                                                    >
+                                                        {linked ? "Trennen" : "Verknüpfen"}
+                                                    </Button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </section>
+                            {messages}
                         </>
                     )}
 

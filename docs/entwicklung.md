@@ -69,4 +69,6 @@ Google und Microsoft sind OpenID Connect gegen feste Issuer (`https://accounts.g
 * `{WEB_ORIGIN}/api/auth/sso/microsoft/callback`
 * Firmen-IdP: `{WEB_ORIGIN}/api/auth/sso/company/callback`
 
+Verknüpft wird nur, wenn der Anbieter die E-Mail des Kontos als bestätigt meldet. Google sendet dafür `email_verified`. Microsoft Entra ID sendet das meist nicht; dort in der App-Registrierung unter „Token configuration“ die optionalen Claims `email` und `xms_edov` für das ID-Token hinzufügen. `xms_edov` sagt, dass der Mandant die Domain der E-Mail bestätigt hat ([Microsoft: Optional claims reference](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference)). Das gilt auch für einen Firmen-Login über Entra.
+
 Der Firmen-Issuer auf der Kontoseite ist die URL, unter der `/.well-known/openid-configuration` liegt (Entra: `https://login.microsoftonline.com/<Mandanten-ID>/v2.0`). Das ist nicht dasselbe wie die Google-/Microsoft-Buttons, die über die Umgebungsvariablen laufen.

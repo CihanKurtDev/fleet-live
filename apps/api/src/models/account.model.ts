@@ -684,6 +684,15 @@ export function linkSsoIdentity(input: {
     });
 }
 
+/** The person's own link to Google or Microsoft; false when there was none. */
+export function unlinkSsoIdentity(userId: number, provider: "google" | "microsoft"): boolean {
+    const result = stmt(
+        "DELETE FROM sso_identities WHERE user_id = ? AND provider = ?",
+    ).run(userId, provider);
+
+    return Number(result.changes) > 0;
+}
+
 export function authUserFor(userId: number, companyId: number) {
     const user = UserModel.getById(userId);
 

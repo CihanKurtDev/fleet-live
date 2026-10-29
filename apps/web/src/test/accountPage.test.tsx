@@ -19,6 +19,7 @@ vi.mock("../api/auth", () => ({
     declineInvitation: vi.fn(),
     disableTotp: vi.fn(),
     getSecurity: vi.fn(),
+    getSsoProviders: vi.fn(),
     inviteMember: vi.fn(),
     listAudit: vi.fn(),
     listInvitations: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("../api/auth", () => ({
     setupTotp: vi.fn(),
     startSsoLink: vi.fn(),
     switchCompany: vi.fn(),
+    unlinkSso: vi.fn(),
     updateSecurity: vi.fn(),
     withdrawInvite: vi.fn(),
 }));
@@ -40,6 +42,7 @@ import {
     declineInvitation,
     disableTotp,
     getSecurity,
+    getSsoProviders,
     inviteMember,
     listAudit,
     listInvitations,
@@ -49,6 +52,7 @@ import {
     setupTotp,
     startSsoLink,
     switchCompany,
+    unlinkSso,
     updateSecurity,
     withdrawInvite,
 } from "../api/auth";
@@ -118,6 +122,7 @@ describe("account page", () => {
         vi.mocked(removeMember).mockReset();
         vi.mocked(listMembers).mockResolvedValue({ data: members });
         vi.mocked(listInvitations).mockResolvedValue({ data: [] });
+        vi.mocked(getSsoProviders).mockResolvedValue({ google: false, microsoft: false });
         vi.mocked(listAudit).mockResolvedValue({
             data: [],
             meta: { page: 1, limit: 50, total: 0, pageCount: 1 },
@@ -709,5 +714,43 @@ describe("account page", () => {
         expect(await screen.findByRole("heading", { name: "Passwort ändern" })).toBeInTheDocument();
         expect(screen.queryByRole("link", { name: "Protokoll" })).toBeNull();
         expect(listAudit).not.toHaveBeenCalled();
+    });
+
+    it("removes the own Google link", async () => {
+        vi.mocked(getSsoProviders).mockResolvedValue({ google: true, microsoft: true });
+        const next = authUser();
+        vi.mocked(unlinkSso).mockResolvedValue(next);
+        const { setUser } = renderAuth(<AccountPage />, {
+            user: authUser({ sso_links: { google: true, microsoft: false } }),
+            route: "/konto#anmeldung",
+        });
+
+        expect(await screen.findByText("Verknüpft")).toBeInTheDocument();
+        expect(screen.getByText("Nicht verknüpft")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Microsoft verknüpfen" })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Google trennen" }));
+
+        expect(
+            await screen.findByText("Google ist nicht mehr mit deinem Konto verknüpft."),
+        ).toBeInTheDocument();
+        expect(unlinkSso).toHaveBeenCalledWith("google");
+        expect(setUser).toHaveBeenCalledWith(next);
+    });
+
+    it("says on its own section when Google or Microsoft was linked", async () => {
+        vi.mocked(getSsoProviders).mockResolvedValue({ google: true, microsoft: false });
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto?sso=linked#anmeldung" });
+
+        expect(
+            await screen.findByText("Verknüpft. Du kannst dich jetzt auch damit anmelden."),
+        ).toBeInTheDocument();
+    });
+
+    it("hides the section when the server has neither provider", async () => {
+        renderAuth(<AccountPage />, { user: authUser(), route: "/konto#passwort" });
+
+        expect(await screen.findByRole("heading", { name: "Passwort ändern" })).toBeInTheDocument();
+        await waitFor(() => expect(getSsoProviders).toHaveBeenCalled());
+        expect(screen.queryByRole("link", { name: "Google und Microsoft" })).toBeNull();
     });
 });

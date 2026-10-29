@@ -29,6 +29,8 @@ export type AuthUser = {
     memberships: MembershipSummary[];
     /** Invitations to other companies this person has not accepted or declined yet. */
     invitations: number;
+    /** The person's own sign-in links (not a company's own login). */
+    sso_links: { google: boolean; microsoft: boolean };
     totp_enabled: boolean;
     import_prompt: boolean;
 };
