@@ -29,16 +29,24 @@
     color: var(--danger);
 }
 
+/* The form reaches into the dialog body's bottom padding, so the footer ends
+   at the dialog edge. The negative margin sits on the form, and the footer
+   sticks to the body's padding edge (bottom: -20px): before, the bar stuck
+   to the content edge and slid 20 px up over the last field. */
+.form:has(> .actions) {
+    margin-bottom: -20px;
+}
+
 /* Sticks to the bottom of a scrolling dialog body, so Speichern stays in view. */
 .actions {
     position: sticky;
-    bottom: 0;
+    bottom: -20px;
     z-index: 1;
     display: flex;
     justify-content: flex-end;
     gap: 8px;
 
-    margin: 0 -20px -20px;
+    margin: 0 -20px;
     padding: 12px 20px 20px;
     /* A line, so the fields scrolling under the buttons read as cut off. */
     border-top: 1px solid var(--border);
