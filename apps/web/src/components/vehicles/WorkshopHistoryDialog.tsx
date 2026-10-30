@@ -1,6 +1,9 @@
 import {
+    DAMAGE_SEVERITY_LABELS,
+    DAMAGE_STATE_LABELS,
     WORKSHOP_REASON_LABELS,
     WORKSHOP_STATE_LABELS,
+    type Damage,
     type VehicleWorkshop,
 } from "@fleet-live/shared";
 
@@ -13,6 +16,8 @@ interface WorkshopHistoryDialogProps {
     open: boolean;
     licensePlate: string;
     workshop: VehicleWorkshop | null;
+    /** The vehicle's damages, open and closed. */
+    damages?: Damage[];
     onClose: () => void;
 }
 
@@ -21,6 +26,7 @@ export const WorkshopHistoryDialog = ({
     open,
     licensePlate,
     workshop,
+    damages = [],
     onClose,
 }: WorkshopHistoryDialogProps) => (
     <Modal open={open} onClose={onClose} title="Werkstatt">
@@ -87,5 +93,32 @@ export const WorkshopHistoryDialog = ({
                 <p className={styles.historyNote}>Noch kein abgeschlossener Aufenthalt.</p>
             )}
         </section>
+
+        {damages.length > 0 && (
+            <section className={styles.history} aria-label="Schäden">
+                <h3 className={styles.historyHead}>
+                    <b>Schäden</b>
+                    <span>{damages.length === 1 ? "1 Schaden" : `${damages.length} Schäden`}</span>
+                </h3>
+                <ol className={styles.historyList}>
+                    {damages.map((damage) => (
+                        <li key={damage.id} className={styles.historyRow}>
+                            <span className={styles.time}>{formatIsoDate(damage.occurred_on)}</span>
+                            <span className={styles.what}>
+                                {damage.description}{" "}
+                                <span className={styles.muted}>
+                                    · {DAMAGE_SEVERITY_LABELS[damage.severity]}
+                                    {damage.drivable ? "" : " · nicht fahrbereit"}
+                                </span>
+                            </span>
+                            <span>
+                                {DAMAGE_STATE_LABELS[damage.state]}
+                                {damage.closed_on ? ` ${formatIsoDate(damage.closed_on)}` : ""}
+                            </span>
+                        </li>
+                    ))}
+                </ol>
+            </section>
+        )}
     </Modal>
 );

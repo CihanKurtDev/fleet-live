@@ -81,12 +81,38 @@ export const vehicleMoreFilters: VehicleFilterOption[] = [
     { id: "in_depot", label: "Im Depot", count: "in_depot" },
     { id: "workshop_due", label: "Werkstatt fällig", count: "workshop_due" },
     { id: "out_of_service", label: "Außer Dienst", count: "out_of_service" },
+    { id: "damage_open", label: "Schaden offen", count: "damage_open" },
+    { id: "not_drivable", label: "Nicht fahrbereit", count: "not_drivable" },
+    { id: "damage_unplanned", label: "Schaden ohne Termin", count: "damage_unplanned" },
 ];
 
-/** „Werkstatt · fertig 31.10.“ (red when late) or „Außer Dienst“, before the warnings. */
+/**
+ * „Werkstatt · fertig 31.10.“ (red when late), „Nicht fahrbereit“ or „Außer
+ * Dienst“, and „Schaden“ for an open damage it can still be driven with.
+ */
 function availabilityHint(row: Vehicle) {
+    if (row.availability === "NOT_DRIVABLE") {
+        return (
+            <span className={chipStyles.chip} data-type="SPEEDING">
+                Nicht fahrbereit
+            </span>
+        );
+    }
+
+    const damage =
+        row.open_damages > 0 ? <span className={chipStyles.chip} data-type="LOW_FUEL">Schaden</span> : null;
+
     if (row.availability === "OUT_OF_SERVICE") {
-        return <span className={chipStyles.chip}>Außer Dienst</span>;
+        return (
+            <>
+                <span className={chipStyles.chip}>Außer Dienst</span>
+                {damage}
+            </>
+        );
+    }
+
+    if (row.availability === "READY") {
+        return damage;
     }
 
     if (row.availability !== "WORKSHOP" || !row.workshop) {

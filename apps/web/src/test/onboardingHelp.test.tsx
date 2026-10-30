@@ -54,6 +54,9 @@ const mockSignals = ({
                 in_workshop: 0,
                 workshop_due: 0,
                 out_of_service: 0,
+                damage_open: 0,
+                not_drivable: 0,
+                damage_unplanned: 0,
             },
         },
     });

@@ -204,6 +204,12 @@ const PAGES: Record<string, HelpPage> = {
                     "„In die Werkstatt“ plant einen Termin (Grund, Werkstatt, Datum, zuständig). „Angekommen“ meldet das Fahrzeug dort; dann bekommt es keinen Fahrer, bis „Fertig melden“ es zurückgibt. Bei einer HU trägst du dabei den neuen Monat von der Plakette ein, bei einer UVV gilt das Fertig-Datum als Prüfung. „Verlauf“ zeigt jede Änderung und frühere Aufenthalte mit Kosten.",
             },
             {
+                question: "Wie melde ich einen Schaden?",
+                answer:
+                    "Unter „Weitere Aktionen“ (⋯) „Schaden melden“: Datum, was passiert ist, Schwere und ob das Fahrzeug noch fahren kann. Nicht fahrbereit heißt: es bekommt keinen Fahrer, bis der Schaden behoben ist. Offene Schäden stehen unter „Hinweise“; „In die Werkstatt“ nimmt sie in den Termin auf, und „Fertig melden“ setzt sie auf behoben. Einen kleinen Schaden ohne Werkstatt erledigst du unter „Bearbeiten“.",
+                dispatcherOnly: true,
+            },
+            {
                 question: "Was heißt „Außer Dienst“?",
                 answer:
                     "Das Fahrzeug wird keinem Fahrer zugewiesen, bis es wieder in Dienst gestellt ist. Beides steht unter „Weitere Aktionen“ (⋯), nicht während das Fahrzeug in der Werkstatt ist.",

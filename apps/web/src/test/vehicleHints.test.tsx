@@ -32,6 +32,7 @@ const vehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({
     current_driver_id: 7,
     availability: "READY",
     workshop: null,
+    open_damages: 0,
     ...overrides,
 });
 
