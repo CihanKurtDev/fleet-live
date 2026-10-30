@@ -250,6 +250,9 @@ CREATE TABLE IF NOT EXISTS vehicles (
     speed_limit_kmh REAL,
     -- Set by the dispatcher: not given to drivers until set back (NULL = in service).
     out_of_service_since TEXT,
+    -- Kilometerstand in metres: the last reading entered plus every reported
+    -- stretch since (the same metres as trips.distance_m). NULL = not known.
+    odometer_m REAL,
     search_text TEXT GENERATED ALWAYS AS (
         lower(license_plate || ' ' || coalesce(driver_name, ''))
     ) VIRTUAL,
@@ -460,6 +463,30 @@ CREATE TABLE IF NOT EXISTS vehicle_damages (
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_damages_vehicle
     ON vehicle_damages(vehicle_id, state);
+
+-- Every reading set by a person or the import, with the one it replaced.
+CREATE TABLE IF NOT EXISTS odometer_readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER NOT NULL,
+    km INTEGER NOT NULL,
+    previous_km INTEGER,
+    source TEXT NOT NULL CHECK (source IN ('CREATE', 'IMPORT', 'MANUAL')),
+    note TEXT,
+    actor_user_id INTEGER,
+    actor_name TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (vehicle_id)
+        REFERENCES vehicles(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (actor_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_odometer_readings_vehicle
+    ON odometer_readings(vehicle_id, id);
 
 -- Ein Profil pro Firma: Spalten- und Statuszuordnung der letzten Exporte.
 CREATE TABLE IF NOT EXISTS import_mapping_profiles (

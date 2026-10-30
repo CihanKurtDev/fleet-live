@@ -28,6 +28,7 @@ function row(
         uvv_due_on: null,
         depot: null,
         cost_center: null,
+        odometer_km: null,
         phone: null,
         licence_expires_on: null,
         licence_checked_on: null,

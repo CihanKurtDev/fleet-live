@@ -23,6 +23,10 @@ import {
     createVehicleDamage,
     getVehicleDamages,
 } from "../controllers/damage.controller";
+import {
+    correctVehicleOdometer,
+    getVehicleOdometer,
+} from "../controllers/odometer.controller";
 
 const router = express.Router();
 
@@ -38,6 +42,8 @@ router.post("/:id/workshop", requireDispatcher, createVehicleWorkshop);
 router.patch("/:id/availability", requireDispatcher, patchVehicleAvailability);
 router.get("/:id/damages", getVehicleDamages);
 router.post("/:id/damages", requireDispatcher, createVehicleDamage);
+router.get("/:id/odometer", getVehicleOdometer);
+router.post("/:id/odometer", requireDispatcher, correctVehicleOdometer);
 router.get("/:id", getVehicleById);
 router.post("/", requireDispatcher, createVehicle);
 router.put("/:id", requireDispatcher, replaceVehicle);

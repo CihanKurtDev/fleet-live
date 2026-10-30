@@ -118,6 +118,7 @@ describe("GET /api/export", () => {
             "UVV",
             "UVV fällig",
             "Kostenstelle",
+            "Kilometerstand",
         ]);
         const exported = rowByPlate(vehicleTable.rows, "K-EXP 1");
         assert.ok(exported);
@@ -133,6 +134,7 @@ describe("GET /api/export", () => {
             "2026-03-01",
             "2027-03-01",
             "4711",
+            "",
         ]);
         const formula = rowByPlate(vehicleTable.rows, "K-FORMEL 1");
         assert.equal(formula?.[6], "'=1+1");

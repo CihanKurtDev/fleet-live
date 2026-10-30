@@ -20,6 +20,7 @@ import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
+import { OdometerModel } from "../models/odometer.model";
 import {
     BadRequestError,
     ConflictError,
@@ -63,6 +64,7 @@ function readInput(body: unknown): Partial<VehicleInput> {
         depot,
         home_site_id,
         cost_center,
+        odometer_km,
     } = (body ?? {}) as Partial<VehicleInput> & Record<string, unknown>;
 
     const input: Partial<VehicleInput> = {};
@@ -106,8 +108,24 @@ function readInput(body: unknown): Partial<VehicleInput> {
     if (cost_center !== undefined) {
         input.cost_center = emptyToNull(cost_center);
     }
+    if (odometer_km !== undefined) {
+        input.odometer_km = odometer_km;
+    }
 
     return input;
+}
+
+/**
+ * Den Stand setzt nur das Anlegen; danach ändert ihn die Korrektur
+ * (`POST /api/vehicles/:id/odometer`), damit jeder Wechsel im Verlauf steht.
+ */
+function refuseOdometerOnUpdate(input: Partial<VehicleInput>) {
+    if (input.odometer_km !== undefined) {
+        throwFieldErrors({
+            odometer_km:
+                "Den Kilometerstand über die Korrektur ändern, damit der Verlauf stimmt.",
+        });
+    }
 }
 
 function trimStrings(input: Partial<VehicleInput>): Partial<VehicleInput> {
@@ -320,6 +338,16 @@ export function createVehicle(req: Request, res: Response) {
         TripModel.open(vehicle.id);
     }
 
+    if (input.odometer_km !== undefined && input.odometer_km !== null) {
+        OdometerModel.set(
+            vehicle.id,
+            sessionCompany(req),
+            input.odometer_km,
+            "CREATE",
+            req.user ? { id: req.user.id, name: req.user.name } : null,
+        );
+    }
+
     const created = syncExceptions(vehicle, sessionCompany(req));
     notifyVehiclesChanged(sessionCompany(req));
     res.status(201).location(`/api/vehicles/${vehicle.id}`).json(created);
@@ -328,6 +356,7 @@ export function createVehicle(req: Request, res: Response) {
 export function replaceVehicle(req: Request, res: Response) {
     const id = parseId(req.params.id);
     const input = readInput(req.body);
+    refuseOdometerOnUpdate(input);
     const errors = validateVehicleInput(input);
 
     if (Object.keys(errors).length > 0) {
@@ -368,6 +397,7 @@ export function updateVehicle(req: Request, res: Response) {
         throw new BadRequestError("Mindestens ein Feld ist erforderlich.");
     }
 
+    refuseOdometerOnUpdate(input);
     const errors = validateVehicleInput(input, { partial: true });
 
     if (Object.keys(errors).length > 0) {

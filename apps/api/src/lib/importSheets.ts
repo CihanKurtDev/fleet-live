@@ -47,6 +47,10 @@ const VEHICLE_COLUMN_HINTS: Array<{
         pattern: /kostenstelle|cost[_\s-]?center|k[.\s-]?stelle/i,
         target: "cost_center",
     },
+    {
+        pattern: /kilometer|km[.\s_-]?stand|tacho|laufleistung|odometer|mileage/i,
+        target: "odometer_km",
+    },
 ];
 
 const NAME_COLUMN_HINTS: Array<{

@@ -34,6 +34,7 @@ const VEHICLE_HEADER = [
     "UVV",
     "UVV fällig",
     "Kostenstelle",
+    "Kilometerstand",
 ];
 
 const ALERT_HEADER = [
@@ -86,6 +87,7 @@ type VehicleRow = {
     uvv_checked_on: string | null;
     uvv_due_on: string | null;
     cost_center: string | null;
+    odometer_km: number | null;
 };
 
 type AlertRow = {
@@ -125,7 +127,8 @@ export class ExportModel {
                 hu_due_on,
                 uvv_checked_on,
                 uvv_due_on,
-                cost_center
+                cost_center,
+                CAST(odometer_m / 1000 AS INTEGER) AS odometer_km
             FROM vehicles
             WHERE company_id = ?
             ORDER BY license_plate COLLATE NOCASE, id
@@ -146,6 +149,7 @@ export class ExportModel {
                 row.uvv_checked_on ?? "",
                 row.uvv_due_on ?? "",
                 row.cost_center ?? "",
+                row.odometer_km === null ? "" : String(row.odometer_km),
             ]),
         ]);
     }
