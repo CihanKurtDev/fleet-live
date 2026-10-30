@@ -67,6 +67,8 @@ Ein externer Login meldet nur an, wenn ihn der Inhaber verknüpft hat (Issuer un
 | `POST`   | `/api/vehicles/:id/damages`      | `{ occurred_on, description, severity, drivable }`, `dispatcher`. Nicht fahrbereit auf Fahrt ist `409`; nimmt den aktuellen Fahrer vom Fahrzeug |
 | `PATCH`  | `/api/damages/:damageId`         | Offenen Schaden ändern, `dispatcher` |
 | `POST`   | `/api/damages/:damageId/close`   | Ohne Werkstatt erledigen (nicht, solange ein offener Aufenthalt ihn hat), `dispatcher` |
+| `GET`    | `/api/vehicles/:id/odometer`     | Kilometerstand `{ km, readings }`: jeder eingetragene, importierte oder korrigierte Stand, neueste zuerst (höchstens 20). Auch als Viewer |
+| `POST`   | `/api/vehicles/:id/odometer`     | `{ km, note? }` korrigiert den Stand (ganze km, 0–2.000.000), `dispatcher`. Derselbe Stand ist `400` |
 | `POST`   | `/api/vehicles`                  | Anlegen, `Location` bei `201`. `company_id` aus der Session |
 | `PUT`    | `/api/vehicles/:id`              | Ersetzen |
 | `PATCH`  | `/api/vehicles/:id`              | Aktualisieren |
@@ -127,7 +129,7 @@ Validierung:
 }
 ```
 
-Fahrzeug-JSON: letzte Telemetrie oder `null`, `speed_limit_kmh`, `active_alerts`, `speeding_open`, `current_driver_id`, `driver_name` (null im Pool), Hof-Felder `vin`, `vehicle_type`, `hu_due_on`, `uvv_due_on`, `depot`, `cost_center`. Anlegen und Update nehmen Kennzeichen, Tank, Status und Hof-Felder. Keinen Fahrernamen. Zuweisung läuft über `/api/drivers`. Fahrer tragen `licence_expires_on` und `licence_checked_on`.
+Fahrzeug-JSON: letzte Telemetrie oder `null`, `speed_limit_kmh`, `active_alerts`, `speeding_open`, `current_driver_id`, `driver_name` (null im Pool), Hof-Felder `vin`, `vehicle_type`, `hu_due_on`, `uvv_due_on`, `depot`, `cost_center`, `odometer_km` (ganze km, `null` ohne eingetragenen Stand; wächst mit jeder gemeldeten Strecke). Anlegen und Update nehmen Kennzeichen, Tank, Status und Hof-Felder; `odometer_km` nur das Anlegen, danach ändert ihn `POST /api/vehicles/:id/odometer` (ein Update damit ist `400`). Keinen Fahrernamen. Zuweisung läuft über `/api/drivers`. Fahrer tragen `licence_expires_on` und `licence_checked_on`.
 
 ## Beispiel: einloggen, dann Fahrzeug anlegen
 
