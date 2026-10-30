@@ -101,7 +101,11 @@ const WORKSHOP_COLUMNS_SQL = `${VEHICLE_AVAILABILITY_SQL} AS availability,
         ow.reason AS workshop_reason,
         ow.place AS workshop_place,
         ow.planned_on AS workshop_planned_on,
-        ow.expected_on AS workshop_expected_on`;
+        ow.expected_on AS workshop_expected_on,
+        (
+            SELECT COUNT(*) FROM vehicle_damages d
+            WHERE d.vehicle_id = v.id AND d.state = 'OPEN'
+        ) AS open_damages`;
 
 const SELECT_ONE = `
     SELECT
@@ -247,6 +251,9 @@ type FacetRow = {
     in_workshop: number;
     workshop_due: number;
     out_of_service: number;
+    damage_open: number;
+    not_drivable: number;
+    damage_unplanned: number;
 };
 
 function toLikePattern(search: string): string {
@@ -298,6 +305,7 @@ function toVehicle(row: ListRow): Vehicle {
     } = row;
     return {
         ...vehicle,
+        open_damages: Number(vehicle.open_damages ?? 0),
         workshop:
             workshop_id === null || workshop_id === undefined
                 ? null
@@ -426,6 +434,9 @@ export class VehicleModel {
                     in_workshop: Number(counts.in_workshop),
                     workshop_due: Number(counts.workshop_due),
                     out_of_service: Number(counts.out_of_service),
+                    damage_open: Number(counts.damage_open),
+                    not_drivable: Number(counts.not_drivable),
+                    damage_unplanned: Number(counts.damage_unplanned),
                 },
             },
         };

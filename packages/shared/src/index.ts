@@ -150,6 +150,25 @@ export {
 export type { Site, SiteInput, SiteListResponse, SitePatch } from "./models/site";
 
 export type {
+    Damage,
+    DamageInput,
+    DamageListResponse,
+    DamageSeverity,
+    DamageState,
+} from "./models/damage";
+
+export {
+    DAMAGE_DESCRIPTION_MAX,
+    DAMAGE_LIST_LIMIT,
+    DAMAGE_SEVERITIES,
+    DAMAGE_SEVERITY_LABELS,
+    DAMAGE_STATES,
+    DAMAGE_STATE_LABELS,
+    parseDamageInput,
+    parseDamagePatch,
+} from "./models/damage";
+
+export type {
     VehicleAvailability,
     VehicleWorkshop,
     VehicleWorkshopResponse,

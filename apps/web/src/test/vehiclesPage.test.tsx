@@ -52,6 +52,7 @@ const vehicle = (overrides: Partial<Vehicle> & { id: number }): Vehicle => ({
     current_driver_id: null,
     availability: "READY",
     workshop: null,
+    open_damages: 0,
     ...overrides,
 });
 
@@ -82,6 +83,9 @@ const listResponse = (data: Vehicle[]): VehicleListResponse => ({
             in_workshop: 1,
             workshop_due: 0,
             out_of_service: 0,
+            damage_open: 0,
+            not_drivable: 0,
+            damage_unplanned: 0,
         },
     },
 });

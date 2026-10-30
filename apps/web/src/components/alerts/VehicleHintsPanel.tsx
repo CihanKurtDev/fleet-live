@@ -6,6 +6,7 @@ import {
     explainHuMonth,
     explainUvv,
     isLowFuelLevel,
+    type Damage,
     type Vehicle,
 } from "@fleet-live/shared";
 
@@ -20,7 +21,28 @@ interface VehicleHintsPanelProps {
     canWrite: boolean;
     /** Opens the master-data form on the field that takes the missing date. */
     onEditMaster?: (field: VehicleFormField) => void;
+    /** The vehicle's damages; open ones are hints. */
+    damages?: Damage[];
+    onEditDamage?: (damage: Damage) => void;
 }
+
+/** „Delle Heckklappe · nicht fahrbereit · 28.10.2026“. */
+const damageText = (damage: Damage) =>
+    [
+        damage.description,
+        damage.drivable ? null : "nicht fahrbereit",
+        formatIsoDate(damage.occurred_on),
+    ]
+        .filter(Boolean)
+        .join(" · ");
+
+/** A damage in an open workshop stay: the stay takes care of it. */
+const damageStay = (damage: Damage) =>
+    damage.workshop_state === "IN_WORKSHOP"
+        ? "In der Werkstatt"
+        : damage.workshop_state === "PLANNED" && damage.workshop_planned_on
+          ? `Termin am ${formatIsoDate(damage.workshop_planned_on)}`
+          : null;
 
 type DueHint = {
     kind: "hu" | "uvv";
@@ -71,7 +93,10 @@ export const VehicleHintsPanel = ({
     vehicle,
     canWrite,
     onEditMaster,
+    damages = [],
+    onEditDamage,
 }: VehicleHintsPanelProps) => {
+    const openDamages = damages.filter((damage) => damage.state === "OPEN");
     const inboxHref = `/alerts?vehicle_id=${vehicle.id}&type=OFFLINE`;
     const tankLow = isLowFuelLevel(vehicle.fuel_level);
     // The warning closes itself when the vehicle reports again, so it is
@@ -95,10 +120,36 @@ export const VehicleHintsPanel = ({
                 ) : null}
             </div>
 
-            {!showTank && !showFunk && dueHints.length === 0 ? (
+            {!showTank && !showFunk && dueHints.length === 0 && openDamages.length === 0 ? (
                 <p className={styles.empty}>Keine offenen Hinweise.</p>
             ) : (
                 <ul className={styles.list}>
+                    {openDamages.map((damage) => (
+                        <li
+                            key={`damage-${damage.id}`}
+                            className={styles.item}
+                            data-tone={damage.drivable ? undefined : "danger"}
+                        >
+                            <span
+                                className={styles.damageChip}
+                                data-tone={damage.drivable ? "warning" : "danger"}
+                            >
+                                Schaden
+                            </span>
+                            <p className={styles.message}>{damageText(damage)}</p>
+                            {damageStay(damage) ? (
+                                <span className={styles.stay}>{damageStay(damage)}</span>
+                            ) : canWrite && onEditDamage ? (
+                                <Button
+                                    variant="ghost"
+                                    size="row"
+                                    onClick={() => onEditDamage(damage)}
+                                >
+                                    Bearbeiten
+                                </Button>
+                            ) : null}
+                        </li>
+                    ))}
                     {showFunk && (
                         <li className={styles.item} data-tone="danger">
                             <WarningChip type="OFFLINE" />

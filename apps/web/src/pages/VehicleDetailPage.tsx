@@ -52,6 +52,10 @@ import {
     type PageNotice,
 } from "../components/vehicles/WorkshopPanel";
 import { setVehicleOutOfService } from "../api/workshop";
+import { closeDamage } from "../api/damages";
+import { DamageDialog } from "../components/vehicles/DamageDialog";
+import { useVehicleDamages } from "../hooks/useVehicleDamages";
+import type { Damage } from "@fleet-live/shared";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
 import { Button } from "../components/ui/Button/Button";
 import { ConfirmDialog } from "../components/ui/Modal/ConfirmDialog";
@@ -126,6 +130,11 @@ export const VehicleDetailPage = () => {
     const [confirmOutOfService, setConfirmOutOfService] = useState(false);
     const [isChangingService, setIsChangingService] = useState(false);
     const [serviceError, setServiceError] = useState<string | null>(null);
+    const [reportingDamage, setReportingDamage] = useState(false);
+    const [editingDamage, setEditingDamage] = useState<Damage | null>(null);
+    const [closingDamage, setClosingDamage] = useState<Damage | null>(null);
+    const [isClosingDamage, setIsClosingDamage] = useState(false);
+    const { damages, reload: reloadDamages } = useVehicleDamages(parsedId);
     const [masterField, setMasterField] = useState<VehicleFormField | undefined>();
     const [tripVehicleId, setTripVehicleId] = useState(parsedId);
     const [livePath, setLivePath] = useState("");
@@ -576,6 +585,32 @@ export const VehicleDetailPage = () => {
         setConfirmDelete(true);
     };
 
+    const damageSaved = (message: string) => {
+        setReportingDamage(false);
+        setEditingDamage(null);
+        setNotice({ text: message, tone: "ok" });
+        reloadDamages();
+        refetchLists();
+    };
+
+    const closeDamageWithoutWorkshop = async () => {
+        if (!closingDamage) return;
+        setIsClosingDamage(true);
+        try {
+            await closeDamage(closingDamage.id);
+            setClosingDamage(null);
+            damageSaved("Schaden ohne Werkstatt erledigt.");
+        } catch (caught: unknown) {
+            setClosingDamage(null);
+            setNotice({
+                text: caught instanceof Error ? caught.message : "Das hat nicht geklappt.",
+                tone: "error",
+            });
+        } finally {
+            setIsClosingDamage(false);
+        }
+    };
+
     const changeService = async (outOfService: boolean) => {
         setNotice(null);
         setServiceError(null);
@@ -637,6 +672,10 @@ export const VehicleDetailPage = () => {
                         </Button>
                         <VehicleMoreMenu
                             availability={vehicle.availability}
+                            onReportDamage={() => {
+                                setNotice(null);
+                                setReportingDamage(true);
+                            }}
                             onOutOfService={(outOfService) => {
                                 setNotice(null);
                                 if (outOfService) {
@@ -752,6 +791,11 @@ export const VehicleDetailPage = () => {
                         <VehicleHintsPanel
                             vehicle={vehicle}
                             canWrite={canWrite}
+                            damages={damages}
+                            onEditDamage={(damage) => {
+                                setNotice(null);
+                                setEditingDamage(damage);
+                            }}
                             onEditMaster={(field) => {
                                 setMasterField(field);
                                 setIsEditingMaster(true);
@@ -836,6 +880,7 @@ export const VehicleDetailPage = () => {
                             vehicle={vehicle}
                             canWrite={canWrite}
                             onNotice={setNotice}
+                            damages={damages}
                         />
                     </section>
                     <section className={`${styles.panel} ${styles.mapPanel}`}>
@@ -970,6 +1015,49 @@ export const VehicleDetailPage = () => {
                     onCancel={() => setIsEditingMaster(false)}
                 />
             </Modal>
+
+            <DamageDialog
+                target={
+                    canWrite && reportingDamage
+                        ? { vehicleId: vehicle.id, licensePlate: vehicle.license_plate }
+                        : null
+                }
+                damage={canWrite ? editingDamage : null}
+                licensePlate={vehicle.license_plate}
+                onClose={() => {
+                    setReportingDamage(false);
+                    setEditingDamage(null);
+                }}
+                onSaved={(_damage, message) => damageSaved(message)}
+                onCloseWithoutWorkshop={(damage) => {
+                    setEditingDamage(null);
+                    setClosingDamage(damage);
+                }}
+            />
+
+            <ConfirmDialog
+                open={canWrite && closingDamage !== null}
+                onClose={() => setClosingDamage(null)}
+                title="Schaden ohne Werkstatt erledigen?"
+                confirmLabel="Erledigen"
+                confirmVariant="primary"
+                busyLabel="Wird erledigt…"
+                isBusy={isClosingDamage}
+                onConfirm={closeDamageWithoutWorkshop}
+                items={
+                    closingDamage
+                        ? [
+                              {
+                                  key: closingDamage.id,
+                                  name: closingDamage.description,
+                                  detail: vehicle.license_plate,
+                              },
+                          ]
+                        : []
+                }
+            >
+                <p>Der Schaden bleibt im Verlauf als erledigt stehen und zählt nicht mehr als offen.</p>
+            </ConfirmDialog>
 
             <ConfirmDialog
                 open={canWrite && confirmOutOfService}

@@ -30,6 +30,7 @@ const empty = {
     open_warnings: null,
     fuel_level: null,
     workshop: null,
+    damage: null,
 };
 
 const response: TodayResponse = {
@@ -69,6 +70,7 @@ const response: TodayResponse = {
             low_fuel: 0,
             deadline_soon: 0,
             workshop_due: 0,
+            damage_unplanned: 0,
         },
         total: 16,
         limit: 6,
@@ -218,6 +220,7 @@ describe("Heute dran in an empty company", () => {
                 low_fuel: 0,
                 deadline_soon: 0,
                 workshop_due: 0,
+                damage_unplanned: 0,
             },
             total: 0,
         },
@@ -275,6 +278,7 @@ describe("Heute dran: workshop stays", () => {
                 vehicle_id: 5,
                 subject: "K-RT 4410",
                 workshop: stay,
+                damage: null,
             },
         ],
         meta: {
@@ -286,6 +290,7 @@ describe("Heute dran: workshop stays", () => {
                 low_fuel: 0,
                 deadline_soon: 0,
                 workshop_due: 1,
+                damage_unplanned: 0,
             },
             total: 1,
         },

@@ -29,6 +29,10 @@ vi.mock("../api/auth", () => ({
     listMembers: vi.fn(),
 }));
 
+vi.mock("../api/damages", () => ({
+    listVehicleDamages: vi.fn().mockResolvedValue({ data: [] }),
+}));
+
 import { listMembers } from "../api/auth";
 import {
     arriveWorkshopVisit,
@@ -223,6 +227,7 @@ describe("WorkshopPanel", () => {
                 assignee_user_id: 1,
                 note: null,
                 arrived: false,
+                damage_ids: [],
             }),
         );
         expect(onNotice).toHaveBeenLastCalledWith({

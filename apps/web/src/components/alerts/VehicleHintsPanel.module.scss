@@ -93,3 +93,26 @@
     font-size: 13px;
     color: var(--text);
 }
+
+/* Damage tag: outlined like the warning chips, red when not drivable. */
+.damageChip {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--tag, var(--warning)) 42%, transparent);
+    border-radius: var(--radius-sm);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--tag, var(--warning));
+    white-space: nowrap;
+
+    &[data-tone="danger"] {
+        --tag: var(--danger);
+    }
+}

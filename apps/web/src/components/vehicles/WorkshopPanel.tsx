@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
     WORKSHOP_REASON_LABELS,
     WORKSHOP_STATE_LABELS,
+    type Damage,
     type Vehicle,
     type VehicleWorkshop,
     type WorkshopVisit,
@@ -31,13 +32,20 @@ interface WorkshopPanelProps {
     canWrite: boolean;
     /** The page's one status line (header): what a write did, or why it failed. */
     onNotice: (notice: PageNotice) => void;
+    /** The vehicle's damages, for the history. */
+    damages?: Damage[];
 }
 
 /**
  * Werkstatt on the vehicle page, a strip above the map: the open stay with
  * its one next step, or how to start one.
  */
-export const WorkshopPanel = ({ vehicle, canWrite, onNotice }: WorkshopPanelProps) => {
+export const WorkshopPanel = ({
+    vehicle,
+    canWrite,
+    onNotice,
+    damages = [],
+}: WorkshopPanelProps) => {
     const { listEpoch, refetchLists } = useVehicles();
     const [loaded, setLoaded] = useState<{ id: number; data: VehicleWorkshop } | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -71,7 +79,8 @@ export const WorkshopPanel = ({ vehicle, canWrite, onNotice }: WorkshopPanelProp
     const workshop = loaded?.id === vehicle.id ? loaded.data : null;
     const open = workshop?.open ?? null;
     const last = workshop?.past.find((visit) => visit.state === "DONE") ?? null;
-    const hasHistory = workshop !== null && (open !== null || workshop.past.length > 0);
+    const hasHistory =
+        workshop !== null && (open !== null || workshop.past.length > 0 || damages.length > 0);
 
     const afterWrite = (text: string) => {
         onNotice({ text, tone: "ok" });
@@ -285,6 +294,7 @@ export const WorkshopPanel = ({ vehicle, canWrite, onNotice }: WorkshopPanelProp
                 open={showHistory}
                 licensePlate={vehicle.license_plate}
                 workshop={workshop}
+                damages={damages}
                 onClose={() => setShowHistory(false)}
             />
             <ConfirmDialog

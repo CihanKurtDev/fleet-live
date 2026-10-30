@@ -9,9 +9,10 @@ import {
 } from "@fleet-live/shared";
 
 import { ApiError } from "../../api/client";
-import { arriveWorkshopVisit } from "../../api/workshop";
+import { arriveWorkshopVisit, type WorkshopTarget } from "../../api/workshop";
 import { useVehicles } from "../../context/vehiclesContext";
 import { WorkshopFinishDialog } from "../vehicles/WorkshopFinishDialog";
+import { WorkshopPlanDialog } from "../vehicles/WorkshopPlanDialog";
 import { isReturnLate, todayWorkshopLine } from "../vehicles/workshopText";
 
 import { useAuth } from "../../hooks/useAuth";
@@ -47,6 +48,13 @@ const KIND: Record<
         chip: "Werkstatt fällig",
         to: "/vehicles?filter=workshop_due",
         tone: "warning",
+        tile: false,
+    },
+    damage_unplanned: {
+        tag: "Schaden",
+        chip: "Schaden ohne Termin",
+        to: "/vehicles?filter=damage_unplanned",
+        tone: "critical",
         tile: false,
     },
     driver_talk: {
@@ -105,6 +113,10 @@ const reason = (item: TodayItem, meId?: number): string => {
             return `Tankstand ${Math.round(item.fuel_level ?? 0)} %`;
         case "workshop_due":
             return item.workshop ? todayWorkshopLine(item.workshop, meId) : "";
+        case "damage_unplanned":
+            return item.damage
+                ? `${item.damage.description} · nicht fahrbereit seit ${formatDue(item.damage.occurred_on)}`
+                : "";
     }
 };
 
@@ -133,6 +145,7 @@ export const TodayPanel = ({
     const { data, error, reload } = useToday(limit);
     const [editing, setEditing] = useState<TodayItem | null>(null);
     const [finishing, setFinishing] = useState<WorkshopVisit | null>(null);
+    const [planning, setPlanning] = useState<WorkshopTarget | null>(null);
     const [arriving, setArriving] = useState<number | null>(null);
     const [notice, setNotice] = useState("");
     const { refetchLists } = useVehicles();
@@ -200,6 +213,28 @@ export const TodayPanel = ({
                     }}
                 >
                     Eintragen
+                </Button>
+            );
+        }
+
+        if (item.kind === "damage_unplanned" && item.vehicle_id !== null) {
+            const vehicleId = item.vehicle_id;
+            return (
+                <Button
+                    variant="secondary"
+                    size="row"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setNotice("");
+                        setPlanning({
+                            vehicleId,
+                            licensePlate: item.subject,
+                            reason: "DAMAGE",
+                            context: "nicht fahrbereit",
+                        });
+                    }}
+                >
+                    In die Werkstatt
                 </Button>
             );
         }
@@ -325,6 +360,17 @@ export const TodayPanel = ({
                         : " "}
                 </p>
             )}
+
+            <WorkshopPlanDialog
+                target={planning}
+                onClose={() => setPlanning(null)}
+                onSaved={(_visit, message) => {
+                    setPlanning(null);
+                    setNotice(message);
+                    reload();
+                    refetchLists();
+                }}
+            />
 
             <WorkshopFinishDialog
                 visit={finishing}

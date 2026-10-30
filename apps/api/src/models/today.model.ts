@@ -17,6 +17,7 @@ import { CompanyModel } from "./company.model";
 import { DriverModel } from "./driver.model";
 import { DueModel } from "./due.model";
 import { VehicleModel } from "./vehicle.model";
+import { DamageModel } from "./damage.model";
 import { WorkshopModel } from "./workshop.model";
 
 const emptyItem = {
@@ -29,6 +30,7 @@ const emptyItem = {
     open_warnings: null,
     fuel_level: null,
     workshop: null,
+    damage: null,
 } satisfies Partial<TodayItem>;
 
 /** Never-set dates first (a licence never checked), then the oldest. */
@@ -104,6 +106,7 @@ export class TodayModel {
     ): TodayResponse {
         const withTalk = options.driverTalk !== false;
         const workshop = WorkshopModel.dueForCompany(companyId, options.userId ?? null);
+        const unplanned = DamageModel.unplannedForCompany(companyId);
         const dueRows = DueModel.rowsForCompany(companyId);
         const overdue = dueRows
             .filter((row) => row.state === "overdue")
@@ -153,6 +156,15 @@ export class TodayModel {
                 subject: visit.license_plate,
                 workshop: visit,
             })),
+            damage_unplanned: unplanned.slice(0, limit).map(({ license_plate, ...damage }) => ({
+                ...emptyItem,
+                kind: "damage_unplanned",
+                key: `damage_unplanned:${damage.id}`,
+                vehicle_id: damage.vehicle_id,
+                subject: license_plate,
+                since: damage.occurred_on,
+                damage,
+            })),
             driver_talk: (withTalk ? talk.data : []).map((driver) => ({
                 ...emptyItem,
                 kind: "driver_talk",
@@ -187,6 +199,7 @@ export class TodayModel {
         const counts: TodayCounts = {
             deadline_overdue: overdue.length,
             workshop_due: workshop.length,
+            damage_unplanned: unplanned.length,
             driver_talk: withTalk ? talk.meta.total : 0,
             offline: offline.meta.total,
             low_fuel: lowFuel.meta.total,

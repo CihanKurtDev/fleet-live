@@ -429,6 +429,38 @@ CREATE TABLE IF NOT EXISTS workshop_visit_events (
 CREATE INDEX IF NOT EXISTS idx_workshop_visit_events_visit
     ON workshop_visit_events(visit_id, id);
 
+-- A damage reported on a vehicle. Open until a workshop stay that covers it
+-- is finished (REPAIRED) or it is closed without one (CLOSED).
+CREATE TABLE IF NOT EXISTS vehicle_damages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER NOT NULL,
+    occurred_on TEXT NOT NULL,
+    description TEXT NOT NULL,
+    severity TEXT NOT NULL CHECK (severity IN ('MINOR', 'MEDIUM', 'SEVERE')),
+    drivable INTEGER NOT NULL DEFAULT 1,
+    state TEXT NOT NULL DEFAULT 'OPEN' CHECK (state IN ('OPEN', 'REPAIRED', 'CLOSED')),
+    workshop_visit_id INTEGER,
+    closed_on TEXT,
+    reported_by_user_id INTEGER,
+    reported_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (vehicle_id)
+        REFERENCES vehicles(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (workshop_visit_id)
+        REFERENCES workshop_visits(id)
+        ON DELETE SET NULL,
+
+    FOREIGN KEY (reported_by_user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vehicle_damages_vehicle
+    ON vehicle_damages(vehicle_id, state);
+
 -- Ein Profil pro Firma: Spalten- und Statuszuordnung der letzten Exporte.
 CREATE TABLE IF NOT EXISTS import_mapping_profiles (
     company_id INTEGER PRIMARY KEY,

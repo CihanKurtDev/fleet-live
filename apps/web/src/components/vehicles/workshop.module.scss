@@ -268,3 +268,38 @@
         color: var(--text-h);
     }
 }
+
+/* A side note with its own action inside a form (Ohne Werkstatt erledigen). */
+.aside {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+/* Damages a workshop stay takes care of. */
+.damageList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    label {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 14px;
+        color: var(--text-h);
+        cursor: pointer;
+    }
+
+    small {
+        display: block;
+        font-size: 12px;
+        color: var(--text);
+    }
+}

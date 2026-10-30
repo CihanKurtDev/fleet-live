@@ -45,6 +45,7 @@ export const WORKSHOP_STATE_LABELS: Record<WorkshopState, string> = {
 export const VEHICLE_AVAILABILITIES = [
     "READY",
     "WORKSHOP",
+    "NOT_DRIVABLE",
     "OUT_OF_SERVICE",
 ] as const;
 
@@ -53,6 +54,7 @@ export type VehicleAvailability = (typeof VEHICLE_AVAILABILITIES)[number];
 export const VEHICLE_AVAILABILITY_LABELS: Record<VehicleAvailability, string> = {
     READY: "Einsatzbereit",
     WORKSHOP: "In der Werkstatt",
+    NOT_DRIVABLE: "Nicht fahrbereit",
     OUT_OF_SERVICE: "Außer Dienst",
 };
 
@@ -132,10 +134,12 @@ export type WorkshopCreateInput = {
     note: string | null;
     /** The vehicle is already there: the stay starts in `IN_WORKSHOP`. */
     arrived: boolean;
+    /** Open damages of the vehicle this stay repairs (reason DAMAGE). */
+    damage_ids: number[];
 };
 
 export type WorkshopPatch = Partial<
-    Omit<WorkshopCreateInput, "arrived">
+    Omit<WorkshopCreateInput, "arrived" | "damage_ids">
 >;
 
 export type WorkshopFinishInput = {
@@ -209,6 +213,12 @@ export function parseWorkshopCreate(
             assignee_user_id: assigneeSchema,
             note: noteSchema.optional().default(null),
             arrived: z.boolean({ error: "Angabe ungültig." }).optional().default(false),
+            damage_ids: z
+                .array(z.number().int().positive(), { error: "Schäden ungültig." })
+                .max(20, "Höchstens 20 Schäden.")
+                .refine((ids) => new Set(ids).size === ids.length, "Ein Schaden doppelt.")
+                .optional()
+                .default([]),
         })
         .superRefine((value, ctx) => {
             if (value.arrived && value.planned_on > today) {

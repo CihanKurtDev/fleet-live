@@ -13,7 +13,8 @@ import {
 
 import { withTransaction } from "../db/database";
 import { stmt } from "../db/statements";
-import { VEHICLE_CONCEPT_SQL, WORKSHOP_DUE_SQL } from "../db/vehicleConcepts";
+import { VEHICLE_AVAILABILITY_SQL, WORKSHOP_DUE_SQL } from "../db/vehicleConcepts";
+import { DamageModel } from "./damage.model";
 import { AppError, NotFoundError, ValidationError } from "../lib/errors";
 
 export type WorkshopActor = { id: number; name: string };
@@ -233,6 +234,7 @@ export class WorkshopModel {
                 input.arrived ? input.planned_on : null,
             );
             const visitId = Number(result.lastInsertRowid);
+            DamageModel.linkToVisit(vehicleId, visitId, input.damage_ids);
 
             if (input.arrived) {
                 releaseCurrentDriver(vehicleId);
@@ -374,6 +376,8 @@ export class WorkshopModel {
                 );
             }
 
+            DamageModel.repairedByVisit(visitId, input.finished_on);
+
             if (visit.reason === "UVV") {
                 // The next UVV follows from this check and the company interval.
                 stmt(
@@ -403,6 +407,7 @@ export class WorkshopModel {
 
         withTransaction(() => {
             stmt(`UPDATE workshop_visits SET state = 'CANCELLED' WHERE id = ?`).run(visitId);
+            DamageModel.releaseFromVisit(visitId);
             logEvent(visitId, "cancelled", actor);
         });
 
@@ -500,28 +505,20 @@ export class WorkshopModel {
     static unavailableReason(vehicleId: number): string | null {
         const row = stmt(
             `
-            SELECT v.license_plate,
-                   ${VEHICLE_CONCEPT_SQL.in_workshop} AS in_workshop,
-                   ${VEHICLE_CONCEPT_SQL.out_of_service} AS out_of_service
+            SELECT v.license_plate, ${VEHICLE_AVAILABILITY_SQL} AS availability
             FROM vehicles v
             WHERE v.id = ?
             `,
-        ).get(vehicleId) as
-            | { license_plate: string; in_workshop: number; out_of_service: number }
-            | undefined;
+        ).get(vehicleId) as { license_plate: string; availability: string } | undefined;
 
-        if (!row) {
-            return null;
-        }
+        const why: Record<string, string> = {
+            WORKSHOP: "ist in der Werkstatt",
+            NOT_DRIVABLE: "ist nicht fahrbereit",
+            OUT_OF_SERVICE: "ist außer Dienst",
+        };
 
-        if (Number(row.in_workshop) === 1) {
-            return `${row.license_plate} ist in der Werkstatt und lässt sich keinem Fahrer zuweisen.`;
-        }
-
-        if (Number(row.out_of_service) === 1) {
-            return `${row.license_plate} ist außer Dienst und lässt sich keinem Fahrer zuweisen.`;
-        }
-
-        return null;
+        return row && why[row.availability]
+            ? `${row.license_plate} ${why[row.availability]} und lässt sich keinem Fahrer zuweisen.`
+            : null;
     }
 }

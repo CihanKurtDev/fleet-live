@@ -4,13 +4,16 @@ import {
     WORKSHOP_PLACE_MAX,
     WORKSHOP_REASONS,
     WORKSHOP_REASON_LABELS,
+    DAMAGE_SEVERITY_LABELS,
     berlinTodayIso,
+    type Damage,
     type WorkshopReason,
     type WorkshopVisit,
 } from "@fleet-live/shared";
 
 import { listMembers, type Member } from "../../api/auth";
 import { ApiError } from "../../api/client";
+import { listVehicleDamages } from "../../api/damages";
 import {
     createWorkshopVisit,
     getWorkshopPlaces,
@@ -18,6 +21,7 @@ import {
     type WorkshopTarget,
 } from "../../api/workshop";
 import { useAuth } from "../../hooks/useAuth";
+import { formatIsoDate } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
 import { SwapLabel } from "../ui/Button/SwapLabel";
 import { Checkbox } from "../ui/Checkbox/Checkbox";
@@ -37,6 +41,7 @@ type Field =
     | "expected_on"
     | "assignee_user_id"
     | "note"
+    | "damage_ids"
     | "form";
 
 interface WorkshopPlanDialogProps {
@@ -106,6 +111,9 @@ const PlanForm = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [members, setMembers] = useState<Member[]>([]);
     const [places, setPlaces] = useState<string[]>([]);
+    /** Open damages of the vehicle no stay takes care of yet (new stays only). */
+    const [damages, setDamages] = useState<Damage[]>([]);
+    const [damageIds, setDamageIds] = useState<number[] | null>(null);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -115,8 +123,26 @@ const PlanForm = ({
         getWorkshopPlaces(controller.signal)
             .then((response) => setPlaces(response.data))
             .catch(() => setPlaces([]));
+        if (target && !visit) {
+            listVehicleDamages(target.vehicleId, controller.signal)
+                .then((response) =>
+                    setDamages(
+                        response.data.filter(
+                            (damage) =>
+                                damage.state === "OPEN" &&
+                                damage.workshop_state !== "PLANNED" &&
+                                damage.workshop_state !== "IN_WORKSHOP",
+                        ),
+                    ),
+                )
+                .catch(() => setDamages([]));
+        }
         return () => controller.abort();
-    }, []);
+    }, [target, visit]);
+
+    // A stay for a damage takes all open damages unless someone unticks them.
+    const chosenDamages =
+        damageIds ?? (reason === "DAMAGE" ? damages.map((damage) => damage.id) : []);
 
     const dispatchers = members.filter(
         (member) => member.role === "dispatcher" && !member.invited,
@@ -169,6 +195,7 @@ const PlanForm = ({
                 const { data } = await createWorkshopVisit(target.vehicleId, {
                     ...fields,
                     arrived,
+                    damage_ids: chosenDamages,
                 });
                 onSaved(
                     data,
@@ -351,6 +378,41 @@ const PlanForm = ({
                     {errors.note}
                 </FieldError>
             </div>
+
+            {!visit && damages.length > 0 && (
+                <fieldset className={styles.reasons}>
+                    <legend>Offene Schäden, die dabei behoben werden</legend>
+                    <ul className={styles.damageList}>
+                        {damages.map((damage) => (
+                            <li key={damage.id}>
+                                <label>
+                                    <Checkbox
+                                        checked={chosenDamages.includes(damage.id)}
+                                        onChange={(event) => {
+                                            const next = event.target.checked
+                                                ? [...chosenDamages, damage.id]
+                                                : chosenDamages.filter((id) => id !== damage.id);
+                                            setDamageIds(next);
+                                            clear("damage_ids");
+                                        }}
+                                    />
+                                    <span>
+                                        {damage.description}
+                                        <small>
+                                            {DAMAGE_SEVERITY_LABELS[damage.severity]}
+                                            {damage.drivable ? "" : " · nicht fahrbereit"} ·{" "}
+                                            {formatIsoDate(damage.occurred_on)}
+                                        </small>
+                                    </span>
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                    <FieldError fieldId={`${fieldId}-damages`} className={formStyles.error}>
+                        {errors.damage_ids}
+                    </FieldError>
+                </fieldset>
+            )}
 
             {!visit && (
                 <label className={styles.check}>
