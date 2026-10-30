@@ -216,6 +216,11 @@ const PAGES: Record<string, HelpPage> = {
                 dispatcherOnly: true,
             },
             {
+                question: "Woher kommt der Kilometerstand?",
+                answer:
+                    "Aus dem Stand, der beim Anlegen oder im Import eingetragen wurde, plus jeder Strecke, die das Fahrzeug seitdem gemeldet hat. Ein Klick auf den Wert unter „Stammdaten“ zeigt, wer ihn wann gesetzt hat. Weicht er vom Tacho ab, korrigiert ihn ein Dispatcher dort mit dem abgelesenen Stand.",
+            },
+            {
                 question: "Was zeigt die Linie auf der Karte?",
                 answer:
                     "Die ausgewählte Fahrt. Eine laufende Fahrt wächst live mit, eine abgeschlossene Fahrt aus „Fahrten“ zeigt ihren gespeicherten Weg.",

@@ -9,6 +9,7 @@ import {
     explainHuMonth,
     explainUvv,
     berlinTodayIso,
+    parseKilometerText,
     validateVehicleInput,
     type Site,
     type VehicleFieldErrors,
@@ -42,6 +43,8 @@ interface FormValues {
     uvv_due_on: string;
     home_site_id: string;
     cost_center: string;
+    /** Only when creating; later the reading changes through its correction. */
+    odometer_km: string;
 }
 
 const EMPTY_VALUES: FormValues = {
@@ -54,6 +57,7 @@ const EMPTY_VALUES: FormValues = {
     uvv_due_on: "",
     home_site_id: "",
     cost_center: "",
+    odometer_km: "",
 };
 
 /** Monatseingabe braucht `YYYY-MM`. Ein gespeichertes Tagesdatum wird auf den Monat gekürzt. */
@@ -81,10 +85,17 @@ const toValues = (input?: VehicleInput): FormValues =>
                       ? ""
                       : String(input.home_site_id),
               cost_center: input.cost_center ?? "",
+              odometer_km: "",
           }
         : EMPTY_VALUES;
 
 export type VehicleFormField = "hu" | "uvv-checked";
+
+/** Empty is „not known“; text that is no whole km fails validation as NaN. */
+const odometerInput = (text: string): number | null => {
+    const km = parseKilometerText(text);
+    return km === "invalid" ? Number.NaN : km;
+};
 
 interface VehicleFormProps {
     /** Field the dialog focuses first; the plate when unset. */
@@ -171,6 +182,7 @@ export const VehicleForm = ({
             values.home_site_id === "" ? null : Number(values.home_site_id),
         cost_center:
             values.cost_center.trim() === "" ? null : values.cost_center,
+        ...(isEditing ? {} : { odometer_km: odometerInput(values.odometer_km) }),
     });
 
     const editable = (form: FormValues) =>
@@ -444,6 +456,32 @@ export const VehicleForm = ({
                     {errorFor("cost_center")}
                 </FieldError>
             </div>
+
+            {!isEditing && (
+                <div className={styles.field}>
+                    <label htmlFor={`${fieldId}-km`}>Kilometerstand</label>
+                    <Input
+                        id={`${fieldId}-km`}
+                        type="text"
+                        size="md"
+                        fullWidth
+                        inputMode="numeric"
+                        placeholder="z. B. 123.456"
+                        value={values.odometer_km}
+                        disabled={readOnly}
+                        onChange={(event) =>
+                            setField("odometer_km", event.target.value)
+                        }
+                        {...fieldAria(`${fieldId}-km`, errorFor("odometer_km"), `${fieldId}-km-hint`)}
+                    />
+                    <p className={styles.hint} id={`${fieldId}-km-hint`}>
+                        Laut Tacho. Wächst danach mit jeder Fahrt.
+                    </p>
+                    <FieldError fieldId={`${fieldId}-km`} className={styles.error}>
+                        {errorFor("odometer_km")}
+                    </FieldError>
+                </div>
+            )}
 
             <div className={styles.field}>
                 <label htmlFor={`${fieldId}-fuel`}>
