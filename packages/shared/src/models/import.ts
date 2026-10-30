@@ -15,6 +15,7 @@ export const IMPORT_COLUMN_TARGETS = [
     "uvv_due_on",
     "depot",
     "cost_center",
+    "odometer_km",
     "phone",
     "licence_expires_on",
     "licence_checked_on",
@@ -73,6 +74,8 @@ export type ImportPreviewRow = {
     uvv_due_on: string | null;
     depot: string | null;
     cost_center: string | null;
+    /** Kilometerstand laut Tacho, ganze km. */
+    odometer_km: number | null;
     phone: string | null;
     licence_expires_on: string | null;
     licence_checked_on: string | null;

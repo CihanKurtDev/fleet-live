@@ -35,7 +35,9 @@ import {
     isAlreadyThereRow,
     isVehicleStatus,
     LICENSE_PLATE_MAX,
+    ODOMETER_MAX_KM,
     normalizeVin,
+    parseKilometerText,
     parseHuDate,
     parseImportProfileInput,
     parseVehicleType,
@@ -81,6 +83,7 @@ import {
     speedForStatus,
 } from "../lib/startPosition";
 import { SpeedingEventModel } from "./speedingEvent.model";
+import { OdometerModel } from "./odometer.model";
 import {
     BadRequestError,
     ConflictError,
@@ -115,10 +118,12 @@ type ParsedImportRow = {
     uvv_due_on: string | null;
     depot: string | null;
     cost_center: string | null;
+    odometer_km: number | null;
     phone: string | null;
     licence_expires_on: string | null;
     licence_checked_on: string | null;
     vin_invalid: boolean;
+    odometer_invalid: boolean;
     vehicle_type_invalid: boolean;
     hu_invalid: boolean;
     uvv_checked_invalid: boolean;
@@ -144,6 +149,7 @@ const EMPTY_OPTIONALS = {
     uvv_due_on: null,
     depot: null,
     cost_center: null,
+    odometer_km: null,
     phone: null,
     licence_expires_on: null,
     licence_checked_on: null,
@@ -241,6 +247,24 @@ function parseOptionalText(
     }
 
     return { value: trimmed };
+}
+
+/** Whole km as people write them (`parseKilometerText`), within the odometer range. */
+function parseImportOdometer(raw: string | undefined): {
+    value: number | null;
+    invalid?: boolean;
+} {
+    const km = parseKilometerText(raw);
+
+    if (km === null) {
+        return { value: null };
+    }
+
+    if (km === "invalid" || km > ODOMETER_MAX_KM) {
+        return { value: null, invalid: true };
+    }
+
+    return { value: km };
 }
 
 function parseImportVin(raw: string | undefined): {
@@ -418,6 +442,7 @@ function mapTableRows(
         const licenceCheckedParsed = parseImportHuDate(read("licence_checked_on"));
         const depotParsed = parseOptionalText(read("depot"), DEPOT_MAX);
         const costParsed = parseOptionalText(read("cost_center"), COST_CENTER_MAX);
+        const odometerParsed = parseImportOdometer(read("odometer_km"));
         const phoneParsed = parseImportPhone(read("phone"));
         const latitudeParsed = parseAxis(read("latitude"), -90, 90);
         const longitudeParsed = parseAxis(read("longitude"), -180, 180);
@@ -435,6 +460,7 @@ function mapTableRows(
             uvv_due_on: uvvParsed.value,
             depot: depotParsed.tooLong ? null : depotParsed.value,
             cost_center: costParsed.tooLong ? null : costParsed.value,
+            odometer_km: odometerParsed.value,
             phone: phoneParsed.value,
             licence_expires_on: licenceExpiresParsed.value,
             licence_checked_on: licenceCheckedParsed.value,
@@ -447,6 +473,7 @@ function mapTableRows(
             licence_checked_invalid: Boolean(licenceCheckedParsed.invalid),
             depot_too_long: Boolean(depotParsed.tooLong),
             cost_center_too_long: Boolean(costParsed.tooLong),
+            odometer_invalid: Boolean(odometerParsed.invalid),
             phone_invalid: Boolean(phoneParsed.invalid),
             latitude: latitudeParsed.value,
             longitude: longitudeParsed.value,
@@ -770,6 +797,15 @@ function buildVehiclePreviewRows(
             defaultAction = "skip";
         }
 
+        if (row.odometer_invalid) {
+            issues.push({
+                level: "error",
+                code: "INVALID_ODOMETER",
+                message: `Kilometerstand muss eine ganze Zahl von 0 bis ${ODOMETER_MAX_KM.toLocaleString("de-DE")} km sein.`,
+            });
+            defaultAction = "skip";
+        }
+
         if (row.status === "DRIVING") {
             issues.push({
                 level: "warning",
@@ -792,6 +828,7 @@ function buildVehiclePreviewRows(
             uvv_due_on: row.uvv_due_on,
             depot: row.depot,
             cost_center: row.cost_center,
+            odometer_km: row.odometer_km,
             phone: null,
             licence_expires_on: null,
             licence_checked_on: null,
@@ -1627,6 +1664,17 @@ export class ImportModel {
             ...stored.rowActions,
             ...rowActionsInput,
         };
+        // Who imported, copied into the odometer history like the workshop log.
+        let actorName: string | null | undefined;
+        const importActor = () => {
+            actorName ??=
+                (
+                    stmt(`SELECT name FROM users WHERE id = ?`).get(userId) as
+                        | { name: string | null }
+                        | undefined
+                )?.name ?? null;
+            return { id: userId, name: actorName ?? "" };
+        };
 
         const hasCurrentSheet = stored.rows.some(
             (row) => row.sheet_kind === "current",
@@ -1837,6 +1885,16 @@ export class ImportModel {
                                     wantsDriving.add(created.id);
                                 }
 
+                                if (row.odometer_km !== null) {
+                                    OdometerModel.set(
+                                        created.id,
+                                        companyId,
+                                        row.odometer_km,
+                                        "IMPORT",
+                                        importActor(),
+                                    );
+                                }
+
                                 queueStart(created.id, false);
 
                                 if (createdDriver) {
@@ -1878,6 +1936,16 @@ export class ImportModel {
                                     abortRow(
                                         row,
                                         `Fahrzeug ${row.license_plate} konnte nicht aktualisiert werden.`,
+                                    );
+                                }
+
+                                if (row.odometer_km !== null) {
+                                    OdometerModel.set(
+                                        vehicleId,
+                                        companyId,
+                                        row.odometer_km,
+                                        "IMPORT",
+                                        importActor(),
                                     );
                                 }
 

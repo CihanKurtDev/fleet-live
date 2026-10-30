@@ -207,7 +207,8 @@
         color: var(--text-h);
         overflow-wrap: anywhere;
 
-        a {
+        a,
+        .factButton {
             color: inherit;
             text-decoration: underline;
             text-underline-offset: 2px;
@@ -215,6 +216,15 @@
             &:hover {
                 color: var(--accent);
             }
+        }
+
+        /* Opens the value's own dialog (Kilometerstand), looks like the link beside it. */
+        .factButton {
+            padding: 0;
+            border: 0;
+            background: none;
+            font: inherit;
+            cursor: pointer;
         }
     }
 }

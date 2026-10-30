@@ -1137,6 +1137,7 @@ export function ensureVehicleService(database: DatabaseSync) {
     }
 
     addColumn(database, "vehicles", "out_of_service_since", "TEXT");
+    addColumn(database, "vehicles", "odometer_m", "REAL");
 }
 
 export function ensurePrivacyColumns(database: DatabaseSync) {

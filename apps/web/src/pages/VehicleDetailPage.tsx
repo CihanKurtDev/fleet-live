@@ -54,6 +54,8 @@ import {
 import { setVehicleOutOfService } from "../api/workshop";
 import { closeDamage } from "../api/damages";
 import { DamageDialog } from "../components/vehicles/DamageDialog";
+import { OdometerDialog } from "../components/vehicles/OdometerDialog";
+import { formatKm } from "../components/vehicles/odometerText";
 import { useVehicleDamages } from "../hooks/useVehicleDamages";
 import type { Damage } from "@fleet-live/shared";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
@@ -131,6 +133,7 @@ export const VehicleDetailPage = () => {
     const [isChangingService, setIsChangingService] = useState(false);
     const [serviceError, setServiceError] = useState<string | null>(null);
     const [reportingDamage, setReportingDamage] = useState(false);
+    const [isOdometerOpen, setIsOdometerOpen] = useState(false);
     const [editingDamage, setEditingDamage] = useState<Damage | null>(null);
     const [closingDamage, setClosingDamage] = useState<Damage | null>(null);
     const [isClosingDamage, setIsClosingDamage] = useState(false);
@@ -839,6 +842,27 @@ export const VehicleDetailPage = () => {
                                 <dd>{formatIsoDate(vehicle.uvv_due_on)}</dd>
                             </div>
                             <div>
+                                <dt>Kilometerstand</dt>
+                                <dd>
+                                    {vehicle.odometer_km !== null || canWrite ? (
+                                        <button
+                                            type="button"
+                                            className={styles.factButton}
+                                            onClick={() => {
+                                                setNotice(null);
+                                                setIsOdometerOpen(true);
+                                            }}
+                                        >
+                                            {vehicle.odometer_km !== null
+                                                ? formatKm(vehicle.odometer_km)
+                                                : "Eintragen"}
+                                        </button>
+                                    ) : (
+                                        "—"
+                                    )}
+                                </dd>
+                            </div>
+                            <div>
                                 <dt>Stammstandort</dt>
                                 <dd>
                                     {vehicle.home_site_id && vehicle.depot ? (
@@ -1015,6 +1039,17 @@ export const VehicleDetailPage = () => {
                     onCancel={() => setIsEditingMaster(false)}
                 />
             </Modal>
+
+            <OdometerDialog
+                vehicle={isOdometerOpen ? vehicle : null}
+                canWrite={canWrite}
+                onClose={() => setIsOdometerOpen(false)}
+                onSaved={(message) => {
+                    setIsOdometerOpen(false);
+                    setNotice({ text: message, tone: "ok" });
+                    refetchLists();
+                }}
+            />
 
             <DamageDialog
                 target={

@@ -56,7 +56,8 @@ const SELECT_LAST_POSITION = `
     WHERE v.id = ?
 `;
 
-const UPDATE_FUEL_AND_LIMIT = `UPDATE vehicles SET fuel_level = ?, speed_limit_kmh = ? WHERE id = ?`;
+/** One write per ping on the vehicle row; the odometer grows by the metres the trip got (NULL stays NULL). */
+const UPDATE_VEHICLE_PING = `UPDATE vehicles SET fuel_level = ?, speed_limit_kmh = ?, odometer_m = odometer_m + ? WHERE id = ?`;
 
 const INSERT_TELEMETRY = `
     INSERT INTO telemetry (vehicle_id, latitude, longitude, speed, recorded_at)
@@ -121,7 +122,7 @@ function writePatches(pings: Ping[]): TickedPatch[] {
 
     const insert = stmt(INSERT_TELEMETRY);
     const prune = stmt(PRUNE_TELEMETRY);
-    const updateFuelAndLimit = stmt(UPDATE_FUEL_AND_LIMIT);
+    const updateVehicle = stmt(UPDATE_VEHICLE_PING);
     const recordedAt = nowSqliteMs();
     const patches: TickedPatch[] = [];
     const keep = config.telemetryKeepPerVehicle;
@@ -151,7 +152,6 @@ function writePatches(pings: Ping[]): TickedPatch[] {
             );
 
             prune.run(vehicle.id, vehicle.id, keep);
-            updateFuelAndLimit.run(fuelLevel, limit_kmh, vehicle.id);
 
             // Moved off a convoy at the start: the old trip ends where it was,
             // the line does not jump across the map.
@@ -163,6 +163,12 @@ function writePatches(pings: Ping[]): TickedPatch[] {
                 vehicle.id,
                 path,
                 speed,
+            );
+            updateVehicle.run(
+                fuelLevel,
+                limit_kmh,
+                pathDelta?.meters ?? 0,
+                vehicle.id,
             );
 
             if (next.turnedAround) {

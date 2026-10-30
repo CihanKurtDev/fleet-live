@@ -40,6 +40,7 @@ const vehicle = (overrides: Partial<Vehicle> & { id: number }): Vehicle => ({
     depot: "Köln",
     home_site_id: null,
     cost_center: null,
+    odometer_km: null,
     latitude: null,
     longitude: null,
     speed: 0,

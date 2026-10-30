@@ -252,12 +252,14 @@ export class TripModel {
      * @returns Encoded-Polyline-Suffix relativ zum bisherigen Ende, oder
      *          `undefined` wenn nichts geschrieben wurde. `reset` ist wahr,
      *          wenn dieser Suffix eine neue Fahrt beginnt — nicht anhängen.
+     *          `meters` ist, was `distance_m` dazubekam; der Tick zählt es auf
+     *          den Kilometerstand.
      */
     static appendPoints(
         vehicleId: number,
         points: GeoPoint[],
         speed: number,
-    ): { suffix: string; reset: boolean } | undefined {
+    ): { suffix: string; reset: boolean; meters: number } | undefined {
         if (points.length === 0) {
             return undefined;
         }
@@ -305,7 +307,7 @@ export class TripModel {
             open.id,
         );
 
-        return { suffix, reset };
+        return { suffix, reset, meters };
     }
 
     /**

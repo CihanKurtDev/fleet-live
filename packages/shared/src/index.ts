@@ -169,6 +169,23 @@ export {
 } from "./models/damage";
 
 export type {
+    OdometerCorrectionInput,
+    OdometerReading,
+    OdometerSource,
+    VehicleOdometer,
+} from "./models/odometer";
+
+export {
+    ODOMETER_HISTORY_LIMIT,
+    ODOMETER_MAX_KM,
+    ODOMETER_NOTE_MAX,
+    ODOMETER_SOURCES,
+    ODOMETER_SOURCE_LABELS,
+    parseKilometerText,
+    parseOdometerCorrection,
+} from "./models/odometer";
+
+export type {
     VehicleAvailability,
     VehicleWorkshop,
     VehicleWorkshopResponse,

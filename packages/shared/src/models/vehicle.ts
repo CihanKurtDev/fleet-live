@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AlertType } from "./alert";
 import type { VehicleFilterId } from "./vehicleQuery";
+import { odometerKmSchema } from "./odometer";
 import type { VehicleAvailability, WorkshopSummary } from "./workshop";
 
 export const VEHICLE_STATUSES = [
@@ -101,6 +102,11 @@ export type Vehicle = {
     /** Depot, dem das Fahrzeug zugeordnet ist. `depot` ist dessen Name. */
     home_site_id: number | null;
     cost_center: string | null;
+    /**
+     * Kilometerstand in ganzen km: der zuletzt eingetragene Stand plus jede
+     * seitdem gemeldete Strecke. `null`, solange keiner eingetragen ist.
+     */
+    odometer_km: number | null;
     latitude: number | null;
     longitude: number | null;
     speed: number | null;
@@ -144,6 +150,8 @@ export type VehicleInput = {
     depot?: string | null;
     home_site_id?: number | null;
     cost_center?: string | null;
+    /** Nur beim Anlegen: der Stand laut Tacho. Danach über die Korrektur mit Verlauf. */
+    odometer_km?: number | null;
 };
 
 export type VehicleFieldErrors = Partial<Record<keyof VehicleInput, string>>;
@@ -160,6 +168,7 @@ const VEHICLE_INPUT_KEYS = [
     "depot",
     "home_site_id",
     "cost_center",
+    "odometer_km",
 ] as const;
 
 export function isVehicleStatus(
@@ -371,6 +380,7 @@ export const vehicleInputSchema = z.object({
         ])
         .optional(),
     cost_center: costCenterSchema.optional(),
+    odometer_km: z.union([z.null(), odometerKmSchema]).optional(),
 });
 
 interface ValidateOptions {

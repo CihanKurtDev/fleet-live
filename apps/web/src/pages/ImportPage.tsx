@@ -60,6 +60,7 @@ const COLUMN_TARGET_LABELS: Record<ImportColumnTarget, string> = {
     uvv_due_on: "UVV fällig",
     depot: "Depot",
     cost_center: "Kostenstelle",
+    odometer_km: "Kilometerstand",
     phone: "Telefon",
     licence_expires_on: "Führerschein gültig bis",
     licence_checked_on: "Führerschein kontrolliert am",

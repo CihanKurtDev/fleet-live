@@ -4,7 +4,8 @@
  * 180 vehicles and 150 drivers at three depots (Köln, Düsseldorf, Bonn),
  * with eligibility, current crews and a realistic share of problems
  * (low tank, no signal, overdue or missing HU/UVV, expired licences,
- * old licence checks). A fixed seed keeps the files the same on every run.
+ * old licence checks) and an odometer reading per vehicle. A fixed seed keeps
+ * the files the same on every run.
  *
  * Run: `npm run sample:import -w api`
  */
@@ -47,12 +48,28 @@ const PLATE_LETTERS = "ABCDEFGHJKLMNPRSTUVWXZ";
 const VIN_CHARS = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789";
 
 // mulberry32: small, seeded, the same numbers on every machine.
-let seed = 20261027;
-const random = () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+const seeded = (start: number) => {
+    let seed = start;
+    return () => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+};
+const random = seeded(20261027);
+// Odometer readings draw from their own sequence, so adding them left every
+// other column as it was.
+const odometerRandom = seeded(20261030);
+const ODOMETER_RANGE: Record<string, [number, number]> = {
+    Transporter: [18_000, 240_000],
+    LKW: [40_000, 620_000],
+    PKW: [9_000, 190_000],
+    Sonstiges: [2_000, 60_000],
+};
+const odometerKm = (type: string) => {
+    const [min, max] = ODOMETER_RANGE[type] ?? [0, 100_000];
+    return String(min + Math.floor(odometerRandom() * (max - min + 1)));
 };
 const int = (min: number, max: number) =>
     min + Math.floor(random() * (max - min + 1));
@@ -221,11 +238,14 @@ for (const vehicle of vehicles) {
 
 vehicles.sort((left, right) => left.plate.localeCompare(right.plate, "de"));
 
+const odometers = new Map(vehicles.map((vehicle) => [vehicle, odometerKm(vehicle.type)]));
+
 const vehicleRows = (withDriver: boolean) => [
     [
         "Kennzeichen", "Tank", "Status",
         ...(withDriver ? ["Fahrer"] : []),
         "VIN", "Fahrzeugtyp", "Depot", "HU", "UVV fällig", "Kostenstelle",
+        "Kilometerstand",
     ],
     ...vehicles.map((vehicle) => [
         vehicle.plate,
@@ -238,6 +258,7 @@ const vehicleRows = (withDriver: boolean) => [
         vehicle.hu,
         vehicle.uvv,
         vehicle.depot.costCenter,
+        odometers.get(vehicle)!,
     ]),
 ];
 
