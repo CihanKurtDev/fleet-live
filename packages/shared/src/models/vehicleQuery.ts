@@ -33,6 +33,12 @@ export const VEHICLE_FILTERS = [
     "workshop_due",
     /** Außer Dienst gestellt. */
     "out_of_service",
+    /** Mindestens ein offener Schaden. */
+    "damage_open",
+    /** Offener Schaden, nicht fahrbereit, nicht in der Werkstatt. */
+    "not_drivable",
+    /** Nicht fahrbereit und noch kein Werkstatt-Termin. */
+    "damage_unplanned",
 ] as const;
 
 export const VEHICLE_PAGE_LIMITS = [10, 25, 50, 100] as const;
@@ -102,6 +108,9 @@ export type VehicleListCounts = {
     in_workshop: number;
     workshop_due: number;
     out_of_service: number;
+    damage_open: number;
+    not_drivable: number;
+    damage_unplanned: number;
 };
 
 export type VehicleListMeta = {

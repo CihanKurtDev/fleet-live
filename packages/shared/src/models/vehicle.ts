@@ -127,6 +127,8 @@ export type Vehicle = {
     availability: VehicleAvailability;
     /** The open workshop stay, planned or arrived; `null` without one. */
     workshop: WorkshopSummary | null;
+    /** Damages not repaired or closed yet. */
+    open_damages: number;
 };
 
 /** Die vom Client beschreibbaren Felder eines Fahrzeugs. */

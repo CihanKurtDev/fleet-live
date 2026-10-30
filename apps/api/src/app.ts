@@ -23,6 +23,7 @@ import importRoutes from "./routes/import.routes";
 import exportRoutes from "./routes/export.routes";
 import siteRoutes from "./routes/site.routes";
 import workshopRoutes from "./routes/workshop.routes";
+import damageRoutes from "./routes/damage.routes";
 import { setStreamFocus, streamEvents } from "./controllers/stream.controller";
 import {
     getSim,
@@ -139,6 +140,7 @@ export function createApp() {
     app.use("/api/export", requireAuth, exportRoutes);
     app.use("/api/sites", requireAuth, siteRoutes);
     app.use("/api/workshop", requireAuth, workshopRoutes);
+    app.use("/api/damages", requireAuth, damageRoutes);
 
     app.use(notFound);
     app.use(errorHandler);

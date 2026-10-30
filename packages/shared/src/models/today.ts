@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { DueKind } from "./dueDates";
 import { emptyToUndefined } from "./queryPreprocess";
+import type { Damage } from "./damage";
 import type { WorkshopVisit } from "./workshop";
 
 /**
@@ -13,6 +14,7 @@ import type { WorkshopVisit } from "./workshop";
 export const TODAY_KINDS = [
     "deadline_overdue",
     "workshop_due",
+    "damage_unplanned",
     "driver_talk",
     "offline",
     "low_fuel",
@@ -40,6 +42,8 @@ export type TodayItem = {
     fuel_level: number | null;
     /** The stay for `workshop_due` rows. */
     workshop: WorkshopVisit | null;
+    /** The damage for `damage_unplanned` rows (the oldest not drivable one). */
+    damage: Damage | null;
 };
 
 export type TodayCounts = Record<TodayKind, number>;

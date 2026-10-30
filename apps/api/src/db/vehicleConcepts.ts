@@ -20,12 +20,30 @@ const IN_WORKSHOP_SQL = `EXISTS (
           AND w.state = 'IN_WORKSHOP'
     )`;
 
-/** Not to be given to a driver: in a workshop or out of service. */
-export const VEHICLE_UNAVAILABLE_SQL = `(${IN_WORKSHOP_SQL} OR v.out_of_service_since IS NOT NULL)`;
+/** An open damage that the vehicle cannot be driven with. */
+const UNDRIVABLE_DAMAGE_SQL = `EXISTS (
+        SELECT 1 FROM vehicle_damages d
+        WHERE d.vehicle_id = v.id
+          AND d.state = 'OPEN'
+          AND d.drivable = 0
+    )`;
 
-/** `availability` of a vehicle row; the workshop wins over out of service. */
+const OPEN_STAY_SQL = `EXISTS (
+        SELECT 1 FROM workshop_visits w
+        WHERE w.vehicle_id = v.id
+          AND w.state IN ('PLANNED', 'IN_WORKSHOP')
+    )`;
+
+/** Not to be given to a driver: in a workshop, not drivable or out of service. */
+export const VEHICLE_UNAVAILABLE_SQL = `(${IN_WORKSHOP_SQL} OR ${UNDRIVABLE_DAMAGE_SQL} OR v.out_of_service_since IS NOT NULL)`;
+
+/**
+ * `availability` of a vehicle row: the workshop wins, then a damage it
+ * cannot be driven with, then out of service.
+ */
 export const VEHICLE_AVAILABILITY_SQL = `CASE
         WHEN ${IN_WORKSHOP_SQL} THEN 'WORKSHOP'
+        WHEN ${UNDRIVABLE_DAMAGE_SQL} THEN 'NOT_DRIVABLE'
         WHEN v.out_of_service_since IS NOT NULL THEN 'OUT_OF_SERVICE'
         ELSE 'READY'
     END`;
@@ -58,6 +76,12 @@ export const VEHICLE_CONCEPT_SQL: Record<VehicleFilterId, string> = {
           AND ${WORKSHOP_DUE_SQL}
     )`,
     out_of_service: "v.out_of_service_since IS NOT NULL",
+    damage_open: `EXISTS (
+        SELECT 1 FROM vehicle_damages d
+        WHERE d.vehicle_id = v.id AND d.state = 'OPEN'
+    )`,
+    not_drivable: `(${UNDRIVABLE_DAMAGE_SQL} AND NOT ${IN_WORKSHOP_SQL})`,
+    damage_unplanned: `(${UNDRIVABLE_DAMAGE_SQL} AND NOT ${OPEN_STAY_SQL})`,
 };
 
 /** `COALESCE(SUM(<predicate>), 0) AS <id>` for the given concepts. */
