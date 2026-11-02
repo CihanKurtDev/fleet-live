@@ -97,7 +97,34 @@ export type Alert = {
     created_at: string;
     ended_at: string | null;
     resolved_at: string | null;
+    /** The trip the warning happened on (speeding, signal loss), to frame it on the map. */
+    trip_id: number | null;
+    /** How it was cleared, e.g. „Gespräch geführt am 02.11.2026“. */
+    resolution_note: string | null;
 };
+
+export const DRIVER_TALK_NOTE_MAX = 500;
+
+/** „Gespräch geführt“ with a driver: an optional note to the talk. */
+export function parseDriverTalk(input: unknown): { note: string | null } {
+    return z
+        .object({
+            note: z.preprocess(
+                (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+                z
+                    .union([
+                        z.null(),
+                        z
+                            .string({ error: "Notiz ist ungültig." })
+                            .trim()
+                            .max(DRIVER_TALK_NOTE_MAX, `Notiz darf höchstens ${DRIVER_TALK_NOTE_MAX} Zeichen haben.`),
+                    ])
+                    .optional()
+                    .default(null),
+            ),
+        })
+        .parse(input ?? {});
+}
 
 export function isSpeedingAlertDetails(
     value: unknown,
@@ -197,6 +224,8 @@ export type AlertListMeta = {
     pageCount: number;
     counts: AlertListCounts;
     type_counts: AlertTypeCounts;
+    /** Days a resolved warning stays in the list (the company's retention). */
+    resolved_kept_days: number;
 };
 
 export type AlertListResponse = {

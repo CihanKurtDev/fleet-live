@@ -28,6 +28,7 @@ import {
     routeLengthMeters,
     seedSimProgress,
     simOverspeedFactor,
+    SIM_CLASS_LIMITS,
     speedLimitKmh,
     verticesBetween,
 } from "../sim/routes";
@@ -2000,6 +2001,24 @@ describe("telemetry route simulation", () => {
         assert.ok(latest.distance_m < 15_000);
     });
 
+    it("gives trucks their own, lower classes as steps, never a ramp of values", () => {
+        const fracs = Array.from({ length: 101 }, (_, index) => index / 100);
+        const truck = new Set(fracs.map((frac) => speedLimitKmh(frac, "TRUCK")));
+        const car = new Set(fracs.map((frac) => speedLimitKmh(frac, "VAN")));
+
+        assert.deepEqual([...truck].sort((a, b) => a - b), [
+            SIM_CLASS_LIMITS.TRUCK.city,
+            SIM_CLASS_LIMITS.TRUCK.ramp,
+            SIM_CLASS_LIMITS.TRUCK.highway,
+        ]);
+        assert.deepEqual([...car].sort((a, b) => a - b), [
+            SIM_CLASS_LIMITS.default.city,
+            SIM_CLASS_LIMITS.default.ramp,
+            SIM_CLASS_LIMITS.default.highway,
+        ]);
+        assert.ok(speedLimitKmh(0.5, "TRUCK") < speedLimitKmh(0.5, "VAN"));
+    });
+
     it("keeps displayed speed within the local limit", () => {
         assert.equal(speedLimitKmh(0), CITY_LIMIT_KMH);
         assert.equal(speedLimitKmh(0.5), HIGHWAY_LIMIT_KMH);
@@ -2790,5 +2809,58 @@ describe("route vertices", () => {
             slice.length > 5,
             `expected a curve, got ${slice.length} points`,
         );
+    });
+});
+
+describe("a long reporting pause ends the trip", () => {
+    it("closes the trip at its last report and starts a new one with the next", async () => {
+        const vehicle = VehicleModel.create({ license_plate: "K-PAUSE 1", company_id: 1 });
+        await giveCurrentDriver(api, vehicle.id, "Paula Pause");
+        await api.patch(`/api/vehicles/${vehicle.id}`).send({ status: "DRIVING" });
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.3);
+        TelemetryModel.tickDrivingVehicles([vehicle.id]);
+        const first = (await api.get(`/api/vehicles/${vehicle.id}/trips/latest`)).body.data;
+        assert.equal(first.ended_at, null);
+
+        // The last report lies two hours back (server off, sim paused).
+        db.prepare(
+            "UPDATE telemetry SET recorded_at = datetime('now', '-2 hours') WHERE vehicle_id = ?",
+        ).run(vehicle.id);
+        const lastReport = (
+            db.prepare("SELECT MAX(recorded_at) AS at FROM telemetry WHERE vehicle_id = ?").get(vehicle.id) as {
+                at: string;
+            }
+        ).at;
+        TelemetryModel.tickDrivingVehicles([vehicle.id]);
+
+        const closed = db.prepare("SELECT ended_at FROM trips WHERE id = ?").get(first.id) as { ended_at: string };
+        assert.equal(closed.ended_at, lastReport.slice(0, 19));
+        const next = (await api.get(`/api/vehicles/${vehicle.id}/trips/latest`)).body.data;
+        assert.notEqual(next.id, first.id);
+        assert.equal(next.ended_at, null);
+    });
+});
+
+describe("simulated vehicles drive near their home depot", () => {
+    it("brings a vehicle that stands far from home back onto a road near its depot, once", async () => {
+        const depot = await api.post("/api/sites").send({ name: "Köln Heim", latitude: 50.9375, longitude: 6.9603 });
+        assert.equal(depot.status, 201);
+        const vehicle = VehicleModel.create({ license_plate: "K-HEIM 1", company_id: 1 });
+        db.prepare("UPDATE vehicles SET home_site_id = ? WHERE id = ?").run(depot.body.id, vehicle.id);
+        // Near Nürnberg, ~400 km from Köln.
+        db.prepare("INSERT INTO telemetry (vehicle_id, latitude, longitude, speed) VALUES (?, 49.45, 11.08, 0)").run(vehicle.id);
+        await giveCurrentDriver(api, vehicle.id, "Heiko Heim");
+        await api.patch(`/api/vehicles/${vehicle.id}`).send({ status: "DRIVING" });
+        resetSimProgress();
+
+        const [moved] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+        assert.ok(moved);
+        const km = haversineMeters({ lat: moved.latitude, lng: moved.longitude }, { lat: 50.9375, lng: 6.9603 }) / 1000;
+        assert.ok(km < 120, `${km} km from home`);
+
+        const [next] = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+        assert.ok(next);
+        const step = haversineMeters({ lat: moved.latitude, lng: moved.longitude }, { lat: next.latitude, lng: next.longitude });
+        assert.ok(step < 20_000, `jumped ${step} m on the second tick`);
     });
 });

@@ -215,7 +215,12 @@
 
 @media (max-width: 700px) {
     /* Phones stack the page; the list grows with a fixed handful of rows. */
+    .panel {
+        height: auto;
+    }
+
     .list {
+        flex: none;
         overflow: visible;
     }
 

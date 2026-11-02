@@ -1,12 +1,19 @@
 /* Werkstatt strip on the vehicle page and the workshop dialogs. */
 
-/* One row: title, state or the empty line, then Verlauf and the actions. */
+/*
+ * One row: title, state or the empty line, then Verlauf and the actions. The
+ * line takes the free width and wraps inside it, so the actions never drop
+ * onto the facts below; phones let the row wrap.
+ */
 .header {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: 8px 12px;
     min-height: var(--control-sm);
+
+    @media (max-width: 700px) {
+        flex-wrap: wrap;
+    }
 }
 
 .title {
@@ -15,22 +22,31 @@
 }
 
 .line {
-    flex: 0 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     margin: 0;
     font-size: 13px;
+    line-height: 1.35;
     color: var(--text);
 
-    &[data-tone="error"] {
+    &[data-tone="error"],
+    [data-tone="danger"] {
         color: var(--danger);
+    }
+
+    [data-tone="warning"] {
+        color: var(--warning);
+    }
+
+    @media (max-width: 700px) {
+        flex-basis: 100%;
+        order: 1;
     }
 }
 
-.spacer {
-    flex: 1 1 0;
-}
-
 .link {
+    flex: none;
+    white-space: nowrap;
     padding: 0;
     border: 0;
     background: none;
@@ -48,7 +64,7 @@
 
 .facts {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 10px 14px;
     margin: 0;
 
@@ -69,6 +85,12 @@
         font-variant-numeric: tabular-nums;
         color: var(--text-h);
         overflow-wrap: anywhere;
+
+        small {
+            display: block;
+            font-size: 12px;
+            color: var(--text);
+        }
     }
 }
 
@@ -78,8 +100,13 @@
 
 .actions {
     display: flex;
-    flex-wrap: wrap;
+    flex: none;
     gap: 8px;
+
+    // Phones: title, state and Verlauf, then the line, then the buttons.
+    @media (max-width: 700px) {
+        order: 2;
+    }
 }
 
 /* Dialogs */
@@ -302,4 +329,379 @@
         font-size: 12px;
         color: var(--text);
     }
+}
+
+/* Name and contact of a workshop: address wide, phone narrow. */
+/* Address search: one button, then up to five hits to pick from. */
+.geocode {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: -4px;
+}
+
+.geocodeHits {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.geocodeHit {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-h);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+        background: var(--code-bg);
+    }
+}
+
+.geocodeHits li:last-child .geocodeHit {
+    border-bottom: 0;
+}
+
+.geocodeCredit {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text);
+}
+
+/* The destructive action sits apart, at the left of the dialog footer. */
+.actionsStart {
+    margin-right: auto;
+}
+
+.addressRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    gap: 12px;
+
+    @media (max-width: 700px) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.fieldLabel {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-h);
+}
+
+/* Wann (date and time) wide, the driver beside it. */
+.whenPair {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+    gap: 16px;
+
+    @media (max-width: 700px) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Date and time of a damage side by side. */
+.whenRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 6.5rem;
+    gap: 8px;
+}
+
+/* A value that is shown, not edited (the driver on a damage). */
+.readValue {
+    margin: 0;
+    min-height: var(--control-md);
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: var(--text-h);
+}
+
+/* Up to three photos of a damage, and the square to add one. */
+.photos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.photo {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    margin: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+
+    a {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+}
+
+.photoRemove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    color: var(--text-h);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.photoAdd {
+    width: 72px;
+    height: 72px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+        color: var(--text-h);
+        border-color: var(--text);
+    }
+}
+
+.fileInput {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* The map to set a workshop's place by clicking. */
+.pickerMap {
+    height: 220px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: crosshair;
+}
+
+/* A field label with a small action on the same line (Neue Werkstatt, Schaden melden). */
+.labelRow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+
+    label,
+    legend,
+    > span {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-h);
+    }
+}
+
+.inlineAction {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: 500 12px var(--sans);
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+/* The chosen workshop's contact under its select. */
+.placeLine {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text);
+}
+
+/* Termin am | Uhrzeit | Fertig erwartet. */
+.trio {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 12px;
+
+    @media (max-width: 700px) {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+
+        > :last-child {
+            grid-column: 1 / -1;
+        }
+    }
+}
+
+/* Fahrer zuweisen: the drivers allowed to drive the vehicle. */
+.pick {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pickList {
+    margin: 0 -20px;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--border);
+}
+
+.pickRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+
+    > span {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    b {
+        display: block;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-h);
+    }
+
+    small {
+        display: block;
+        font-size: 12px;
+        color: var(--text);
+    }
+}
+
+.pickError {
+    margin: 0;
+    font-size: 13px;
+    color: var(--danger);
+}
+
+/* Kosten nachtragen in the history: amount field and Speichern in the row. */
+// The open field takes its own line under the stay, so reason and place
+// keep their width in the narrow dialog.
+.costEdit {
+    grid-column: 2 / -1;
+    justify-self: end;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-bottom: 8px;
+
+    input {
+        width: 110px;
+    }
+}
+
+.costError {
+    flex-basis: 100%;
+    font-size: 12px;
+    color: var(--danger);
+    text-align: right;
+}
+
+/* The chosen workshop is far from the vehicle: a question, not an error. */
+.farBox {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--warning) 42%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--warning) 8%, transparent);
+
+    p {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--text-h);
+    }
+}
+
+/* „Was gemacht wird“: one row per job, the due ones ticked. */
+.todo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    label {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--bg);
+        font-size: 14px;
+        color: var(--text-h);
+        cursor: pointer;
+
+        &[data-checked] {
+            border-color: var(--accent-border);
+            background: var(--accent-bg);
+        }
+    }
+
+    small {
+        display: block;
+        font-size: 12px;
+        color: var(--text);
+    }
+}
+
+.todoState {
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+
+    &[data-tone="warning"] {
+        color: var(--warning);
+        font-weight: 600;
+    }
+}
+
+/* What speaks against the chosen bring driver on that day. */
+.bringNote {
+    margin: 0;
+    font-size: 12px;
+    color: var(--warning);
+}
+
+/* A transport that does not fit the vehicle (a driver for one that cannot be driven). */
+.reason[data-disabled] {
+    cursor: not-allowed;
+    opacity: 0.5;
 }

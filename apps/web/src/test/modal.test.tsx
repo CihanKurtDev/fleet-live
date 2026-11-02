@@ -84,3 +84,57 @@ describe("Modal with unsaved input", () => {
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("Modal inside a modal", () => {
+    // React passes close, keydown and input of the inner dialog on to the
+    // outer one through the component tree; only the inner one may react.
+    const renderNested = () => {
+        const onOuterClose = vi.fn();
+        const onInnerClose = vi.fn();
+        const view = render(
+            <Modal open onClose={onOuterClose} title="Termin planen" guardUnsaved>
+                <label>
+                    Notiz
+                    <input type="text" />
+                </label>
+                <Modal open onClose={onInnerClose} title="Werkstatt anlegen" guardUnsaved>
+                    <label>
+                        Name
+                        <input type="text" />
+                    </label>
+                </Modal>
+            </Modal>,
+        );
+        const [outer, inner] = [...view.container.querySelectorAll("dialog")] as HTMLDialogElement[];
+        return { onOuterClose, onInnerClose, outer, inner };
+    };
+
+    it("closes only the inner dialog when it closes", () => {
+        const { onOuterClose, onInnerClose, inner } = renderNested();
+
+        fireEvent(inner, new Event("close"));
+
+        expect(onInnerClose).toHaveBeenCalledTimes(1);
+        expect(onOuterClose).not.toHaveBeenCalled();
+    });
+
+    it("does not mark the outer form as changed by typing in the inner one", () => {
+        const { onOuterClose, outer, inner } = renderNested();
+
+        fireEvent.input(within(inner).getByLabelText("Name"), { target: { value: "Autohaus Weber" } });
+        fireEvent.click(within(outer).getAllByRole("button", { name: "Schließen", hidden: true })[0]);
+
+        expect(onOuterClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves Escape in the inner dialog to the inner dialog", () => {
+        const { outer, inner } = renderNested();
+
+        fireEvent.input(within(outer).getByLabelText("Notiz"), { target: { value: "x" } });
+        const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+        within(inner).getByLabelText("Name").dispatchEvent(escape);
+
+        expect(escape.defaultPrevented).toBe(false);
+        expect(within(outer).queryByText("Eingaben verwerfen?")).toBeNull();
+    });
+});

@@ -39,6 +39,12 @@ export const VEHICLE_FILTERS = [
     "not_drivable",
     /** Nicht fahrbereit und noch kein Werkstatt-Termin. */
     "damage_unplanned",
+    /** Fährt heute nicht: in der Werkstatt, nicht fahrbereit oder außer Dienst. */
+    "unavailable",
+    /** HU oder UVV abgelaufen (Regel wie /fristen). */
+    "deadline_overdue",
+    /** HU oder UVV innerhalb der Vorlaufzeit der Firma fällig, keine abgelaufen. */
+    "deadline_soon",
 ] as const;
 
 export const VEHICLE_PAGE_LIMITS = [10, 25, 50, 100] as const;
@@ -111,6 +117,9 @@ export type VehicleListCounts = {
     damage_open: number;
     not_drivable: number;
     damage_unplanned: number;
+    unavailable: number;
+    deadline_overdue: number;
+    deadline_soon: number;
 };
 
 export type VehicleListMeta = {

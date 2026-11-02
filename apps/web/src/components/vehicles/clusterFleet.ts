@@ -8,6 +8,7 @@
  * entsteht höchstens ein Index pro `CLUSTER_INDEX_DEBOUNCE_MS`.
  */
 import Supercluster from "supercluster";
+import { haversineMeters } from "../../utils/geo";
 import {
     VEHICLE_STATUSES,
     type GeoBBox,
@@ -131,24 +132,6 @@ export function clusterIndexDelay(
     return CLUSTER_INDEX_DEBOUNCE_MS;
 }
 
-function haversineMeters(
-    latitudeA: number,
-    longitudeA: number,
-    latitudeB: number,
-    longitudeB: number,
-): number {
-    const earth = 6_371_000;
-    const toRad = (value: number) => (value * Math.PI) / 180;
-    const dLat = toRad(latitudeB - latitudeA);
-    const dLng = toRad(longitudeB - longitudeA);
-    const latA = toRad(latitudeA);
-    const latB = toRad(latitudeB);
-    const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(latA) * Math.cos(latB) * Math.sin(dLng / 2) ** 2;
-
-    return 2 * earth * Math.asin(Math.min(1, Math.sqrt(a)));
-}
 
 /** Diagonale der Hülle in Metern. Ein Punkt ist 0. */
 export function boundsSpanMeters(bounds: GeoBBox): number {

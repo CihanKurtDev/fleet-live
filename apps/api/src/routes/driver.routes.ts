@@ -8,6 +8,7 @@ import {
     getDriverById,
     getDrivers,
     setDriverCurrentVehicle,
+    talkToDriver,
     unassignDriverVehicle,
     updateDriver,
 } from "../controllers/driver.controller";
@@ -20,6 +21,7 @@ router.post("/", requireDispatcher, createDriver);
 router.get("/:id", requireDriverNames, getDriverById);
 router.patch("/:id", requireDispatcher, updateDriver);
 router.delete("/:id", requireDispatcher, deleteDriver);
+router.post("/:id/talk", requireDispatcher, talkToDriver);
 router.post("/:id/vehicles", requireDispatcher, assignDriverVehicle);
 router.delete(
     "/:id/vehicles/:vehicleId",
@@ -30,6 +32,7 @@ router.patch(
     "/:id/current-vehicle",
     requireDispatcher,
     setDriverCurrentVehicle,
+    talkToDriver,
 );
 
 export default router;

@@ -21,6 +21,13 @@ export const SPEED_CRITICAL_OVER_LIMIT_KMH = 20;
 /** Zusammenhängende Überschreitung, bevor eine `alerts`-Zeile entsteht. */
 export const SPEEDING_OPEN_AFTER_MS = 8_000;
 
+/**
+ * Eine Warnung entsteht erst, wenn die Fahrt an einer Stelle mindestens so
+ * viele km/h über dem Limit lag. Kürzer oder knapper drüber färbt die Anzeige
+ * nur live orange (Firmen-Schwelle der App, keine Rechtsangabe).
+ */
+export const SPEEDING_MIN_OVER_KMH = 10;
+
 /** Unter der Schwelle, bevor `ended_at` gesetzt wird. */
 export const SPEEDING_HYSTERESIS_MS = 2_000;
 

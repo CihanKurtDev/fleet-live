@@ -30,6 +30,8 @@ const alert = (overrides: Partial<Alert> & { id: number }): Alert => ({
     created_at: "2026-10-14 08:00:00",
     ended_at: null,
     resolved_at: null,
+    resolution_note: null,
+    trip_id: null,
     ...overrides,
 });
 
@@ -46,7 +48,7 @@ const listResponse = (data: Alert[]): AlertListResponse => ({
             SPEEDING: 1,
             LOW_FUEL: 0,
             OFFLINE: data.length - 1,
-        },
+        }, resolved_kept_days: 90,
     },
 });
 
@@ -123,7 +125,7 @@ describe("alert list page", () => {
         renderTable(true);
 
         expect(
-            await screen.findByText("3 offen · 5 erledigt · neueste zuerst"),
+            await screen.findByText("3 offen · 5 erledigt. Erledigt heißt geklärt; die Warnung bleibt 90 Tage im Verlauf."),
         ).toBeInTheDocument();
 
         const tiles = screen.getByRole("group", { name: "Status" });
@@ -167,7 +169,7 @@ describe("alert list page", () => {
             meta: {
                 ...resolved.meta,
                 counts: { all: 8, open: 3, resolved: 5 },
-                type_counts: { all: 5, SPEEDING: 5, LOW_FUEL: 0, OFFLINE: 0 },
+                type_counts: { all: 5, SPEEDING: 5, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
             },
         });
 
@@ -419,7 +421,7 @@ describe("alert list page", () => {
             meta: {
                 ...empty.meta,
                 counts: { all: 5, open: 0, resolved: 5 },
-                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 },
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
             },
         });
         renderTable(true, "/alerts?type=SPEEDING");
@@ -444,7 +446,7 @@ describe("Warnungen in a company without any warning", () => {
                 total: 0,
                 pageCount: 1,
                 counts: { all: 0, open: 0, resolved: 0 },
-                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 },
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
             },
         });
         renderTable(true);
@@ -466,7 +468,7 @@ describe("Warnungen in a company without any warning", () => {
                 total: 0,
                 pageCount: 1,
                 counts: { all: 5, open: 0, resolved: 5 },
-                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 },
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
             },
         });
         renderTable(true);

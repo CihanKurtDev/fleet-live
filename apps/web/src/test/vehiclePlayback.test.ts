@@ -643,6 +643,74 @@ describe("VehiclePlayback: trips", () => {
         expect(passed[passed.length - 1]).toBe(5);
         expect([...passed].sort((a, b) => a - b)).toEqual(passed);
     });
+
+    it("drives off along the road after a long stand where the road begins", () => {
+        const playback = playbackForTest();
+        // Parked beside the road (a workshop), then set off a minute later.
+        const parked = { lat: 50, lng: 7.002 };
+
+        playback.report(1, { ...parked, recordedAt: stamp(0) }, 100);
+
+        const road = [parked, roadAt(0), ...roadBetween(0, 100)];
+
+        playback.report(
+            1,
+            { ...roadAt(100), recordedAt: stamp(60_000), road, newTrip: true, roadFrom: 0 },
+            60_100,
+        );
+
+        const first = playback.at(1, 60_100)!;
+
+        expect(first).toMatchObject({ lat: parked.lat, lng: parked.lng });
+
+        let previous = first;
+        let moved = 0;
+
+        for (let now = 60_116; now < 75_000; now += 16) {
+            const shown = playback.at(1, now)!;
+            const step = Math.hypot(
+                (shown.lat - previous.lat) * M_PER_DEG,
+                (shown.lng - previous.lng) * M_PER_DEG * COS,
+            );
+
+            expect(step).toBeLessThan(5);
+            moved += step;
+            previous = shown;
+        }
+
+        expect(project(previous).s).toBeCloseTo(100, 3);
+        expect(moved).toBeGreaterThan(200);
+    });
+
+    it("never counts line points ahead of the shown position when reports lie between them", () => {
+        // As the simulator reports: the position lies between two road
+        // points, and the next road starts at that position. The line the
+        // map draws is every road point in order.
+        const playback = playbackForTest();
+        const line: RoadPoint[] = [roadAt(0)];
+        let reported = 0;
+
+        playback.report(1, { ...roadAt(0), recordedAt: stamp(0), road: [roadAt(0)], roadFrom: 0 }, 0);
+
+        for (let device = 5_000; device <= 120_000; device += 5_000) {
+            const s = (SPEED * device) / 1000 + 7;
+            const road = [roadAt(reported), ...roadBetween(reported, s)];
+            const roadFrom = line.length;
+
+            line.push(...road);
+            reported = s;
+            playback.report(1, { ...roadAt(s), recordedAt: stamp(device), road, roadFrom }, device + 100);
+
+            for (let now = device + 100; now < device + 5_100; now += 250) {
+                const shown = playback.at(1, now)!;
+                const ahead = line
+                    .slice(0, shown.passed)
+                    .filter((point) => project(point).s > project(shown).s + 0.5);
+
+                expect(ahead).toEqual([]);
+            }
+        }
+    });
 });
 
 describe("VehiclePlayback: history", () => {
@@ -684,6 +752,28 @@ describe("VehiclePlayback: history", () => {
         // The line behind the dot ends before it.
         expect(first.passed).toBeGreaterThan(1);
         expect(first.passed).toBeLessThan(line(40_000).length);
+    });
+
+    it("starts from where it stood when the history holds a long stand before the drive", () => {
+        const playback = playbackForTest();
+        const parked = { lat: 50, lng: 7.002 };
+        const tripLine = [parked, roadAt(0), ...roadBetween(0, 100), roadAt(100)];
+
+        playback.seed(
+            1,
+            [
+                { ...parked, recordedAt: stamp(0) },
+                { ...roadAt(100), recordedAt: stamp(60_000) },
+            ],
+            tripLine,
+            60_300,
+        );
+
+        const first = playback.at(1, 60_300)!;
+
+        // Still at the place, not far along the stretch it stood for a minute.
+        expect(Math.abs(first.lng - parked.lng) * M_PER_DEG * COS).toBeLessThan(30);
+        expect(first.done).toBe(false);
     });
 
     it("goes on from the history into the live reports without a jump", () => {

@@ -55,7 +55,7 @@ const TRIP_HEADER = [
     "Strecke km",
     "Höchstgeschwindigkeit",
     "Punkte",
-    "Verbrauch l",
+    "Verbrauch l (geschätzt)",
 ];
 
 const PERIOD_HEADER = [
@@ -63,7 +63,7 @@ const PERIOD_HEADER = [
     "Kilometer",
     "Angelegt und offen",
     "Angelegt und erledigt",
-    "Verbrauch l",
+    "Verbrauch l (geschätzt)",
 ];
 
 const stamp = new Intl.DateTimeFormat("de-DE", {

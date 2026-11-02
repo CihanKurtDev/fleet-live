@@ -23,6 +23,8 @@ export class ApiError extends Error {
 interface RequestOptions {
     method?: string;
     body?: unknown;
+    /** A file sent as it is, with its own type (a photo), instead of JSON. */
+    file?: Blob;
     signal?: AbortSignal;
     timeoutMs?: number;
 }
@@ -83,10 +85,12 @@ export async function request<T>(
 
     const response = await fetch(path, {
         method: options.method ?? "GET",
-        headers: options.body
-            ? { "Content-Type": "application/json" }
-            : undefined,
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        headers: options.file
+            ? { "Content-Type": options.file.type }
+            : options.body
+              ? { "Content-Type": "application/json" }
+              : undefined,
+        body: options.file ?? (options.body ? JSON.stringify(options.body) : undefined),
         credentials: "include",
         signal,
     });

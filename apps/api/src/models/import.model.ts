@@ -85,6 +85,7 @@ import {
 import { SpeedingEventModel } from "./speedingEvent.model";
 import { OdometerModel } from "./odometer.model";
 import {
+    AppError,
     BadRequestError,
     ConflictError,
     NotFoundError,
@@ -1195,6 +1196,8 @@ function assignDriverToVehicle(
     vehicleId: number,
     driverName: string,
     setCurrentIfFree: boolean,
+    /** The driver may not take the vehicle now (expired licence, vehicle unavailable). */
+    onRefused?: (message: string) => void,
 ): boolean {
     const existed = driverExists(companyId, driverName);
     const driverId = DriverModel.upsert(companyId, driverName);
@@ -1213,7 +1216,14 @@ function assignDriverToVehicle(
     ).get(driverId) as { id: number } | undefined;
 
     if (!occupied) {
-        DriverModel.setCurrentVehicle(driverId, vehicleId, companyId);
+        try {
+            DriverModel.setCurrentVehicle(driverId, vehicleId, companyId);
+        } catch (error) {
+            if (!(error instanceof AppError && error.status === 409)) {
+                throw error;
+            }
+            onRefused?.(error.message);
+        }
     }
 
     return !existed;
@@ -1939,7 +1949,12 @@ export class ImportModel {
                                     );
                                 }
 
-                                if (row.odometer_km !== null) {
+                                // A device that reads the dashboard wins
+                                // over the file.
+                                if (
+                                    row.odometer_km !== null &&
+                                    !OdometerModel.fromDevice(vehicleId, companyId)
+                                ) {
                                     OdometerModel.set(
                                         vehicleId,
                                         companyId,
@@ -1970,6 +1985,11 @@ export class ImportModel {
                                         vehicleId,
                                         row.driver_name,
                                         !hasCurrentSheet,
+                                        (message) =>
+                                            result.errors.push({
+                                                row_index: row.row_index,
+                                                message: `${IMPORT_SHEET_KIND_LABELS.vehicles}, Zeile ${row.row_index}: ${message}`,
+                                            }),
                                     );
                                     if (createdDriver) {
                                         result.created_drivers += 1;
@@ -2032,11 +2052,12 @@ export class ImportModel {
                             );
                             result.set_current += 1;
                         } catch (error) {
-                            if (!(error instanceof ConflictError)) {
+                            // A 409 (on a trip, not available, licence expired) refuses this
+                            // crew only; master data and the rest of the import stay.
+                            if (!(error instanceof AppError && error.status === 409)) {
                                 throw error;
                             }
 
-                            // Stammdaten ja, Besatzung mid-trip nein; restlicher Import bleibt.
                             result.failed_rows += 1;
                             result.errors.push({
                                 row_index: row.row_index,

@@ -1,6 +1,7 @@
 import {
     SPEED_CRITICAL_OVER_LIMIT_KMH,
     SPEEDING_HYSTERESIS_MS,
+    SPEEDING_MIN_OVER_KMH,
     SPEEDING_OPEN_AFTER_MS,
     isOverSpeedLimit,
     type VehicleStatus,
@@ -108,7 +109,12 @@ export function stepSpeeding(
             ...atWorst(state, input.speed, input.limit_kmh),
         };
 
-        if (input.nowMs - state.startedAtMs >= SPEEDING_OPEN_AFTER_MS) {
+        // Long enough over, and once clearly over: a warning. A run that
+        // only grazes the limit stays a candidate (orange live, no warning).
+        if (
+            input.nowMs - state.startedAtMs >= SPEEDING_OPEN_AFTER_MS &&
+            overLimitKmh(next.maxSpeed, next.limitAtWorst) >= SPEEDING_MIN_OVER_KMH
+        ) {
             return { action: "open", state: { ...next, phase: "open" } };
         }
 

@@ -6,6 +6,9 @@ import { Button } from "./ui/Button/Button";
 import { SwapLabel } from "./ui/Button/SwapLabel";
 import styles from "./SimToggle.module.scss";
 
+/** Marks the switch as part of the demo, not of a real fleet. */
+const DemoTag = () => <span className={styles.demo}>Demo</span>;
+
 export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
     // undefined: still loading; null: not available for this session.
     const [sim, setSim] = useState<SimState | null | undefined>(undefined);
@@ -38,6 +41,7 @@ export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
                     disabled
                     tabIndex={-1}
                 >
+                    <DemoTag />{" "}
                     Simulation pausieren
                 </Button>
             </div>
@@ -80,10 +84,11 @@ export const SimToggle = ({ fullWidth = false }: { fullWidth?: boolean }) => {
                 onClick={toggle}
                 title={
                     sim.running
-                        ? "Pausiert die Simulation dieser Firma. Positionen bleiben stehen. Nach etwa 15 Sekunden ohne Meldung entsteht eine Warnung für Fahrzeuge, die gerade liefen."
-                        : "Startet die Simulation dieser Firma wieder."
+                        ? "Demo: pausiert die simulierten Fahrzeuge dieser Firma. Positionen bleiben stehen. Nach etwa 15 Sekunden ohne Meldung entsteht eine Warnung für Fahrzeuge, die gerade liefen."
+                        : "Demo: startet die simulierten Fahrzeuge dieser Firma wieder."
                 }
             >
+                <DemoTag />{" "}
                 <SwapLabel swapped={!sim.running} alt="Simulation starten">
                     Simulation pausieren
                 </SwapLabel>

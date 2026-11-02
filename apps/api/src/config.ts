@@ -91,6 +91,17 @@ const environmentSchema = z.object({
      * Nur setzen, wenn ein Proxy den Header wirklich überschreibt.
      */
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+
+    /**
+     * Adresssuche für Werkstätten: eine Nominatim-kompatible `/search`-Adresse
+     * (JSON). Leer: keine Suche, der Ort wird auf der Karte angeklickt. Der
+     * öffentliche Dienst unter nominatim.openstreetmap.org hat Regeln
+     * (https://operations.osmfoundation.org/policies/nominatim/): höchstens
+     * eine Anfrage je Sekunde, ein eigener User-Agent, keine Suche beim Tippen,
+     * keine personenbezogenen Daten. Die API hält sie ein (Proxy, Cache, Takt).
+     */
+    GEOCODER_URL: z.string().default(""),
+    GEOCODER_USER_AGENT: z.string().min(1).default("fleet-live (Werkstatt-Adresssuche)"),
 });
 
 // No silent default: a process started without NODE_ENV would run in
@@ -151,6 +162,8 @@ export const config = {
     logLevel: env.LOG_LEVEL,
     allowDemoAccounts: env.ALLOW_DEMO_ACCOUNTS,
     smtpUrl: env.SMTP_URL,
+    geocoderUrl: env.GEOCODER_URL,
+    geocoderUserAgent: env.GEOCODER_USER_AGENT,
     mailFrom: env.MAIL_FROM,
     webOrigin: env.WEB_ORIGIN.replace(/\/$/, ""),
     totpEncryptionKey:

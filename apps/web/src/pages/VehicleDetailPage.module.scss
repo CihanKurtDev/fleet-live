@@ -105,6 +105,22 @@
     font-size: 20px;
 }
 
+/* The demo drives faster than the clock: said where trip times are read. */
+.timeLapse {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--text) 42%, transparent);
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text);
+    white-space: nowrap;
+}
+
 .count {
     font-size: 14px;
     font-weight: 400;
@@ -207,8 +223,7 @@
         color: var(--text-h);
         overflow-wrap: anywhere;
 
-        a,
-        .factButton {
+        a {
             color: inherit;
             text-decoration: underline;
             text-underline-offset: 2px;
@@ -216,15 +231,6 @@
             &:hover {
                 color: var(--accent);
             }
-        }
-
-        /* Opens the value's own dialog (Kilometerstand), looks like the link beside it. */
-        .factButton {
-            padding: 0;
-            border: 0;
-            background: none;
-            font: inherit;
-            cursor: pointer;
         }
     }
 }
@@ -333,5 +339,33 @@
         flex: 1 1 0;
         height: auto;
         min-height: 0;
+    }
+}
+
+/* HU and UVV in the master data: the sticker, the date, and its state below. */
+.facts dd.deadline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    span {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+    }
+
+    small {
+        font-size: 12px;
+        color: var(--text);
+    }
+
+    &[data-state="overdue"] {
+        color: var(--warning);
+        font-weight: 600;
+
+        small {
+            color: var(--warning);
+            font-weight: 400;
+        }
     }
 }

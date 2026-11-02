@@ -1,5 +1,5 @@
 import {
-    WORKSHOP_REASON_LABELS,
+    workshopReasonsText,
     WORKSHOP_STATE_LABELS,
     berlinTodayIso,
     type WorkshopEvent,
@@ -8,6 +8,7 @@ import {
 } from "@fleet-live/shared";
 
 import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
+import { formatKm } from "./odometerText";
 
 /** „31.10.“ for a date in the current year, else „31.10.2027“. */
 export const shortDate = (iso: string): string => {
@@ -36,7 +37,7 @@ export const dueWorkshopText = (
     visit: WorkshopSummary,
     rowReason: "HU" | "UVV",
 ): { title: string; detail: string } => {
-    const other = visit.reason !== rowReason ? `${WORKSHOP_REASON_LABELS[visit.reason]} · ` : "";
+    const other = visit.reasons.includes(rowReason) ? "" : `${workshopReasonsText(visit.reasons)} · `;
 
     return visit.state === "IN_WORKSHOP"
         ? {
@@ -50,39 +51,17 @@ export const dueWorkshopText = (
         : { title: `Termin ${shortDate(visit.planned_on)}`, detail: `${other}${visit.place}` };
 };
 
-/**
- * The second line of a Heute-dran row: „HU bei Prüfstelle Köln-Ost · heute ·
- * zuständig: du“.
- */
-export const todayWorkshopLine = (visit: WorkshopVisit, meId: number | undefined) => {
-    const today = berlinTodayIso();
-    const when =
-        visit.state === "IN_WORKSHOP"
-            ? `fertig erwartet am ${formatIsoDate(visit.expected_on)}`
-            : visit.planned_on === today
-              ? "heute"
-              : `Termin am ${formatIsoDate(visit.planned_on)}`;
-    const who =
-        visit.assignee_user_id !== null && visit.assignee_user_id === meId
-            ? "zuständig: du"
-            : visit.assignee_name
-              ? `zuständig: ${visit.assignee_name}`
-              : null;
-
-    return [
-        `${WORKSHOP_REASON_LABELS[visit.reason]} bei ${visit.place}`,
-        when,
-        who,
-    ]
-        .filter(Boolean)
-        .join(" · ");
-};
-
 const FIELD_LABELS: Record<string, string> = {
     reason: "Grund",
+    reasons: "Was gemacht wird",
+    transport: "Hinbringen",
+    damage_ids: "Schäden",
     place: "Werkstatt",
+    workshop_id: "Werkstatt",
     planned_on: "Termin",
+    planned_time: "Uhrzeit",
     expected_on: "Fertig erwartet",
+    bring_driver_id: "Bringt hin",
     assignee_user_id: "Zuständig",
     note: "Notiz",
 };
@@ -95,7 +74,9 @@ export const workshopEventText = (event: WorkshopEvent): string => {
                 ? `Geplant für ${shortDate(event.details.planned_on)}`
                 : "Geplant";
         case "arrived":
-            return "In der Werkstatt";
+            return event.details?.by === "position"
+                ? "Angekommen, erkannt an der Position"
+                : "Angekommen, von Hand gemeldet";
         case "updated":
             return `Geändert: ${(event.details?.fields ?? [])
                 .map((field) => FIELD_LABELS[field] ?? field)
@@ -109,10 +90,39 @@ export const workshopEventText = (event: WorkshopEvent): string => {
                 event.details?.cost_cents != null
                     ? formatEuro(event.details.cost_cents)
                     : null,
+                event.details?.odometer_km != null
+                    ? `${formatKm(event.details.odometer_km)} laut Rechnung`
+                    : null,
             ]
                 .filter(Boolean)
                 .join(" · ");
         case "cancelled":
             return "Abgesagt";
+        case "picked_up":
+            return "Abgeholt: hat die Werkstatt verlassen";
+        case "cost_added":
+            return event.details?.cost_cents != null
+                ? `Kosten nachgetragen: ${formatEuro(event.details.cost_cents)}`
+                : "Kosten nachgetragen";
     }
+};
+
+/** „heute, 08:00“, „03.11., 08:00“ or „03.11.“. */
+/**
+ * The driver to suggest when a stay needs one: who is to bring it, or, once
+ * it is finished, who brought it.
+ */
+export const bringDriver = (
+    visit: Pick<WorkshopVisit, "state" | "bring_driver_id"> | null,
+): { id: number; note: string } | null =>
+    visit?.bring_driver_id
+        ? { id: visit.bring_driver_id, note: visit.state === "PLANNED" ? "bringt es hin" : "hat es hingebracht" }
+        : null;
+
+/** „heute“, else „30.10.“ (with the year when it is another one). */
+export const dayText = (iso: string): string => (iso === berlinTodayIso() ? "heute" : shortDate(iso));
+
+export const appointmentText = (visit: Pick<WorkshopSummary, "planned_on" | "planned_time">): string => {
+    const day = dayText(visit.planned_on);
+    return visit.planned_time ? `${day}, ${visit.planned_time}` : day;
 };

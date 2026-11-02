@@ -5,8 +5,11 @@ import {
     parseDriverListQuery,
     parseDriverPatch,
     parseDriverVehicleAssign,
+    berlinTodayIso,
+    parseDriverTalk,
     parseHuDate,
 } from "@fleet-live/shared";
+import { AlertModel } from "../models/alert.model";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { NotFoundError } from "../lib/errors";
@@ -94,6 +97,34 @@ export function updateDriver(req: Request, res: Response) {
 
     notifyVehiclesChanged(companyId);
     res.json({ data: driver });
+}
+
+/**
+ * „Gespräch geführt“: the dispatcher talked to the driver about the speeding
+ * warnings; all open ones are cleared with that note.
+ */
+export function talkToDriver(req: Request, res: Response) {
+    const companyId = sessionCompany(req);
+    const id = parseId(req.params.id, "Fahrer-ID");
+    const { note } = parseDriverTalk(req.body);
+
+    if (!DriverModel.getById(id, companyId)) {
+        throw new NotFoundError("Fahrer nicht gefunden.");
+    }
+
+    const today = berlinTodayIso();
+    const day = `${today.slice(8, 10)}.${today.slice(5, 7)}.${today.slice(0, 4)}`;
+    const resolved = AlertModel.resolveSpeedingForDriver(
+        id,
+        companyId,
+        note ? `Gespräch geführt am ${day}: ${note}` : `Gespräch geführt am ${day}`,
+    );
+
+    if (resolved > 0) {
+        notifyVehiclesChanged(companyId);
+    }
+
+    res.json({ data: { resolved } });
 }
 
 export function deleteDriver(req: Request, res: Response) {

@@ -14,6 +14,7 @@ import { TodayPanel } from "../components/briefing/TodayPanel";
 import { KpiTileView, type KpiTileTone } from "../components/ui/KpiTiles/KpiTiles";
 import { PageTips } from "../components/help/PageTips";
 import { dueSoonLabel } from "../components/due/dueLabels";
+import { VEHICLE_TILE_HINTS } from "../components/vehicles/vehicleTileHints";
 import { ExportButton } from "../components/export/ExportButton";
 import { buttonClass } from "../components/ui/Button/buttonClass";
 import { RetryMessage } from "../components/ui/RetryMessage";
@@ -35,7 +36,8 @@ const briefingDateLabel = (now = new Date()) =>
 const hasNoVehicles = (counts: BriefingCounts) =>
     counts.driving + counts.idle + counts.stopped + counts.offline === 0;
 
-const briefingNeed = (counts: BriefingCounts) => {
+/** The line under the title. A viewer reads the state; only a dispatcher is asked to act. */
+const briefingNeed = (counts: BriefingCounts, canWrite: boolean) => {
     const { open } = counts;
 
     if (hasNoVehicles(counts)) {
@@ -44,6 +46,10 @@ const briefingNeed = (counts: BriefingCounts) => {
 
     if (open === 0) {
         return "Keine offenen Warnungen.";
+    }
+
+    if (!canWrite) {
+        return open === 1 ? "1 offene Warnung." : `${formatCount(open)} offene Warnungen.`;
     }
 
     if (open === 1) {
@@ -78,32 +84,35 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         {
             key: "driving",
             label: VEHICLE_STATUS_LABELS.DRIVING,
+            hint: VEHICLE_TILE_HINTS.status,
             tone: "positive",
             to: "/vehicles?filter=driving",
         },
         {
             key: "idle",
             label: VEHICLE_STATUS_LABELS.IDLE,
+            hint: VEHICLE_TILE_HINTS.status,
             tone: "neutral",
             to: "/vehicles?filter=idle",
         },
         {
-            key: "in_workshop",
-            label: "Werkstatt",
-            hint: "Fahrzeuge",
+            key: "unavailable",
+            label: "Ausfall",
+            hint: VEHICLE_TILE_HINTS.unavailable,
             tone: "neutral",
-            to: "/vehicles?filter=in_workshop",
+            to: "/vehicles?filter=unavailable",
         },
         {
             key: "low_fuel",
             label: "Wenig Tank",
+            hint: VEHICLE_TILE_HINTS.low_fuel,
             tone: "warning",
             to: "/alerts?type=LOW_FUEL",
         },
         {
             key: "in_depot",
             label: "Im Depot",
-            hint: "im Kreis",
+            hint: VEHICLE_TILE_HINTS.in_depot,
             tone: "neutral",
             to: "/vehicles?filter=in_depot",
         },
@@ -151,6 +160,7 @@ const DueKpis = ({
             key: "overdue",
             label: "Überfällig",
             value: due.overdue,
+            hint: "Datum vorbei",
             tone: "critical",
             to: "/fristen?state=overdue",
         },
@@ -158,6 +168,7 @@ const DueKpis = ({
             key: "soon",
             label: dueSoonLabel(leadDays),
             value: due.soon,
+            hint: "noch rechtzeitig",
             tone: "warning",
             to: "/fristen?state=soon",
         },
@@ -210,7 +221,7 @@ const BriefingBody = ({
                 <p className={styles.subtitle}>
                     {briefingDateLabel()} ·{" "}
                     <span className={styles.need}>
-                        {briefingNeed(data.counts)}
+                        {briefingNeed(data.counts, canWrite)}
                     </span>
                 </p>
                 <FirstSteps className={styles.headSteps} />

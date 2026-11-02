@@ -36,9 +36,10 @@ export const CHART_SERIES = {
     },
 };
 
-const pct = (numerator: number, denominator: number) => {
-    if (denominator <= 0) {
-        return 0;
+/** A share in percent; `null` when there is nothing to share (no trips that month). */
+const pct = (numerator: number, denominator: number | null): number | null => {
+    if (denominator === null || denominator <= 0) {
+        return null;
     }
 
     return Number(((numerator / denominator) * 100).toFixed(1));
@@ -51,23 +52,24 @@ const monthLabel = (month: string) => {
 
 export type RateMonth = {
     month: string;
-    aktiveFahrer: number;
+    aktiveFahrer: number | null;
     verstoss: number;
-    rate: number;
+    /** `null`: no trips that month, so no share (a gap, not 0 %). */
+    rate: number | null;
 };
 
 export type TypeMonth = {
     month: string;
-    rate: number;
-    lowFuel: number;
-    offline: number;
-    highShare: number;
+    rate: number | null;
+    lowFuel: number | null;
+    offline: number | null;
+    highShare: number | null;
 };
 
 export type KmMonth = {
     month: string;
     eventsPer1000km: number | null;
-    highShare: number;
+    highShare: number | null;
 };
 
 export const toRateSeries = (history: BriefingHistoryMonth[]): RateMonth[] =>
@@ -102,13 +104,18 @@ export const toKmSeries = (history: BriefingHistoryMonth[]): KmMonth[] =>
         };
     });
 
+/** Mean of the earlier months that had trips; months without data do not pull it to 0. */
 export const rateBaseline = (series: RateMonth[]) => {
-    if (series.length === 0) {
+    const prior = series
+        .slice(0, Math.max(1, series.length - 1))
+        .map((row) => row.rate)
+        .filter((rate): rate is number => rate !== null);
+
+    if (prior.length === 0) {
         return 0;
     }
 
-    const prior = series.slice(0, Math.max(1, series.length - 1));
-    const sum = prior.reduce((total, row) => total + row.rate, 0);
+    const sum = prior.reduce((total, rate) => total + rate, 0);
     return Number((sum / prior.length).toFixed(1));
 };
 
@@ -119,12 +126,12 @@ export const firstKmMonth = (series: KmMonth[]) => {
 
 /** Axis top: the peak plus 15 %, rounded up, but never above `cap` (100 for a share). */
 export const yCeiling = (
-    values: number[],
+    values: (number | null)[],
     min = 8,
     step = 5,
     cap = Number.POSITIVE_INFINITY,
 ) => {
-    const peak = Math.max(min, ...values, 0);
+    const peak = Math.max(min, ...values.filter((value): value is number => value !== null), 0);
     return Math.min(cap, Math.ceil((peak * 1.15) / step) * step);
 };
 

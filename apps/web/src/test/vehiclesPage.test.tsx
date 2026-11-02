@@ -41,6 +41,7 @@ const vehicle = (overrides: Partial<Vehicle> & { id: number }): Vehicle => ({
     home_site_id: null,
     cost_center: null,
     odometer_km: null,
+    odometer_reported_at: null,
     latitude: null,
     longitude: null,
     speed: 0,
@@ -53,7 +54,10 @@ const vehicle = (overrides: Partial<Vehicle> & { id: number }): Vehicle => ({
     current_driver_id: null,
     availability: "READY",
     workshop: null,
+    workshop_task: null,
     open_damages: 0,
+    hu_state: "ok",
+    uvv_state: "ok",
     ...overrides,
 });
 
@@ -87,6 +91,9 @@ const listResponse = (data: Vehicle[]): VehicleListResponse => ({
             damage_open: 0,
             not_drivable: 0,
             damage_unplanned: 0,
+                unavailable: 0,
+                deadline_overdue: 0,
+                deadline_soon: 0,
         },
     },
 });
@@ -234,6 +241,29 @@ describe("Fahrzeuge list page", () => {
         fireEvent.click(plate);
 
         expect(await screen.findByText("Detailseite")).toBeInTheDocument();
+    });
+
+    it("says in Hinweise why a vehicle is under Werkstatt fällig", async () => {
+        const stay = {
+            id: 5,
+            state: "PLANNED" as const,
+            reasons: ["UVV" as const],
+            place: "Autohaus Weber",
+            workshop_id: 1,
+            planned_on: "2026-10-01",
+            planned_time: null,
+            expected_on: "2026-10-01",
+        };
+        vi.mocked(listVehicles).mockResolvedValue(
+            listResponse([
+                vehicle({ id: 1, workshop: stay, workshop_task: "missed" }),
+                vehicle({ id: 2, workshop_task: "pickup" }),
+            ]),
+        );
+        renderPage();
+
+        expect(await screen.findByText("verpasst")).toBeInTheDocument();
+        expect(screen.getByText("abholen")).toBeInTheDocument();
     });
 
     it("selects rows in selection mode and deletes after confirm", async () => {

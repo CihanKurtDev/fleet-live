@@ -82,3 +82,11 @@ export function setDriverCurrentVehicle(
         { method: "PATCH", body: input },
     ).then((response) => response.data);
 }
+
+/** „Gespräch geführt“: clears the driver's open speeding warnings with a note. */
+export function talkToDriver(driverId: number, note: string | null) {
+    return request<{ data: { resolved: number } }>(`/api/drivers/${driverId}/talk`, {
+        method: "POST",
+        body: { note },
+    });
+}

@@ -1,12 +1,12 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { Alert, AlertTypeCounts, Site } from "@fleet-live/shared";
+import type { Alert, AlertTypeCounts, Site, WorkshopPlace } from "@fleet-live/shared";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 import { FleetEventFeed } from "../components/alerts/FleetEventFeed";
 import { fleetEventDetail } from "../components/alerts/fleetEvents";
 import { DepotPanel } from "../components/vehicles/DepotPanel";
-import { DepotStrip } from "../components/vehicles/DepotStrip";
+import { PlaceBoard } from "../components/vehicles/PlaceBoard";
 import { depotAfterClick } from "../components/vehicles/depotDraft";
 import {
     FleetKpiBand,
@@ -26,6 +26,8 @@ const alert = (overrides: Partial<Alert> = {}): Alert => ({
     created_at: "2026-09-01 19:04:00",
     ended_at: null,
     resolved_at: null,
+    resolution_note: null,
+    trip_id: null,
     ...overrides,
 });
 
@@ -44,10 +46,25 @@ const site = (overrides: Partial<Site> = {}): Site =>
         longitude: 6.96,
         radius_m: 400,
         home_count: 38,
+        home_status: { driving: 20, idle: 10, stopped: 7, offline: 1 },
         in_depot_count: 9,
         other_home_count: 0,
         ...overrides,
     }) as Site;
+
+const workshop = (overrides: Partial<WorkshopPlace> = {}): WorkshopPlace => ({
+    id: 5,
+    name: "Prüfstelle Ost",
+    address: null,
+    phone: null,
+    latitude: 50.95,
+    longitude: 6.99,
+    radius_m: 150,
+    vehicles_here: 0,
+    here: [],
+    appointments: [],
+    ...overrides,
+});
 
 describe("FleetKpiBand", () => {
     const tiles = (onToggle = vi.fn()): FleetKpiTile[] => [
@@ -218,8 +235,9 @@ describe("depot selection", () => {
         expect(depotAfterClick(1, 1, true)).toBe(1);
     });
 
-    it("offers Auswahl aufheben on the selected depot", () => {
+    const renderCard = (canEdit: boolean) => {
         const onDeselect = vi.fn();
+        const onEdit = vi.fn();
 
         render(
             <MemoryRouter>
@@ -228,15 +246,12 @@ describe("depot selection", () => {
                     selectedId={1}
                     draft={null}
                     placing={false}
-                    canEdit={false}
+                    canEdit={canEdit}
                     saveError={null}
                     loadError={null}
                     isSaving={false}
-                    revealToken={0}
-                    onSelect={vi.fn()}
                     onDeselect={onDeselect}
-                    onEdit={vi.fn()}
-                    onStartPlace={vi.fn()}
+                    onEdit={onEdit}
                     onCancel={vi.fn()}
                     onDraftChange={vi.fn()}
                     onSave={vi.fn()}
@@ -246,65 +261,106 @@ describe("depot selection", () => {
             </MemoryRouter>,
         );
 
-        const buttons = screen.getAllByRole("button", {
-            name: "Auswahl aufheben",
-            hidden: true,
-        });
-        expect(buttons).toHaveLength(1);
-        fireEvent.click(buttons[0]);
+        return { onDeselect, onEdit };
+    };
+
+    it("shows the selected depot as a card with its vehicles by status", () => {
+        const { onDeselect } = renderCard(false);
+        const card = screen.getByRole("region", { name: "Depot Köln" });
+
+        expect(card).toHaveTextContent("Stammstandort von 38 Fahrzeugen");
+        expect(card).toHaveTextContent("Auf Fahrt20");
+        expect(card).toHaveTextContent("Kein Signal1");
+        expect(card).toHaveTextContent("Jetzt im Depot: 9");
+        expect(within(card).queryByRole("button", { name: "Bearbeiten" })).not.toBeInTheDocument();
+
+        fireEvent.click(within(card).getByRole("button", { name: "Auswahl aufheben" }));
         expect(onDeselect).toHaveBeenCalledTimes(1);
+    });
+
+    it("lets a dispatcher edit the depot from its card", () => {
+        const { onEdit } = renderCard(true);
+
+        fireEvent.click(screen.getByRole("button", { name: "Bearbeiten" }));
+        expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
     });
 });
 
-describe("DepotStrip", () => {
-    const renderStrip = (canEdit: boolean) => {
-        const onSelect = vi.fn();
-        const onStartPlace = vi.fn();
+describe("PlaceBoard", () => {
+    const view = { west: 6.9, south: 50.9, east: 7.0, north: 51.0 };
+    const renderBoard = (canEdit: boolean) => {
+        const props = {
+            onSelect: vi.fn(),
+            onOpenList: vi.fn(),
+            onNewDepot: vi.fn(),
+            onNewWorkshop: vi.fn(),
+        };
 
         render(
-            <DepotStrip
-                sites={[site(), site({ id: 2, name: "Bremen", home_count: 5, in_depot_count: 0 })]}
-                selectedId={2}
+            <PlaceBoard
+                sites={[
+                    site(),
+                    site({ id: 2, name: "Bremen", latitude: 53.08, longitude: 8.8, home_count: 5, in_depot_count: 0 }),
+                ]}
+                workshops={[
+                    workshop({
+                        vehicles_here: 1,
+                        here: [{ vehicle_id: 9, license_plate: "K-WS 1" }],
+                        appointments: [
+                            {
+                                visit_id: 3,
+                                vehicle_id: 8,
+                                license_plate: "K-WS 2",
+                                state: "PLANNED",
+                                planned_on: "2026-11-03",
+                                planned_time: null,
+                                reasons: ["HU"],
+                            },
+                        ],
+                    }),
+                ]}
+                view={view}
+                selected={{ kind: "depot", id: 1 }}
                 canEdit={canEdit}
                 placing={false}
-                editing={false}
                 loadError={null}
                 onRetry={vi.fn()}
-                onSelect={onSelect}
-                onStartPlace={onStartPlace}
+                {...props}
             />,
         );
 
-        return { onSelect, onStartPlace };
+        return props;
     };
 
-    it("shows who is in each depot and lets a dispatcher add one", () => {
-        const { onSelect, onStartPlace } = renderStrip(true);
-        const strip = screen.getByRole("region", { name: "Depots" });
-        const koeln = within(strip).getByRole("button", { name: /Köln/ });
-
-        expect(koeln).toHaveTextContent("9 im Depot · 38 Stammstandort");
-        expect(koeln).toHaveAttribute("aria-pressed", "false");
-        expect(
-            within(strip).getByRole("button", { name: /Bremen/ }),
-        ).toHaveAttribute("aria-pressed", "true");
-
-        fireEvent.click(koeln);
-        expect(onSelect).toHaveBeenCalledWith(
-            expect.objectContaining({ id: 1 }),
+    it("lists the places in view, busy ones first, and counts the rest", () => {
+        const props = renderBoard(true);
+        const board = screen.getByRole("region", { name: "Orte" });
+        const tiles = within(board).getAllByRole("button", { pressed: undefined }).filter((button) =>
+            button.hasAttribute("aria-pressed"),
         );
 
-        fireEvent.click(
-            within(strip).getByRole("button", { name: "Depot anlegen" }),
-        );
-        expect(onStartPlace).toHaveBeenCalledTimes(1);
+        // The workshop with a vehicle there comes before the depot; Bremen is outside.
+        expect(tiles.map((tile) => tile.textContent)).toEqual([
+            expect.stringContaining("Prüfstelle Ost"),
+            expect.stringContaining("Köln"),
+        ]);
+        expect(tiles[0]).toHaveTextContent("K-WS 1 dort");
+        expect(tiles[0]).toHaveTextContent("1 Termin · K-WS 2 am 03.11.");
+        expect(tiles[1]).toHaveTextContent("10 Standby · 9 im Depot");
+        expect(tiles[1]).toHaveAttribute("aria-pressed", "true");
+
+        fireEvent.click(tiles[0]);
+        expect(props.onSelect).toHaveBeenCalledWith({ kind: "workshop", id: 5 });
+
+        fireEvent.click(within(board).getByRole("button", { name: "+ 1 außerhalb" }));
+        fireEvent.click(within(board).getByRole("button", { name: /3\s*Orte/ }));
+        expect(props.onOpenList).toHaveBeenCalledTimes(2);
+        expect(within(board).getByRole("button", { name: /Neuer Ort/ })).toBeInTheDocument();
     });
 
-    it("hides Depot anlegen for a viewer", () => {
-        renderStrip(false);
+    it("hides Neuer Ort for a viewer", () => {
+        renderBoard(false);
 
-        expect(
-            screen.queryByRole("button", { name: "Depot anlegen" }),
-        ).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Neuer Ort/ })).not.toBeInTheDocument();
     });
 });

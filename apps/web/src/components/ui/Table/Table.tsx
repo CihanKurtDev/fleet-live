@@ -51,6 +51,7 @@ export const Table = <RowType,>({
                         {columns.map((column) => (
                             <col
                                 key={String(column.key)}
+                                data-col={String(column.key)}
                                 style={
                                     column.width
                                         ? { width: column.width }

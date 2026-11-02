@@ -62,6 +62,8 @@ Nach `db:seed` kann die Loginseite in der Entwicklung `cihan@example.com` / `dev
 | `MICROSOFT_CLIENT_SECRET` | leer | |
 | `OIDC_PRIVATE_HOSTS` | leer | Hostnamen von Firmen-IdPs, die auf interne Adressen zeigen dürfen (kommagetrennt, exakt). Sonst gehen OIDC-Anfragen nur per HTTPS an öffentliche Adressen |
 | `TRUST_PROXY_HOPS` | `0` | Anzahl Proxies, die `X-Forwarded-For` überschreiben. `0`: der Header wird ignoriert |
+| `GEOCODER_URL` | leer | Adresssuche für Werkstätten: eine Nominatim-kompatible `/search`-Adresse. Leer: keine Suche. Der öffentliche Dienst `https://nominatim.openstreetmap.org/search` hat Regeln (https://operations.osmfoundation.org/policies/nominatim/): höchstens eine Anfrage je Sekunde, ein eigener User-Agent, keine Suche beim Tippen, keine personenbezogenen Daten; für mehr Last einen eigenen oder kommerziellen Dienst. Die API hält die Regeln ein (sucht nur auf Knopfdruck, eine Anfrage je Sekunde, Cache einen Tag) |
+| `GEOCODER_USER_AGENT` | `fleet-live (Werkstatt-Adresssuche)` | User-Agent der Suchanfragen; mit einer Kontaktadresse des Betreibers ergänzen |
 
 Google und Microsoft sind OpenID Connect gegen feste Issuer (`https://accounts.google.com` bzw. `https://login.microsoftonline.com/common/v2.0`). Im IdP als Redirect-URI eintragen:
 

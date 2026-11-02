@@ -1,0 +1,51 @@
+.plaque {
+    flex-shrink: 0;
+    color: var(--text);
+}
+
+.ring {
+    fill: none;
+    stroke: var(--border-strong);
+    stroke-width: 1.5;
+}
+
+.mark {
+    stroke: var(--text);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+}
+
+.year {
+    font: 600 10px var(--mono);
+    fill: currentColor;
+}
+
+/* Due soon: the outline turns yellow. */
+.plaque[data-state="soon"] {
+    color: var(--text-h);
+
+    .ring,
+    .mark {
+        stroke: var(--warning);
+    }
+}
+
+/* Expired: yellow and filled, like a sticker that needs replacing. */
+.plaque[data-state="overdue"] {
+    color: var(--warning);
+
+    .ring {
+        fill: color-mix(in srgb, var(--warning) 16%, transparent);
+        stroke: var(--warning);
+    }
+
+    .mark {
+        stroke: var(--warning);
+    }
+}
+
+.plaque[data-state="missing"] {
+    .ring {
+        stroke-dasharray: 3 3;
+    }
+}

@@ -7,6 +7,24 @@
 
 .toggle {
     flex-shrink: 0;
+    gap: 8px;
+}
+
+/* Outlined tag like the status tags: this switch belongs to the demo. */
+.demo {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
 }
 
 .error {

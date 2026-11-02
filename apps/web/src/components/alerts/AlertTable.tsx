@@ -178,8 +178,10 @@ export const AlertTable = ({
         <>
             {noAlerts
                 ? "Noch keine Warnungen."
-                : counts
-                ? `${formatCount(counts.open)} offen · ${formatCount(counts.resolved)} erledigt · neueste zuerst`
+                : counts && meta
+                ? // What „Erledigen“ does: cleared, then kept for the
+                  // company's retention.
+                  `${formatCount(counts.open)} offen · ${formatCount(counts.resolved)} erledigt. Erledigt heißt geklärt; die Warnung bleibt ${meta.resolved_kept_days} Tage im Verlauf.`
                 : "Warnungen der Firma"}
             {query.vehicle_id !== undefined && (
                 <>
@@ -211,6 +213,7 @@ export const AlertTable = ({
     const tiles: KpiTile[] = alertTiles.map((tile) => ({
         key: tile.id,
         label: tile.label,
+        hint: tile.hint,
         value: alertTileCount(tile.id, counts, openTypeCounts),
         tone: tile.tone,
         pressed: activeTile === tile.id,

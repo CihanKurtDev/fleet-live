@@ -13,8 +13,8 @@ import type {
     TripListItem,
     VehicleInput,
 } from "@fleet-live/shared";
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useParams } from "react-router";
 
 import { resolveAlerts } from "../api/alerts";
 import { isAbortError } from "../api/client";
@@ -40,6 +40,10 @@ import { VehicleTripArchive } from "../components/vehicles/VehicleTripArchive";
 import type { TripFocusInfo } from "../components/vehicles/TripFocus";
 import { useTripCache } from "../components/vehicles/useTripCache";
 import { VehicleMoreMenu } from "../components/vehicles/VehicleMoreMenu";
+import { InspectionPlaque } from "../components/vehicles/InspectionPlaque";
+import { deadlineStateText, vehicleDeadlines } from "../components/vehicles/vehicleDeadlines";
+import { useDueSettings } from "../hooks/useDueSettings";
+import { useSimTimeScale } from "../hooks/useSimTimeScale";
 import type { PlaybackFix } from "../components/vehicles/vehiclePlayback";
 import { pathLength, toLatLngs } from "../components/vehicles/mapGeometry";
 import { SPEED_BAND_COLORS, speedBandTitle } from "../components/vehicles/speedBand";
@@ -51,11 +55,14 @@ import {
     WorkshopPanel,
     type PageNotice,
 } from "../components/vehicles/WorkshopPanel";
-import { setVehicleOutOfService } from "../api/workshop";
+import { setVehicleOutOfService, updateWorkshopVisit } from "../api/workshop";
 import { closeDamage } from "../api/damages";
 import { DamageDialog } from "../components/vehicles/DamageDialog";
+import { WorkshopPlanDialog } from "../components/vehicles/WorkshopPlanDialog";
+import type { WorkshopTarget } from "../api/workshop";
 import { OdometerDialog } from "../components/vehicles/OdometerDialog";
-import { formatKm } from "../components/vehicles/odometerText";
+import type { MapWorkshop } from "../components/vehicles/workshopRing";
+import { OdometerNow } from "../components/vehicles/OdometerNow";
 import { useVehicleDamages } from "../hooks/useVehicleDamages";
 import type { Damage } from "@fleet-live/shared";
 import { vehicleStatusLabel } from "../components/vehicles/vehicleStatus";
@@ -119,6 +126,8 @@ export const VehicleDetailPage = () => {
     } = useVehicles();
     const { user } = useAuth();
     const canWrite = user?.role === "dispatcher";
+    const { settings: dueSettings } = useDueSettings();
+    const simTimeScale = useSimTimeScale();
 
     const vehicleId = Number(id);
     const parsedId = Number.isInteger(vehicleId) ? vehicleId : null;
@@ -133,7 +142,10 @@ export const VehicleDetailPage = () => {
     const [isChangingService, setIsChangingService] = useState(false);
     const [serviceError, setServiceError] = useState<string | null>(null);
     const [reportingDamage, setReportingDamage] = useState(false);
+    // A stay planned from Hinweise or right after reporting a damage.
+    const [planTarget, setPlanTarget] = useState<WorkshopTarget | null>(null);
     const [isOdometerOpen, setIsOdometerOpen] = useState(false);
+    const [workshopPlace, setWorkshopPlace] = useState<MapWorkshop | null>(null);
     const [editingDamage, setEditingDamage] = useState<Damage | null>(null);
     const [closingDamage, setClosingDamage] = useState<Damage | null>(null);
     const [isClosingDamage, setIsClosingDamage] = useState(false);
@@ -150,10 +162,17 @@ export const VehicleDetailPage = () => {
     const [archiveLoading, setArchiveLoading] = useState(parsedId !== null);
     const [archiveError, setArchiveError] = useState<string | null>(null);
     const [archiveRetryKey, setArchiveRetryKey] = useState(0);
-    const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
+    // A warning clicked elsewhere names its trip: the page opens on it.
+    const location = useLocation();
+    const focusFromLink =
+        (location.state as { focusTrip?: number | null } | null)?.focusTrip ?? null;
+    const [selectedTripId, setSelectedTripId] = useState<number | null>(focusFromLink);
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+    // Until someone clicks a trip the page shows the newest one, so a vehicle
+    // that sets off (from a workshop, a pause) shows the trip it starts.
+    const tripPickedFor = useRef<number | null>(null);
     /** The trip clicked in the list: the map frames it (not the first one picked on load). */
-    const [focusTripId, setFocusTripId] = useState<number | null>(null);
+    const [focusTripId, setFocusTripId] = useState<number | null>(focusFromLink);
     /** The trip framed on the map, kept while the next picked one loads. */
     const [framedTripId, setFramedTripId] = useState<number | null>(null);
     const tripCache = useTripCache(parsedId);
@@ -176,9 +195,9 @@ export const VehicleDetailPage = () => {
         setArchivePage(1);
         setArchiveLimit(10);
         setArchiveError(null);
-        setSelectedTripId(null);
+        setSelectedTripId(focusFromLink);
         setSelectedTrip(null);
-        setFocusTripId(null);
+        setFocusTripId(focusFromLink);
         setFocusEvents(null);
     }
 
@@ -313,9 +332,11 @@ export const VehicleDetailPage = () => {
                 setArchivePageCount(response.meta.pageCount);
                 setArchiveTotal(response.meta.total);
                 setSelectedTripId((current) => {
+                    // A trip someone picked stays, also one from an older page
+                    // of the list (a warning's trip).
                     if (
                         current !== null &&
-                        response.data.some((row) => row.id === current)
+                        (tripPickedFor.current === parsedId || current === focusFromLink)
                     ) {
                         return current;
                     }
@@ -345,6 +366,7 @@ export const VehicleDetailPage = () => {
         archiveLimit,
         vehicleStatus,
         archiveRetryKey,
+        focusFromLink,
     ]);
 
     useEffect(() => {
@@ -549,6 +571,12 @@ export const VehicleDetailPage = () => {
         ? (archiveTrips.find((row) => row.ended_at === null) ??
           (selectedTrip?.ended_at === null ? selectedTrip : null))
         : null;
+    const timeScale = simTimeScale;
+    const STANDING_SINCE: Record<Exclude<typeof vehicle.status, "DRIVING">, string> = {
+        IDLE: "Steht seit",
+        STOPPED: "Zündung aus seit",
+        OFFLINE: "Kein Signal seit",
+    };
     const summary = [
         vehicle.vehicle_type ? VEHICLE_TYPE_LABELS[vehicle.vehicle_type] : null,
         vehicle.driver_name ?? "Kein Fahrer",
@@ -587,6 +615,20 @@ export const VehicleDetailPage = () => {
         setDeleteError(null);
         setConfirmDelete(true);
     };
+
+    const workshopTarget = (plan: Pick<WorkshopTarget, "reason" | "damageId">): WorkshopTarget | null =>
+        vehicle
+            ? {
+                  vehicleId: vehicle.id,
+                  licensePlate: vehicle.license_plate,
+                  position:
+                      vehicle.latitude !== null && vehicle.longitude !== null
+                          ? { latitude: vehicle.latitude, longitude: vehicle.longitude }
+                          : null,
+                  currentDriverId: vehicle.current_driver_id,
+                  ...plan,
+              }
+            : null;
 
     const damageSaved = (message: string) => {
         setReportingDamage(false);
@@ -642,6 +684,8 @@ export const VehicleDetailPage = () => {
         }
     };
 
+    const deadlines = vehicleDeadlines(vehicle, berlinTodayIso(), dueSettings?.lead_days ?? 30);
+
     return (
         <section className={styles.page}>
             <header className={styles.header}>
@@ -675,10 +719,6 @@ export const VehicleDetailPage = () => {
                         </Button>
                         <VehicleMoreMenu
                             availability={vehicle.availability}
-                            onReportDamage={() => {
-                                setNotice(null);
-                                setReportingDamage(true);
-                            }}
                             onOutOfService={(outOfService) => {
                                 setNotice(null);
                                 if (outOfService) {
@@ -703,8 +743,12 @@ export const VehicleDetailPage = () => {
                                 className={styles.muted}
                                 title={formatTimestamp(vehicle.recorded_at)}
                             >
-                                Letzte Meldung{" "}
-                                {formatRelativeTimestamp(vehicle.recorded_at)}
+                                {vehicle.recorded_at === null
+                                    ? "Noch keine Meldung"
+                                    : vehicle.status === "DRIVING"
+                                      ? `Letzte Meldung ${formatRelativeTimestamp(vehicle.recorded_at)}`
+                                      : // A parked vehicle reported last when it stopped: say since when.
+                                        `${STANDING_SINCE[vehicle.status]} ${formatTimestamp(vehicle.recorded_at)}`}
                             </span>
                         </div>
                         <dl className={styles.now}>
@@ -788,6 +832,14 @@ export const VehicleDetailPage = () => {
                                 )}
                             </div>
                         </dl>
+                        <OdometerNow
+                            vehicle={vehicle}
+                            canWrite={canWrite}
+                            onEdit={() => {
+                                setNotice(null);
+                                setIsOdometerOpen(true);
+                            }}
+                        />
                     </section>
 
                     <section className={styles.panel}>
@@ -802,6 +854,40 @@ export const VehicleDetailPage = () => {
                             onEditMaster={(field) => {
                                 setMasterField(field);
                                 setIsEditingMaster(true);
+                            }}
+                            onPlanWorkshop={(plan) => {
+                                setNotice(null);
+                                setPlanTarget(workshopTarget(plan));
+                            }}
+                            onReportDamage={() => {
+                                setNotice(null);
+                                setReportingDamage(true);
+                            }}
+                            onAddToStay={(reason) => {
+                                const stay = vehicle.workshop;
+                                if (!stay) {
+                                    return;
+                                }
+                                setNotice(null);
+                                void updateWorkshopVisit(stay.id, { reasons: [...stay.reasons, reason] })
+                                    .then(() => {
+                                        setNotice({
+                                            text: `${reason} ist beim Termin am ${formatIsoDate(stay.planned_on)} dabei.`,
+                                            tone: "ok",
+                                        });
+                                        refetchLists();
+                                    })
+                                    .catch((caught: unknown) =>
+                                        setNotice({
+                                            text: caught instanceof Error ? caught.message : "Nicht gespeichert.",
+                                            tone: "error",
+                                        }),
+                                    );
+                            }}
+                            onShowTrip={(tripId) => {
+                                tripPickedFor.current = parsedId;
+                                setSelectedTripId(tripId);
+                                setFocusTripId(tripId);
                             }}
                         />
                     </section>
@@ -829,38 +915,41 @@ export const VehicleDetailPage = () => {
                                 <dt>Kostenstelle</dt>
                                 <dd>{vehicle.cost_center ?? "—"}</dd>
                             </div>
-                            <div>
-                                <dt>HU fällig</dt>
-                                <dd>{formatYearMonth(vehicle.hu_due_on)}</dd>
-                            </div>
+                            {deadlines.map((deadline) => (
+                                <div key={deadline.reason}>
+                                    <dt>{deadline.reason === "HU" ? "HU fällig" : "UVV fällig"}</dt>
+                                    {/* How the date comes about stays one hover away. */}
+                                    <dd
+                                        className={styles.deadline}
+                                        data-state={deadline.state}
+                                        title={dueExplanationText(
+                                            deadline.reason === "HU" ? "hu" : "uvv",
+                                            deadline.reason === "HU"
+                                                ? explainHuMonth(vehicle.hu_due_on)
+                                                : explainUvv({
+                                                      checkedOn: vehicle.uvv_checked_on,
+                                                      manualDueOn: vehicle.uvv_due_on,
+                                                      today: berlinTodayIso(),
+                                                  }),
+                                        )}
+                                    >
+                                        <InspectionPlaque dueOn={deadline.due_on} state={deadline.state} size={22} />
+                                        <span>
+                                            {deadline.due_on === null
+                                                ? "—"
+                                                : deadline.reason === "HU"
+                                                  ? formatYearMonth(vehicle.hu_due_on)
+                                                  : formatIsoDate(deadline.due_on)}
+                                            {(deadline.state === "overdue" || deadline.state === "soon") && (
+                                                <small>{deadlineStateText(deadline, berlinTodayIso())}</small>
+                                            )}
+                                        </span>
+                                    </dd>
+                                </div>
+                            ))}
                             <div>
                                 <dt>UVV geprüft</dt>
                                 <dd>{formatIsoDate(vehicle.uvv_checked_on)}</dd>
-                            </div>
-                            <div>
-                                <dt>UVV fällig am</dt>
-                                <dd>{formatIsoDate(vehicle.uvv_due_on)}</dd>
-                            </div>
-                            <div>
-                                <dt>Kilometerstand</dt>
-                                <dd>
-                                    {vehicle.odometer_km !== null || canWrite ? (
-                                        <button
-                                            type="button"
-                                            className={styles.factButton}
-                                            onClick={() => {
-                                                setNotice(null);
-                                                setIsOdometerOpen(true);
-                                            }}
-                                        >
-                                            {vehicle.odometer_km !== null
-                                                ? formatKm(vehicle.odometer_km)
-                                                : "Eintragen"}
-                                        </button>
-                                    ) : (
-                                        "—"
-                                    )}
-                                </dd>
                             </div>
                             <div>
                                 <dt>Stammstandort</dt>
@@ -877,20 +966,6 @@ export const VehicleDetailPage = () => {
                                 </dd>
                             </div>
                         </dl>
-                        <p className={styles.note}>
-                            {dueExplanationText(
-                                "hu",
-                                explainHuMonth(vehicle.hu_due_on),
-                            )}{" "}
-                            {dueExplanationText(
-                                "uvv",
-                                explainUvv({
-                                    checkedOn: vehicle.uvv_checked_on,
-                                    manualDueOn: vehicle.uvv_due_on,
-                                    today: berlinTodayIso(),
-                                }),
-                            )}
-                        </p>
                         <VehicleAssignmentPanel
                             vehicle={vehicle}
                             canWrite={canWrite}
@@ -905,6 +980,7 @@ export const VehicleDetailPage = () => {
                             canWrite={canWrite}
                             onNotice={setNotice}
                             damages={damages}
+                            onPlace={setWorkshopPlace}
                         />
                     </section>
                     <section className={`${styles.panel} ${styles.mapPanel}`}>
@@ -939,6 +1015,7 @@ export const VehicleDetailPage = () => {
                                     fill
                                     focus={tripFocus}
                                     onLeaveFocus={() => setFocusTripId(null)}
+                                    workshop={workshopPlace}
                                 />
                             </div>
                         ) : (
@@ -960,6 +1037,14 @@ export const VehicleDetailPage = () => {
                                     </span>
                                 )}
                             </h2>
+                            {timeScale !== null && (
+                                <span
+                                    className={styles.timeLapse}
+                                    title={`Die Demo fährt ${timeScale}-mal schneller als die Uhr: Strecke und Dauer einer Fahrt passen nicht zueinander.`}
+                                >
+                                    Demo · Zeitraffer ×{timeScale}
+                                </span>
+                            )}
                         </div>
                         {/* The line is kept while the trip loads, so the list does not jump. */}
                         <p
@@ -979,9 +1064,19 @@ export const VehicleDetailPage = () => {
                             />
                         )}
                         <VehicleTripArchive
-                            trips={archiveTrips}
+                            trips={
+                                // The running trip's km grow with the live line, not on reload.
+                                openTrailMeters === null
+                                    ? archiveTrips
+                                    : archiveTrips.map((row) =>
+                                          row.ended_at === null
+                                              ? { ...row, distance_m: Math.max(row.distance_m, openTrailMeters) }
+                                              : row,
+                                      )
+                            }
                             selectedTripId={selectedTripId}
                             onSelectTrip={(tripId) => {
+                                tripPickedFor.current = parsedId;
                                 setSelectedTripId(tripId);
                                 setFocusTripId(tripId);
                                 // Loaded before (or ahead, from the row under
@@ -1051,10 +1146,27 @@ export const VehicleDetailPage = () => {
                 }}
             />
 
+            <WorkshopPlanDialog
+                target={canWrite ? planTarget : null}
+                onClose={() => setPlanTarget(null)}
+                onSaved={(_visit, message) => {
+                    setPlanTarget(null);
+                    setNotice({ text: message, tone: "ok" });
+                    reloadDamages();
+                    refetchLists();
+                }}
+            />
+
             <DamageDialog
                 target={
                     canWrite && reportingDamage
-                        ? { vehicleId: vehicle.id, licensePlate: vehicle.license_plate }
+                        ? {
+                              vehicleId: vehicle.id,
+                              licensePlate: vehicle.license_plate,
+                              driving: isDriving,
+                              driverName: vehicle.driver_name,
+                              position,
+                          }
                         : null
                 }
                 damage={canWrite ? editingDamage : null}
@@ -1064,6 +1176,14 @@ export const VehicleDetailPage = () => {
                     setEditingDamage(null);
                 }}
                 onSaved={(_damage, message) => damageSaved(message)}
+                onPlan={
+                    vehicle.workshop === null
+                        ? (damage, message) => {
+                              damageSaved(message);
+                              setPlanTarget(workshopTarget({ reason: "DAMAGE", damageId: damage.id }));
+                          }
+                        : undefined
+                }
                 onCloseWithoutWorkshop={(damage) => {
                     setEditingDamage(null);
                     setClosingDamage(damage);

@@ -125,6 +125,7 @@ export const VehicleTable = ({
         key: filter.id ?? "all",
         label: filter.label,
         value: counts ? counts[filter.count] : null,
+        hint: filter.hint,
         tone: filter.tone,
         pressed: activeFilter === filter.id,
         onToggle: () => setFilter(filter.id),

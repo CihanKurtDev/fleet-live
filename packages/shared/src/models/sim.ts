@@ -8,6 +8,8 @@ export type SimState = {
     running: boolean;
     /** false, wenn TELEMETRY_TICK_MS=0 — dann gibt es keinen Ticker. */
     available: boolean;
+    /** The demo drives this many times faster than the clock: durations of trips are not real. */
+    time_scale: number;
 };
 
 export type SimPatch = z.infer<typeof simPatchSchema>;

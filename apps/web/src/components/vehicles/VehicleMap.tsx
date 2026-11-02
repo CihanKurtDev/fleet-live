@@ -10,6 +10,7 @@ import {
 } from "../../hooks/useLeafletFollowMap";
 import { useLatestRef } from "../../hooks/useLatestRef";
 import { themeColor } from "./leafletMap";
+import { drawWorkshop, type MapWorkshop } from "./workshopRing";
 import { detailTooltipHtml } from "./mapLabels";
 import type { MapPoint } from "./mapGeometry";
 import { PlaybackAge } from "./PlaybackAge";
@@ -47,6 +48,8 @@ type VehicleMapProps = {
     focus?: TripFocusInfo | null;
     /** "Zurück zum Fahrzeug": the map follows the vehicle again. */
     onLeaveFocus?: () => void;
+    /** The workshop of the open stay, or where the vehicle stands: its circle. */
+    workshop?: MapWorkshop | null;
 };
 
 /** The one vehicle of this map, in its playback. */
@@ -107,6 +110,7 @@ export const VehicleMap = ({
     fill = false,
     focus = null,
     onLeaveFocus,
+    workshop = null,
 }: VehicleMapProps) => {
     const {
         containerRef,
@@ -262,6 +266,23 @@ export const VehicleMap = ({
         markerRef.current?.setTooltipContent(markerTooltip(label, status));
     }, [label, status]);
 
+    const workshopKey = workshop
+        ? `${workshop.name}|${workshop.latitude}|${workshop.longitude}|${workshop.radius_m}`
+        : "";
+    const workshopRef = useLatestRef(workshop);
+    useEffect(() => {
+        const map = mapRef.current;
+        const place = workshopRef.current;
+        if (!map || !place) {
+            return;
+        }
+        const group = L.layerGroup().addTo(map);
+        drawWorkshop(group, place);
+        return () => {
+            group.remove();
+        };
+    }, [mapRef, workshopKey, workshopRef]);
+
     useEffect(() => {
         const map = mapRef.current;
         const line = lineRef.current;
@@ -295,8 +316,11 @@ export const VehicleMap = ({
         const playback = playbackRef.current;
         const now = performance.now();
         const fix = { lat: latitude, lng: longitude, recordedAt };
-        const report = (road?: RoadPoint[], newTrip?: boolean) =>
-            playback.report(VEHICLE, { ...fix, road, newTrip }, now);
+        const report = (
+            road?: RoadPoint[],
+            newTrip?: boolean,
+            roadFrom?: number,
+        ) => playback.report(VEHICLE, { ...fix, road, newTrip, roadFrom }, now);
         const trailChanged = trail !== trailRef.current;
         const points = trailChanged
             ? toPoints(live ? (trail ?? []) : [])
@@ -367,10 +391,10 @@ export const VehicleMap = ({
 
             placeMarker(shown ? L.latLng(shown.lat, shown.lng) : next);
         } else if (grew) {
-            report(points.slice(previous.length));
+            report(points.slice(previous.length), false, previous.length);
         } else if (restarted) {
             drawnRef.current = -1;
-            report(points, true);
+            report(points, true, 0);
         } else {
             report();
         }

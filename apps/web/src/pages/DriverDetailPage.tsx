@@ -252,9 +252,15 @@ export const DriverDetailPage = () => {
                         driver={driver}
                         canWrite={canWrite}
                         checkMonths={checkMonths}
+                        currentVehicle={drivingVehicle ?? null}
                         onEdit={(field) => {
                             setEditField(field);
                             setIsEditing(true);
+                        }}
+                        onChanged={(message) => {
+                            setExportNotice(message);
+                            retry();
+                            refetchLists();
                         }}
                     />
 
@@ -284,6 +290,7 @@ export const DriverDetailPage = () => {
                                 "licence_check",
                                 explainLicenceCheck({
                                     checkedOn: driver.licence_checked_on,
+                                    expiresOn: driver.licence_expires_on,
                                     today: berlinTodayIso(),
                                     intervalMonths: checkMonths,
                                 }),

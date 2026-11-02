@@ -1,0 +1,74 @@
+/* Kilometerstand under „Jetzt“: the value left, where it comes from right. */
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.value {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
+.km {
+    font-size: 20px;
+    font-weight: 650;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-h);
+    white-space: nowrap;
+}
+
+.source {
+    flex: 1 1 180px;
+    min-width: 0;
+    max-width: 260px;
+    margin: 0 0 0 auto;
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: right;
+    color: var(--text);
+
+    // Phones: under the value, read from the left.
+    @media (max-width: 700px) {
+        flex-basis: 100%;
+        max-width: none;
+        margin-left: 0;
+        text-align: left;
+    }
+}
+
+.link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--text-h);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+
+    &:hover {
+        color: var(--accent);
+    }
+}
+
+.enter {
+    margin-left: auto;
+
+    @media (max-width: 700px) {
+        margin-left: 0;
+    }
+}

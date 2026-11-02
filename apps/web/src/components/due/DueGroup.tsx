@@ -2,9 +2,11 @@ import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { DUE_KIND_LABELS, type DueKind, type DueListItem } from "@fleet-live/shared";
 
-import type { WorkshopTarget } from "../../api/workshop";
+import { updateWorkshopVisit, type WorkshopTarget } from "../../api/workshop";
 import { useAuth } from "../../hooks/useAuth";
+import { formatIsoDate } from "../../utils/dateTime";
 import { formatCount } from "../../utils/formatCount";
+import { DeadlineEditDialog, type DeadlineTarget } from "../briefing/DeadlineEditDialog";
 import { Button } from "../ui/Button/Button";
 import { RetryMessage } from "../ui/RetryMessage";
 import { WorkshopPlanDialog } from "../vehicles/WorkshopPlanDialog";
@@ -67,17 +69,73 @@ export const DueGroup = ({
     const canWrite = user?.role === "dispatcher";
     const [open, setOpen] = useState(true);
     const [planning, setPlanning] = useState<WorkshopTarget | null>(null);
+    const [editing, setEditing] = useState<DeadlineTarget | null>(null);
     const workshopKind = WORKSHOP_KINDS.has(kind);
 
-    const workshopCell = (row: DueListItem) => {
+    /**
+     * The row's next step outside the row link: HU and UVV go to the
+     * workshop; a licence row takes the new date or the check, in the
+     * driver's edit dialog.
+     */
+    const actionCell = (row: DueListItem) => {
         if (!workshopKind) {
-            return <span className={styles.rowWorkshop} />;
+            return (
+                <span className={styles.rowAction}>
+                    {canWrite && row.driver_id !== null && (
+                        <Button
+                            variant="secondary"
+                            size="row"
+                            onClick={() =>
+                                setEditing({
+                                    vehicle_id: null,
+                                    driver_id: row.driver_id,
+                                    due_kind: row.kind,
+                                    subject: row.label,
+                                })
+                            }
+                        >
+                            {row.kind === "licence_check"
+                                ? "Kontrolle eintragen"
+                                : row.due_on === null
+                                  ? "Datum eintragen"
+                                  : "Neues Ablaufdatum"}
+                        </Button>
+                    )}
+                </span>
+            );
         }
 
-        if (row.workshop) {
-            const text = dueWorkshopText(row.workshop, row.kind === "hu" ? "HU" : "UVV");
+        const reason = row.kind === "hu" ? "HU" : "UVV";
+        const stay = row.workshop;
+        // A stay for something else is running: the deadline joins it, one visit.
+        if (stay && !stay.reasons.includes(reason) && canWrite) {
+            const text = dueWorkshopText(stay, reason);
             return (
-                <span className={styles.rowWorkshop}>
+                <span className={styles.rowAction} title={`${text.title}: ${text.detail}`}>
+                    <Button
+                        variant="secondary"
+                        size="row"
+                        onClick={() => {
+                            void updateWorkshopVisit(stay.id, { reasons: [...stay.reasons, reason] })
+                                .then(() => {
+                                    onNotice?.(`${reason} für ${row.label} kommt zum Termin am ${formatIsoDate(stay.planned_on)}.`);
+                                    onRetry();
+                                })
+                                .catch((caught: unknown) =>
+                                    onNotice?.(caught instanceof Error ? caught.message : "Nicht gespeichert."),
+                                );
+                        }}
+                    >
+                        Zum Termin dazu
+                    </Button>
+                </span>
+            );
+        }
+
+        if (stay) {
+            const text = dueWorkshopText(stay, reason);
+            return (
+                <span className={styles.rowAction}>
                     <b>{text.title}</b>
                     <span>{text.detail}</span>
                 </span>
@@ -85,7 +143,7 @@ export const DueGroup = ({
         }
 
         return (
-            <span className={styles.rowWorkshop}>
+            <span className={styles.rowAction}>
                 {canWrite && row.vehicle_id !== null && (
                     <Button
                         variant="secondary"
@@ -177,7 +235,7 @@ export const DueGroup = ({
                                         ) : (
                                             <div className={styles.rowLink}>{content}</div>
                                         )}
-                                        {workshopCell(row)}
+                                        {actionCell(row)}
                                     </li>
                                 );
                             })}
@@ -192,6 +250,18 @@ export const DueGroup = ({
 
                     {footer}
                 </div>
+            )}
+
+            {!workshopKind && (
+                <DeadlineEditDialog
+                    item={editing}
+                    onClose={() => setEditing(null)}
+                    onSaved={() => {
+                        onNotice?.(`${editing?.subject ?? "Fahrer"} gespeichert.`);
+                        setEditing(null);
+                        onRetry();
+                    }}
+                />
             )}
 
             {workshopKind && (

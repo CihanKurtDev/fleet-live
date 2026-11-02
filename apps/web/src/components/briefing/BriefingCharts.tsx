@@ -152,7 +152,7 @@ export const BriefingCharts = ({
                                             {formatMonth(month.month)}
                                         </th>
                                         <td>
-                                            {formatCount(month.active_drivers)}
+                                            {month.active_drivers === null ? "—" : formatCount(month.active_drivers)}
                                         </td>
                                         <td
                                             className={toneClass(

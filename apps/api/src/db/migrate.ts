@@ -513,6 +513,10 @@ function ensureAlertsEventColumns(database: DatabaseSync) {
         database.exec("ALTER TABLE alerts ADD COLUMN details TEXT");
     }
 
+    if (!names.has("resolution_note")) {
+        database.exec("ALTER TABLE alerts ADD COLUMN resolution_note TEXT");
+    }
+
     // Unique open SPEEDING: keep the oldest row per vehicle, close extras.
     database.exec(`
         UPDATE alerts
@@ -731,6 +735,36 @@ function enforceOneCurrentVehiclePerDriver(database: DatabaseSync) {
 
     // Wer hier den Fahrer verliert, darf nicht auf Fahrt bleiben.
     demoteDrivingWithoutDriver(database);
+}
+
+/**
+ * Ein nicht fahrbereites Fahrzeug fährt niemand in die Werkstatt. Ein
+ * geplanter Aufenthalt mit „Fahrer bringt“ (aus der Zeit, bevor ein Schaden
+ * das umstellte, oder aus der Spalte `transport` mit Standard `DRIVER`) wird
+ * „Abschleppen“ ohne Bringer. Läuft bei jedem Start; ohne solche Zeilen tut
+ * es nichts.
+ */
+function towUndrivablePlannedStays(database: DatabaseSync) {
+    if (
+        !tableExists(database, "workshop_visits") ||
+        !tableExists(database, "vehicle_damages") ||
+        !columnNames(database, "workshop_visits").has("transport")
+    ) {
+        return;
+    }
+
+    database.exec(`
+        UPDATE workshop_visits
+        SET transport = 'TOW', bring_driver_id = NULL
+        WHERE state = 'PLANNED'
+          AND transport = 'DRIVER'
+          AND EXISTS (
+              SELECT 1 FROM vehicle_damages d
+              WHERE d.vehicle_id = workshop_visits.vehicle_id
+                AND d.state = 'OPEN'
+                AND d.drivable = 0
+          )
+    `);
 }
 
 /**
@@ -1138,6 +1172,66 @@ export function ensureVehicleService(database: DatabaseSync) {
 
     addColumn(database, "vehicles", "out_of_service_since", "TEXT");
     addColumn(database, "vehicles", "odometer_m", "REAL");
+    addColumn(database, "vehicles", "odometer_reported_at", "TEXT");
+    addColumn(database, "vehicles", "at_workshop_id", "INTEGER");
+
+    if (tableExists(database, "workshop_visits")) {
+        addColumn(
+            database,
+            "workshop_visits",
+            "workshop_id",
+            "INTEGER REFERENCES workshops(id) ON DELETE SET NULL",
+        );
+        addColumn(database, "workshop_visits", "planned_time", "TEXT");
+        addColumn(
+            database,
+            "workshop_visits",
+            "bring_driver_id",
+            "INTEGER REFERENCES drivers(id) ON DELETE SET NULL",
+        );
+        addColumn(database, "workshop_visits", "arrived_at", "TEXT");
+        addColumn(database, "workshop_visits", "arrived_by", "TEXT");
+        addColumn(database, "workshop_visits", "picked_up_at", "TEXT");
+        addColumn(
+            database,
+            "workshop_visits",
+            "transport",
+            "TEXT NOT NULL DEFAULT 'DRIVER' CHECK (transport IN ('DRIVER', 'TOW', 'WORKSHOP_PICKUP'))",
+        );
+
+        // One reason per stay became a list: the old column moves into it.
+        if (columnNames(database, "workshop_visits").has("reason")) {
+            addColumn(
+                database,
+                "workshop_visits",
+                "reasons",
+                "TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(reasons))",
+            );
+            database.exec(`
+                UPDATE workshop_visits SET reasons = json_array(reason) WHERE reasons = '[]';
+                ALTER TABLE workshop_visits DROP COLUMN reason;
+            `);
+        }
+    }
+
+    if (tableExists(database, "vehicle_damages")) {
+        addColumn(database, "vehicle_damages", "occurred_time", "TEXT");
+        addColumn(database, "vehicle_damages", "latitude", "REAL");
+        addColumn(database, "vehicle_damages", "longitude", "REAL");
+        addColumn(
+            database,
+            "vehicle_damages",
+            "driver_id",
+            "INTEGER REFERENCES drivers(id) ON DELETE SET NULL",
+        );
+        addColumn(database, "vehicle_damages", "driver_name", "TEXT");
+    }
+
+    database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_vehicles_at_workshop
+            ON vehicles(at_workshop_id)
+            WHERE at_workshop_id IS NOT NULL
+    `);
 }
 
 export function ensurePrivacyColumns(database: DatabaseSync) {
@@ -1759,6 +1853,7 @@ export function migrate(database: DatabaseSync) {
     ensureCompanyInvites(database);
     ensurePrivacyColumns(database);
     ensureVehicleService(database);
+    towUndrivablePlannedStays(database);
     ensureTripEvents(database);
     applyMaintenanceTriggers(database);
     // After the triggers, so `active_alerts` follows the rows it writes.

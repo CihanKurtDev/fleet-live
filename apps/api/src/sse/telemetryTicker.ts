@@ -7,6 +7,10 @@ import { TelemetryModel } from "../models/telemetry.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { SiteModel } from "../models/site.model";
+import { DriveModel } from "../models/drive.model";
+import { WorkshopModel } from "../models/workshop.model";
+import { WorkshopPlaceModel } from "../models/workshopPlace.model";
+import { playWorkshopTrips } from "../sim/workshopTrips";
 import { broadcast } from "./hub";
 import type { TelemetryPatch } from "@fleet-live/shared";
 
@@ -16,9 +20,12 @@ let lastArchive = 0;
 
 /** Ended speeding events that ran out of their open days and resolved warnings past their retention are looked for this often. */
 const ARCHIVE_EVERY_MS = 10 * 60_000;
+/** Workshop trips and pickups are looked for this often. */
+const WORKSHOP_TRIPS_EVERY_MS = 10_000;
+let lastWorkshopTrips = 0;
 
 function broadcastPatches(
-    patches: Array<TelemetryPatch & { company_id: number }>,
+    patches: Array<TelemetryPatch & { company_id: number; parked?: true }>,
 ) {
     if (patches.length === 0) {
         return;
@@ -27,7 +34,7 @@ function broadcastPatches(
     const byCompany = new Map<number, TelemetryPatch[]>();
 
     for (const patch of patches) {
-        const { company_id, ...wire } = patch;
+        const { company_id, parked: _parked, ...wire } = patch;
         const group = byCompany.get(company_id);
 
         if (group) {
@@ -41,6 +48,35 @@ function broadcastPatches(
     for (const [companyId, group] of byCompany) {
         broadcast("telemetry", group, companyId);
     }
+}
+
+/**
+ * What follows from a batch of pings: speeding, signal, depot and workshop
+ * circles, a device that parked reporting ignition off, and arrivals at a
+ * workshop. Returns the companies whose vehicles changed.
+ */
+export function applyTickEffects(
+    patches: Array<TelemetryPatch & { company_id: number; parked?: true }>,
+): Set<number> {
+    const notifyCompanies = new Set<number>([
+        ...SpeedingEventModel.applyPatches(patches),
+        ...ExceptionEventModel.applyPatches(patches),
+        ...SiteModel.applyPatches(patches),
+        ...WorkshopPlaceModel.applyPatches(patches),
+    ]);
+
+    for (const patch of patches) {
+        if (patch.parked) {
+            DriveModel.report(patch.id, patch.company_id, "IDLE");
+            notifyCompanies.add(patch.company_id);
+        }
+    }
+
+    for (const companyId of WorkshopModel.detectArrivals()) {
+        notifyCompanies.add(companyId);
+    }
+
+    return notifyCompanies;
 }
 
 export function isTelemetryTickerRunning(): boolean {
@@ -62,11 +98,17 @@ export function startTelemetryTicker(ms: number) {
     timer = setInterval(() => {
         try {
             const patches = TelemetryModel.tickDrivingVehicles();
-            const notifyCompanies = new Set<number>([
-                ...SpeedingEventModel.applyPatches(patches),
-                ...ExceptionEventModel.applyPatches(patches),
-                ...SiteModel.applyPatches(patches),
-            ]);
+            const notifyCompanies = applyTickEffects(patches);
+
+            if (Date.now() - lastWorkshopTrips >= WORKSHOP_TRIPS_EVERY_MS) {
+                lastWorkshopTrips = Date.now();
+
+                const trips = playWorkshopTrips();
+                for (const companyId of [...trips.companies, ...applyTickEffects(trips.patches)]) {
+                    notifyCompanies.add(companyId);
+                }
+                patches.push(...trips.patches);
+            }
 
             for (const companyId of ExceptionEventModel.applySilence()) {
                 notifyCompanies.add(companyId);

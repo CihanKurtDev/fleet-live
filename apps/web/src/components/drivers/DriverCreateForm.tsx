@@ -219,6 +219,7 @@ export const DriverCreateForm = ({
                         "licence_check",
                         explainLicenceCheck({
                             checkedOn: licenceChecked || null,
+                            expiresOn: licenceExpires || null,
                             today: berlinTodayIso(),
                             intervalMonths: checkMonths,
                         }),

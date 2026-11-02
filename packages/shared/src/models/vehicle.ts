@@ -1,8 +1,9 @@
 import { z } from "zod";
+import type { DueCalendarState } from "./dueDates";
 import type { AlertType } from "./alert";
 import type { VehicleFilterId } from "./vehicleQuery";
 import { odometerKmSchema } from "./odometer";
-import type { VehicleAvailability, WorkshopSummary } from "./workshop";
+import type { VehicleAvailability, WorkshopSummary, WorkshopTask } from "./workshop";
 
 export const VEHICLE_STATUSES = [
     "IDLE",
@@ -107,6 +108,12 @@ export type Vehicle = {
      * seitdem gemeldete Strecke. `null`, solange keiner eingetragen ist.
      */
     odometer_km: number | null;
+    /**
+     * When the device last reported the dashboard reading (a truck's FMS);
+     * `null` for a GPS box that does not read it: then `odometer_km` is the
+     * last reading entered plus the distance driven since.
+     */
+    odometer_reported_at: string | null;
     latitude: number | null;
     longitude: number | null;
     speed: number | null;
@@ -133,6 +140,15 @@ export type Vehicle = {
     availability: VehicleAvailability;
     /** The open workshop stay, planned or arrived; `null` without one. */
     workshop: WorkshopSummary | null;
+    /**
+     * What a workshop stay needs today (missed, late return, trip or pickup
+     * without a driver, parked at a workshop without a stay); the same
+     * condition as the filter `workshop_due`.
+     */
+    workshop_task: WorkshopTask | null;
+    /** HU and UVV today by the rule of /fristen and the company lead. */
+    hu_state: DueCalendarState;
+    uvv_state: DueCalendarState;
     /** Damages not repaired or closed yet. */
     open_damages: number;
 };

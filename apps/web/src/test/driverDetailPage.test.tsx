@@ -92,6 +92,7 @@ const baseDriver: DriverDetail = {
         is_current: true,
         availability: "READY",
     },
+    workshop_transports: [],
 };
 
 const alert = (id: number, overrides: Partial<Alert> = {}): Alert => ({
@@ -111,6 +112,8 @@ const alert = (id: number, overrides: Partial<Alert> = {}): Alert => ({
     created_at: "2026-10-14 08:00:00",
     ended_at: "2026-10-14 08:02:00",
     resolved_at: null,
+    resolution_note: null,
+    trip_id: null,
     ...overrides,
 });
 
@@ -134,7 +137,7 @@ const listResponse: DriverListResponse = {
         limit: 10,
         total: 1,
         pageCount: 1,
-        counts: { all: 1, talk: 1, without_vehicle: 0 },
+        counts: { all: 1, talk: 1, without_vehicle: 0, licence_driving: 0 },
     },
 };
 

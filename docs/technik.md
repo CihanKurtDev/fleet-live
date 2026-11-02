@@ -71,7 +71,7 @@ Ohne Session landet man auf `/login`. Danach ist `/` die Startseite.
 
 ### Schichtüberblick
 
-Hinter den Kacheln liegt die Karte der Flotte. Oben die Kennzahlen: offene Warnungen, Kein Signal, fahrend, bereit, niedriger Tank, im Depot. Daneben drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. „Heute dran“ zeigt, was jetzt zu tun ist (Daten eintragen, Gespräch führen, Fristen bald fällig). Daneben zwei kleine Diagramme; die exakten Monatswerte stehen in einer Tabelle zum Aufklappen. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
+Hinter den Kacheln liegt die Karte der Flotte. Oben die Kennzahlen: offene Warnungen, Kein Signal, fahrend, bereit, Ausfall (Werkstatt, nicht fahrbereit, außer Dienst), niedriger Tank, im Depot; jede Kachel sagt in ihrer Hinweiszeile, was sie zählt. Daneben drei Fristenzahlen, jede öffnet die Liste mit derselben Zahl. „Heute dran“ zeigt, was jetzt zu tun ist (zuerst ein Fahrer mit abgelaufenem Führerschein, der eingeteilt ist; Daten eintragen, Werkstatt: Termin verpasst, Rückgabe überfällig, Hinfahrt oder Abholung ohne Fahrer, parkt ohne Termin; Schaden ohne Termin; Gespräch führen ab 5 offenen Tempo-Warnungen; Fristen bald fällig). Daneben zwei kleine Diagramme; die exakten Monatswerte stehen in einer Tabelle zum Aufklappen. Die Navigation zeigt den Warnungen-Zähler. Fristen steht daneben ohne Zähler. `viewer` liest, `dispatcher` pflegt die Daten.
 
 ### Fahrzeugliste
 
@@ -79,7 +79,7 @@ Normale Tabelle. Spalten und Filter sind Konfiguration. Suche, Filter, Sortierun
 
 ### Fahrzeugverwaltung
 
-Anlegen, bearbeiten, löschen. Status als Badge. Tank während der Fahrt nur lesen. Der Header pausiert den Simulator dieser Firma und wechselt zwischen Liste und Karte.
+Anlegen, bearbeiten, löschen. Status als Badge. Tank während der Fahrt nur lesen. „Jetzt“ zeigt den Kilometerstand mit Herkunft (vom Tacho gemeldet oder aus der GPS-Strecke berechnet). Darüber der Werkstatt-Streifen mit dem nächsten Schritt. „Schaden melden“ steht im Kopf der Hinweise und nimmt Tag, Uhrzeit, Ort auf der Karte, den Fahrer und bis zu 3 Fotos auf; auf Fahrt beendet „nicht fahrbereit“ die Fahrt (Panne). Der Header pausiert den Simulator dieser Firma (als Demo gekennzeichnet) und wechselt zwischen Liste und Karte.
 
 ### Flottenkarte
 
@@ -91,11 +91,11 @@ Tabellenkomponente: [apps/docs/table.md](../apps/docs/table.md).
 
 Kurzer Puffer: Fahrzeug, Latitude, Longitude, Geschwindigkeit, `recorded_at`. Der letzte Punkt steckt im Fahrzeug-JSON. `GET /api/vehicles/:id/telemetry` gibt `{ data }` chronologisch. Das ist Marker und letzte Bewegung, nicht die Spur.
 
-Der Simulator spielt Geräte: jedes `DRIVING`-Fahrzeug mit Fahrer, dessen Firma die Sim laufen lässt, meldet sich in einem eigenen, leicht schwankenden Takt (`PING_INTERVAL_MS`, Standard 5 s), ob jemand zusieht oder nicht. Der Ticker (`TELEMETRY_TICK_MS`) prüft nur, welche Meldungen fällig sind. `connected` liefert `connection_id`. Die UI schickt `{ connection_id, ids }` (Liste plus Nachbarn, offenes Detail, fahrende auf der Flottenkarte). Jede Verbindung hat eigenen Fokus. Der Fokus bestimmt nur, wer die Patches bekommt, nicht wer fährt. Patches nur an Verbindungen, die die ID fokussiert haben und zur Firma gehören. `vehicles-changed` nur an diese Firma.
+Der Simulator spielt Geräte: jedes `DRIVING`-Fahrzeug mit Fahrer, dessen Firma die Sim laufen lässt, meldet sich in einem eigenen, leicht schwankenden Takt (`PING_INTERVAL_MS`, Standard 5 s), ob jemand zusieht oder nicht. Ein simulierter LKW meldet dabei den Tachostand mit (wie ein Gerät am FMS-Stecker); Transporter und PKW sind GPS-Boxen, ihr Stand wächst um die gemeldete Strecke. Fährt ein Fahrzeug am Termintag zur Werkstatt, steuert die Simulation es dorthin, parkt es im Kreis und meldet die Zündung aus; die App erkennt daran die Ankunft. Die Simulation kennt nur einige gespeicherte Straßen (kein Routing zur Laufzeit): Sie fährt bis zum Punkt der Straße, der der Werkstatt am nächsten ist, und von dort in gerader Linie weiter, so weit es auch ist. Ein Fahrzeug fährt auf den Straßen nahe seinem Stammdepot (im Umkreis von 80 km); steht es beim Start weit weg davon, setzt die Simulation es einmal dorthin. Meldet ein Fahrzeug über 30 Minuten nichts (Server aus, Sim pausiert), endet seine Fahrt bei der letzten Meldung, und die nächste beginnt eine neue. Der Ticker (`TELEMETRY_TICK_MS`) prüft nur, welche Meldungen fällig sind. `connected` liefert `connection_id`. Die UI schickt `{ connection_id, ids }` (Liste plus Nachbarn, offenes Detail, fahrende auf der Flottenkarte). Jede Verbindung hat eigenen Fokus. Der Fokus bestimmt nur, wer die Patches bekommt, nicht wer fährt. Patches nur an Verbindungen, die die ID fokussiert haben und zur Firma gehören. `vehicles-changed` nur an diese Firma.
 
 Pro Fahrzeug bleiben `TELEMETRY_KEEP_PER_VEHICLE` Rohzeilen (Standard 100). Das ist die Retention. Trip-Ende schreibt Speed 0 an der letzten Position.
 
-Fahrende Fahrzeuge fahren auf eingebackenen OSRM-Linien. Tempo nach Stadt/Autobahn plus etwas Rauschen. Die Simulation läuft im Zeitraffer (Faktor 5), die Fahrzeit einer Fahrt sagt also nichts über echte Zeit.
+Fahrende Fahrzeuge fahren auf eingebackenen OSRM-Linien. Tempo nach Straßenklasse (Stufen, keine Rampen; LKW außerorts niedriger und bei 89 km/h abgeregelt) plus etwas Rauschen. Die Simulation läuft im Zeitraffer (Faktor 5, `GET /api/sim` `time_scale`), die Fahrzeit einer Fahrt sagt also nichts über echte Zeit; die Fahrtenliste trägt dafür den Hinweis „Demo · Zeitraffer ×5“.
 
 ### Fahrten
 

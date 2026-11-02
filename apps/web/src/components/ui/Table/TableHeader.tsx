@@ -30,6 +30,7 @@ export const TableHeader = <RowType,>({
                     <th
                         key={String(column.key)}
                         scope="col"
+                        data-col={String(column.key)}
                         className={styles.tableHeader}
                         title={column.headerText ? column.displayText : undefined}
                         aria-sort={

@@ -18,9 +18,10 @@ import {
 import { VehicleModel } from "../models/vehicle.model";
 import { TelemetryModel } from "../models/telemetry.model";
 import { TripModel } from "../models/trip.model";
-import { SpeedingEventModel } from "../models/speedingEvent.model";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { OdometerModel } from "../models/odometer.model";
+import { DriveModel } from "../models/drive.model";
+import { WorkshopModel } from "../models/workshop.model";
 import {
     BadRequestError,
     ConflictError,
@@ -160,10 +161,9 @@ function syncTrip(
         return updated;
     }
 
-    TelemetryModel.recordStandstill(id);
-    SpeedingEventModel.endForVehicle(id);
-    TripModel.close(id);
-    TripModel.pruneClosedForCompany(companyId);
+    DriveModel.end(id, companyId);
+    // Stopped in the circle of a planned workshop: it has arrived.
+    WorkshopModel.detectArrivals();
 
     return VehicleModel.getById(id, companyId) ?? updated;
 }

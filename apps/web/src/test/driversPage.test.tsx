@@ -66,7 +66,7 @@ const listResponse = (data: Driver[]): DriverListResponse => ({
         limit: 10,
         total: data.length,
         pageCount: 1,
-        counts: { all: 2851, talk: 5, without_vehicle: 31 },
+        counts: { all: 2851, talk: 5, without_vehicle: 31, licence_driving: 0 },
     },
 });
 
@@ -333,7 +333,7 @@ describe("Fahrer list page", () => {
     it("offers Filter aufheben when a tile filter finds nobody", async () => {
         vi.mocked(listDrivers).mockResolvedValue({
             ...listResponse([]),
-            meta: { ...listResponse([]).meta, counts: { all: 3, talk: 0, without_vehicle: 0 } },
+            meta: { ...listResponse([]).meta, counts: { all: 3, talk: 0, without_vehicle: 0, licence_driving: 0 } },
         });
         renderPage("dispatcher", "/drivers?without_vehicle=true");
 

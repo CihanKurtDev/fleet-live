@@ -322,6 +322,8 @@ export function classifyLicenceInterval(input: {
     today: string;
     intervalMonths: number;
     leadDays: number;
+    /** Ablaufdatum des Führerscheins: eine Kontrolle danach sah keinen gültigen. */
+    expiresOn?: string | null;
 }): {
     included: boolean;
     state: DueCalendarState;
@@ -329,9 +331,12 @@ export function classifyLicenceInterval(input: {
     last_on: string | null;
     /** Kontrolldatum liegt nach heute. Die Fälligkeit wird trotzdem normal gerechnet. */
     last_checked_in_future: boolean;
+    /** Kontrolliert nach dem Ablaufdatum: zählt nicht, das neue Ablaufdatum fehlt. */
+    checked_after_expiry: boolean;
 } {
     const checked = blankToNull(input.checkedOn);
     const lastCheckedInFuture = checked !== null && checked > input.today;
+    const checkedAfterExpiry = licenceCheckedAfterExpiry(checked, input.expiresOn ?? null);
 
     if (input.intervalMonths === 0) {
         return {
@@ -340,6 +345,7 @@ export function classifyLicenceInterval(input: {
             due_on: null,
             last_on: checked,
             last_checked_in_future: lastCheckedInFuture,
+            checked_after_expiry: false,
         };
     }
 
@@ -350,6 +356,18 @@ export function classifyLicenceInterval(input: {
             due_on: null,
             last_on: null,
             last_checked_in_future: false,
+            checked_after_expiry: false,
+        };
+    }
+
+    if (checkedAfterExpiry) {
+        return {
+            included: true,
+            state: "overdue",
+            due_on: null,
+            last_on: checked,
+            last_checked_in_future: lastCheckedInFuture,
+            checked_after_expiry: true,
         };
     }
 
@@ -362,7 +380,27 @@ export function classifyLicenceInterval(input: {
         due_on: dueOn,
         last_on: checked,
         last_checked_in_future: lastCheckedInFuture,
+        checked_after_expiry: false,
     };
+}
+
+/** Der Führerschein ist abgelaufen: Ablaufdatum vor heute. */
+export function isLicenceExpired(
+    expiresOn: string | null | undefined,
+    today: string,
+): boolean {
+    const expires = blankToNull(expiresOn ?? null);
+    return expires !== null && expires < today;
+}
+
+/** Eine Kontrolle nach dem Ablaufdatum hat keinen gültigen Führerschein gesehen. */
+export function licenceCheckedAfterExpiry(
+    checkedOn: string | null | undefined,
+    expiresOn: string | null | undefined,
+): boolean {
+    const checked = blankToNull(checkedOn ?? null);
+    const expires = blankToNull(expiresOn ?? null);
+    return checked !== null && expires !== null && checked > expires;
 }
 
 export function isDueActive(active: boolean | undefined): boolean {
@@ -372,8 +410,13 @@ export function isDueActive(active: boolean | undefined): boolean {
 export function classifyLicenceCheck(
     checkedOn: string | null,
     today: string,
+    expiresOn: string | null = null,
 ): { state: DueCalendarState; due_on: string | null } {
-    if (checkedOn === null || checkedOn === "") {
+    if (
+        checkedOn === null ||
+        checkedOn === "" ||
+        licenceCheckedAfterExpiry(checkedOn, expiresOn)
+    ) {
         return { state: "overdue", due_on: null };
     }
 
@@ -440,6 +483,7 @@ function collectDue(input: DueCollectInput): {
         const check = classifyLicenceCheck(
             driver.licence_checked_on,
             input.today,
+            driver.licence_expires_on,
         );
         if (check.state === "overdue" || check.state === "soon") {
             items.push({
@@ -804,6 +848,8 @@ export type DueExplanation = {
     source: DueDateSource;
     /** Letztes Prüf- oder Kontrolldatum liegt nach heute. */
     last_checked_in_future: boolean;
+    /** Führerscheinkontrolle nach dem Ablaufdatum: zählt nicht. */
+    checked_after_expiry?: boolean;
 };
 
 function germanDueDate(value: string | null): string {
@@ -872,6 +918,10 @@ function licenceCheckText(explanation: DueExplanation): string {
         ? ` ${explanation.internal_notice}.`
         : "";
     const months = explanation.interval_months ?? 6;
+
+    if (explanation.checked_after_expiry) {
+        return `Kontrolle vom ${germanDueDate(explanation.last_on)} war nach dem Ablauf des Führerscheins; sie zählt erst mit dem neuen Ablaufdatum.${notice}`;
+    }
 
     if (explanation.due_on === null) {
         return `Bisher kein Kontrolldatum. Wiederholung alle ${months} Monate.${notice}`;
@@ -952,6 +1002,7 @@ export function explainLicenceCheck(input: {
     checkedOn: string | null;
     today: string;
     intervalMonths: number;
+    expiresOn?: string | null;
 }): DueExplanation {
     const check = dueRule("licence_check");
     const result = classifyLicenceInterval({
@@ -959,6 +1010,7 @@ export function explainLicenceCheck(input: {
         today: input.today,
         intervalMonths: input.intervalMonths,
         leadDays: check.lead_days,
+        expiresOn: input.expiresOn,
     });
 
     return {
@@ -970,6 +1022,7 @@ export function explainLicenceCheck(input: {
         internal_notice: ruleNotice(check.rule_kind),
         source: "interval",
         last_checked_in_future: result.last_checked_in_future,
+        checked_after_expiry: result.checked_after_expiry,
     };
 }
 
@@ -1098,12 +1151,14 @@ export function buildConfiguredDueRows(input: {
             checkedOn: driver.licence_checked_on,
             today: input.today,
             intervalMonths: input.licenceCheckMonths,
+            expiresOn: driver.licence_expires_on,
         });
         const checkResult = classifyLicenceInterval({
             checkedOn: driver.licence_checked_on,
             today: input.today,
             intervalMonths: input.licenceCheckMonths,
             leadDays: input.leadDays,
+            expiresOn: driver.licence_expires_on,
         });
 
         if (!checkResult.included) {
@@ -1121,4 +1176,48 @@ export function buildConfiguredDueRows(input: {
     }
 
     return rows;
+}
+
+export type VehicleDeadline = {
+    reason: "HU" | "UVV";
+    /** Abgelaufen, bald fällig (within the company lead), fine, or no date. */
+    state: DueCalendarState;
+    due_on: string | null;
+};
+
+/**
+ * HU and UVV of a vehicle with their state today. The same rule as /fristen:
+ * the HU is due at the end of its sticker month, the UVV from the last check
+ * or a date entered by hand; „bald“ means within the company lead.
+ */
+export function vehicleDeadlines(
+    vehicle: { hu_due_on: string | null; uvv_checked_on: string | null; uvv_due_on: string | null },
+    today: string,
+    leadDays: number,
+): VehicleDeadline[] {
+    const hu = explainHuMonth(vehicle.hu_due_on).due_on;
+    const uvv = explainUvv({
+        checkedOn: vehicle.uvv_checked_on,
+        manualDueOn: vehicle.uvv_due_on,
+        today,
+    }).due_on;
+
+    return [
+        { reason: "HU", due_on: hu, state: classifyDueOn(hu, today, leadDays) },
+        { reason: "UVV", due_on: uvv, state: classifyDueOn(uvv, today, leadDays) },
+    ];
+}
+
+/**
+ * What the vehicle list marks and filters (`deadline_overdue`,
+ * `deadline_soon`): HU or UVV past, else one due within the lead, else null.
+ * A missing date is not counted here; /fristen lists it as „Datum fehlt“.
+ */
+export function vehicleDeadlineState(
+    vehicle: { hu_due_on: string | null; uvv_checked_on: string | null; uvv_due_on: string | null },
+    today: string,
+    leadDays: number,
+): "overdue" | "soon" | null {
+    const states = vehicleDeadlines(vehicle, today, leadDays).map((deadline) => deadline.state);
+    return states.includes("overdue") ? "overdue" : states.includes("soon") ? "soon" : null;
 }

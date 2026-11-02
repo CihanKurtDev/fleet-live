@@ -31,6 +31,11 @@ export type OdometerReading = {
 export type VehicleOdometer = {
     /** Current reading in whole km; `null` while nobody entered one. */
     km: number | null;
+    /**
+     * When the device last reported the dashboard reading; `null` for a GPS
+     * box. A reported reading cannot be corrected: the dashboard is the truth.
+     */
+    reported_at: string | null;
     readings: OdometerReading[];
 };
 

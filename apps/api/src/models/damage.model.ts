@@ -1,17 +1,23 @@
 import {
     DAMAGE_LIST_LIMIT,
+    DAMAGE_PHOTOS_MAX,
+    DAMAGE_PHOTO_MAX_BYTES,
     berlinTodayIso,
     type Damage,
     type DamageInput,
+    type DamagePhotoType,
 } from "@fleet-live/shared";
 
 import { withTransaction } from "../db/database";
 import { stmt } from "../db/statements";
 import { AppError, NotFoundError } from "../lib/errors";
+import { DriveModel } from "./drive.model";
 
 export type DamageActor = { id: number; name: string };
 
-type DamageRow = Omit<Damage, "drivable"> & { drivable: number };
+type DamageRow = Omit<Damage, "drivable" | "photo_ids"> & { drivable: number; photo_ids: string };
+
+export type DamagePhoto = { content_type: DamagePhotoType; data: Uint8Array };
 
 const COLUMNS = `
     d.id,
@@ -26,7 +32,16 @@ const COLUMNS = `
     w.planned_on AS workshop_planned_on,
     d.closed_on,
     d.reported_by_name,
-    d.created_at
+    d.created_at,
+    d.occurred_time,
+    d.latitude,
+    d.longitude,
+    d.driver_id,
+    d.driver_name,
+    (
+        SELECT COALESCE(json_group_array(p.id), '[]')
+        FROM (SELECT id FROM damage_photos WHERE damage_id = d.id ORDER BY id) p
+    ) AS photo_ids
 `;
 
 const FROM = `
@@ -43,15 +58,27 @@ function toDamage(row: DamageRow): Damage {
         drivable: Number(row.drivable) === 1,
         workshop_visit_id:
             row.workshop_visit_id === null ? null : Number(row.workshop_visit_id),
+        driver_id: row.driver_id === null ? null : Number(row.driver_id),
+        photo_ids: (JSON.parse(row.photo_ids) as number[]).map(Number),
     };
 }
 
-function vehicleOf(vehicleId: number, companyId: number) {
+type DamageVehicle = {
+    id: number;
+    license_plate: string;
+    status: string;
+    current_driver_id: number | null;
+    driver_name: string | null;
+};
+
+function vehicleOf(vehicleId: number, companyId: number): DamageVehicle {
     const vehicle = stmt(
-        `SELECT id, license_plate, status FROM vehicles WHERE id = ? AND company_id = ?`,
-    ).get(vehicleId, companyId) as
-        | { id: number; license_plate: string; status: string }
-        | undefined;
+        `
+        SELECT id, license_plate, status, current_driver_id, driver_name
+        FROM vehicles
+        WHERE id = ? AND company_id = ?
+        `,
+    ).get(vehicleId, companyId) as DamageVehicle | undefined;
 
     if (!vehicle) {
         throw new NotFoundError();
@@ -73,19 +100,68 @@ function damageOf(damageId: number, companyId: number): Damage {
     return toDamage(row);
 }
 
-/** „Nicht fahrbereit“ takes the vehicle off the road: not while it is driving. */
-function refuseUndrivableWhileDriving(vehicle: { license_plate: string; status: string }) {
+/**
+ * A vehicle that cannot be driven is off the road: a breakdown on a trip
+ * stops it where it stands (the trip ends there), then it has no current
+ * driver until the damage is repaired.
+ */
+function takeOffTheRoad(vehicle: DamageVehicle, companyId: number, actor: DamageActor | null) {
     if (vehicle.status === "DRIVING") {
-        const message = `${vehicle.license_plate} ist auf Fahrt. „Nicht fahrbereit“ lässt sich eintragen, sobald die Fahrt endet.`;
-        throw new AppError(409, "VEHICLE_DRIVING", message, { drivable: message });
+        DriveModel.report(vehicle.id, companyId, "IDLE");
+    }
+
+    stmt(
+        `UPDATE vehicles SET current_driver_id = NULL, driver_name = NULL WHERE id = ?`,
+    ).run(vehicle.id);
+
+    // Nobody drives it to its planned workshop stay any more: it is towed
+    // there (the dispatcher can still switch to „Werkstatt holt ab“).
+    const stay = stmt(
+        `
+        SELECT id FROM workshop_visits
+        WHERE vehicle_id = ? AND state = 'PLANNED' AND transport = 'DRIVER'
+        `,
+    ).get(vehicle.id) as { id: number } | undefined;
+
+    if (stay) {
+        stmt(
+            `UPDATE workshop_visits SET transport = 'TOW', bring_driver_id = NULL WHERE id = ?`,
+        ).run(stay.id);
+        stmt(
+            `
+            INSERT INTO workshop_visit_events (visit_id, action, actor_user_id, actor_name, details)
+            VALUES (?, 'updated', ?, ?, ?)
+            `,
+        ).run(
+            stay.id,
+            actor?.id ?? null,
+            actor?.name ?? null,
+            JSON.stringify({ fields: ["transport", "bring_driver_id"] }),
+        );
     }
 }
 
-/** A vehicle that cannot be driven has no current driver. */
-function releaseCurrentDriver(vehicleId: number) {
-    stmt(
-        `UPDATE vehicles SET current_driver_id = NULL, driver_name = NULL WHERE id = ?`,
-    ).run(vehicleId);
+/** The first bytes say what a file is; the declared type must match them. */
+function photoMatches(type: DamagePhotoType, data: Uint8Array): boolean {
+    const starts = (...bytes: number[]) => bytes.every((byte, index) => data[index] === byte);
+    const ascii = (from: number, text: string) =>
+        [...text].every((char, index) => data[from + index] === char.charCodeAt(0));
+
+    switch (type) {
+        case "image/jpeg":
+            return starts(0xff, 0xd8, 0xff);
+        case "image/png":
+            return starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+        case "image/webp":
+            return ascii(0, "RIFF") && ascii(8, "WEBP");
+    }
+}
+
+function refuseClosed(damage: Damage) {
+    if (damage.state !== "OPEN") {
+        const message = "Der Schaden ist abgeschlossen.";
+        throw new AppError(409, "DAMAGE_CLOSED", message, { state: message });
+    }
 }
 
 const isOpenStay = (damage: Damage) =>
@@ -116,18 +192,17 @@ export class DamageModel {
     ): Damage {
         const vehicle = vehicleOf(vehicleId, companyId);
 
-        if (!input.drivable) {
-            refuseUndrivableWhileDriving(vehicle);
-        }
-
         const id = withTransaction(() => {
+            // The driver at the moment of the report, before an undrivable
+            // damage takes them off the vehicle.
             const result = stmt(
                 `
                 INSERT INTO vehicle_damages (
                     vehicle_id, occurred_on, description, severity, drivable,
-                    reported_by_user_id, reported_by_name
+                    reported_by_user_id, reported_by_name,
+                    occurred_time, latitude, longitude, driver_id, driver_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `,
             ).run(
                 vehicleId,
@@ -137,10 +212,15 @@ export class DamageModel {
                 input.drivable ? 1 : 0,
                 actor.id,
                 actor.name,
+                input.occurred_time ?? null,
+                input.latitude ?? null,
+                input.longitude ?? null,
+                vehicle.current_driver_id,
+                vehicle.current_driver_id === null ? null : vehicle.driver_name,
             );
 
             if (!input.drivable) {
-                releaseCurrentDriver(vehicleId);
+                takeOffTheRoad(vehicle, companyId, actor);
             }
 
             return Number(result.lastInsertRowid);
@@ -149,34 +229,102 @@ export class DamageModel {
         return damageOf(id, companyId);
     }
 
-    static update(damageId: number, companyId: number, patch: Partial<DamageInput>): Damage {
+    static update(
+        damageId: number,
+        companyId: number,
+        patch: Partial<DamageInput>,
+        actor: DamageActor | null = null,
+    ): Damage {
         const damage = damageOf(damageId, companyId);
-
-        if (damage.state !== "OPEN") {
-            const message = "Der Schaden ist abgeschlossen.";
-            throw new AppError(409, "DAMAGE_CLOSED", message, { state: message });
-        }
+        refuseClosed(damage);
 
         const next = { ...damage, ...patch };
         const becomesUndrivable = damage.drivable && patch.drivable === false;
-
-        if (becomesUndrivable) {
-            refuseUndrivableWhileDriving(vehicleOf(damage.vehicle_id, companyId));
-        }
 
         withTransaction(() => {
             stmt(
                 `
                 UPDATE vehicle_damages
-                SET occurred_on = ?, description = ?, severity = ?, drivable = ?
+                SET occurred_on = ?, description = ?, severity = ?, drivable = ?,
+                    occurred_time = ?, latitude = ?, longitude = ?
                 WHERE id = ?
                 `,
-            ).run(next.occurred_on, next.description, next.severity, next.drivable ? 1 : 0, damageId);
+            ).run(
+                next.occurred_on,
+                next.description,
+                next.severity,
+                next.drivable ? 1 : 0,
+                next.occurred_time ?? null,
+                next.latitude ?? null,
+                next.longitude ?? null,
+                damageId,
+            );
 
             if (becomesUndrivable) {
-                releaseCurrentDriver(damage.vehicle_id);
+                takeOffTheRoad(vehicleOf(damage.vehicle_id, companyId), companyId, actor);
             }
         });
+
+        return damageOf(damageId, companyId);
+    }
+
+    /** A photo of an open damage; at most `DAMAGE_PHOTOS_MAX`, the type read from the bytes. */
+    static addPhoto(damageId: number, companyId: number, photo: DamagePhoto): Damage {
+        const damage = damageOf(damageId, companyId);
+        refuseClosed(damage);
+
+        if (damage.photo_ids.length >= DAMAGE_PHOTOS_MAX) {
+            const message = `Höchstens ${DAMAGE_PHOTOS_MAX} Fotos je Schaden.`;
+            throw new AppError(409, "DAMAGE_PHOTOS_FULL", message, { photos: message });
+        }
+
+        if (photo.data.byteLength === 0 || photo.data.byteLength > DAMAGE_PHOTO_MAX_BYTES) {
+            const message = `Ein Foto darf höchstens ${Math.round(DAMAGE_PHOTO_MAX_BYTES / 1_000_000 * 10) / 10} MB groß sein.`;
+            throw new AppError(400, "DAMAGE_PHOTO_SIZE", message, { photos: message });
+        }
+
+        if (!photoMatches(photo.content_type, photo.data)) {
+            const message = "Die Datei ist kein JPEG-, PNG- oder WebP-Bild.";
+            throw new AppError(400, "DAMAGE_PHOTO_TYPE", message, { photos: message });
+        }
+
+        stmt(
+            `INSERT INTO damage_photos (damage_id, content_type, data) VALUES (?, ?, ?)`,
+        ).run(damageId, photo.content_type, photo.data);
+
+        return damageOf(damageId, companyId);
+    }
+
+    static photo(damageId: number, photoId: number, companyId: number): DamagePhoto {
+        const row = stmt(
+            `
+            SELECT p.content_type, p.data
+            FROM damage_photos p
+            JOIN vehicle_damages d ON d.id = p.damage_id
+            JOIN vehicles v ON v.id = d.vehicle_id
+            WHERE p.id = ? AND p.damage_id = ? AND v.company_id = ?
+            `,
+        ).get(photoId, damageId, companyId) as DamagePhoto | undefined;
+
+        if (!row) {
+            throw new NotFoundError("Foto nicht gefunden.");
+        }
+
+        return row;
+    }
+
+    static deletePhoto(damageId: number, photoId: number, companyId: number): Damage {
+        const damage = damageOf(damageId, companyId);
+        refuseClosed(damage);
+
+        const result = stmt(`DELETE FROM damage_photos WHERE id = ? AND damage_id = ?`).run(
+            photoId,
+            damageId,
+        );
+
+        if (Number(result.changes) === 0) {
+            throw new NotFoundError("Foto nicht gefunden.");
+        }
 
         return damageOf(damageId, companyId);
     }
@@ -231,6 +379,38 @@ export class DamageModel {
                 damageId,
             );
         }
+    }
+
+    /** The damages a stay takes, as a whole set: the others go back to unplanned. */
+    static setForVisit(vehicleId: number, visitId: number, damageIds: number[]) {
+        const linked = new Set(
+            (
+                stmt(
+                    `SELECT id FROM vehicle_damages WHERE workshop_visit_id = ? AND state = 'OPEN'`,
+                ).all(visitId) as { id: number }[]
+            ).map((row) => Number(row.id)),
+        );
+
+        for (const id of linked) {
+            if (!damageIds.includes(id)) {
+                stmt(`UPDATE vehicle_damages SET workshop_visit_id = NULL WHERE id = ?`).run(id);
+            }
+        }
+
+        this.linkToVisit(
+            vehicleId,
+            visitId,
+            damageIds.filter((id) => !linked.has(id)),
+        );
+    }
+
+    /** An open damage that it cannot be driven with: nobody drives it to the workshop. */
+    static notDrivable(vehicleId: number): boolean {
+        return Boolean(
+            stmt(
+                `SELECT 1 FROM vehicle_damages WHERE vehicle_id = ? AND state = 'OPEN' AND drivable = 0`,
+            ).get(vehicleId),
+        );
     }
 
     /** The stay is finished: its damages are repaired on that day. */

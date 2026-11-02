@@ -9,6 +9,60 @@
     color: var(--text);
 }
 
+/* A panel narrower than the columns (a window on half a screen): the columns
+   close up to their content, then HU and UVV go (they have the Fristen page
+   and the vehicle page), then km/h. Never cut off at the right edge: what
+   still does not fit scrolls sideways. */
+@media (min-width: 701px) {
+    .cards {
+        container-type: inline-size;
+        overflow-x: auto;
+
+        @container (max-width: 1179px) {
+            :global(col[data-col="license_plate"]) {
+                width: 180px !important;
+            }
+
+            :global(col[data-col="driver_name"]) {
+                width: 130px !important;
+            }
+
+            :global(col[data-col="status"]) {
+                width: 136px !important;
+            }
+
+            :global(col[data-col="fuel_level"]) {
+                width: 130px !important;
+            }
+
+            :global(col[data-col="speed"]) {
+                width: 80px !important;
+            }
+
+            :global(col[data-col="hu_due_on"]) {
+                width: 84px !important;
+            }
+
+            :global(col[data-col="uvv_due_on"]) {
+                width: 104px !important;
+            }
+        }
+
+        @container (max-width: 1043px) {
+            :global([data-col="hu_due_on"]),
+            :global([data-col="uvv_due_on"]) {
+                display: none;
+            }
+        }
+
+        @container (max-width: 855px) {
+            :global([data-col="speed"]) {
+                display: none;
+            }
+        }
+    }
+}
+
 @media (max-width: 700px) {
     .error {
         padding: 0;

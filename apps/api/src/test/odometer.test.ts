@@ -28,6 +28,7 @@ async function create(plate: string, odometer?: number) {
 const reading = async (vehicleId: number) =>
     (await api.get(`/api/vehicles/${vehicleId}/odometer`)).body.data as {
         km: number | null;
+        reported_at: string | null;
         readings: Array<{
             km: number;
             previous_km: number | null;
@@ -87,7 +88,7 @@ describe("odometer", () => {
 
         const unknown = await create("K-KM 2");
         assert.equal(unknown.odometer_km, null);
-        assert.deepEqual(await reading(unknown.id), { km: null, readings: [] });
+        assert.deepEqual(await reading(unknown.id), { km: null, reported_at: null, readings: [] });
     });
 
     it("grows by the distance of a trip", async () => {
@@ -118,6 +119,74 @@ describe("odometer", () => {
         assert.equal((await reading(car.id)).readings.length, 1);
         // Without a reading there is nothing to add to.
         assert.equal((await api.get(`/api/vehicles/${unknown.id}`)).body.odometer_km, null);
+    });
+
+    it("comes from a truck's dashboard with each ping; nobody overwrites it", async () => {
+        const make = async (plate: string, odometer?: number) => {
+            const response = await api
+                .post("/api/vehicles")
+                .send({
+                    license_plate: plate,
+                    fuel_level: 80,
+                    status: "IDLE",
+                    vehicle_type: "TRUCK",
+                    ...(odometer === undefined ? {} : { odometer_km: odometer }),
+                })
+                .expect(201);
+            await giveCurrentDriver(api, response.body.id);
+            await api.patch(`/api/vehicles/${response.body.id}`).send({ status: "DRIVING" }).expect(200);
+            return response.body.id as number;
+        };
+        const entered = await make("K-LKW 1", 200000);
+        const unknown = await make("K-LKW 2");
+        seedSimProgress(entered, "koeln-duesseldorf", 0.2);
+        seedSimProgress(unknown, "koeln-duesseldorf", 0.5);
+
+        let patches: ReturnType<typeof TelemetryModel.tickDrivingVehicles> = [];
+        for (let index = 0; index < 10; index += 1) {
+            patches = TelemetryModel.tickDrivingVehicles([entered, unknown]);
+        }
+
+        const truck = (await api.get(`/api/vehicles/${entered}`)).body;
+        assert.ok(truck.odometer_km > 200000, `dashboard ${truck.odometer_km}`);
+        assert.ok(truck.odometer_reported_at, "the device reported it");
+        // The live patch carries the reading and says where it comes from.
+        const patch = patches.find((item) => item.id === entered);
+        assert.equal(patch?.odometer_km, truck.odometer_km);
+        assert.equal(patch?.odometer_from_device, true);
+        // A dashboard has a reading even when nobody entered one.
+        assert.ok((await api.get(`/api/vehicles/${unknown}`)).body.odometer_km > 0);
+
+        const correction = await api
+            .post(`/api/vehicles/${entered}/odometer`)
+            .send({ km: 1000, note: null })
+            .expect(409);
+        assert.equal(correction.body.code, "ODOMETER_FROM_DEVICE");
+        assert.ok((await reading(entered)).reported_at);
+
+        const preview = await api
+            .post("/api/import/preview")
+            .send({ csv: `Kennzeichen;Tank;Status;Kilometerstand
+K-LKW 1;80;Auf Fahrt;5
+` })
+            .expect(200);
+        const row = (
+            await api.get(`/api/import/preview/${preview.body.data.preview_id}/rows`).query({ limit: 10 }).expect(200)
+        ).body.data[0] as ImportPreviewRow;
+        await api
+            .post("/api/import/commit")
+            .send({
+                preview_id: preview.body.data.preview_id,
+                row_actions: { [importActionKey("vehicles", row.row_index)]: "update" },
+            })
+            .expect(200);
+        assert.ok((await api.get(`/api/vehicles/${entered}`)).body.odometer_km > 200000);
+    });
+
+    it("of a GPS box is counted and says so: no device reading", async () => {
+        const van = await create("K-KM 9", 1000);
+        assert.equal((await api.get(`/api/vehicles/${van.id}`)).body.odometer_reported_at, null);
+        assert.equal((await reading(van.id)).reported_at, null);
     });
 
     it("is corrected by hand with a reason and keeps the history", async () => {

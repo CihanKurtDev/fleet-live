@@ -26,20 +26,24 @@ const DRIVER_FIELD: Partial<Record<DueKind, DriverFormField>> = {
     licence_check: "licence-checked",
 };
 
+/** The deadline to fill in: a row of „Heute dran“ or of /fristen. */
+export type DeadlineTarget = Pick<TodayItem, "vehicle_id" | "driver_id" | "due_kind" | "subject">;
+
 type Loaded =
     | { kind: "vehicle"; vehicle: Vehicle }
     | { kind: "driver"; driver: DriverDetail };
 
 /**
  * "Eintragen" on a deadline row: the same edit dialog as on the vehicle or
- * driver page, opened on the field the deadline needs, right on Schicht.
+ * driver page, opened on the field the deadline needs, right on Schicht or
+ * /fristen.
  */
 export const DeadlineEditDialog = ({
     item,
     onClose,
     onSaved,
 }: {
-    item: TodayItem | null;
+    item: DeadlineTarget | null;
     onClose: () => void;
     onSaved: () => void;
 }) => {

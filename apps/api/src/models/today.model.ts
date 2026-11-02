@@ -1,4 +1,5 @@
 import {
+    berlinTodayIso,
     DRIVER_TALK_MIN_OPEN_WARNINGS,
     parseAlertListQuery,
     parseDriverListQuery,
@@ -12,9 +13,10 @@ import {
     type TodayResponse,
 } from "@fleet-live/shared";
 
+import { stmt } from "../db/statements";
 import { AlertModel } from "./alert.model";
 import { CompanyModel } from "./company.model";
-import { DriverModel } from "./driver.model";
+import { DriverModel, LICENCE_DRIVING_SQL } from "./driver.model";
 import { DueModel } from "./due.model";
 import { VehicleModel } from "./vehicle.model";
 import { DamageModel } from "./damage.model";
@@ -30,12 +32,25 @@ const emptyItem = {
     open_warnings: null,
     fuel_level: null,
     workshop: null,
+    workshop_task: null,
+    workshop_place: null,
     damage: null,
+    vehicle_plate: null,
+    vehicle_driving: null,
+    phone: null,
 } satisfies Partial<TodayItem>;
 
-/** Never-set dates first (a licence never checked), then the oldest. */
+/** Oldest first; a date never set (a licence never checked) after the dated ones. */
 const byDueDate = (a: DueListItem, b: DueListItem) =>
-    (a.due_on ?? "").localeCompare(b.due_on ?? "");
+    (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999");
+
+/**
+ * Overdue rows: legal dates (HU, UVV, licence expiry) before the company's own
+ * licence check, each oldest first.
+ */
+const byOverdue = (a: DueListItem, b: DueListItem) =>
+    Number(a.kind === "licence_check") - Number(b.kind === "licence_check") ||
+    byDueDate(a, b);
 
 const deadlineItem = (
     kind: TodayKind,
@@ -105,15 +120,43 @@ export class TodayModel {
         options: { driverTalk?: boolean; userId?: number } = {},
     ): TodayResponse {
         const withTalk = options.driverTalk !== false;
-        const workshop = WorkshopModel.dueForCompany(companyId, options.userId ?? null);
+        const workshop = WorkshopModel.tasksForCompany(companyId, options.userId ?? null);
         const unplanned = DamageModel.unplannedForCompany(companyId);
         const dueRows = DueModel.rowsForCompany(companyId);
+        const today = berlinTodayIso();
         const overdue = dueRows
             .filter((row) => row.state === "overdue")
+            .sort(byOverdue);
+        const dueToday = dueRows
+            .filter((row) => row.state === "soon" && row.due_on === today)
             .sort(byDueDate);
         const soon = dueRows
-            .filter((row) => row.state === "soon")
+            .filter((row) => row.state === "soon" && row.due_on !== today)
             .sort(byDueDate);
+        const licenceDriving = stmt(
+            `
+            SELECT d.id, d.name, d.phone, d.licence_expires_on,
+                v.id AS vehicle_id, v.license_plate, v.status = 'DRIVING' AS driving
+            FROM drivers d
+            JOIN vehicles v ON v.current_driver_id = d.id
+            WHERE d.company_id = ? AND ${LICENCE_DRIVING_SQL}
+            ORDER BY d.licence_expires_on, d.id
+            `,
+        ).all(companyId) as {
+            id: number;
+            name: string;
+            phone: string | null;
+            licence_expires_on: string;
+            vehicle_id: number;
+            license_plate: string;
+            driving: number;
+        }[];
+        const currentDriverPhone = (vehicleId: number) =>
+            (
+                stmt(
+                    `SELECT d.phone FROM vehicles v JOIN drivers d ON d.id = v.current_driver_id WHERE v.id = ?`,
+                ).get(vehicleId) as { phone: string | null } | undefined
+            )?.phone ?? null;
 
         const talk = DriverModel.list(
             parseDriverListQuery({
@@ -145,16 +188,35 @@ export class TodayModel {
         );
 
         const byKind: Record<TodayKind, TodayItem[]> = {
+            licence_driving: licenceDriving.slice(0, limit).map((row) => ({
+                ...emptyItem,
+                kind: "licence_driving",
+                key: `licence_driving:${row.id}`,
+                vehicle_id: Number(row.vehicle_id),
+                driver_id: Number(row.id),
+                subject: row.name,
+                due_kind: "licence_expiry",
+                due_on: row.licence_expires_on,
+                vehicle_plate: row.license_plate,
+                vehicle_driving: Boolean(row.driving),
+                phone: row.phone,
+            })),
+            deadline_today: dueToday
+                .slice(0, limit)
+                .map((row, index) => deadlineItem("deadline_today", row, index)),
             deadline_overdue: overdue
                 .slice(0, limit)
                 .map((row, index) => deadlineItem("deadline_overdue", row, index)),
-            workshop_due: workshop.slice(0, limit).map((visit) => ({
+            workshop_due: workshop.slice(0, limit).map((task) => ({
                 ...emptyItem,
                 kind: "workshop_due",
-                key: `workshop_due:${visit.id}`,
-                vehicle_id: visit.vehicle_id,
-                subject: visit.license_plate,
-                workshop: visit,
+                key: `workshop_due:${task.vehicle_id}`,
+                vehicle_id: task.vehicle_id,
+                subject: task.license_plate,
+                since: task.since,
+                workshop: task.visit,
+                workshop_task: task.task,
+                workshop_place: task.place,
             })),
             damage_unplanned: unplanned.slice(0, limit).map(({ license_plate, ...damage }) => ({
                 ...emptyItem,
@@ -182,6 +244,7 @@ export class TodayModel {
                 subject: alert.license_plate,
                 alert_id: alert.id,
                 since: alert.created_at,
+                phone: currentDriverPhone(alert.vehicle_id),
             })),
             low_fuel: lowFuel.data.map((vehicle) => ({
                 ...emptyItem,
@@ -197,6 +260,8 @@ export class TodayModel {
         };
 
         const counts: TodayCounts = {
+            licence_driving: licenceDriving.length,
+            deadline_today: dueToday.length,
             deadline_overdue: overdue.length,
             workshop_due: workshop.length,
             damage_unplanned: unplanned.length,

@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
     DEPOT_RADIUS_DEFAULT_M,
-    LOW_FUEL_THRESHOLD_PERCENT,
     type Alert,
     type AlertType,
     type FleetPosition,
+    type GeoBBox,
     type Site,
+    type WorkshopPlace,
     type VehicleFilterId,
     type VehicleStatus,
 } from "@fleet-live/shared";
@@ -26,7 +27,14 @@ import { Button } from "../components/ui/Button/Button";
 import { RetryMessage } from "../components/ui/RetryMessage";
 import { TableFilterBar } from "../components/ui/Table/TableFilterBar";
 import { DepotPanel } from "../components/vehicles/DepotPanel";
-import { DepotStrip } from "../components/vehicles/DepotStrip";
+import { PlaceBoard } from "../components/vehicles/PlaceBoard";
+import { PlaceList } from "../components/vehicles/PlaceList";
+import type { PlaceRef } from "../components/vehicles/places";
+import { WorkshopCard } from "../components/vehicles/WorkshopCard";
+import { WorkshopPlaceDialog } from "../components/vehicles/WorkshopPlaceDialog";
+import { getWorkshopPlaces } from "../api/workshop";
+import { circleBounds } from "../utils/geo";
+import { VEHICLE_TILE_HINTS } from "../components/vehicles/vehicleTileHints";
 import {
     depotAfterClick,
     isDepotDraftDirty,
@@ -114,7 +122,7 @@ export const FleetPage = () => {
     usePageTitle("Flottenkarte");
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { listEpoch, streamConnection, lastTelemetryAt } = useVehicles();
+    const { listEpoch, streamConnection, lastTelemetryAt, refetchLists } = useVehicles();
     const canEdit = user?.role === "dispatcher";
     const {
         bbox,
@@ -163,6 +171,11 @@ export const FleetPage = () => {
     const [sites, setSites] = useState<Site[]>([]);
     const [sitesError, setSitesError] = useState<string | null>(null);
     const [sitesRetryKey, setSitesRetryKey] = useState(0);
+    const [workshops, setWorkshops] = useState<WorkshopPlace[]>([]);
+    const [editingWorkshop, setEditingWorkshop] = useState<WorkshopPlace | "new" | null>(null);
+    // The workshop picked in the place band (depots keep theirs in the URL).
+    const [workshopId, setWorkshopId] = useState<number | null>(null);
+    const [placeListOpen, setPlaceListOpen] = useState(false);
     const [draft, setDraft] = useState<DepotDraft | null>(null);
     const [placing, setPlacing] = useState(false);
     const [focusNonce, setFocusNonce] = useState(0);
@@ -179,6 +192,9 @@ export const FleetPage = () => {
         vehicle: FleetPosition;
     } | null>(null);
     const [frameNonce, setFrameNonce] = useState(0);
+    // A workshop picked in its strip: framed until the fleet is
+    // framed again. Negative nonces, so they never equal a fleet frame.
+    const [placeFrame, setPlaceFrame] = useState<{ nonce: number; bounds: GeoBBox } | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
     // Set when a search hit is chosen: the panel then takes the focus.
     const [pickedId, setPickedId] = useState<number | null>(null);
@@ -232,6 +248,14 @@ export const FleetPage = () => {
 
         return () => controller.abort();
     }, [listEpoch, sitesRetryKey]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        getWorkshopPlaces(controller.signal)
+            .then((response) => setWorkshops(response.data))
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, [listEpoch]);
 
     const missingVehicles = useMemo(
         () => vehicles.filter((vehicle) => !vehicle.has_position),
@@ -362,6 +386,16 @@ export const FleetPage = () => {
                 return;
             }
 
+            if (placeListOpen) {
+                setPlaceListOpen(false);
+                return;
+            }
+
+            if (workshopId !== null) {
+                setWorkshopId(null);
+                return;
+            }
+
             if (placing) {
                 setPlacing(false);
                 return;
@@ -382,6 +416,8 @@ export const FleetPage = () => {
 
         return () => window.removeEventListener("keydown", onKey);
     }, [
+        placeListOpen,
+        workshopId,
         vehiclePanelOpen,
         placing,
         draft,
@@ -395,6 +431,46 @@ export const FleetPage = () => {
         draft !== null ||
         depotId !== undefined ||
         saveError !== null;
+    const selectedPlace: PlaceRef | null =
+        depotId !== undefined && depotId !== null
+            ? { kind: "depot", id: depotId }
+            : workshopId !== null
+              ? { kind: "workshop", id: workshopId }
+              : null;
+    const selectedWorkshop = workshops.find((place) => place.id === workshopId) ?? null;
+
+    /** A place picked in the band or the list: the map flies there, its card opens; a second click closes it. */
+    const selectPlace = (place: PlaceRef) => {
+        setPlaceListOpen(false);
+
+        if (place.kind === "depot") {
+            const site = sites.find((entry) => entry.id === place.id);
+            if (site) {
+                setWorkshopId(null);
+                selectDepot(site);
+            }
+            return;
+        }
+
+        const workshop = workshops.find((entry) => entry.id === place.id);
+        if (!workshop) {
+            return;
+        }
+        if (draft && isDepotDraftDirty(draft, sites)) {
+            rejectDirtyDepot();
+            return;
+        }
+        if (workshopId === place.id) {
+            setWorkshopId(null);
+            return;
+        }
+        clearDepot();
+        setWorkshopId(place.id);
+        setPlaceFrame((current) => ({
+            nonce: Math.min(current?.nonce ?? 0, 0) - 1,
+            bounds: circleBounds(workshop.latitude, workshop.longitude, workshop.radius_m),
+        }));
+    };
     const statusReady = hasLoaded && !error;
     const counts = briefing.data?.counts ?? null;
     const toggleServerFilter = (id: VehicleFilterId) => {
@@ -429,19 +505,19 @@ export const FleetPage = () => {
             },
         ),
         {
-            key: "in_workshop",
-            label: "Werkstatt",
-            value: counts?.in_workshop ?? null,
-            hint: "Fahrzeuge",
+            key: "unavailable",
+            label: "Ausfall",
+            value: counts?.unavailable ?? null,
+            hint: VEHICLE_TILE_HINTS.unavailable,
             tone: "neutral",
-            pressed: filter === "in_workshop",
-            onToggle: () => toggleServerFilter("in_workshop"),
+            pressed: filter === "unavailable",
+            onToggle: () => toggleServerFilter("unavailable"),
         },
         {
             key: "speeding",
             label: "Tempo jetzt",
             value: counts?.speeding ?? null,
-            hint: "laufende Überschreitungen",
+            hint: VEHICLE_TILE_HINTS.speeding,
             tone: "critical",
             pressed: filter === "speeding",
             onToggle: () => toggleServerFilter("speeding"),
@@ -450,7 +526,7 @@ export const FleetPage = () => {
             key: "low_fuel",
             label: "Wenig Tank",
             value: counts?.low_fuel ?? null,
-            hint: `unter ${LOW_FUEL_THRESHOLD_PERCENT} % Tank`,
+            hint: VEHICLE_TILE_HINTS.low_fuel,
             tone: "warning",
             pressed: filter === "low_fuel",
             onToggle: () => toggleServerFilter("low_fuel"),
@@ -488,7 +564,7 @@ export const FleetPage = () => {
 
         navigate(`/vehicles/${alert.vehicle_id}`, {
             viewTransition: true,
-            state: { from: fleetPath },
+            state: { from: fleetPath, focusTrip: alert.trip_id },
         });
     };
 
@@ -743,9 +819,10 @@ export const FleetPage = () => {
                                 type="button"
                                 className={styles.frameAll}
                                 disabled={frameBounds === null}
-                                onClick={() =>
-                                    setFrameNonce((current) => current + 1)
-                                }
+                                onClick={() => {
+                                    setPlaceFrame(null);
+                                    setFrameNonce((current) => current + 1);
+                                }}
                             >
                                 Alle Fahrzeuge anzeigen
                             </button>
@@ -838,11 +915,14 @@ export const FleetPage = () => {
                             focusPosition={focus?.vehicle ?? null}
                             selectedId={selectedId}
                             frame={
-                                frameNonce > 0 && frameBounds
+                                placeFrame ??
+                                (frameNonce > 0 && frameBounds
                                     ? { nonce: frameNonce, bounds: frameBounds }
-                                    : null
+                                    : null)
                             }
                             depots={sites}
+                            workshops={workshops}
+                            selectedWorkshopId={workshopId}
                             draft={draft}
                             selectedDepotId={depotId ?? null}
                             focusDepot={
@@ -883,7 +963,22 @@ export const FleetPage = () => {
                                 }
                             }}
                         />
-                        {showDepotPanel && (
+                        {placeListOpen ? (
+                            <PlaceList
+                                sites={sites}
+                                workshops={workshops}
+                                selected={selectedPlace}
+                                onSelect={selectPlace}
+                                onClose={() => setPlaceListOpen(false)}
+                            />
+                        ) : selectedWorkshop ? (
+                            <WorkshopCard
+                                place={selectedWorkshop}
+                                canEdit={canEdit}
+                                onEdit={() => setEditingWorkshop(selectedWorkshop)}
+                                onClose={() => setWorkshopId(null)}
+                            />
+                        ) : showDepotPanel && (
                             <DepotPanel
                                 sites={sites}
                                 selectedId={depotId ?? null}
@@ -893,14 +988,11 @@ export const FleetPage = () => {
                                 saveError={saveError}
                                 loadError={sitesError}
                                 isSaving={isSaving}
-                                revealToken={focusNonce}
                                 onRetryLoad={() =>
                                     setSitesRetryKey((current) => current + 1)
                                 }
-                                onSelect={selectDepot}
                                 onDeselect={clearDepot}
                                 onEdit={editDepot}
-                                onStartPlace={startPlaceDepot}
                                 onCancel={() => {
                                     setDraft(null);
                                     setPlacing(false);
@@ -952,18 +1044,45 @@ export const FleetPage = () => {
                             </p>
                         )}
                     </div>
-                    <DepotStrip
+                    <PlaceBoard
                         sites={sites}
-                        selectedId={depotId ?? null}
+                        workshops={workshops}
+                        view={bbox}
+                        selected={selectedPlace}
                         canEdit={canEdit}
                         placing={placing}
-                        editing={draft !== null}
                         loadError={sitesError}
                         onRetry={() =>
                             setSitesRetryKey((current) => current + 1)
                         }
-                        onSelect={selectDepot}
-                        onStartPlace={startPlaceDepot}
+                        onSelect={selectPlace}
+                        onOpenList={() => setPlaceListOpen((current) => !current)}
+                        onNewDepot={() => {
+                            setPlaceListOpen(false);
+                            setWorkshopId(null);
+                            startPlaceDepot();
+                        }}
+                        onNewWorkshop={() => setEditingWorkshop("new")}
+                    />
+                    <WorkshopPlaceDialog
+                        open={editingWorkshop !== null}
+                        place={editingWorkshop === "new" ? null : editingWorkshop}
+                        onClose={() => setEditingWorkshop(null)}
+                        onSaved={(place) => {
+                            setEditingWorkshop(null);
+                            setWorkshops((current) => [
+                                ...current.filter((entry) => entry.id !== place.id),
+                                place,
+                            ]);
+                            setWorkshopId(place.id);
+                            refetchLists();
+                        }}
+                        onDeleted={(place) => {
+                            setEditingWorkshop(null);
+                            setWorkshops((current) => current.filter((entry) => entry.id !== place.id));
+                            setWorkshopId(null);
+                            refetchLists();
+                        }}
                     />
                 </div>
                 <aside className={styles.side} aria-label="Ereignisse">

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import {
     SPEEDING_HYSTERESIS_MS,
+    SPEEDING_MIN_OVER_KMH,
     SPEEDING_OPEN_AFTER_MS,
 } from "@fleet-live/shared";
 import { VehicleModel } from "../models/vehicle.model";
@@ -397,11 +398,12 @@ describe("one SPEEDING warning per trip", () => {
         });
         TripModel.open(vehicle.id, "1970-01-01 00:00:00");
 
-        // +10 on the motorway, +20 in town, +5 on the motorway: town is worst,
-        // though 130 and 125 are the higher speeds.
+        // +10 on the motorway, +20 in town, +12 on the motorway: town is worst,
+        // though 130 and 132 are the higher speeds. (+5 would not count at all:
+        // under SPEEDING_MIN_OVER_KMH a run opens no warning.)
         const afterMotorway = episode(vehicle.id, 6_000_000, 130, 10, 120);
         const afterCity = episode(vehicle.id, afterMotorway + 120_000, 70, 12);
-        episode(vehicle.id, afterCity + 120_000, 125, 10, 120);
+        episode(vehicle.id, afterCity + 120_000, 132, 10, 120);
 
         const all = await api.get("/api/alerts").query({ filter: "all" });
         assert.equal(all.body.data.length, 1);
@@ -409,6 +411,21 @@ describe("one SPEEDING warning per trip", () => {
         assert.equal(all.body.data[0].details.max_speed_kmh, 70);
         assert.equal(all.body.data[0].details.limit_kmh, 50);
         assert.match(all.body.data[0].message, /70 km\/h bei Limit 50/);
+    });
+
+    it("opens no warning for a run under the threshold", async () => {
+        const vehicle = VehicleModel.create({
+            license_plate: "K-SP 25",
+            driver_name: "Knapp drüber",
+            status: "DRIVING",
+            company_id: 1,
+        });
+        TripModel.open(vehicle.id, "1970-01-01 00:00:00");
+
+        episode(vehicle.id, 6_000_000, CITY_LIMIT + SPEEDING_MIN_OVER_KMH - 2, 20);
+
+        const all = await api.get("/api/alerts").query({ filter: "all" });
+        assert.equal(all.body.data.length, 0);
     });
 
     it("keeps the motorway overshoot when it is the worst", async () => {

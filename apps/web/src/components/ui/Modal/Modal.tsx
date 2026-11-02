@@ -4,6 +4,7 @@ import {
     useState,
     type KeyboardEvent,
     type ReactNode,
+    type SyntheticEvent,
 } from "react";
 import { skipMotion } from "../../../hooks/usePresence";
 import { Button } from "../Button/Button";
@@ -54,6 +55,12 @@ export const Modal = ({
         setAsking(false);
     }
 
+    // React hands close, keydown and input of a dialog opened inside this
+    // one on to this one through the component tree. Only its own count.
+    const fromThisDialog = (event: SyntheticEvent) =>
+        event.target instanceof Element &&
+        event.target.closest("dialog") === dialogRef.current;
+
     const askToDiscard = () => {
         askerRef.current =
             document.activeElement instanceof HTMLElement
@@ -79,7 +86,7 @@ export const Modal = ({
 
     // The × and the backdrop ask; Escape answers the question with "no".
     const handleDismissKey = (event: KeyboardEvent<HTMLDialogElement>) => {
-        if (event.key !== "Escape") {
+        if (event.key !== "Escape" || !fromThisDialog(event)) {
             return;
         }
 
@@ -197,16 +204,16 @@ export const Modal = ({
             // Escape stays the native close (a selection mode may take it
             // first by cancelling the event), so it closes without the fade.
             onKeyDown={handleDismissKey}
-            onClose={() => {
-                if (open) {
+            onClose={(event) => {
+                if (open && event.target === dialogRef.current) {
                     onClose();
                 }
             }}
             onPointerDown={(event) => {
                 pressedBackdrop.current = event.target === dialogRef.current;
             }}
-            onInput={() => {
-                if (guardUnsaved && !dirty) {
+            onInput={(event) => {
+                if (guardUnsaved && !dirty && fromThisDialog(event)) {
                     setDirty(true);
                 }
             }}

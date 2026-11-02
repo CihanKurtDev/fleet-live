@@ -8,7 +8,7 @@ import { BadRequestError } from "../lib/errors";
 import { sessionCompany } from "../lib/http";
 import { config } from "../config";
 import { simplifyPath } from "../lib/geo";
-import { SIM_ROUTES } from "../sim/routes";
+import { SIM_ROUTES, TIME_SCALE } from "../sim/routes";
 import {
     isCompanySimRunning,
     setCompanySimRunning,
@@ -20,6 +20,7 @@ function simState(companyId: number) {
     return {
         running: available && isCompanySimRunning(companyId),
         available,
+        time_scale: TIME_SCALE,
     };
 }
 

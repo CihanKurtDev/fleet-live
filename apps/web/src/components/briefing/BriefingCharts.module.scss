@@ -142,6 +142,11 @@
     .lead {
         font-size: 13px;
     }
+
+    /* The task list keeps the height of its rows; it never shrinks under the charts. */
+    .leadSlot {
+        flex: none;
+    }
 }
 
 /* The list left over both rows, the two charts right. */
@@ -380,7 +385,7 @@
     }
 }
 
-/* Lower windows: explanations cut to one line (full text stays in the DOM). */
+/* Lower windows: tighter cards. The explanations are short enough to fit; never cut. */
 @media (min-width: 701px) and (max-height: 960px) {
     .card {
         padding: 8px var(--pad-panel);
@@ -388,14 +393,6 @@
 
     .title {
         margin: 2px 0;
-    }
-
-    .lead,
-    .note {
-        display: -webkit-box;
-        overflow: hidden;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 1;
     }
 
     .lead {

@@ -1,19 +1,24 @@
 import { useState, type KeyboardEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import {
+    DRIVER_TALK_MIN_OPEN_WARNINGS,
     DUE_KIND_LABELS,
     TODAY_KINDS,
+    WORKSHOP_TASK_LABELS,
+    berlinTodayIso,
     type TodayItem,
     type TodayKind,
     type WorkshopVisit,
 } from "@fleet-live/shared";
 
-import { ApiError } from "../../api/client";
-import { arriveWorkshopVisit, type WorkshopTarget } from "../../api/workshop";
+import { setDriverCurrentVehicle } from "../../api/drivers";
+import { type WorkshopTarget } from "../../api/workshop";
 import { useVehicles } from "../../context/vehiclesContext";
+import { formatShortStamp } from "../../utils/dateTime";
+import { DriverPickDialog } from "../vehicles/DriverPickDialog";
 import { WorkshopFinishDialog } from "../vehicles/WorkshopFinishDialog";
 import { WorkshopPlanDialog } from "../vehicles/WorkshopPlanDialog";
-import { isReturnLate, todayWorkshopLine } from "../vehicles/workshopText";
+import { appointmentText, bringDriver } from "../vehicles/workshopText";
 
 import { useAuth } from "../../hooks/useAuth";
 import { useBoundHeight } from "../../hooks/useBoundHeight";
@@ -35,6 +40,14 @@ const KIND: Record<
     TodayKind,
     { tag: string; chip: string; to: string; tone: Tone; tile: boolean }
 > = {
+    // A driver at the wheel with an expired licence: the most urgent row.
+    licence_driving: {
+        tag: "Führerschein",
+        chip: "Führerschein abgelaufen, eingeteilt",
+        to: "/drivers?licence_driving=true",
+        tone: "critical",
+        tile: false,
+    },
     deadline_overdue: {
         tag: "Überfällig",
         chip: "Fristen überfällig",
@@ -42,9 +55,9 @@ const KIND: Record<
         tone: "critical",
         tile: true,
     },
-    // The tag says which: „Rückgabe“ (late, critical) or „Termin“ (today).
+    // The tag says which task: Verpasst, Rückgabe, Hinfahrt, Abholen, Ohne Termin.
     workshop_due: {
-        tag: "Termin",
+        tag: "Werkstatt",
         chip: "Werkstatt fällig",
         to: "/vehicles?filter=workshop_due",
         tone: "warning",
@@ -57,10 +70,11 @@ const KIND: Record<
         tone: "critical",
         tile: false,
     },
+    // The chip and the row name the threshold the drivers list uses.
     driver_talk: {
         tag: "Gespräch",
-        chip: "Gespräch führen",
-        to: "/drivers?min_open_warnings=5",
+        chip: `Gespräch führen (ab ${DRIVER_TALK_MIN_OPEN_WARNINGS} Warnungen)`,
+        to: `/drivers?min_open_warnings=${DRIVER_TALK_MIN_OPEN_WARNINGS}`,
         tone: "warning",
         tile: false,
     },
@@ -78,12 +92,20 @@ const KIND: Record<
         tone: "warning",
         tile: true,
     },
+    // Due today and coming up are both counted by the tile „In N Tagen“: no chip.
+    deadline_today: {
+        tag: "Heute fällig",
+        chip: "Fristen heute fällig",
+        to: "/fristen?state=soon",
+        tone: "warning",
+        tile: true,
+    },
     deadline_soon: {
         tag: "Bald fällig",
         chip: "Fristen bald fällig",
         to: "/fristen?state=soon",
         tone: "warning",
-        tile: false,
+        tile: true,
     },
 };
 
@@ -93,8 +115,14 @@ const formatDue = (value: string) => {
     return day ? `${day}.${month}.${year}` : `${month}.${year}`;
 };
 
-const reason = (item: TodayItem, meId?: number): string => {
+const reason = (item: TodayItem): string => {
     switch (item.kind) {
+        case "licence_driving":
+            return `${item.vehicle_driving ? "fährt gerade" : "eingeteilt auf"} ${item.vehicle_plate ?? ""} · Führerschein seit ${item.due_on ? formatDue(item.due_on) : "?"} abgelaufen`;
+        case "deadline_today": {
+            const label = item.due_kind ? DUE_KIND_LABELS[item.due_kind] : "Frist";
+            return `${label} · heute fällig`;
+        }
         case "deadline_overdue":
         case "deadline_soon": {
             const label = item.due_kind ? DUE_KIND_LABELS[item.due_kind] : "Frist";
@@ -106,13 +134,13 @@ const reason = (item: TodayItem, meId?: number): string => {
             return `${label} · ${item.kind === "deadline_overdue" ? "seit" : "am"} ${formatDue(item.due_on)}`;
         }
         case "driver_talk":
-            return `${item.open_warnings ?? 0} offene Tempo-Warnungen`;
+            return `${item.open_warnings ?? 0} offene Tempo-Warnungen · Gespräch ab ${DRIVER_TALK_MIN_OPEN_WARNINGS}`;
         case "offline":
-            return `Meldet sich nicht · Warnung ${formatRelativeTimestamp(item.since)}`;
+            return `Meldet sich nicht seit ${formatRelativeTimestamp(item.since)} · ${item.phone ? `Fahrer anrufen: ${item.phone}` : "kein Fahrer eingeteilt"}`;
         case "low_fuel":
             return `Tankstand ${Math.round(item.fuel_level ?? 0)} %`;
         case "workshop_due":
-            return item.workshop ? todayWorkshopLine(item.workshop, meId) : "";
+            return workshopLine(item);
         case "damage_unplanned":
             return item.damage
                 ? `${item.damage.description} · nicht fahrbereit seit ${formatDue(item.damage.occurred_on)}`
@@ -120,9 +148,37 @@ const reason = (item: TodayItem, meId?: number): string => {
     }
 };
 
-/** Late returns are critical; an appointment today is a warning. */
-const lateReturn = (item: TodayItem) =>
-    item.kind === "workshop_due" && item.workshop !== null && isReturnLate(item.workshop);
+const daysSince = (iso: string) =>
+    Math.round((Date.parse(`${berlinTodayIso()}T12:00:00Z`) - Date.parse(`${iso}T12:00:00Z`)) / 86_400_000);
+
+/** The second line of a workshop row: what the task is about, where. */
+const workshopLine = (item: TodayItem): string => {
+    const visit = item.workshop;
+    const place = item.workshop_place?.name ?? visit?.place ?? "der Werkstatt";
+    switch (item.workshop_task) {
+        case "missed":
+            return visit ? `Termin ${appointmentText(visit)} bei ${place} · nicht angekommen` : place;
+        case "return_late":
+            return visit?.expected_on
+                ? `seit ${daysSince(visit.expected_on)} Tagen überfällig · ${place}${item.workshop_place?.phone ? `, ${item.workshop_place.phone}` : ""}`
+                : place;
+        case "trip_no_driver":
+            return visit
+                ? `Termin ${appointmentText(visit)} bei ${place} · ${visit.bring_driver_name ? `${visit.bring_driver_name} bringt es hin` : "kein Fahrer"}`
+                : place;
+        case "pickup":
+            return `fertig bei ${place} · kein Fahrer zum Abholen`;
+        case "unplanned":
+            return `steht seit ${formatShortStamp(item.since)} bei ${place} · kein Termin`;
+        default:
+            return place;
+    }
+};
+
+/** Missed appointments and late returns are critical, the rest a warning. */
+const workshopCritical = (item: TodayItem) =>
+    item.kind === "workshop_due" &&
+    (item.workshop_task === "missed" || item.workshop_task === "return_late");
 
 /**
  * "Heute dran" on Schicht: the most urgent tasks across the fleet, one row
@@ -146,7 +202,8 @@ export const TodayPanel = ({
     const [editing, setEditing] = useState<TodayItem | null>(null);
     const [finishing, setFinishing] = useState<WorkshopVisit | null>(null);
     const [planning, setPlanning] = useState<WorkshopTarget | null>(null);
-    const [arriving, setArriving] = useState<number | null>(null);
+    const [replanning, setReplanning] = useState<WorkshopVisit | null>(null);
+    const [picking, setPicking] = useState<TodayItem | null>(null);
     const [notice, setNotice] = useState("");
     const { refetchLists } = useVehicles();
 
@@ -154,26 +211,16 @@ export const TodayPanel = ({
     const tagOf = (item: TodayItem) =>
         item.kind === "deadline_soon"
             ? soonLabel
-            : lateReturn(item)
-              ? "Rückgabe"
+            : item.kind === "workshop_due" && item.workshop_task
+              ? WORKSHOP_TASK_LABELS[item.workshop_task]
               : KIND[item.kind].tag;
     const toneOf = (item: TodayItem) =>
-        lateReturn(item) ? "critical" : KIND[item.kind].tone;
+        workshopCritical(item) ? "critical" : KIND[item.kind].tone;
 
-    const arrive = async (item: TodayItem) => {
-        if (!item.workshop) return;
-        setNotice("");
-        setArriving(item.workshop.id);
-        try {
-            await arriveWorkshopVisit(item.workshop.id);
-            setNotice(`${item.subject} ist in der Werkstatt.`);
-            reload();
-            refetchLists();
-        } catch (caught) {
-            setNotice(caught instanceof ApiError ? caught.message : "Das hat nicht geklappt.");
-        } finally {
-            setArriving(null);
-        }
+    const afterWrite = (message: string) => {
+        setNotice(message);
+        reload();
+        refetchLists();
     };
     const chipOf = (kind: TodayKind) =>
         kind === "deadline_soon"
@@ -201,7 +248,32 @@ export const TodayPanel = ({
             return null;
         }
 
-        if (item.kind === "deadline_overdue" || item.kind === "deadline_soon") {
+        if (item.kind === "licence_driving" && item.driver_id !== null) {
+            // Mid-trip the driver cannot be taken off; the row says it drives.
+            if (item.vehicle_driving) {
+                return null;
+            }
+            const driverId = item.driver_id;
+            return (
+                <Button
+                    variant="secondary"
+                    size="row"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setNotice("");
+                        void setDriverCurrentVehicle(driverId, { vehicle_id: null })
+                            .then(() => afterWrite(`${item.subject} ist von ${item.vehicle_plate ?? "dem Fahrzeug"} abgenommen.`))
+                            .catch((caught: unknown) =>
+                                setNotice(caught instanceof Error ? caught.message : "Nicht abgenommen."),
+                            );
+                    }}
+                >
+                    Abnehmen
+                </Button>
+            );
+        }
+
+        if (item.kind === "deadline_overdue" || item.kind === "deadline_soon" || item.kind === "deadline_today") {
             return (
                 <Button
                     variant="secondary"
@@ -239,34 +311,44 @@ export const TodayPanel = ({
             );
         }
 
-        if (item.kind === "workshop_due" && item.workshop) {
+        if (item.kind === "workshop_due" && item.vehicle_id !== null) {
             const visit = item.workshop;
-            return visit.state === "PLANNED" ? (
-                <Button
-                    variant="secondary"
-                    size="row"
-                    busy={arriving === visit.id}
-                    busyLabel="Wird eingetragen…"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        void arrive(item);
-                    }}
-                >
-                    Angekommen
-                </Button>
-            ) : (
+            const vehicleId = item.vehicle_id;
+            const button = (label: string, act: () => void) => (
                 <Button
                     variant="secondary"
                     size="row"
                     onClick={(event) => {
                         event.stopPropagation();
                         setNotice("");
-                        setFinishing(visit);
+                        act();
                     }}
                 >
-                    Fertig melden
+                    {label}
                 </Button>
             );
+
+            switch (item.workshop_task) {
+                case "missed":
+                    return visit ? button("Neu planen", () => setReplanning(visit)) : null;
+                case "return_late":
+                    return visit ? button("Fertig melden", () => setFinishing(visit)) : null;
+                case "trip_no_driver":
+                case "pickup":
+                    return button("Fahrer zuweisen", () => setPicking(item));
+                case "unplanned":
+                    return item.workshop_place
+                        ? button("Aufenthalt anlegen", () =>
+                              setPlanning({
+                                  vehicleId,
+                                  licensePlate: item.subject,
+                                  standingAt: item.workshop_place ?? undefined,
+                              }),
+                          )
+                        : null;
+                default:
+                    return null;
+            }
         }
 
         return null;
@@ -333,7 +415,7 @@ export const TodayPanel = ({
                         className={styles.row}
                         role="link"
                         tabIndex={0}
-                        aria-label={`${item.subject}: ${reason(item, user?.id)}`}
+                        aria-label={`${item.subject}: ${reason(item)}`}
                         onClick={() => open(item)}
                         onKeyDown={(event) => onRowKey(event, item)}
                     >
@@ -345,7 +427,7 @@ export const TodayPanel = ({
                         </span>
                         <span className={styles.what}>
                             <b>{item.subject}</b>
-                            <span>{reason(item, user?.id)}</span>
+                            <span>{reason(item)}</span>
                         </span>
                         <span className={styles.action}>{action(item)}</span>
                     </li>
@@ -363,12 +445,30 @@ export const TodayPanel = ({
 
             <WorkshopPlanDialog
                 target={planning}
-                onClose={() => setPlanning(null)}
+                visit={replanning}
+                onClose={() => {
+                    setPlanning(null);
+                    setReplanning(null);
+                }}
                 onSaved={(_visit, message) => {
                     setPlanning(null);
-                    setNotice(message);
-                    reload();
-                    refetchLists();
+                    setReplanning(null);
+                    afterWrite(message);
+                }}
+            />
+
+            <DriverPickDialog
+                vehicle={picking?.vehicle_id ? { id: picking.vehicle_id, license_plate: picking.subject } : null}
+                purpose={
+                    picking?.workshop_task === "pickup"
+                        ? `holt es bei ${picking.workshop_place?.name ?? "der Werkstatt"} ab`
+                        : `bringt es zu ${picking?.workshop_place?.name ?? picking?.workshop?.place ?? "der Werkstatt"}`
+                }
+                suggested={bringDriver(picking?.workshop ?? null)}
+                onClose={() => setPicking(null)}
+                onAssigned={(message) => {
+                    setPicking(null);
+                    afterWrite(message);
                 }}
             />
 
