@@ -7,6 +7,7 @@ import {
     briefingMonthKeys,
 } from "@fleet-live/shared";
 import { app } from "../app";
+import { db } from "../db/database";
 import { DriverModel } from "../models/driver.model";
 import { VehicleModel } from "../models/vehicle.model";
 import { UserModel } from "../models/user.model";
@@ -228,6 +229,34 @@ describe("GET /api/briefing", () => {
 
         assert.equal(response.status, 200);
         assert.equal(row?.distance_m, 50_000);
+    });
+
+    it("counts who drove in a month from its trips; unknown once the trips are gone", async () => {
+        const [older, newer] = briefingMonthKeys();
+        const car = VehicleModel.create({ license_plate: "K-AF 1", company_id: 1 });
+        const second = VehicleModel.create({ license_plate: "K-AF 2", company_id: 1 });
+        const driver = db
+            .prepare("INSERT INTO drivers (company_id, name) VALUES (1, 'Anna Aktiv')")
+            .run().lastInsertRowid;
+        const insertTrip = db.prepare(
+            "INSERT INTO trips (vehicle_id, driver_id, started_at, ended_at, path, distance_m) VALUES (?, ?, ?, ?, '', 1000)",
+        );
+        insertTrip.run(car.id, driver, `${newer}-05 08:00:00`, `${newer}-05 09:00:00`);
+        insertTrip.run(second.id, driver, `${newer}-06 08:00:00`, `${newer}-06 09:00:00`);
+        // An older month whose km are kept but whose trips are past retention.
+        TripModel.addClosedDistance(1, `${older}-10 08:00:00`, 40_000);
+
+        const history = (await api.get("/api/briefing")).body.data.history as Array<{
+            month: string;
+            active_drivers: number | null;
+            active_vehicles: number | null;
+        }>;
+        const row = (month: string) => history.find((entry) => entry.month === month);
+
+        assert.equal(row(newer)?.active_drivers, 1);
+        assert.equal(row(newer)?.active_vehicles, 2);
+        assert.equal(row(older)?.active_drivers, null);
+        assert.equal(row(older)?.active_vehicles, null);
     });
 
     it("counts this company's deadlines and skips the other tenant", async () => {

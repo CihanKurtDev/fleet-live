@@ -30,4 +30,17 @@
     &[data-type="OFFLINE"] {
         --tag: var(--danger);
     }
+
+    &[data-tone="danger"] {
+        --tag: var(--danger);
+    }
+
+    &[data-tone="warning"] {
+        --tag: var(--warning);
+    }
+
+    /* Deadlines: the yellow of the HU sticker, not an alarm colour. */
+    &[data-tone="accent"] {
+        --tag: var(--accent);
+    }
 }

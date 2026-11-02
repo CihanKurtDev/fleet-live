@@ -3,16 +3,6 @@ import {
     type VehicleFilterId,
 } from "@fleet-live/shared";
 
-/**
- * A workshop stay that needs someone today: planned for today or earlier but
- * not there yet, or there and later than expected. Written once for the list
- * filter, the Schicht task list and its chip (`w` is `workshop_visits`).
- */
-export const WORKSHOP_DUE_SQL = `(
-        (w.state = 'PLANNED' AND w.planned_on <= berlin_today())
-        OR (w.state = 'IN_WORKSHOP' AND w.expected_on < berlin_today())
-    )`;
-
 /** The vehicle stands in a workshop: its open stay has arrived. */
 const IN_WORKSHOP_SQL = `EXISTS (
         SELECT 1 FROM workshop_visits w
@@ -35,6 +25,52 @@ const OPEN_STAY_SQL = `EXISTS (
     )`;
 
 /** Not to be given to a driver: in a workshop, not drivable or out of service. */
+/** A finished stay at the workshop the vehicle stands in, not picked up yet. */
+const TO_PICK_UP_SQL = `EXISTS (
+        SELECT 1 FROM workshop_visits w
+        WHERE w.vehicle_id = v.id
+          AND w.state = 'DONE'
+          AND w.workshop_id = v.at_workshop_id
+          AND w.picked_up_at IS NULL
+    )`;
+
+/**
+ * What a workshop stay needs from someone today, as a task name or NULL
+ * (`WORKSHOP_TASKS` in shared). Missed: the appointment passed, the vehicle
+ * never parked there. Return late: still there after „fertig erwartet“. Trip
+ * without driver: the appointment is today and the standing vehicle has no
+ * driver. Pickup: finished, still there, no driver. Unplanned: parks in a
+ * workshop circle without a stay. Written once for the list filter, the
+ * Schicht task list and its chip.
+ */
+export const WORKSHOP_TASK_SQL = `COALESCE(
+        (
+            SELECT CASE
+                WHEN w.state = 'PLANNED' AND w.planned_on < berlin_today() THEN 'missed'
+                WHEN w.state = 'IN_WORKSHOP' AND w.expected_on < berlin_today() THEN 'return_late'
+                WHEN w.state = 'PLANNED' AND w.planned_on = berlin_today()
+                    AND w.transport = 'DRIVER'
+                    AND v.status != 'DRIVING' AND v.current_driver_id IS NULL
+                    AND v.at_workshop_id IS NOT w.workshop_id THEN 'trip_no_driver'
+            END
+            FROM workshop_visits w
+            WHERE w.vehicle_id = v.id AND w.state IN ('PLANNED', 'IN_WORKSHOP')
+        ),
+        CASE
+            WHEN v.at_workshop_id IS NULL OR v.status = 'DRIVING' OR ${OPEN_STAY_SQL} THEN NULL
+            WHEN ${TO_PICK_UP_SQL} THEN CASE WHEN v.current_driver_id IS NULL THEN 'pickup' END
+            ELSE 'unplanned'
+        END
+    )`;
+
+/** `vehicle_deadline` (db/database.ts) of a vehicle row: 'HU', 'UVV' or 'ANY'. */
+export const vehicleDeadlineSql = (kind: "HU" | "UVV" | "ANY") => `vehicle_deadline(
+        '${kind}', v.hu_due_on, v.uvv_due_on, v.uvv_checked_on,
+        (SELECT c.due_lead_days FROM companies c WHERE c.id = v.company_id)
+    )`;
+
+const DEADLINE_STATE_SQL = vehicleDeadlineSql("ANY");
+
 export const VEHICLE_UNAVAILABLE_SQL = `(${IN_WORKSHOP_SQL} OR ${UNDRIVABLE_DAMAGE_SQL} OR v.out_of_service_since IS NOT NULL)`;
 
 /**
@@ -70,11 +106,7 @@ export const VEHICLE_CONCEPT_SQL: Record<VehicleFilterId, string> = {
           AND a.ended_at IS NULL
     )`,
     in_workshop: IN_WORKSHOP_SQL,
-    workshop_due: `EXISTS (
-        SELECT 1 FROM workshop_visits w
-        WHERE w.vehicle_id = v.id
-          AND ${WORKSHOP_DUE_SQL}
-    )`,
+    workshop_due: `${WORKSHOP_TASK_SQL} IS NOT NULL`,
     out_of_service: "v.out_of_service_since IS NOT NULL",
     damage_open: `EXISTS (
         SELECT 1 FROM vehicle_damages d
@@ -82,6 +114,9 @@ export const VEHICLE_CONCEPT_SQL: Record<VehicleFilterId, string> = {
     )`,
     not_drivable: `(${UNDRIVABLE_DAMAGE_SQL} AND NOT ${IN_WORKSHOP_SQL})`,
     damage_unplanned: `(${UNDRIVABLE_DAMAGE_SQL} AND NOT ${OPEN_STAY_SQL})`,
+    unavailable: VEHICLE_UNAVAILABLE_SQL,
+    deadline_overdue: `${DEADLINE_STATE_SQL} = 'overdue'`,
+    deadline_soon: `${DEADLINE_STATE_SQL} = 'soon'`,
 };
 
 /** `COALESCE(SUM(<predicate>), 0) AS <id>` for the given concepts. */

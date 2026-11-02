@@ -1,7 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import {
     ODOMETER_NOTE_MAX,
-    ODOMETER_SOURCE_LABELS,
     parseKilometerText,
     type VehicleOdometer,
 } from "@fleet-live/shared";
@@ -14,7 +13,7 @@ import { FieldError } from "../ui/FieldError/FieldError";
 import { fieldAria } from "../ui/FieldError/fieldAria";
 import { Input } from "../ui/Input/Input";
 import { Modal } from "../ui/Modal/Modal";
-import { formatKm } from "./odometerText";
+import { formatKm, readingSourceLabel } from "./odometerText";
 import formStyles from "./VehicleForm.module.scss";
 import styles from "./workshop.module.scss";
 
@@ -29,9 +28,10 @@ interface OdometerDialogProps {
 }
 
 /**
- * „Kilometerstand“: the reading with every change people or the import made.
- * A dispatcher corrects it to what the dashboard shows; driving is not logged,
- * it adds to the reading on its own.
+ * „Kilometerstand“ of a GPS box: the counted reading with every change people
+ * or the import made. A dispatcher sets it to what the dashboard shows, and
+ * the counting goes on from there; driving is not logged. A reading the
+ * device takes from the dashboard is only shown.
  */
 export const OdometerDialog = ({ vehicle, canWrite, onClose, onSaved }: OdometerDialogProps) => (
     <Modal open={vehicle !== null} onClose={onClose} title="Kilometerstand" guardUnsaved>
@@ -149,7 +149,7 @@ const OdometerBody = ({
                                     ? formatKm(reading.km)
                                     : `${formatKm(reading.previous_km)} → ${formatKm(reading.km)}`}{" "}
                                 <span className={styles.muted}>
-                                    · {ODOMETER_SOURCE_LABELS[reading.source]}
+                                    · {readingSourceLabel(reading)}
                                     {reading.note ? ` · ${reading.note}` : ""}
                                 </span>
                             </span>
@@ -161,15 +161,19 @@ const OdometerBody = ({
         </section>
     );
 
+    const fromDevice = Boolean(odometer?.reported_at);
     const context = (
         <p className={styles.context}>
             {vehicle.license_plate} ·{" "}
-            {odometer?.km == null ? "kein Stand eingetragen" : `jetzt ${formatKm(odometer.km)}`} · wächst mit
-            jeder gemeldeten Fahrt
+            {odometer?.km == null
+                ? "noch kein Stand eingetragen"
+                : fromDevice
+                  ? `${formatKm(odometer.km)}, vom Fahrzeug gemeldet wie auf dem Tacho`
+                  : `jetzt ≈ ${formatKm(odometer.km)}, aus der GPS-Strecke berechnet`}
         </p>
     );
 
-    if (!canWrite) {
+    if (!canWrite || fromDevice) {
         return (
             <div className={formStyles.form}>
                 {context}
@@ -196,20 +200,23 @@ const OdometerBody = ({
                             setKm(event.target.value);
                             setErrors((current) => ({ ...current, km: undefined, form: undefined }));
                         }}
-                        {...fieldAria(`${fieldId}-km`, errors.km)}
+                        {...fieldAria(`${fieldId}-km`, errors.km, `${fieldId}-km-hint`)}
                     />
+                    <p className={formStyles.hint} id={`${fieldId}-km-hint`}>
+                        Ab jetzt rechnet fleet-live von diesem Stand weiter.
+                    </p>
                     <FieldError fieldId={`${fieldId}-km`} className={formStyles.error}>
                         {errors.km}
                     </FieldError>
                 </div>
                 <div className={formStyles.field}>
-                    <label htmlFor={`${fieldId}-note`}>Grund</label>
+                    <label htmlFor={`${fieldId}-note`}>Woher</label>
                     <Input
                         id={`${fieldId}-note`}
                         size="md"
                         fullWidth
                         maxLength={ODOMETER_NOTE_MAX}
-                        placeholder="z. B. Werkstattrechnung"
+                        placeholder="z. B. Tacho abgelesen"
                         value={note}
                         onChange={(event) => {
                             setNote(event.target.value);

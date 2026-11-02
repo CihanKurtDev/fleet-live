@@ -1,9 +1,11 @@
-import type { TelemetryPatch, TelemetryPoint } from "@fleet-live/shared";
+import type { TelemetryPatch, TelemetryPoint, VehicleType } from "@fleet-live/shared";
 import { config } from "../config";
 import { db } from "../db/database";
 import { stmt } from "../db/statements";
 import { nowSqlite, nowSqliteMs } from "../lib/sqlTime";
+import { simDashboardMeters } from "../sim/device";
 import { nextSimTick, SIM_PING_SECONDS } from "../sim/routes";
+import { SpeedingEventModel } from "./speedingEvent.model";
 import { TripModel } from "./trip.model";
 import { isCompanySimRunning } from "../lib/simControl";
 
@@ -14,7 +16,23 @@ type DrivingVehicle = {
     longitude: number;
     speed: number | null;
     fuel_level: number;
+    vehicle_type: VehicleType | null;
+    odometer_m: number | null;
+    /** The last report, to see a long pause. */
+    recorded_at: string | null;
+    /** The home depot, whose roads the simulated vehicle drives. */
+    home_latitude: number | null;
+    home_longitude: number | null;
 };
+
+/**
+ * A trip that has not reported for this long has ended: the next report
+ * starts a new one instead of drawing one trip over two days.
+ */
+export const TRIP_GAP_MS = 30 * 60 * 1000;
+
+const msOf = (sqlite: string | null) =>
+    sqlite === null ? null : Date.parse(`${sqlite.replace(" ", "T")}Z`);
 
 /** Ein Ping, den ein Gerät senden würde: das Fahrzeug und die Zeit seit dem letzten. */
 type Ping = { vehicle: DrivingVehicle; elapsedS: number };
@@ -30,9 +48,15 @@ const SELECT_DRIVING = `
         COALESCE(t.latitude, 50.9375) AS latitude,
         COALESCE(t.longitude, 6.9603) AS longitude,
         t.speed,
-        v.fuel_level
+        v.fuel_level,
+        v.vehicle_type,
+        v.odometer_m,
+        t.recorded_at,
+        hs.latitude AS home_latitude,
+        hs.longitude AS home_longitude
     FROM vehicles v
     LEFT JOIN telemetry t ON t.id = v.last_telemetry_id
+    LEFT JOIN sites hs ON hs.id = v.home_site_id
     WHERE v.status = 'DRIVING'
       AND (
           ?1 IS NULL
@@ -56,8 +80,19 @@ const SELECT_LAST_POSITION = `
     WHERE v.id = ?
 `;
 
-/** One write per ping on the vehicle row; the odometer grows by the metres the trip got (NULL stays NULL). */
-const UPDATE_VEHICLE_PING = `UPDATE vehicles SET fuel_level = ?, speed_limit_kmh = ?, odometer_m = odometer_m + ? WHERE id = ?`;
+/**
+ * One write per ping on the vehicle row. The odometer is the dashboard
+ * reading when the ping carries one (`?3`, then `odometer_reported_at` is the
+ * ping time); otherwise it grows by the metres the trip got (NULL stays NULL).
+ */
+const UPDATE_VEHICLE_PING = `
+    UPDATE vehicles
+    SET fuel_level = ?1,
+        speed_limit_kmh = ?2,
+        odometer_m = COALESCE(?3, odometer_m + ?4),
+        odometer_reported_at = CASE WHEN ?3 IS NULL THEN odometer_reported_at ELSE ?5 END
+    WHERE id = ?6
+`;
 
 const INSERT_TELEMETRY = `
     INSERT INTO telemetry (vehicle_id, latitude, longitude, speed, recorded_at)
@@ -113,7 +148,8 @@ function takeBatch<T>(items: T[], limit: number): T[] {
     return batch;
 }
 
-type TickedPatch = TelemetryPatch & { company_id: number };
+/** `parked`: the device reported ignition off at its destination (not on the wire). */
+type TickedPatch = TelemetryPatch & { company_id: number; parked?: true };
 
 function writePatches(pings: Ping[]): TickedPatch[] {
     if (pings.length === 0) {
@@ -124,12 +160,21 @@ function writePatches(pings: Ping[]): TickedPatch[] {
     const prune = stmt(PRUNE_TELEMETRY);
     const updateVehicle = stmt(UPDATE_VEHICLE_PING);
     const recordedAt = nowSqliteMs();
+    const nowMs = msOf(recordedAt) ?? Date.now();
     const patches: TickedPatch[] = [];
     const keep = config.telemetryKeepPerVehicle;
 
     db.exec("BEGIN");
     try {
         for (const { vehicle, elapsedS } of pings) {
+            // Silent for a long time (server off, sim paused): the trip ended
+            // at its last report; this report starts the next one.
+            const lastMs = msOf(vehicle.recorded_at);
+            if (lastMs !== null && nowMs - lastMs > TRIP_GAP_MS && vehicle.recorded_at) {
+                SpeedingEventModel.endForVehicle(vehicle.id, lastMs);
+                TripModel.close(vehicle.id, vehicle.recorded_at.slice(0, 19));
+            }
+
             const next = nextSimTick(
                 vehicle.id,
                 {
@@ -138,6 +183,10 @@ function writePatches(pings: Ping[]): TickedPatch[] {
                 },
                 vehicle.speed,
                 elapsedS,
+                vehicle.vehicle_type,
+                vehicle.home_latitude === null || vehicle.home_longitude === null
+                    ? null
+                    : { lat: vehicle.home_latitude, lng: vehicle.home_longitude },
             );
             const { lat: latitude, lng: longitude, speed, path, limit_kmh } =
                 next;
@@ -164,10 +213,18 @@ function writePatches(pings: Ping[]): TickedPatch[] {
                 path,
                 speed,
             );
+            const meters = pathDelta?.meters ?? 0;
+            // What the device read from the dashboard, if it reads it.
+            const dashboardM = simDashboardMeters(vehicle, meters);
+            const odometerM =
+                dashboardM ??
+                (vehicle.odometer_m === null ? null : vehicle.odometer_m + meters);
             updateVehicle.run(
                 fuelLevel,
                 limit_kmh,
-                pathDelta?.meters ?? 0,
+                dashboardM,
+                meters,
+                recordedAt,
                 vehicle.id,
             );
 
@@ -184,6 +241,13 @@ function writePatches(pings: Ping[]): TickedPatch[] {
                 longitude,
                 recorded_at: recordedAt,
                 fuel_level: fuelLevel,
+                ...(odometerM === null
+                    ? {}
+                    : { odometer_km: Math.floor(odometerM / 1000) }),
+                ...(dashboardM === null
+                    ? {}
+                    : { odometer_from_device: true as const }),
+                ...(next.parked ? { parked: true as const } : {}),
                 ...(pathDelta
                     ? {
                           path_delta: pathDelta.suffix,
@@ -301,6 +365,39 @@ export class TelemetryModel {
      * Schreibt einen letzten Punkt mit Tempo 0, wenn eine Fahrt endet.
      * Ohne das behält ein Fahrzeug im Feierabend seine Reisegeschwindigkeit.
      */
+    /**
+     * A position report with the ignition off somewhere else: a towed vehicle,
+     * or one the workshop fetched. It moved without being driven, so no trip.
+     */
+    static recordMovedTo(
+        vehicleId: number,
+        latitude: number,
+        longitude: number,
+    ): (TelemetryPatch & { company_id: number }) | undefined {
+        const vehicle = stmt(`SELECT company_id, fuel_level FROM vehicles WHERE id = ?`).get(
+            vehicleId,
+        ) as { company_id: number; fuel_level: number } | undefined;
+
+        if (!vehicle) {
+            return undefined;
+        }
+
+        const recordedAt = nowSqliteMs();
+
+        stmt(INSERT_TELEMETRY).run(vehicleId, latitude, longitude, 0, recordedAt);
+        stmt(PRUNE_TELEMETRY).run(vehicleId, vehicleId, config.telemetryKeepPerVehicle);
+
+        return {
+            id: vehicleId,
+            company_id: Number(vehicle.company_id),
+            speed: 0,
+            latitude,
+            longitude,
+            recorded_at: recordedAt,
+            fuel_level: vehicle.fuel_level,
+        };
+    }
+
     static recordStandstill(vehicleId: number): TelemetryPatch | undefined {
         const row = stmt(SELECT_LAST_POSITION).get(vehicleId) as
             | {

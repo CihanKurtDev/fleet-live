@@ -169,7 +169,7 @@ describe("GET /api/export", () => {
             "Strecke km",
             "Höchstgeschwindigkeit",
             "Punkte",
-            "Verbrauch l",
+            "Verbrauch l (geschätzt)",
         ]);
         assert.equal(tripTable.rows.length, 1);
         assert.equal(tripTable.rows[0]?.[0], "K-EXP 1");
@@ -228,7 +228,7 @@ describe("GET /api/export", () => {
             "Kilometer",
             "Angelegt und offen",
             "Angelegt und erledigt",
-            "Verbrauch l",
+            "Verbrauch l (geschätzt)",
         ]);
         assert.deepEqual(table.rows[0], ["2026-10", "10,0", "1", "1", "2,5"]);
         assert.equal(response.text.includes("fremd"), false);

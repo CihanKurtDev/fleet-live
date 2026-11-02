@@ -20,6 +20,24 @@ export function updateDamage(damageId: number, patch: Partial<DamageInput>) {
     });
 }
 
+export function addDamagePhoto(damageId: number, photo: Blob) {
+    return request<{ data: Damage }>(`/api/damages/${damageId}/photos`, {
+        method: "POST",
+        file: photo,
+        timeoutMs: 30_000,
+    });
+}
+
+export function deleteDamagePhoto(damageId: number, photoId: number) {
+    return request<{ data: Damage }>(`/api/damages/${damageId}/photos/${photoId}`, {
+        method: "DELETE",
+    });
+}
+
+/** Address of a stored photo, for an `<img>` (same origin, the session cookie goes along). */
+export const damagePhotoUrl = (damageId: number, photoId: number) =>
+    `/api/damages/${damageId}/photos/${photoId}`;
+
 export function closeDamage(damageId: number) {
     return request<{ data: Damage }>(`/api/damages/${damageId}/close`, { method: "POST" });
 }

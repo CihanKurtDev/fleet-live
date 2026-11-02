@@ -4,7 +4,6 @@ import { MenuButton } from "../ui/Menu/MenuButton";
 
 interface VehicleMoreMenuProps {
     availability: VehicleAvailability;
-    onReportDamage?: () => void;
     onOutOfService: (outOfService: boolean) => void;
     onDelete: () => void;
 }
@@ -15,7 +14,6 @@ interface VehicleMoreMenuProps {
  */
 export const VehicleMoreMenu = ({
     availability,
-    onReportDamage,
     onOutOfService,
     onDelete,
 }: VehicleMoreMenuProps) => (
@@ -26,9 +24,6 @@ export const VehicleMoreMenu = ({
         caret={false}
         size="toolbar"
         items={[
-            ...(onReportDamage
-                ? [{ key: "damage", label: "Schaden melden", onSelect: onReportDamage }]
-                : []),
             ...(availability === "OUT_OF_SERVICE"
                 ? [
                       {

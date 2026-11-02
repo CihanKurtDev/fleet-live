@@ -250,9 +250,16 @@ CREATE TABLE IF NOT EXISTS vehicles (
     speed_limit_kmh REAL,
     -- Set by the dispatcher: not given to drivers until set back (NULL = in service).
     out_of_service_since TEXT,
-    -- Kilometerstand in metres: the last reading entered plus every reported
-    -- stretch since (the same metres as trips.distance_m). NULL = not known.
+    -- Kilometerstand in metres. A device that reads the dashboard (a truck's
+    -- FMS) reports it with each ping; otherwise it is the last reading
+    -- entered plus every reported stretch since (the same metres as
+    -- trips.distance_m). NULL = not known.
     odometer_m REAL,
+    -- When the device last reported the dashboard reading; NULL = the
+    -- device does not read it (a GPS box), the reading is counted.
+    odometer_reported_at TEXT,
+    -- The workshop whose circle holds the last position (like depot_site_id).
+    at_workshop_id INTEGER,
     search_text TEXT GENERATED ALWAYS AS (
         lower(license_plate || ' ' || coalesce(driver_name, ''))
     ) VIRTUAL,
@@ -359,6 +366,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ended_at TEXT,
     resolved_at TEXT,
+    -- How it was cleared, e.g. „Gespräch geführt am 02.11.2026“.
+    resolution_note TEXT,
 
     FOREIGN KEY (vehicle_id)
         REFERENCES vehicles(id)
@@ -374,21 +383,50 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_open_per_type
 
 -- A vehicle's stay in a workshop: planned, there, finished or cancelled.
 -- No company_id: access is visit → vehicle → company, like alerts.
+-- Workshops of a company: places on the map with a contact, like depots.
+CREATE TABLE IF NOT EXISTS workshops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    address TEXT,
+    phone TEXT,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    radius_m REAL NOT NULL CHECK (radius_m > 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (company_id)
+        REFERENCES companies(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workshops_company_name
+    ON workshops(company_id, name COLLATE NOCASE);
+
 CREATE TABLE IF NOT EXISTS workshop_visits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     vehicle_id INTEGER NOT NULL,
-    reason TEXT NOT NULL
-        CHECK (reason IN ('HU', 'UVV', 'MAINTENANCE', 'DAMAGE', 'OTHER')),
+    -- What is done there: a JSON array of HU, UVV, MAINTENANCE, DAMAGE, OTHER.
+    reasons TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(reasons)),
     state TEXT NOT NULL
         CHECK (state IN ('PLANNED', 'IN_WORKSHOP', 'DONE', 'CANCELLED')),
+    -- How it gets there; a bring driver only with DRIVER.
+    transport TEXT NOT NULL DEFAULT 'DRIVER'
+        CHECK (transport IN ('DRIVER', 'TOW', 'WORKSHOP_PICKUP')),
     place TEXT NOT NULL,
+    workshop_id INTEGER REFERENCES workshops(id) ON DELETE SET NULL,
     planned_on TEXT NOT NULL,
+    planned_time TEXT,
     expected_on TEXT,
+    bring_driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL,
     assignee_user_id INTEGER,
     note TEXT,
-    -- Day it got there (Europe/Berlin); the event log keeps the time.
+    -- Day it got there (Europe/Berlin), the moment and how it was known.
     arrived_on TEXT,
+    arrived_at TEXT,
+    arrived_by TEXT CHECK (arrived_by IS NULL OR arrived_by IN ('POSITION', 'HAND')),
     finished_on TEXT,
+    -- It left the workshop circle after it was finished.
+    picked_up_at TEXT,
     cost_cents INTEGER,
     result_note TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -447,6 +485,12 @@ CREATE TABLE IF NOT EXISTS vehicle_damages (
     reported_by_user_id INTEGER,
     reported_by_name TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- When and where it happened (a breakdown on the road) and who drove.
+    occurred_time TEXT,
+    latitude REAL,
+    longitude REAL,
+    driver_id INTEGER REFERENCES drivers(id) ON DELETE SET NULL,
+    driver_name TEXT,
 
     FOREIGN KEY (vehicle_id)
         REFERENCES vehicles(id)
@@ -463,6 +507,18 @@ CREATE TABLE IF NOT EXISTS vehicle_damages (
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_damages_vehicle
     ON vehicle_damages(vehicle_id, state);
+
+-- Up to DAMAGE_PHOTOS_MAX photos per damage, gone with the damage.
+CREATE TABLE IF NOT EXISTS damage_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    damage_id INTEGER NOT NULL REFERENCES vehicle_damages(id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL CHECK (content_type IN ('image/jpeg', 'image/png', 'image/webp')),
+    data BLOB NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_damage_photos_damage
+    ON damage_photos(damage_id, id);
 
 -- Every reading set by a person or the import, with the one it replaced.
 CREATE TABLE IF NOT EXISTS odometer_readings (

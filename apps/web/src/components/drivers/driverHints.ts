@@ -48,6 +48,7 @@ export function driverHints(driver: DriverDetail, checkMonths: number): Hint[] {
 
     const check = classifyLicenceInterval({
         checkedOn: driver.licence_checked_on,
+        expiresOn: driver.licence_expires_on,
         today,
         intervalMonths: checkMonths,
         leadDays: 0,
@@ -56,13 +57,15 @@ export function driverHints(driver: DriverDetail, checkMonths: number): Hint[] {
     if (check.included && check.state === "overdue") {
         hints.push({
             key: "licence_check",
-            field: "licence-checked",
+            // A check after the expiry counts once the new expiry date is in.
+            field: check.checked_after_expiry ? "licence-expires" : "licence-checked",
             tag: "Kontrolle",
             tone: "warning",
-            text:
-                check.due_on === null
-                    ? "Führerscheinkontrolle noch nie eingetragen"
-                    : `Führerscheinkontrolle war am ${formatIsoDate(check.due_on)} fällig`,
+            text: check.checked_after_expiry
+                ? `Kontrolle vom ${formatIsoDate(check.last_on)} war nach dem Ablauf; neues Ablaufdatum fehlt`
+                : check.due_on === null
+                  ? "Führerscheinkontrolle noch nie eingetragen"
+                  : `Führerscheinkontrolle war am ${formatIsoDate(check.due_on)} fällig`,
             fristen: { state: "overdue", kind: "licence_check" },
         });
     }

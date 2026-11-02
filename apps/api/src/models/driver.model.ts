@@ -1,4 +1,9 @@
-import { DRIVER_TALK_MIN_OPEN_WARNINGS } from "@fleet-live/shared";
+import {
+    berlinTodayIso,
+    DRIVER_TALK_MIN_OPEN_WARNINGS,
+    isLicenceExpired,
+    licenceCheckedAfterExpiry,
+} from "@fleet-live/shared";
 import type {
     Driver,
     DriverDetail,
@@ -16,8 +21,38 @@ import {
     AppError,
     ConflictError,
     NotFoundError,
+    ValidationError,
     isUniqueConstraintError,
 } from "../lib/errors";
+
+/** The licence has expired and the driver still has a current vehicle. */
+export const LICENCE_DRIVING_SQL = `(d.licence_expires_on IS NOT NULL
+    AND d.licence_expires_on < berlin_today()
+    AND EXISTS (SELECT 1 FROM vehicles v WHERE v.current_driver_id = d.id))`;
+
+const germanDay = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+
+/**
+ * A licence check after the expiry date saw no valid licence: it is only
+ * taken together with the new expiry date.
+ */
+function assertCheckWithinLicence(
+    expiresOn: string | null | undefined,
+    checkedOn: string | null | undefined,
+): void {
+    if (expiresOn && checkedOn && licenceCheckedAfterExpiry(checkedOn, expiresOn)) {
+        const message = `Am ${germanDay(checkedOn)} war der Führerschein schon abgelaufen (${germanDay(expiresOn)}). Erst das neue Ablaufdatum eintragen.`;
+        throw new ValidationError(message, { licence_checked_on: message });
+    }
+}
+
+/** 409 when the driver may not drive: the licence has expired. */
+export function assertLicenceValid(driver: { name: string; licence_expires_on: string | null }): void {
+    if (isLicenceExpired(driver.licence_expires_on, berlinTodayIso())) {
+        const message = `Der Führerschein von ${driver.name} ist seit ${germanDay(driver.licence_expires_on!)} abgelaufen. Erst das neue Ablaufdatum eintragen.`;
+        throw new AppError(409, "LICENCE_EXPIRED", message, { vehicle_id: message });
+    }
+}
 import { WorkshopModel } from "./workshop.model";
 import { pagedQuery, type SqlParam } from "../lib/pagination";
 
@@ -254,6 +289,8 @@ export class DriverModel {
         phone?: string | null,
         dates?: DriverDateInput,
     ): DriverCore {
+        assertCheckWithinLicence(dates?.licence_expires_on, dates?.licence_checked_on);
+
         try {
             const result = stmt(INSERT_DRIVER).run(
                 companyId,
@@ -314,6 +351,10 @@ export class DriverModel {
             input.licence_checked_on !== undefined
                 ? input.licence_checked_on
                 : current.licence_checked_on;
+
+        if (input.licence_checked_on !== undefined || input.licence_expires_on !== undefined) {
+            assertCheckWithinLicence(licenceExpires, licenceChecked);
+        }
 
         try {
             withTransaction(() => {
@@ -385,10 +426,12 @@ export class DriverModel {
                 WHERE v.current_driver_id = d.id
               )`
             : "";
+        const licenceSql = query.licence_driving ? `AND ${LICENCE_DRIVING_SQL}` : "";
         const filterSql = `${searchSql}
               ${vehicleSql}
               ${warningsSql}
-              ${withoutVehicleSql}`;
+              ${withoutVehicleSql}
+              ${licenceSql}`;
         const sortKey = query.sort ?? "open_warnings";
         const sortColumn = SORT_SQL[sortKey];
         const sortDirection = query.sort
@@ -448,7 +491,8 @@ export class DriverModel {
             SELECT
                 COUNT(*) AS all_count,
                 COALESCE(SUM(open_warnings >= ?), 0) AS talk,
-                COALESCE(SUM(has_current = 0), 0) AS without_vehicle
+                COALESCE(SUM(has_current = 0), 0) AS without_vehicle,
+                COALESCE(SUM(licence_driving), 0) AS licence_driving
             FROM (
                 SELECT
                     (
@@ -461,7 +505,8 @@ export class DriverModel {
                     EXISTS (
                         SELECT 1 FROM vehicles v
                         WHERE v.current_driver_id = d.id
-                    ) AS has_current
+                    ) AS has_current,
+                    ${LICENCE_DRIVING_SQL} AS licence_driving
                 FROM drivers d
                 WHERE d.company_id = ?
                   ${searchSql}
@@ -472,6 +517,7 @@ export class DriverModel {
             all_count: number;
             talk: number;
             without_vehicle: number;
+            licence_driving: number;
         };
 
         return {
@@ -482,6 +528,7 @@ export class DriverModel {
                     all: Number(counts.all_count),
                     talk: Number(counts.talk),
                     without_vehicle: Number(counts.without_vehicle),
+                    licence_driving: Number(counts.licence_driving),
                 },
             },
         };
@@ -502,10 +549,26 @@ export class DriverModel {
         const vehicles = mapAssigned(loadAssignedVehicles(id, companyId));
         const current = vehicles.find((vehicle) => vehicle.is_current) ?? null;
 
+        const transports = stmt(
+            `
+            SELECT w.id AS visit_id, w.vehicle_id, v.license_plate, w.place, w.planned_on,
+                w.planned_time
+            FROM workshop_visits w
+            JOIN vehicles v ON v.id = w.vehicle_id
+            WHERE w.bring_driver_id = ? AND v.company_id = ? AND w.state = 'PLANNED'
+            ORDER BY w.planned_on, w.planned_time
+            `,
+        ).all(id, companyId) as DriverDetail["workshop_transports"];
+
         return {
             ...toDriver(row),
             vehicles,
             current_vehicle: current,
+            workshop_transports: transports.map((trip) => ({
+                ...trip,
+                visit_id: Number(trip.visit_id),
+                vehicle_id: Number(trip.vehicle_id),
+            })),
         };
     }
 
@@ -717,6 +780,10 @@ export class DriverModel {
                 throw new AppError(409, "VEHICLE_UNAVAILABLE", unavailable, {
                     vehicle_id: unavailable,
                 });
+            }
+
+            if (assigned.current_driver_id !== driverId) {
+                assertLicenceValid(driver);
             }
         }
 

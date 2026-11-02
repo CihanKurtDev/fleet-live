@@ -3,6 +3,7 @@ import type { DueKind, DueListItem, DueListResponse } from "@fleet-live/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DueBoard } from "../components/due/DueBoard";
+import { VehiclesContext, type VehiclesContextValue } from "../context/vehiclesContext";
 import { renderAuth, authUser } from "./renderAuth";
 
 vi.mock("../api/due", () => ({
@@ -77,8 +78,25 @@ beforeEach(() => {
     } as never);
 });
 
+const vehicles = {
+    listEpoch: 0,
+    vehicleOverrides: {},
+    streamConnection: "live",
+    lastTelemetryAt: null,
+    refetchLists: vi.fn(),
+    createVehicle: vi.fn(),
+    updateVehicle: vi.fn(),
+    deleteVehicles: vi.fn(),
+    subscribeTripPath: vi.fn(() => () => undefined),
+} satisfies VehiclesContextValue;
+
 const renderBoard = (route = "/fristen") =>
-    renderAuth(<DueBoard />, { user: authUser(), route });
+    renderAuth(
+        <VehiclesContext.Provider value={vehicles}>
+            <DueBoard />
+        </VehiclesContext.Provider>,
+        { user: authUser(), route },
+    );
 
 describe("Fristen board", () => {
     it("shows the three state tiles with their counts", async () => {
@@ -104,6 +122,27 @@ describe("Fristen board", () => {
         expect(screen.getByText("HB-KE 0036")).toBeInTheDocument();
         expect(screen.getByText("Ali Arslan")).toBeInTheDocument();
         expect(screen.getByText("HB-FN 1218")).toBeInTheDocument();
+    });
+
+    it("gives every row its next step: the workshop for HU and UVV, the new date for a licence", async () => {
+        renderBoard();
+        await screen.findByText("Ali Arslan");
+
+        expect(screen.getByRole("button", { name: "Neues Ablaufdatum" })).toBeInTheDocument();
+        expect(screen.getAllByRole("button", { name: "Termin planen" })).toHaveLength(3);
+    });
+
+    it("shows a viewer no row buttons", async () => {
+        renderAuth(
+            <VehiclesContext.Provider value={vehicles}>
+                <DueBoard />
+            </VehiclesContext.Provider>,
+            { user: authUser({ role: "viewer" }), route: "/fristen" },
+        );
+        await screen.findByText("Ali Arslan");
+
+        expect(screen.queryByRole("button", { name: "Neues Ablaufdatum" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Termin planen" })).toBeNull();
     });
 
     it("asks for one kind when its chip is chosen and shows only that kind", async () => {

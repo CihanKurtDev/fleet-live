@@ -24,6 +24,7 @@ import {
 } from "./fleetMapStyle";
 import { createThemedMap, themeColor } from "./leafletMap";
 import { depotLabelHtml, fleetTooltipHtml } from "./mapLabels";
+import { drawWorkshop, type MapWorkshop } from "./workshopRing";
 import {
     FLEET_CLUSTER_FIT_PADDING_PX,
     FLEET_CLUSTER_MAX_ZOOM,
@@ -259,6 +260,10 @@ type FleetMapProps = {
     focusKey?: string | null;
     focusPosition?: FleetPosition | null;
     depots?: MapDepot[];
+    /** Workshops of the company: dashed circles with their names. */
+    workshops?: MapWorkshop[];
+    /** The workshop picked in the place band: its ring is yellow. */
+    selectedWorkshopId?: number | null;
     draft?: DepotDraft | null;
     selectedDepotId?: number | null;
     focusDepot?: { id: number; nonce: number } | null;
@@ -286,6 +291,8 @@ export const FleetMap = ({
     focusKey = null,
     focusPosition = null,
     depots = [],
+    workshops = [],
+    selectedWorkshopId = null,
     draft = null,
     selectedDepotId = null,
     focusDepot = null,
@@ -1623,6 +1630,27 @@ export const FleetMap = ({
             map.off("click", onClick);
         };
     }, [placing, onPlaceDepotRef]);
+
+    const workshopsKey = workshops
+        .map((place) => `${place.name}|${place.latitude}|${place.longitude}|${place.radius_m}`)
+        .join(";");
+    const workshopsRef = useLatestRef(workshops);
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) {
+            return;
+        }
+        if (!map.getPane(DEPOT_LABEL_PANE)) {
+            map.createPane(DEPOT_LABEL_PANE).style.zIndex = "590";
+        }
+        const group = L.layerGroup().addTo(map);
+        for (const place of workshopsRef.current) {
+            drawWorkshop(group, place, DEPOT_LABEL_PANE, place.id === selectedWorkshopId);
+        }
+        return () => {
+            group.remove();
+        };
+    }, [workshopsKey, workshopsRef, selectedWorkshopId]);
 
     useEffect(() => {
         const map = mapRef.current;

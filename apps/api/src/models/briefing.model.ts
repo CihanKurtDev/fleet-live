@@ -20,7 +20,7 @@ const BRIEFING_VEHICLE_CONCEPTS = [
     "low_fuel",
     "in_depot",
     "speeding",
-    "in_workshop",
+    "unavailable",
 ] as const;
 
 type VehicleCountRow = Record<
@@ -31,7 +31,7 @@ type VehicleCountRow = Record<
     | "low_fuel"
     | "in_depot"
     | "speeding"
-    | "in_workshop",
+    | "unavailable",
     number
 >;
 
@@ -85,16 +85,48 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
     const firstMonth = keys[0] ?? "1970-01";
     const lastMonth = keys[keys.length - 1] ?? "1970-01";
 
-    const roster = stmt(
+    // Who drove in a month comes from that month's trips, not today's roster.
+    const rosterRows = stmt(
         `
         SELECT
-            COUNT(*) AS active_vehicles,
-            COUNT(DISTINCT current_driver_id) AS active_drivers
-        FROM vehicles
-        WHERE company_id = ?
-          AND current_driver_id IS NOT NULL
+            strftime('%Y-%m', t.started_at) AS month,
+            COUNT(DISTINCT t.vehicle_id) AS active_vehicles,
+            COUNT(DISTINCT t.driver_id) AS active_drivers
+        FROM trips t
+        INNER JOIN vehicles v ON v.id = t.vehicle_id
+        WHERE v.company_id = ?
+          AND t.started_at >= ?
+          AND t.started_at < ?
+        GROUP BY 1
         `,
-    ).get(companyId) as RosterRow;
+    ).all(companyId, from, until) as (RosterRow & { month: string })[];
+    const rosterByMonth = new Map(rosterRows.map((row) => [row.month, row] as const));
+
+    // Low tank and no signal count the vehicles that had such a warning at any
+    // time in the month, also one opened before it: a state, not an event.
+    const stateRows = keys.map((month) => {
+        const range = historyRange([month]);
+        return {
+            month,
+            ...(stmt(
+                `
+                SELECT
+                    COUNT(DISTINCT CASE WHEN a.type = 'LOW_FUEL' THEN a.vehicle_id END) AS low_fuel_vehicles,
+                    COUNT(DISTINCT CASE WHEN a.type = 'OFFLINE' THEN a.vehicle_id END) AS offline_vehicles
+                FROM alerts a
+                INNER JOIN vehicles v ON v.id = a.vehicle_id
+                WHERE v.company_id = ?
+                  AND a.type IN ('LOW_FUEL', 'OFFLINE')
+                  AND a.created_at < ?
+                  AND (a.resolved_at IS NULL OR a.resolved_at >= ?)
+                `,
+            ).get(companyId, range.until, range.from) as {
+                low_fuel_vehicles: number;
+                offline_vehicles: number;
+            }),
+        };
+    });
+    const stateByMonth = new Map(stateRows.map((row) => [row.month, row] as const));
 
     const alertRows = stmt(
         `
@@ -158,25 +190,30 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
         kmRows.map((row) => [row.month, Number(row.distance_m)] as const),
     );
 
-    const active_drivers = Number(roster.active_drivers);
-    const active_vehicles = Number(roster.active_vehicles);
     const openDistance = Number(openKm.distance_m);
 
     return keys.map((month) => {
         const alerts = alertsByMonth.get(month);
         const closedKm = kmByMonth.get(month) ?? 0;
+        const distance = month === lastMonth ? closedKm + openDistance : closedKm;
+        const roster = rosterByMonth.get(month);
+        const state = stateByMonth.get(month);
+        // Trips older than the retention are gone while their km stay: then
+        // nobody can say who drove, which is not the same as nobody.
+        const unknownRoster = !roster && distance > 0;
+        const stateCount = (key: "low_fuel_vehicles" | "offline_vehicles") =>
+            Number(state?.[key] ?? 0) || Number(alerts?.[key] ?? 0);
 
         return {
             month,
-            active_drivers,
-            active_vehicles,
+            active_drivers: unknownRoster ? null : Number(roster?.active_drivers ?? 0),
+            active_vehicles: unknownRoster ? null : Number(roster?.active_vehicles ?? 0),
             speeding_drivers: Number(alerts?.speeding_drivers ?? 0),
             speeding_events: Number(alerts?.speeding_events ?? 0),
             speeding_high: Number(alerts?.speeding_high ?? 0),
-            low_fuel_vehicles: Number(alerts?.low_fuel_vehicles ?? 0),
-            offline_vehicles: Number(alerts?.offline_vehicles ?? 0),
-            distance_m:
-                month === lastMonth ? closedKm + openDistance : closedKm,
+            low_fuel_vehicles: stateCount("low_fuel_vehicles"),
+            offline_vehicles: stateCount("offline_vehicles"),
+            distance_m: distance,
         };
     });
 };
@@ -215,7 +252,7 @@ export class BriefingModel {
             low_fuel: Number(vehicles.low_fuel),
             in_depot: Number(vehicles.in_depot),
             speeding: Number(vehicles.speeding),
-            in_workshop: Number(vehicles.in_workshop),
+            unavailable: Number(vehicles.unavailable),
         };
 
         return {

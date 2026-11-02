@@ -135,6 +135,8 @@ export {
     isLowFuelLevel,
     isSelfClosingAlertType,
     isSpeedingAlertDetails,
+    parseDriverTalk,
+    DRIVER_TALK_NOTE_MAX,
     LOW_FUEL_CRITICAL_PERCENT,
     LOW_FUEL_THRESHOLD_PERCENT,
     lowFuelSeverity,
@@ -147,12 +149,13 @@ export {
     SPEEDING_OPEN_DAYS,
 } from "./models/alert";
 
-export type { Site, SiteInput, SiteListResponse, SitePatch } from "./models/site";
+export type { Site, SiteHomeStatus, SiteInput, SiteListResponse, SitePatch } from "./models/site";
 
 export type {
     Damage,
     DamageInput,
     DamageListResponse,
+    DamagePhotoType,
     DamageSeverity,
     DamageState,
 } from "./models/damage";
@@ -160,10 +163,14 @@ export type {
 export {
     DAMAGE_DESCRIPTION_MAX,
     DAMAGE_LIST_LIMIT,
+    DAMAGE_PHOTOS_MAX,
+    DAMAGE_PHOTO_MAX_BYTES,
+    DAMAGE_PHOTO_TYPES,
     DAMAGE_SEVERITIES,
     DAMAGE_SEVERITY_LABELS,
     DAMAGE_STATES,
     DAMAGE_STATE_LABELS,
+    isDamagePhotoType,
     parseDamageInput,
     parseDamagePatch,
 } from "./models/damage";
@@ -198,6 +205,19 @@ export type {
     WorkshopState,
     WorkshopSummary,
     WorkshopVisit,
+    WorkshopPlace,
+    WorkshopPlaceInput,
+    WorkshopPlaceListResponse,
+    WorkshopPlacePatch,
+    WorkshopPlaceAppointment,
+    WorkshopPlaceVehicle,
+    WorkshopTask,
+    WorkshopTransport,
+    WorkshopBringer,
+    WorkshopBringersResponse,
+    GeocodeConfigResponse,
+    GeocodeHit,
+    GeocodeResponse,
 } from "./models/workshop";
 
 export {
@@ -207,7 +227,23 @@ export {
     WORKSHOP_EVENT_ACTIONS,
     WORKSHOP_NOTE_MAX,
     WORKSHOP_PAST_LIMIT,
+    WORKSHOP_ADDRESS_MAX,
+    WORKSHOP_PHONE_MAX,
+    WORKSHOP_RADIUS_DEFAULT_M,
+    WORKSHOP_RADIUS_MAX_M,
+    WORKSHOP_RADIUS_MIN_M,
+    WORKSHOP_TASKS,
+    WORKSHOP_TASK_LABELS,
+    WORKSHOP_TRANSPORTS,
+    WORKSHOP_TRANSPORT_LABELS,
+    parseWorkshopReasons,
+    sortWorkshopReasons,
+    workshopReasonsText,
+    parseWorkshopCostPatch,
+    parseWorkshopPlaceInput,
+    parseWorkshopPlacePatch,
     WORKSHOP_PLACE_MAX,
+    WORKSHOP_PLACE_LIST_MAX,
     WORKSHOP_REASONS,
     WORKSHOP_REASON_LABELS,
     WORKSHOP_STATES,
@@ -217,6 +253,9 @@ export {
     parseWorkshopCreate,
     parseWorkshopFinish,
     parseWorkshopPatch,
+    GEOCODE_QUERY_MAX,
+    GEOCODE_QUERY_MIN,
+    parseGeocodeQuery,
 } from "./models/workshop";
 
 export {
@@ -337,6 +376,7 @@ export {
     SPEED_CRITICAL_OVER_LIMIT_KMH,
     SPEEDING_HYSTERESIS_MS,
     SPEEDING_OPEN_AFTER_MS,
+    SPEEDING_MIN_OVER_KMH,
     isOverSpeedLimit,
     speedBand,
 } from "./models/speedBand";
@@ -367,6 +407,7 @@ export type {
     DriverCurrentVehicleInput,
     DriverDetail,
     DriverDetailResponse,
+    DriverWorkshopTransport,
     DriverIncidentCounts,
     DriverListCounts,
     DriverListMeta,
@@ -392,6 +433,7 @@ export type {
     DriverDueInput,
     DueAttention,
     DueCalendarState,
+    VehicleDeadline,
     DueCounts,
     DueDateSource,
     DueExplanation,
@@ -437,6 +479,8 @@ export {
     explainUvv,
     dueListQuerySchema,
     isDueActive,
+    isLicenceExpired,
+    licenceCheckedAfterExpiry,
     isDueKind,
     isDueListState,
     isDueSortKey,
@@ -446,6 +490,8 @@ export {
     resolveUvvDue,
     serializeDueListQuery,
     utcTodayIso,
+    vehicleDeadlineState,
+    vehicleDeadlines,
 } from "./models/dueDates";
 
 export {

@@ -12,10 +12,12 @@ import type {
     VehicleListQuery,
     VehicleListResponse,
     VehicleSortKey,
+    VehicleFilterId,
     WorkshopSummary,
 } from "@fleet-live/shared";
 import {
     ALERT_TYPES,
+    parseWorkshopReasons,
     FLEET_DRIVERS_LIST_LIMIT,
     FLEET_POSITIONS_MAX,
     VEHICLE_FILTERS,
@@ -31,7 +33,9 @@ import { stmt } from "../db/statements";
 import {
     VEHICLE_AVAILABILITY_SQL,
     VEHICLE_CONCEPT_SQL,
+    WORKSHOP_TASK_SQL,
     conceptCountsSql,
+    vehicleDeadlineSql,
 } from "../db/vehicleConcepts";
 import { db } from "../db/database";
 import { pagedQuery } from "../lib/pagination";
@@ -98,10 +102,15 @@ const OPEN_WORKSHOP_JOIN = `LEFT JOIN workshop_visits ow
 const WORKSHOP_COLUMNS_SQL = `${VEHICLE_AVAILABILITY_SQL} AS availability,
         ow.id AS workshop_id,
         ow.state AS workshop_state,
-        ow.reason AS workshop_reason,
+        ow.reasons AS workshop_reasons,
         ow.place AS workshop_place,
+        ow.workshop_id AS workshop_place_id,
         ow.planned_on AS workshop_planned_on,
+        ow.planned_time AS workshop_planned_time,
         ow.expected_on AS workshop_expected_on,
+        ${WORKSHOP_TASK_SQL} AS workshop_task,
+        ${vehicleDeadlineSql("HU")} AS hu_state,
+        ${vehicleDeadlineSql("UVV")} AS uvv_state,
         (
             SELECT COUNT(*) FROM vehicle_damages d
             WHERE d.vehicle_id = v.id AND d.state = 'OPEN'
@@ -125,6 +134,7 @@ const SELECT_ONE = `
         v.home_site_id,
         v.cost_center,
         CAST(v.odometer_m / 1000 AS INTEGER) AS odometer_km,
+        v.odometer_reported_at,
         t.latitude,
         t.longitude,
         t.speed,
@@ -213,9 +223,11 @@ type ListRow = Omit<Vehicle, "speeding_open" | "open_alert_types" | "workshop"> 
     open_alert_types: string | null;
     workshop_id: number | null;
     workshop_state: WorkshopSummary["state"] | null;
-    workshop_reason: WorkshopSummary["reason"] | null;
+    workshop_reasons: string | null;
     workshop_place: string | null;
+    workshop_place_id: number | null;
     workshop_planned_on: string | null;
+    workshop_planned_time: string | null;
     workshop_expected_on: string | null;
     total: number;
 };
@@ -238,24 +250,7 @@ function parseOpenAlertTypes(value: string | null | undefined): AlertType[] {
     return ALERT_TYPES.filter((type) => seen.has(type));
 }
 
-type FacetRow = {
-    all_count: number;
-    alerts: number;
-    low_fuel: number;
-    unassigned: number;
-    driving: number;
-    idle: number;
-    offline: number;
-    stopped: number;
-    in_depot: number;
-    speeding: number;
-    in_workshop: number;
-    workshop_due: number;
-    out_of_service: number;
-    damage_open: number;
-    not_drivable: number;
-    damage_unplanned: number;
-};
+type FacetRow = { all_count: number } & Record<VehicleFilterId, number>;
 
 function toLikePattern(search: string): string {
     const escaped = search
@@ -298,9 +293,11 @@ function toVehicle(row: ListRow): Vehicle {
         active,
         workshop_id,
         workshop_state,
-        workshop_reason,
+        workshop_reasons,
         workshop_place,
+        workshop_place_id,
         workshop_planned_on,
+        workshop_planned_time,
         workshop_expected_on,
         ...vehicle
     } = row;
@@ -313,9 +310,14 @@ function toVehicle(row: ListRow): Vehicle {
                 : {
                       id: Number(workshop_id),
                       state: workshop_state as WorkshopSummary["state"],
-                      reason: workshop_reason as WorkshopSummary["reason"],
+                      reasons: parseWorkshopReasons(String(workshop_reasons)),
                       place: String(workshop_place),
+                      workshop_id:
+                          workshop_place_id === null || workshop_place_id === undefined
+                              ? null
+                              : Number(workshop_place_id),
                       planned_on: String(workshop_planned_on),
+                      planned_time: workshop_planned_time ?? null,
                       expected_on: workshop_expected_on ?? null,
                   },
         active: Number(active) === 1,
@@ -371,6 +373,7 @@ export class VehicleModel {
                 v.home_site_id,
                 v.cost_center,
                 CAST(v.odometer_m / 1000 AS INTEGER) AS odometer_km,
+                v.odometer_reported_at,
                 t.latitude,
                 t.longitude,
                 t.speed,
@@ -424,21 +427,9 @@ export class VehicleModel {
                 ...meta,
                 counts: {
                     all: Number(counts.all_count),
-                    alerts: Number(counts.alerts),
-                    low_fuel: Number(counts.low_fuel),
-                    unassigned: Number(counts.unassigned),
-                    driving: Number(counts.driving),
-                    idle: Number(counts.idle),
-                    offline: Number(counts.offline),
-                    stopped: Number(counts.stopped),
-                    in_depot: Number(counts.in_depot),
-                    speeding: Number(counts.speeding),
-                    in_workshop: Number(counts.in_workshop),
-                    workshop_due: Number(counts.workshop_due),
-                    out_of_service: Number(counts.out_of_service),
-                    damage_open: Number(counts.damage_open),
-                    not_drivable: Number(counts.not_drivable),
-                    damage_unplanned: Number(counts.damage_unplanned),
+                    ...(Object.fromEntries(
+                        VEHICLE_FILTERS.map((id) => [id, Number(counts[id])]),
+                    ) as Record<VehicleFilterId, number>),
                 },
             },
         };
@@ -1001,6 +992,7 @@ export class VehicleModel {
         ExceptionEventModel.resetForTests();
         db.exec("DELETE FROM vehicles");
         db.exec("DELETE FROM sites");
+        db.exec("DELETE FROM workshops");
         db.exec("DELETE FROM drivers");
         db.exec("DELETE FROM trip_month_km");
         db.exec(

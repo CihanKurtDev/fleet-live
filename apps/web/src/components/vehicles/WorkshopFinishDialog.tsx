@@ -1,12 +1,14 @@
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import {
     WORKSHOP_NOTE_MAX,
-    WORKSHOP_REASON_LABELS,
+    workshopReasonsText,
     berlinTodayIso,
+    type VehicleOdometer,
     type WorkshopVisit,
 } from "@fleet-live/shared";
 
 import { ApiError } from "../../api/client";
+import { getVehicleOdometer } from "../../api/odometer";
 import { finishWorkshopVisit } from "../../api/workshop";
 import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
@@ -15,10 +17,11 @@ import { fieldAria } from "../ui/FieldError/fieldAria";
 import { Input } from "../ui/Input/Input";
 import { Textarea } from "../ui/Input/Textarea";
 import { Modal } from "../ui/Modal/Modal";
+import { formatKm } from "./odometerText";
 import formStyles from "./VehicleForm.module.scss";
 import styles from "./workshop.module.scss";
 
-type Field = "finished_on" | "cost" | "hu_due_on" | "result_note" | "form";
+type Field = "finished_on" | "cost" | "odometer" | "hu_due_on" | "result_note" | "form";
 
 interface WorkshopFinishDialogProps {
     visit: WorkshopVisit | null;
@@ -46,13 +49,27 @@ const FinishForm = ({
 }) => {
     const fieldId = useId();
     const today = berlinTodayIso();
-    const isHu = visit.reason === "HU";
+    const isHu = visit.reasons.includes("HU");
     const [finishedOn, setFinishedOn] = useState(today);
     const [cost, setCost] = useState("");
     const [huDueOn, setHuDueOn] = useState("");
     const [note, setNote] = useState("");
+    const [km, setKm] = useState("");
+    // A GPS box counts its reading; the invoice states the real one. A device
+    // that reads the dashboard needs no field.
+    const [odometer, setOdometer] = useState<VehicleOdometer | null>(null);
     const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        getVehicleOdometer(visit.vehicle_id, controller.signal)
+            .then((response) => setOdometer(response.data))
+            .catch(() => setOdometer(null));
+        return () => controller.abort();
+    }, [visit.vehicle_id]);
+
+    const askKm = odometer !== null && odometer.reported_at === null;
 
     const clear = (field: Field) =>
         setErrors((current) => ({ ...current, [field]: undefined, form: undefined }));
@@ -73,6 +90,7 @@ const FinishForm = ({
                 cost,
                 result_note: note,
                 hu_due_on: isHu ? huDueOn : null,
+                ...(askKm ? { odometer: km } : {}),
             });
             onSaved(
                 data,
@@ -98,7 +116,7 @@ const FinishForm = ({
     return (
         <form className={formStyles.form} onSubmit={handleSubmit} noValidate>
             <p className={styles.context}>
-                {visit.license_plate} · {WORKSHOP_REASON_LABELS[visit.reason]} bei {visit.place},
+                {visit.license_plate} · {workshopReasonsText(visit.reasons)} bei {visit.place},
                 dort seit {formatIsoDate(arrived)}
             </p>
 
@@ -139,13 +157,40 @@ const FinishForm = ({
                         {...fieldAria(`${fieldId}-cost`, errors.cost, `${fieldId}-cost-hint`)}
                     />
                     <p className={formStyles.hint} id={`${fieldId}-cost-hint`}>
-                        Freiwillig.
+                        Freiwillig, lässt sich im Verlauf nachtragen.
                     </p>
                     <FieldError fieldId={`${fieldId}-cost`} className={formStyles.error}>
                         {errors.cost}
                     </FieldError>
                 </div>
             </div>
+
+            {askKm && (
+                <div className={formStyles.field}>
+                    <label htmlFor={`${fieldId}-km`}>Kilometerstand laut Rechnung</label>
+                    <Input
+                        id={`${fieldId}-km`}
+                        size="md"
+                        className={styles.month}
+                        inputMode="numeric"
+                        placeholder="z. B. 123.456"
+                        value={km}
+                        onChange={(event) => {
+                            setKm(event.target.value);
+                            clear("odometer");
+                        }}
+                        {...fieldAria(`${fieldId}-km`, errors.odometer, `${fieldId}-km-hint`)}
+                    />
+                    <p className={formStyles.hint} id={`${fieldId}-km-hint`}>
+                        {odometer.km !== null
+                            ? `Freiwillig. Steht auf der Rechnung und korrigiert den berechneten Stand (jetzt ≈ ${formatKm(odometer.km)}).`
+                            : "Freiwillig. Steht auf der Rechnung; ab dann rechnet fleet-live jede Fahrt dazu."}
+                    </p>
+                    <FieldError fieldId={`${fieldId}-km`} className={formStyles.error}>
+                        {errors.odometer}
+                    </FieldError>
+                </div>
+            )}
 
             {isHu && (
                 <div className={`${formStyles.field} ${styles.callout}`}>
@@ -173,9 +218,15 @@ const FinishForm = ({
                 </div>
             )}
 
-            {visit.reason === "UVV" && (
+            {visit.reasons.includes("UVV") && (
                 <p className={formStyles.hint}>
                     „UVV geprüft“ wird auf Fertig am gesetzt; die nächste UVV ergibt sich daraus.
+                </p>
+            )}
+
+            {visit.reasons.includes("DAMAGE") && (
+                <p className={formStyles.hint}>
+                    Die Schäden dieses Aufenthalts gelten ab Fertig am als repariert.
                 </p>
             )}
 

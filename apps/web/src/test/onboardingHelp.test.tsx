@@ -57,6 +57,9 @@ const mockSignals = ({
                 damage_open: 0,
                 not_drivable: 0,
                 damage_unplanned: 0,
+                unavailable: 0,
+                deadline_overdue: 0,
+                deadline_soon: 0,
             },
         },
     });

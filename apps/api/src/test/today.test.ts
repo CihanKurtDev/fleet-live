@@ -124,7 +124,7 @@ describe("GET /api/today", () => {
         );
 
         assert.deepEqual([...order].sort((a, b) => a - b), order);
-        assert.equal(kinds[0], "deadline_overdue");
+        assert.equal(kinds[0], "offline");
         for (const kind of [
             "driver_talk",
             "offline",

@@ -13,12 +13,34 @@ vi.mock("../api/damages", () => ({
     reportDamage: vi.fn(),
     updateDamage: vi.fn(),
     closeDamage: vi.fn(),
+    addDamagePhoto: vi.fn(),
+    deleteDamagePhoto: vi.fn(),
+    damagePhotoUrl: (damageId: number, photoId: number) => `/api/damages/${damageId}/photos/${photoId}`,
+}));
+
+vi.mock("../api/sim", () => ({
+    listSimRoutes: vi.fn().mockResolvedValue({ data: [] }),
+}));
+
+vi.mock("../context/vehiclesContext", () => ({
+    useVehicles: () => ({ listEpoch: 0 }),
+}));
+
+vi.mock("../hooks/useDueSettings", () => ({
+    useDueSettings: () => ({ settings: { lead_days: 30, check_months: 6 } }),
 }));
 
 vi.mock("../api/workshop", () => ({
     createWorkshopVisit: vi.fn(),
     updateWorkshopVisit: vi.fn(),
-    getWorkshopPlaces: vi.fn().mockResolvedValue({ data: [] }),
+    getWorkshopBringers: vi.fn().mockResolvedValue({ data: [] }),
+    getWorkshopPlaces: vi.fn().mockResolvedValue({
+        data: [{ id: 3, name: "Karosserie Schmitz", address: null, phone: null, latitude: 50.9, longitude: 6.9, radius_m: 150, vehicles_here: 0, here: [], appointments: [] }],
+    }),
+}));
+
+vi.mock("../api/drivers", () => ({
+    listDrivers: vi.fn().mockResolvedValue({ data: [] }),
 }));
 
 vi.mock("../api/auth", () => ({
@@ -44,6 +66,12 @@ const damage = (overrides: Partial<Damage> = {}): Damage => ({
     closed_on: null,
     reported_by_name: "Cihan Kurt",
     created_at: "2026-10-28 09:00:00",
+    occurred_time: null,
+    latitude: null,
+    longitude: null,
+    driver_id: null,
+    driver_name: null,
+    photo_ids: [],
     ...overrides,
 });
 
@@ -98,9 +126,12 @@ describe("Schaden melden", () => {
         await waitFor(() =>
             expect(reportDamage).toHaveBeenCalledWith(9, {
                 occurred_on: berlinTodayIso(),
+                occurred_time: expect.stringMatching(/^\d{2}:\d{2}$/),
                 description: "Spiegel rechts abgerissen",
                 severity: "MEDIUM",
                 drivable: false,
+                latitude: null,
+                longitude: null,
             }),
         );
         expect(onSaved).toHaveBeenCalledWith(
@@ -110,9 +141,106 @@ describe("Schaden melden", () => {
     });
 });
 
+describe("Panne unterwegs", () => {
+    it("says what a breakdown does and sends where it happened and who drove", async () => {
+        vi.mocked(reportDamage).mockResolvedValue({ data: damage() });
+        const onSaved = vi.fn();
+        renderAuth(
+            <DamageDialog
+                target={{
+                    vehicleId: 9,
+                    licensePlate: "K-SCH 9",
+                    driving: true,
+                    driverName: "Sam Nowak",
+                    position: { latitude: 50.9582, longitude: 6.9287 },
+                }}
+                licensePlate="K-SCH 9"
+                onClose={vi.fn()}
+                onSaved={onSaved}
+            />,
+            { user: authUser() },
+        );
+
+        expect(screen.getByText("K-SCH 9 · auf Fahrt mit Sam Nowak")).toBeInTheDocument();
+        expect(screen.getByText("Sam Nowak", { selector: "p" })).toBeInTheDocument();
+        expect(screen.getByText(/Letzte Meldung 50,9582° N · 6,9287° O/)).toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText("Was ist passiert?"), { target: { value: "Reifen geplatzt" } });
+        fireEvent.click(screen.getByLabelText("Nein"));
+        expect(screen.getByText(/Panne unterwegs: K-SCH 9 hält an, die laufende Fahrt endet hier/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Schaden melden" }));
+
+        await waitFor(() =>
+            expect(reportDamage).toHaveBeenCalledWith(
+                9,
+                expect.objectContaining({ drivable: false, latitude: 50.9582, longitude: 6.9287 }),
+            ),
+        );
+        expect(onSaved).toHaveBeenCalledWith(
+            damage(),
+            "Panne an K-SCH 9 gemeldet. Die Fahrt ist beendet, es ist nicht fahrbereit.",
+        );
+    });
+
+    it("can leave the place out", async () => {
+        vi.mocked(reportDamage).mockResolvedValue({ data: damage() });
+        renderAuth(
+            <DamageDialog
+                target={{ vehicleId: 9, licensePlate: "K-SCH 9", position: { latitude: 50.9, longitude: 6.9 } }}
+                licensePlate="K-SCH 9"
+                onClose={vi.fn()}
+                onSaved={vi.fn()}
+            />,
+            { user: authUser() },
+        );
+
+        fireEvent.change(screen.getByLabelText("Was ist passiert?"), { target: { value: "Kratzer" } });
+        fireEvent.click(screen.getByRole("button", { name: "Ohne Ort" }));
+        expect(screen.getByText(/Kein Ort eingetragen/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Schaden melden" }));
+
+        await waitFor(() =>
+            expect(reportDamage).toHaveBeenLastCalledWith(9, expect.objectContaining({ latitude: null, longitude: null })),
+        );
+    });
+});
+
+describe("Schaden melden und Termin planen", () => {
+    it("ticks planning for a damage the vehicle cannot be driven with and hands the damage on", async () => {
+        vi.mocked(reportDamage).mockResolvedValue({ data: damage() });
+        const onSaved = vi.fn();
+        const onPlan = vi.fn();
+        renderAuth(
+            <DamageDialog
+                target={{ vehicleId: 9, licensePlate: "K-SCH 9" }}
+                licensePlate="K-SCH 9"
+                onClose={vi.fn()}
+                onSaved={onSaved}
+                onPlan={onPlan}
+            />,
+            { user: authUser() },
+        );
+
+        fireEvent.change(screen.getByLabelText("Was ist passiert?"), {
+            target: { value: "Spiegel rechts abgerissen" },
+        });
+        const plan = screen.getByRole("checkbox", { name: "Danach Werkstatt-Termin planen" });
+        expect(plan).not.toBeChecked();
+        fireEvent.click(screen.getByLabelText("Nein"));
+        expect(plan).toBeChecked();
+        fireEvent.click(screen.getByRole("button", { name: "Melden und Termin planen" }));
+
+        await waitFor(() =>
+            expect(onPlan).toHaveBeenCalledWith(damage(), "Schaden an K-SCH 9 gemeldet. Es ist nicht fahrbereit."),
+        );
+        expect(onSaved).not.toHaveBeenCalled();
+    });
+});
+
 describe("Hinweise with damages", () => {
-    it("lists open damages; one in a stay names the stay instead of Bearbeiten", () => {
+    it("lists open damages: the text opens one, Termin planen plans it, one in a stay names the stay", () => {
         const onEdit = vi.fn();
+        const onPlan = vi.fn();
         render(
             <MemoryRouter>
                 <VehicleHintsPanel
@@ -131,18 +259,22 @@ describe("Hinweise with damages", () => {
                         damage({ id: 9, description: "Alter Kratzer", state: "CLOSED" }),
                     ]}
                     onEditDamage={onEdit}
+                    onPlanWorkshop={onPlan}
                 />
             </MemoryRouter>,
         );
 
-        expect(
-            screen.getByText("Spiegel rechts abgerissen · nicht fahrbereit · 28.10.2026"),
-        ).toBeInTheDocument();
-        expect(screen.getByText("Termin am 03.11.2026")).toBeInTheDocument();
+        expect(screen.getByText(/Termin am 03\.11\.2026/)).toBeInTheDocument();
         expect(screen.queryByText(/Alter Kratzer/)).not.toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole("button", { name: "Bearbeiten" }));
+        fireEvent.click(
+            screen.getByRole("button", { name: "Spiegel rechts abgerissen · nicht fahrbereit · 28.10.2026" }),
+        );
         expect(onEdit).toHaveBeenCalledWith(damage());
+
+        // One row button: the damage in a stay has none.
+        fireEvent.click(screen.getByRole("button", { name: "Termin planen" }));
+        expect(onPlan).toHaveBeenCalledWith({ reason: "DAMAGE", damageId: damage().id });
     });
 });
 
@@ -165,17 +297,16 @@ describe("Werkstatt-Termin für einen Schaden", () => {
         expect(first).toBeChecked();
         fireEvent.click(screen.getByRole("checkbox", { name: /Delle Heckklappe/ }));
 
-        fireEvent.change(screen.getByLabelText("Werkstatt", { selector: "input" }), {
-            target: { value: "Karosserie Schmitz" },
-        });
-        fireEvent.change(screen.getByLabelText("Termin am"), { target: { value: "2026-11-03" } });
+        await screen.findByRole("option", { name: "Karosserie Schmitz" });
+        fireEvent.change(screen.getByRole("combobox", { name: "Werkstatt" }), { target: { value: "3" } });
+        fireEvent.change(screen.getByLabelText("Termin am"), { target: { value: "2099-11-03" } });
         await screen.findByRole("option", { name: "Cihan Kurt (du)" });
         fireEvent.click(screen.getByRole("button", { name: "Termin planen" }));
 
         await waitFor(() =>
             expect(createWorkshopVisit).toHaveBeenCalledWith(
                 9,
-                expect.objectContaining({ reason: "DAMAGE", damage_ids: [7] }),
+                expect.objectContaining({ reasons: ["DAMAGE"], workshop_id: 3, expected_on: "2099-11-03", damage_ids: [7] }),
             ),
         );
     });

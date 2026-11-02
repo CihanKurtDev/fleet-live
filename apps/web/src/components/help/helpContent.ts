@@ -34,7 +34,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was passiert bei einem Klick auf eine Kachel?",
                 answer:
-                    "Jede Kachel öffnet die Liste mit genau diesen Einträgen: „Offen“ die offenen Warnungen, die anderen Kacheln die Fahrzeugliste mit diesem Filter.",
+                    "Jede Kachel öffnet die Liste mit genau diesen Einträgen: „Offen“ die offenen Warnungen, die anderen Kacheln die Fahrzeugliste mit diesem Filter. „Ausfall“ sind die Fahrzeuge, die heute nicht fahren: in der Werkstatt, nicht fahrbereit oder außer Dienst.",
             },
             {
                 question: "Was zählen die Fristen-Kacheln?",
@@ -44,12 +44,12 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was zeigen die Diagramme?",
                 answer:
-                    "Je Monat: wie viele Fahrer zu schnell waren, wie viele Fahrzeuge wenig Tank oder kein Signal hatten, und Tempo-Vorfälle je 1.000 km. Die genauen Zahlen stehen unter „Exakte Monatswerte anzeigen“.",
+                    "Zwei Diagramme zu Tempo, je Monat. „Wie viele Fahrer waren zu schnell?“: der Anteil der Fahrer, die in dem Monat gefahren sind und mindestens einmal zu schnell waren; ein Fahrer zählt einmal, egal wie oft. Die gestrichelte Linie ist der Schnitt der Vormonate mit Fahrten (Monate ohne Daten zählen nicht mit). „Passiert das oft?“: Tempo-Vorfälle je 1.000 km, damit die Zahl vergleichbar bleibt, wenn die Flotte mehr fährt; die Balken zeigen den Anteil der deutlichen Überschreitungen. Eine Tempo-Warnung entsteht erst ab 10 km/h über dem Limit. Wenig Tank und Kein Signal stehen in der Monatstabelle unter „Exakte Monatswerte anzeigen“: Fahrzeuge, die in dem Monat eine solche Warnung hatten. Sind die Fahrten eines Monats schon gelöscht, steht bei den aktiven Fahrern „—“.",
             },
             {
                 question: "Was lädt „Monat“ herunter?",
                 answer:
-                    "Eine CSV für den laufenden Monat: Kilometer, in dem Monat angelegte Warnungen und den Verbrauch, gerechnet mit 25 l pro 100 km.",
+                    "Eine CSV für den laufenden Monat: Kilometer, in dem Monat angelegte Warnungen und einen geschätzten Verbrauch. Die Schätzung rechnet pauschal 25 l pro 100 km, für PKW wie LKW gleich; gemessen ist sie nicht.",
                 dispatcherOnly: true,
             },
         ],
@@ -63,12 +63,17 @@ const PAGES: Record<string, HelpPage> = {
         items: [
             {
                 question: "Was bedeuten die Filter?",
-                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Tempo jetzt“: eine Tempoüberschreitung läuft gerade. „Auf Fahrt“, „Standby“, „Feierabend“ und „Kein Signal“ sind der gemeldete Status und ergeben zusammen „Alle“. Unter „Weitere Filter“: „Kein Fahrer“ (kein aktueller Fahrer) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
+                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Tempo jetzt“: eine Tempoüberschreitung läuft gerade. „Auf Fahrt“, „Standby“, „Feierabend“ und „Kein Signal“ sind der gemeldete Status und ergeben zusammen „Alle“. „Ausfall“: fährt heute nicht (Werkstatt, nicht fahrbereit, außer Dienst). Unter „Weitere Filter“ unter anderem „Kein Fahrer“, „In der Werkstatt“, „Frist abgelaufen“ und „Frist bald fällig“ (HU oder UVV, dieselbe Regel wie unter Fristen) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
+            },
+            {
+                question: "Was heißen die gelben Markierungen bei HU und UVV?",
+                answer:
+                    "Gelb mit Punkt: abgelaufen oder heute fällig, dazu steht „HU abgelaufen“ oder „UVV heute“ bei den Hinweisen. Ein Ring: fällig innerhalb des Vorlaufs der Firma. Hat das Fahrzeug schon einen Werkstatt-Termin dafür, sagt der Hinweis „Werkstatt“ mit dem Termin.",
             },
             {
                 question: "Warum ist das Tempo orange oder rot?",
                 answer:
-                    "Orange: schneller als das Limit der simulierten Straße (Stadt oder Autobahn), eine Warnung ist noch nicht offen. Rot: eine Tempo-Warnung läuft. „Erledigen“ unter Warnungen ändert die Farbe nicht.",
+                    "Orange: schneller als das Limit der simulierten Straße (Stadt, Zubringer oder Autobahn; ein LKW hat außerorts niedrigere Stufen), eine Warnung ist noch nicht offen. Rot: eine Tempo-Warnung läuft, ab 10 km/h über dem Limit. „Erledigen“ unter Warnungen ändert die Farbe nicht. Die Limits sind Klassen der Demo, keine Rechtsangabe.",
             },
             {
                 question: "Kann ich den Status ändern?",
@@ -103,7 +108,12 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was sind die Kreise?",
                 answer:
-                    "Depots der Firma. Liegt die letzte Position eines Fahrzeugs im Kreis, zählt es als „Im Depot“. Dispatcher legen Depots unter „Depots“ an: Mittelpunkt in die Karte klicken, Name und Radius setzen.",
+                    "Durchgezogen: Depots der Firma. Liegt die letzte Position eines Fahrzeugs im Kreis, zählt es als „Im Depot“. Gestrichelt: Werkstätten; parkt ein Fahrzeug mit Termin im Kreis, gilt es als angekommen.",
+            },
+            {
+                question: "Was steht im Band unter der Karte?",
+                answer:
+                    "Die Orte im Kartenausschnitt, die belebten zuerst. Ein Depot zeigt, wie viele Fahrzeuge dort zu Hause sind, als Balken in den Farben der Punkte, und wie viele gerade bereitstehen und im Depot sind. Eine Werkstatt zeigt, wer dort steht und wer einen Termin hat. „N Orte“ öffnet die Liste aller Orte mit Suche, „+ N außerhalb“ ebenso. Ein Klick fährt hin und öffnet die Karte des Orts; Dispatcher bearbeiten ihn dort, eine Werkstatt auch mit Adresssuche (wenn eingerichtet) und Löschen, solange kein offener Termin sie nutzt. „+ Neuer Ort“ legt ein Depot (in die Karte klicken) oder eine Werkstatt an.",
             },
             {
                 question: "Was heißt „Live“?",
@@ -121,12 +131,12 @@ const PAGES: Record<string, HelpPage> = {
         items: [
             {
                 question: "Was bedeuten Tempo, Kein Signal und Wenig Tank?",
-                answer: `Tempo: ein Fahrzeug war 8 Sekunden am Stück schneller als das Limit seiner simulierten Straße (Stadt oder Autobahn). Kein Signal: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Die Warnung geht von selbst weg, sobald das Fahrzeug wieder meldet. Wenig Tank: der Tankstand liegt unter ${LOW_FUEL_THRESHOLD_PERCENT} %. Die Warnung geht von selbst weg, sobald der Tank wieder darüber liegt. Es sind dieselben Fahrzeuge wie bei „Wenig Tank“ unter Fahrzeuge.`,
+                answer: `Tempo: ein Fahrzeug war 8 Sekunden am Stück mindestens 10 km/h schneller als das Limit seiner simulierten Straße. Ein Klick öffnet das Fahrzeug mit der Fahrt, auf der es passiert ist. Viele offene Tempo-Warnungen eines Fahrers erledigst du auf seiner Seite mit „Gespräch geführt“ auf einmal. Kein Signal: 15 Sekunden ohne Meldung, während die Simulation der Firma pausiert, oder der Status „Kein Signal“. Die Warnung geht von selbst weg, sobald das Fahrzeug wieder meldet. Wenig Tank: der Tankstand liegt unter ${LOW_FUEL_THRESHOLD_PERCENT} %. Die Warnung geht von selbst weg, sobald der Tank wieder darüber liegt. Es sind dieselben Fahrzeuge wie bei „Wenig Tank“ unter Fahrzeuge.`,
             },
             {
                 question: "Was macht „Erledigen“?",
                 answer:
-                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. „Wenig Tank“ und „Kein Signal“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist bzw. das Fahrzeug wieder meldet. Eine beendete Tempo-Warnung, die niemand erledigt, wird nach 7 Tagen Verlauf und steht dann unter „Erledigt“. Erledigte Warnungen bleiben 90 Tage sichtbar, die Monatszahlen der Diagramme bleiben.",
+                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. „Wenig Tank“ und „Kein Signal“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist bzw. das Fahrzeug wieder meldet. Eine beendete Tempo-Warnung, die niemand erledigt, wird nach 7 Tagen Verlauf und steht dann unter „Erledigt“. Erledigte Warnungen bleiben so lange sichtbar, wie die Firma unter Konto → Datenschutz festlegt (ohne Einstellung 90 Tage); die Zahl steht oben auf der Seite. Die Monatszahlen der Diagramme bleiben.",
             },
             {
                 question: "Wohin führt eine Zeile?",
@@ -162,6 +172,12 @@ const PAGES: Record<string, HelpPage> = {
                 question: "„Termin planen“ bei HU und UVV",
                 answer:
                     "Plant den Werkstatt-Aufenthalt für dieses Fahrzeug. Danach steht in der Zeile der Termin oder „In der Werkstatt“. Wer „Fertig melden“ drückt, trägt bei der HU den neuen Monat ein; die Zeile verschwindet dann aus der Liste.",
+                dispatcherOnly: true,
+            },
+            {
+                question: "„Neues Ablaufdatum“ und „Kontrolle eintragen“",
+                answer:
+                    "Öffnen den Fahrer mit dem passenden Feld: das neue Ablaufdatum des Führerscheins oder den Tag, an dem du ihn kontrolliert hast. Danach rechnet die Liste neu.",
                 dispatcherOnly: true,
             },
             {
@@ -201,12 +217,12 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Wie läuft ein Werkstatt-Aufenthalt?",
                 answer:
-                    "„In die Werkstatt“ plant einen Termin (Grund, Werkstatt, Datum, zuständig). „Angekommen“ meldet das Fahrzeug dort; dann bekommt es keinen Fahrer, bis „Fertig melden“ es zurückgibt. Bei einer HU trägst du dabei den neuen Monat von der Plakette ein, bei einer UVV gilt das Fertig-Datum als Prüfung. „Verlauf“ zeigt jede Änderung und frühere Aufenthalte mit Kosten.",
+                    "„In die Werkstatt“ plant einen Termin: was gemacht wird (offene Schäden, HU, UVV, Wartung, Sonstiges zum Abhaken; Fälliges ist vorausgewählt, ein Aufenthalt erledigt alles), Werkstatt (nach Entfernung ab dem Stammdepot sortiert, sonst ab der letzten Position; die nächste im Umkreis von 50 km wird vorgeschlagen, eine weiter entfernte fragt nach; eine neue legst du dort an, mit Ort auf der Karte), Tag, Uhrzeit, wann es fertig sein soll, wie es hinkommt (Fahrer bringt, Abschleppen, Werkstatt holt ab; nicht fahrbereit nie mit Fahrer), wer es hinbringt (die Liste sagt, wer gerade fährt oder schon etwas bringt) und wer zuständig ist. Angekommen ist es, sobald es im Kreis der Werkstatt parkt; „Angekommen melden“ von Hand gibt es nur, solange es steht, für Fahrzeuge ohne Signal. In der Werkstatt bekommt es keinen Fahrer, bis „Fertig melden“ es zurückgibt. Bei einer HU trägst du dabei den neuen Monat von der Plakette ein, bei einer UVV gilt das Fertig-Datum als Prüfung; Kosten kannst du später im „Verlauf“ nachtragen. Abgeholt ist es, sobald es den Kreis verlässt; fehlt ein Fahrer, sagt der Streifen das. Ist ein Termin vorbei und das Fahrzeug war nie dort, steht er rot als „Verpasst“.",
             },
             {
                 question: "Wie melde ich einen Schaden?",
                 answer:
-                    "Unter „Weitere Aktionen“ (⋯) „Schaden melden“: Datum, was passiert ist, Schwere und ob das Fahrzeug noch fahren kann. Nicht fahrbereit heißt: es bekommt keinen Fahrer, bis der Schaden behoben ist. Offene Schäden stehen unter „Hinweise“; „In die Werkstatt“ nimmt sie in den Termin auf, und „Fertig melden“ setzt sie auf behoben. Einen kleinen Schaden ohne Werkstatt erledigst du unter „Bearbeiten“.",
+                    "„Schaden melden“ steht im Kopf von „Hinweise“: was passiert ist, Schwere, ob das Fahrzeug noch fahren kann, wann (Tag und Uhrzeit), wer gerade fuhr, wo (der Punkt der letzten Meldung, ein Klick auf die Karte setzt ihn neu) und bis zu 3 Fotos. Nicht fahrbereit heißt: es bekommt keinen Fahrer, bis der Schaden behoben ist; auf Fahrt (Panne) hält es an und die Fahrt endet. Mit „Danach Werkstatt-Termin planen“ geht es gleich weiter zum Termin („Melden und Termin planen“). Offene Schäden stehen unter „Hinweise“ mit „Termin planen“; ein Termin mit Grund „Schaden“ nimmt sie auf, und „Fertig melden“ setzt sie auf behoben. Einen kleinen Schaden ohne Werkstatt erledigst du, indem du ihn unter „Hinweise“ öffnest.",
                 dispatcherOnly: true,
             },
             {
@@ -218,12 +234,12 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Woher kommt der Kilometerstand?",
                 answer:
-                    "Aus dem Stand, der beim Anlegen oder im Import eingetragen wurde, plus jeder Strecke, die das Fahrzeug seitdem gemeldet hat. Ein Klick auf den Wert unter „Stammdaten“ zeigt, wer ihn wann gesetzt hat. Weicht er vom Tacho ab, korrigiert ihn ein Dispatcher dort mit dem abgelesenen Stand.",
+                    "Das steht unter „Jetzt“. Ein LKW meldet den Tachostand selbst, sobald er fährt; den kann niemand ändern. Transporter und PKW haben eine GPS-Box, die den Tacho nicht liest: dort trägt man den Stand einmal ein, danach rechnet fleet-live jede gemeldete Strecke dazu („≈“, weil GPS-Strecke mit der Zeit vom Tacho abweicht). „Korrigieren“ zeigt, wer ihn wann gesetzt hat, und nimmt den abgelesenen Stand; beim „Fertig melden“ geht auch der Stand laut Werkstattrechnung.",
             },
             {
                 question: "Was zeigt die Linie auf der Karte?",
                 answer:
-                    "Die ausgewählte Fahrt. Eine laufende Fahrt wächst live mit, eine abgeschlossene Fahrt aus „Fahrten“ zeigt ihren gespeicherten Weg.",
+                    "Die ausgewählte Fahrt. Eine laufende Fahrt wächst live mit, eine abgeschlossene Fahrt aus „Fahrten“ zeigt ihren gespeicherten Weg. Die Demo fährt im Zeitraffer (×5, steht an „Fahrten“): Strecke und Dauer einer Fahrt passen deshalb nicht zur Uhr.",
             },
             {
                 question: "„Aktuell“ und „Freigegeben“",
@@ -233,7 +249,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was steht unter „Hinweise“?",
                 answer:
-                    "Offene Hinweise zu Tank und Kein Signal an diesem Fahrzeug. Tempo-Warnungen stehen unter Warnungen und am Fahrer.",
+                    "Was an diesem Fahrzeug offen ist: Schäden, eine laufende Tempo-Warnung („Fahrt zeigen“ öffnet die Fahrt), Kein Signal mit Dauer und der Telefonnummer des Fahrers, wenig Tank und HU oder UVV, die abgelaufen sind oder fehlen (mit „Termin planen“ oder „Zum Termin dazu“, wenn schon ein Termin ansteht).",
             },
             {
                 question: "Wo ändere ich HU, UVV oder den Stammstandort?",
@@ -265,9 +281,20 @@ const PAGES: Record<string, HelpPage> = {
                     "Nur Tempo-Warnungen. Tank und Kein Signal hängen am Fahrzeug.",
             },
             {
+                question: "Was tut „Gespräch geführt“?",
+                answer:
+                    "Nach einem Gespräch mit dem Fahrer erledigt es alle seine offenen Tempo-Warnungen auf einmal, mit dem Vermerk „Gespräch geführt am …“ und einer freiwilligen Notiz.",
+                dispatcherOnly: true,
+            },
+            {
+                question: "Warum lässt sich ein Fahrer nicht zuweisen?",
+                answer:
+                    "Ist sein Führerschein abgelaufen, darf er weder ein Fahrzeug fahren noch eines in die Werkstatt bringen. Ist er schon eingeteilt, steht das oben unter „Hinweise“ mit „Abnehmen“ und ganz oben in „Heute dran“. Eine Kontrolle nach dem Ablaufdatum zählt erst mit einem neuen Ablaufdatum.",
+            },
+            {
                 question: "Ein Fahrer will wissen, was über ihn gespeichert ist. Was tue ich?",
                 answer:
-                    "Hier unter „⋯“ → „Auskunft exportieren“. Die ZIP-Datei enthält Stammdaten, Fahrzeuge, Fahrten mit Strecke, Verstöße und Warnungen und erklärt in liesmich.txt, was drin ist. Der Export steht im Protokoll.",
+                    "Hier unter „⋯“ → „Auskunft exportieren“. Die ZIP-Datei enthält Stammdaten, Fahrzeuge, Fahrten mit Strecke, Verstöße, Warnungen, Werkstatt-Fahrten und Schäden aus seiner Zeit am Steuer und erklärt in liesmich.txt, was drin ist. Der Export steht im Protokoll.",
                 dispatcherOnly: true,
             },
         ],

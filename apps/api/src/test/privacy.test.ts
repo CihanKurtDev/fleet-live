@@ -75,8 +75,11 @@ describe("retention per company", () => {
         const recent = insertAlert(mine.id, { resolved_at: sqliteDaysAgo(5), ended_at: sqliteDaysAgo(5) });
         const open = insertAlert(mine.id, { created_at: sqliteDaysAgo(100) });
         const theirsOld = insertAlert(theirs.id, { resolved_at: sqliteDaysAgo(45), ended_at: sqliteDaysAgo(45) });
+        // The inbox says how long a resolved warning stays.
+        assert.equal((await agent.get("/api/alerts").expect(200)).body.meta.resolved_kept_days, 90);
 
         await agent.patch("/api/auth/privacy").send({ alerts_days: 30 }).expect(200);
+        assert.equal((await agent.get("/api/alerts").expect(200)).body.meta.resolved_kept_days, 30);
 
         const exists = (id: number) => count("SELECT COUNT(*) AS n FROM alerts WHERE id = ?", id) === 1;
         assert.equal(exists(old), false);

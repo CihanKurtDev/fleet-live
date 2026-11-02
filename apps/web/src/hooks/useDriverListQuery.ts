@@ -22,13 +22,18 @@ const readDriverParams = (
     dir: searchParams.get("dir") ?? undefined,
     min_open_warnings: searchParams.get("min_open_warnings") ?? undefined,
     without_vehicle: searchParams.get("without_vehicle") ?? undefined,
+    licence_driving: searchParams.get("licence_driving") ?? undefined,
 });
 
 /** The tiles on `/drivers`: the main filter, exactly one is pressed. */
-export type DriverTileId = "all" | "talk" | "without_vehicle";
+export type DriverTileId = "all" | "talk" | "without_vehicle" | "licence_driving";
 
 /** Tile of the current query; `null` for a hand-edited warning minimum. */
 export const driverTileOf = (query: DriverListQuery): DriverTileId | null => {
+    if (query.licence_driving) {
+        return query.min_open_warnings === undefined && !query.without_vehicle ? "licence_driving" : null;
+    }
+
     if (query.without_vehicle) {
         return query.min_open_warnings === undefined ? "without_vehicle" : null;
     }
@@ -62,6 +67,7 @@ const useDriverListQueryBase = createListQueryHook<
         "dir",
         "min_open_warnings",
         "without_vehicle",
+        "licence_driving",
     ],
     defaultSort: { key: "open_warnings", dir: "desc", mode: "implied" },
     debounceSearch: true,
@@ -72,6 +78,7 @@ const useDriverListQueryBase = createListQueryHook<
                     min_open_warnings:
                         tile === "talk" ? DRIVER_TALK_MIN_OPEN_WARNINGS : null,
                     without_vehicle: tile === "without_vehicle" ? true : null,
+                    licence_driving: tile === "licence_driving" ? true : null,
                 } as ListQueryPatch<DriverListQuery>,
                 { replace: true, resetPage: true },
             );
@@ -82,6 +89,7 @@ const useDriverListQueryBase = createListQueryHook<
                 {
                     min_open_warnings: null,
                     without_vehicle: null,
+                    licence_driving: null,
                     search: "",
                 } as ListQueryPatch<DriverListQuery>,
                 { replace: true, resetPage: true },

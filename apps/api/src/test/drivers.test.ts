@@ -519,6 +519,7 @@ describe("GET /api/drivers page size and tile counts", () => {
             all: 3,
             talk: 1,
             without_vehicle: 1,
+            licence_driving: 0,
         });
 
         // The numbers do not move with a tile filter, but follow the search.
@@ -533,6 +534,7 @@ describe("GET /api/drivers page size and tile counts", () => {
             all: 1,
             talk: 1,
             without_vehicle: 0,
+            licence_driving: 0,
         });
 
         const theirs = await (await loginAs(2)).agent.get("/api/drivers");
@@ -540,6 +542,7 @@ describe("GET /api/drivers page size and tile counts", () => {
             all: 1,
             talk: 1,
             without_vehicle: 0,
+            licence_driving: 0,
         });
     });
 });

@@ -34,7 +34,7 @@ const openMenu = () => {
 
 describe("phone menu", () => {
     beforeEach(() => {
-        vi.mocked(getSim).mockResolvedValue({ available: true, running: true });
+        vi.mocked(getSim).mockResolvedValue({ available: true, running: true, time_scale: 5 });
         vi.mocked(logout).mockReset();
     });
 
@@ -86,7 +86,7 @@ describe("phone menu", () => {
         ).toHaveAttribute("aria-current", "page");
 
         expect(
-            await menu.findByRole("button", { name: "Simulation pausieren" }),
+            await menu.findByRole("button", { name: "Demo Simulation pausieren" }),
         ).toBeInTheDocument();
         expect(
             menu.getByRole("button", { name: "Abmelden" }),

@@ -56,6 +56,7 @@ describe("depots", () => {
 
         const listed = await agent.get("/api/sites");
         assert.equal(listed.body.data[0].home_count, 1);
+        assert.deepEqual(listed.body.data[0].home_status, { driving: 0, idle: 1, stopped: 0, offline: 0 });
         assert.equal(listed.body.data[0].in_depot_count, 0);
 
         const duplicate = await agent.post("/api/sites").send({

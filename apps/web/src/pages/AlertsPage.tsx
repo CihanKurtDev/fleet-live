@@ -29,6 +29,8 @@ export const AlertsPage = () => {
                     viewTransition: true,
                     state: {
                         from: `${location.pathname}${location.search}`,
+                        // The page opens on the trip of the warning, with the place marked.
+                        focusTrip: alert.trip_id,
                     },
                 });
             }}

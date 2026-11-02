@@ -70,6 +70,10 @@ export const telemetryPatchSchema = z.object({
      * verwerfen, nicht anhängen.
      */
     path_reset: z.literal(true).optional(),
+    /** Kilometerstand in whole km after this ping, when the vehicle has one. */
+    odometer_km: z.number().int().optional(),
+    /** The device read it from the dashboard (FMS), not counted from the distance. */
+    odometer_from_device: z.literal(true).optional(),
 });
 
 export type TelemetryPatch = z.infer<typeof telemetryPatchSchema>;

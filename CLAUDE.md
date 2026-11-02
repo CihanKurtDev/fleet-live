@@ -21,7 +21,7 @@
 - `npm test` — API tests (`node:test` + SuperTest)
 - `npm run test:web` — web tests (Vitest)
 - `npm run typecheck`, `npm run build -w web`
-- `npm run lint` — passes (0 errors, 2 warnings in `FleetMap.tsx`); lint the files you change (`npx eslint <file>` in the app folder). A hook runs ESLint on every TypeScript file Claude edits in `apps/web` or `apps/api`. Other hooks block `db:seed` on the dev data (`rules/backend.md`, Dev data) and flag `prefers-color-scheme` in web sources (the header switch sets `data-theme`).
+- `npm run lint` — passes (0 errors, 2 older warnings in `FleetMap.tsx` and `FleetDetailPanel.tsx`); lint the files you change (`npx eslint <file>` in the app folder). A hook runs ESLint on every TypeScript file Claude edits in `apps/web` or `apps/api`. Other hooks block `db:seed` on the dev data (`rules/backend.md`, Dev data) and flag `prefers-color-scheme` in web sources (the header switch sets `data-theme`).
 - `npm run verify` — typecheck, tests, lint and build.
 
 ## Slash commands

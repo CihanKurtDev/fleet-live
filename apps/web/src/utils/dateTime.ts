@@ -85,7 +85,7 @@ export const formatRelativeTimestamp = (value: string | null): string => {
     return formatTimestamp(value);
 };
 
-/** HU-Monat `YYYY-MM` als `MM.JJJJ`. Andere Werte bleiben ein Kalenderdatum. */
+/** HU-Monat `YYYY-MM` als `MM/JJJJ`, wie auf der Plakette. Andere Werte bleiben ein Kalenderdatum. */
 export const formatYearMonth = (value: string | null | undefined): string => {
     if (!value) {
         return "—";
@@ -96,7 +96,7 @@ export const formatYearMonth = (value: string | null | undefined): string => {
         return formatIsoDate(value);
     }
 
-    return `${match[2]}.${match[1]}`;
+    return `${match[2]}/${match[1]}`;
 };
 
 /** Kalenderdatum `YYYY-MM-DD` ohne Zeitzonen-Verschiebung. */
@@ -174,4 +174,29 @@ export const formatShortStamp = (value: string | null): string => {
     return isSameDay(date, new Date())
         ? clockFormat.format(date)
         : `${dayMonthFormat.format(date)}, ${clockFormat.format(date)}`;
+};
+
+/** How long something has lasted: „seit 5 Min.“, „seit 3 Std.“, „seit 6 Tagen“. */
+export const formatSince = (value: string | null): string => {
+    const date = value === null ? null : parseSqliteUtc(value);
+
+    if (!date) {
+        return "";
+    }
+
+    const minutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60_000));
+
+    if (minutes < 60) {
+        return minutes <= 1 ? "seit 1 Min." : `seit ${minutes} Min.`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+
+    if (hours < 24) {
+        return `seit ${hours} Std.`;
+    }
+
+    const days = Math.floor(hours / 24);
+
+    return days === 1 ? "seit 1 Tag" : `seit ${days} Tagen`;
 };

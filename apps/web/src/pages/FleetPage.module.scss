@@ -255,12 +255,14 @@
     min-height: 240px;
 }
 
+// At the bottom edge: a depot or workshop picked in the strips is centred
+// and may stand in an empty view, its ring and name stay visible.
 .empty {
     position: absolute;
     left: 50%;
-    top: 50%;
+    bottom: 24px;
     z-index: 500;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
 
     margin: 0;
     padding: 8px 12px;

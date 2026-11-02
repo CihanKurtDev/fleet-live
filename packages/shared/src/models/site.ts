@@ -8,6 +8,8 @@ export const DEPOT_RADIUS_MAX_M = 5_000;
 /** Darüber zählt ein großer Teil der Stadt als Depot. */
 export const DEPOT_RADIUS_WARN_M = 2_500;
 
+export type SiteHomeStatus = { driving: number; idle: number; stopped: number; offline: number };
+
 export type Site = {
     id: number;
     name: string;
@@ -18,6 +20,8 @@ export type Site = {
     is_default: boolean;
     /** Fahrzeuge mit diesem Stammstandort. */
     home_count: number;
+    /** Dieselben nach Status, wie die Punkte der Karte. */
+    home_status: SiteHomeStatus;
     /** Fahrzeuge, deren letzte Position in diesem Kreis liegt. */
     in_depot_count: number;
     /** Davon mit einem anderen Stammstandort. */

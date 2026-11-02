@@ -1,16 +1,19 @@
-import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "react-router";
 import {
     DEPOT_RADIUS_MAX_M,
     DEPOT_RADIUS_MIN_M,
     DEPOT_RADIUS_WARN_M,
+    VEHICLE_STATUS_LABELS,
     type Site,
 } from "@fleet-live/shared";
+
+import { formatCount } from "../../utils/formatCount";
+import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import { RetryMessage } from "../ui/RetryMessage";
 import { isDepotDraftDirty, type DepotDraft } from "./depotDraft";
-import { SwapLabel } from "../ui/Button/SwapLabel";
-import styles from "./DepotPanel.module.scss";
+import { StatusBar } from "./PlaceBoard";
+import styles from "./PlaceCard.module.scss";
 
 interface DepotPanelProps {
     sites: Site[];
@@ -21,13 +24,9 @@ interface DepotPanelProps {
     saveError: string | null;
     loadError: string | null;
     isSaving: boolean;
-    /** Steigt, wenn ein Depot von der Karte oder der Liste gewählt wird. */
-    revealToken: number;
-    onSelect: (site: Site) => void;
-    /** Clears the selection: panel, highlight and URL. */
+    /** Clears the selection: card, highlight and URL. */
     onDeselect: () => void;
     onEdit: (site: Site) => void;
-    onStartPlace: () => void;
     onCancel: () => void;
     onDraftChange: (draft: DepotDraft) => void;
     onSave: () => void;
@@ -35,49 +34,19 @@ interface DepotPanelProps {
     onRetryLoad: () => void;
 }
 
-const Icon = ({ children }: { children: ReactNode }) => (
-    <svg
-        viewBox="0 0 24 24"
-        width="16"
-        height="16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-    >
-        {children}
-    </svg>
-);
+const STATUS_ROWS = [
+    ["driving", "DRIVING"],
+    ["idle", "IDLE"],
+    ["stopped", "STOPPED"],
+    ["offline", "OFFLINE"],
+] as const;
 
-const PencilIcon = () => (
-    <Icon>
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </Icon>
-);
-
-const TrashIcon = () => (
-    <Icon>
-        <path d="M3 6h18" />
-        <path d="M8 6V4h8v2" />
-        <path d="M19 6l-1 14H6L5 6" />
-    </Icon>
-);
-
-const CloseIcon = () => (
-    <Icon>
-        <path d="M18 6 6 18M6 6l12 12" />
-    </Icon>
-);
-
-const CheckIcon = () => (
-    <Icon>
-        <path d="M20 6 9 17l-5-5" />
-    </Icon>
-);
-
+/**
+ * The depot picked on the fleet map, as a card over it: how many vehicles are
+ * at home there and in which state, how many stand in the circle now. A
+ * dispatcher edits it in the same card (name, radius, the point dragged on
+ * the map) or places a new one.
+ */
 export const DepotPanel = ({
     sites,
     selectedId,
@@ -87,192 +56,25 @@ export const DepotPanel = ({
     saveError,
     loadError,
     isSaving,
-    revealToken,
-    onSelect,
     onDeselect,
     onEdit,
-    onStartPlace,
     onCancel,
     onDraftChange,
     onSave,
     onAskDelete,
     onRetryLoad,
 }: DepotPanelProps) => {
-    const detailsRef = useRef<HTMLDetailsElement>(null);
     const selected = sites.find((site) => site.id === selectedId) ?? null;
     const dirty = draft !== null && isDepotDraftDirty(draft, sites);
-    const radiusTooWide =
-        draft !== null && draft.radius_m >= DEPOT_RADIUS_WARN_M;
-    const editingSaved = draft !== null && draft.id !== "new";
 
-    useEffect(() => {
-        if (detailsRef.current && (draft || placing)) {
-            detailsRef.current.open = true;
-        }
-    }, [draft, placing]);
-
-    useEffect(() => {
-        if (revealToken > 0 && detailsRef.current) {
-            detailsRef.current.open = true;
-        }
-    }, [revealToken]);
-
-    return (
-        <details id="depots" ref={detailsRef} className={styles.panel}>
-            <summary>Depots ({sites.length})</summary>
-            {loadError && (
-                <div className={styles.loadError}>
-                    <RetryMessage message={loadError} onRetry={onRetryLoad} />
+    if (canEdit && draft) {
+        const editingSaved = draft.id !== "new";
+        return (
+            <section className={styles.card} aria-label={editingSaved ? "Depot bearbeiten" : "Depot anlegen"}>
+                <div className={styles.cardHead}>
+                    <span className={styles.kindTag}>Depot</span>
+                    <h2 className={styles.title}>{editingSaved ? "Bearbeiten" : "Neues Depot"}</h2>
                 </div>
-            )}
-            {sites.length === 0 && draft === null && !loadError && (
-                <>
-                    <p className={styles.empty}>Keine Depots angelegt.</p>
-                    {canEdit && (
-                        <p className={styles.hint}>
-                            Der Kreis ist nur die Fläche. Stammstandort setzt
-                            du danach am{" "}
-                            <Link to="/vehicles">Fahrzeug</Link> oder per{" "}
-                            <Link to="/vehicles/import">Import</Link>.
-                        </p>
-                    )}
-                </>
-            )}
-            {sites.length > 0 && (
-                <ul className={styles.list}>
-                    {sites.map((site) => {
-                        const isSelected = site.id === selectedId;
-                        const showViewIcons =
-                            canEdit &&
-                            isSelected &&
-                            !(editingSaved && dirty && draft?.id === site.id);
-
-                        return (
-                            <li
-                                key={site.id}
-                                className={
-                                    isSelected ? styles.itemSelected : styles.item
-                                }
-                            >
-                                <div className={styles.head}>
-                                    <button
-                                        type="button"
-                                        className={styles.nameButton}
-                                        aria-pressed={isSelected}
-                                        disabled={dirty}
-                                        onClick={() => onSelect(site)}
-                                    >
-                                        {site.name}
-                                    </button>
-                                    {showViewIcons && (
-                                        <div className={styles.icons}>
-                                            {draft?.id !== site.id && (
-                                                <button
-                                                    type="button"
-                                                    className={styles.iconButton}
-                                                    aria-label={`${site.name} bearbeiten`}
-                                                    onClick={() => onEdit(site)}
-                                                >
-                                                    <PencilIcon />
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                className={`${styles.iconButton} ${styles.iconDanger}`}
-                                                aria-label={`${site.name} löschen`}
-                                                onClick={() => onAskDelete(site)}
-                                            >
-                                                <TrashIcon />
-                                            </button>
-                                        </div>
-                                    )}
-                                    {isSelected && !dirty && (
-                                        <button
-                                            type="button"
-                                            className={styles.iconButton}
-                                            aria-label="Auswahl aufheben"
-                                            title="Auswahl aufheben"
-                                            onClick={onDeselect}
-                                        >
-                                            <CloseIcon />
-                                        </button>
-                                    )}
-                                </div>
-                                <button
-                                    type="button"
-                                    className={styles.statsButton}
-                                    disabled={dirty}
-                                    onClick={() => onSelect(site)}
-                                >
-                                    <span className={styles.stat}>
-                                        <span>Stammstandort</span>
-                                        <span className={styles.statValue}>
-                                            {site.home_count}
-                                        </span>
-                                    </span>
-                                    <span className={styles.stat}>
-                                        <span>Im Depot</span>
-                                        <span className={styles.statValue}>
-                                            {site.in_depot_count}
-                                        </span>
-                                    </span>
-                                    {site.other_home_count > 0 && (
-                                        <span className={styles.note}>
-                                            davon {site.other_home_count} mit
-                                            anderem Stammstandort
-                                        </span>
-                                    )}
-                                </button>
-                                {isSelected &&
-                                    canEdit &&
-                                    site.home_count === 0 && (
-                                        <p className={styles.assign}>
-                                            Stammstandort setzt du am{" "}
-                                            <Link to="/vehicles">
-                                                Fahrzeug
-                                            </Link>{" "}
-                                            oder per{" "}
-                                            <Link to="/vehicles/import">
-                                                Import
-                                            </Link>
-                                            . „Im Depot“ kommt von der Position
-                                            im Kreis.
-                                        </p>
-                                    )}
-                                {isSelected && site.home_count > 0 && (
-                                    <p className={styles.assign}>
-                                        <Link
-                                            to={`/vehicles?search=${encodeURIComponent(site.name)}`}
-                                        >
-                                            {site.home_count === 1
-                                                ? "1 Fahrzeug in der Liste"
-                                                : `${site.home_count} Fahrzeuge in der Liste`}
-                                        </Link>
-                                    </p>
-                                )}
-                            </li>
-                        );
-                    })}
-                </ul>
-            )}
-            {canEdit && draft === null && (
-                <button
-                    type="button"
-                    className={styles.add}
-                    disabled={dirty}
-                    onClick={onStartPlace}
-                >
-                    <SwapLabel swapped={placing} alt="Klicken abbrechen">
-                        Depot anlegen
-                    </SwapLabel>
-                </button>
-            )}
-            {placing && draft === null && (
-                <p className={styles.hint}>
-                    Klicke in die Karte, um den Mittelpunkt zu setzen.
-                </p>
-            )}
-            {canEdit && draft && (
                 <form
                     className={styles.editor}
                     onSubmit={(event) => {
@@ -287,89 +89,157 @@ export const DepotPanel = ({
                         id="depot-name"
                         size="sm"
                         fullWidth
+                        autoFocus
                         value={draft.name}
-                        onChange={(event) =>
-                            onDraftChange({
-                                ...draft,
-                                name: event.target.value,
-                            })
-                        }
+                        onChange={(event) => onDraftChange({ ...draft, name: event.target.value })}
                     />
-                    <label htmlFor="depot-radius">
-                        Radius {draft.radius_m} m
-                    </label>
+                    <label htmlFor="depot-radius">Kreis: {draft.radius_m} m</label>
                     <Input
                         id="depot-radius"
-                        className={styles.slider}
                         type="range"
                         min={DEPOT_RADIUS_MIN_M}
                         max={DEPOT_RADIUS_MAX_M}
                         step={50}
                         value={draft.radius_m}
-                        onChange={(event) =>
-                            onDraftChange({
-                                ...draft,
-                                radius_m: Number(event.target.value),
-                            })
-                        }
+                        onChange={(event) => onDraftChange({ ...draft, radius_m: Number(event.target.value) })}
                     />
-                    {radiusTooWide && (
+                    {draft.radius_m >= DEPOT_RADIUS_WARN_M && (
                         <p className={styles.warn} role="status">
-                            Der Kreis ist so groß, dass ein großer Teil der
-                            Stadt als Depot zählt.
+                            Der Kreis ist so groß, dass ein großer Teil der Stadt als Depot zählt.
                         </p>
                     )}
-                    <p className={styles.hint}>
-                        Ziehe den Punkt in der Mitte, um das Depot zu
-                        verschieben.
-                    </p>
-                    {dirty && (
-                        <p className={styles.hint}>
-                            Speichern oder abbrechen, um ein anderes Depot zu
-                            wählen.
-                        </p>
-                    )}
+                    <p className={styles.muted}>Den Punkt in der Mitte auf der Karte ziehen, um das Depot zu verschieben.</p>
                     {saveError && (
                         <p className={styles.error} role="alert">
                             {saveError}
                         </p>
                     )}
-                    {dirty && (
-                        <div className={styles.actions}>
-                            <button
+                    <div className={styles.cardActions}>
+                        {editingSaved && selected && (
+                            <Button
                                 type="button"
-                                className={styles.action}
-                                onClick={onCancel}
+                                variant="dangerOutline"
+                                size="sm"
+                                className={styles.actionsStart}
                                 disabled={isSaving}
+                                onClick={() => onAskDelete(selected)}
                             >
-                                <CloseIcon />
-                                Abbrechen
-                            </button>
-                            <button
-                                type="submit"
-                                className={`${styles.action} ${styles.actionPrimary}`}
-                                disabled={
-                                    isSaving || draft.name.trim().length === 0
-                                }
-                            >
-                                <CheckIcon />
-                                Speichern
-                            </button>
-                            {selected && draft.id === selected.id && (
-                                <button
-                                    type="button"
-                                    className={`${styles.iconButton} ${styles.iconDanger} ${styles.actionDelete}`}
-                                    aria-label={`${selected.name} löschen`}
-                                    onClick={() => onAskDelete(selected)}
-                                    disabled={isSaving}
-                                >
-                                    <TrashIcon />
-                                </button>
-                            )}
-                        </div>
-                    )}
+                                Löschen
+                            </Button>
+                        )}
+                        <Button type="button" variant="secondary" size="sm" disabled={isSaving} onClick={onCancel}>
+                            Abbrechen
+                        </Button>
+                        <Button
+                            type="submit"
+                            size="sm"
+                            busy={isSaving}
+                            busyLabel="Speichert…"
+                            disabled={!dirty || draft.name.trim().length === 0}
+                        >
+                            Speichern
+                        </Button>
+                    </div>
                 </form>
+            </section>
+        );
+    }
+
+    if (placing) {
+        return (
+            <section className={styles.card} aria-label="Depot anlegen">
+                <div className={styles.cardHead}>
+                    <span className={styles.kindTag}>Depot</span>
+                    <h2 className={styles.title}>Neues Depot</h2>
+                </div>
+                <p className={styles.muted}>Klicke in die Karte, wo das Depot liegt.</p>
+                {saveError && (
+                    <p className={styles.error} role="alert">
+                        {saveError}
+                    </p>
+                )}
+                <div className={styles.cardActions}>
+                    <Button variant="secondary" size="sm" onClick={onCancel}>
+                        Abbrechen
+                    </Button>
+                </div>
+            </section>
+        );
+    }
+
+    if (!selected) {
+        return loadError ? (
+            <section className={styles.card} aria-label="Depots">
+                <RetryMessage message={loadError} onRetry={onRetryLoad} />
+            </section>
+        ) : saveError ? (
+            <section className={styles.card} aria-label="Depot">
+                <p className={styles.error} role="alert">
+                    {saveError}
+                </p>
+            </section>
+        ) : null;
+    }
+
+    return (
+        <section className={styles.card} aria-label={`Depot ${selected.name}`}>
+            <div className={styles.cardHead}>
+                <span className={styles.kindTag}>Depot</span>
+                <h2 className={styles.title}>{selected.name}</h2>
+                <button type="button" className={styles.close} aria-label="Auswahl aufheben" onClick={onDeselect}>
+                    ✕
+                </button>
+            </div>
+            <p className={styles.lead}>
+                Stammstandort von{" "}
+                <b>
+                    {selected.home_count === 1 ? "1 Fahrzeug" : `${formatCount(selected.home_count)} Fahrzeugen`}
+                </b>
+            </p>
+            {selected.home_count > 0 && (
+                <>
+                    <StatusBar site={selected} />
+                    <ul className={styles.legend}>
+                        {STATUS_ROWS.map(([key, status]) => (
+                            <li key={key}>
+                                <span className={styles.dot} data-status={key} aria-hidden="true" />
+                                {VEHICLE_STATUS_LABELS[status]}
+                                <b>{formatCount(selected.home_status[key])}</b>
+                            </li>
+                        ))}
+                    </ul>
+                </>
             )}
-        </details>
+            <p className={styles.lead}>
+                Jetzt im Depot: <b>{formatCount(selected.in_depot_count)}</b>
+                {selected.other_home_count > 0 && (
+                    <span className={styles.muted}> · davon {formatCount(selected.other_home_count)} von anderswo</span>
+                )}
+            </p>
+            {selected.home_count > 0 ? (
+                <Link className={styles.link} to={`/vehicles?search=${encodeURIComponent(selected.name)}`}>
+                    {selected.home_count === 1 ? "1 Fahrzeug in der Liste" : `${formatCount(selected.home_count)} Fahrzeuge in der Liste`}
+                </Link>
+            ) : (
+                canEdit && (
+                    <p className={styles.muted}>
+                        Stammstandort setzt du am <Link to="/vehicles">Fahrzeug</Link> oder per{" "}
+                        <Link to="/vehicles/import">Import</Link>. „Im Depot“ kommt von der Position im Kreis.
+                    </p>
+                )
+            )}
+            {saveError && (
+                <p className={styles.error} role="alert">
+                    {saveError}
+                </p>
+            )}
+            {canEdit && (
+                <div className={styles.cardActions}>
+                    <Button variant="secondary" size="sm" onClick={() => onEdit(selected)}>
+                        Bearbeiten
+                    </Button>
+                </div>
+            )}
+        </section>
     );
 };

@@ -18,7 +18,7 @@ beforeEach(() => {
 
 describe("SimToggle", () => {
     it("holds the button's place while loading and shows nothing when there is no simulator", async () => {
-        vi.mocked(getSim).mockResolvedValue({ running: true, available: false });
+        vi.mocked(getSim).mockResolvedValue({ running: true, available: false, time_scale: 5 });
         const { container } = render(<SimToggle />);
 
         // Loading: a hidden placeholder, so the header does not shift.
@@ -35,41 +35,41 @@ describe("SimToggle", () => {
     });
 
     it("pauses and resumes the simulation of the company", async () => {
-        vi.mocked(getSim).mockResolvedValue({ running: true, available: true });
+        vi.mocked(getSim).mockResolvedValue({ running: true, available: true, time_scale: 5 });
         vi.mocked(setSimRunning)
-            .mockResolvedValueOnce({ running: false, available: true })
-            .mockResolvedValueOnce({ running: true, available: true });
+            .mockResolvedValueOnce({ running: false, available: true, time_scale: 5 })
+            .mockResolvedValueOnce({ running: true, available: true, time_scale: 5 });
         render(<SimToggle />);
 
         fireEvent.click(
-            await screen.findByRole("button", { name: "Simulation pausieren" }),
+            await screen.findByRole("button", { name: "Demo Simulation pausieren" }),
         );
         await waitFor(() => expect(setSimRunning).toHaveBeenLastCalledWith(false));
         expect(
-            await screen.findByRole("button", { name: "Simulation starten" }),
+            await screen.findByRole("button", { name: "Demo Simulation starten" }),
         ).toBeEnabled();
 
-        fireEvent.click(screen.getByRole("button", { name: "Simulation starten" }));
+        fireEvent.click(screen.getByRole("button", { name: "Demo Simulation starten" }));
         await waitFor(() => expect(setSimRunning).toHaveBeenLastCalledWith(true));
         expect(
-            await screen.findByRole("button", { name: "Simulation pausieren" }),
+            await screen.findByRole("button", { name: "Demo Simulation pausieren" }),
         ).toBeInTheDocument();
     });
 
     it("says so when the change fails and keeps the state", async () => {
-        vi.mocked(getSim).mockResolvedValue({ running: true, available: true });
+        vi.mocked(getSim).mockResolvedValue({ running: true, available: true, time_scale: 5 });
         vi.mocked(setSimRunning).mockRejectedValue(new Error("Nur für Disponenten."));
         render(<SimToggle />);
 
         fireEvent.click(
-            await screen.findByRole("button", { name: "Simulation pausieren" }),
+            await screen.findByRole("button", { name: "Demo Simulation pausieren" }),
         );
 
         expect(await screen.findByRole("alert")).toHaveTextContent(
             "Nur für Disponenten.",
         );
         expect(
-            screen.getByRole("button", { name: "Simulation pausieren" }),
+            screen.getByRole("button", { name: "Demo Simulation pausieren" }),
         ).toBeEnabled();
     });
 });

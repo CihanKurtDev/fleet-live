@@ -74,8 +74,8 @@ export const BriefingRateChart = ({
             compact
             kicker="Nur Tempo"
             title="Wie viele Fahrer waren zu schnell?"
-            lead="Bezogen auf den heutigen Bestand (alle Fahrer mit Fahrzeug): wie viel Prozent hatten in dem Monat mindestens einen Tempo-Verstoß. Ein Fahrer zählt einmal — egal ob er einmal oder zehnmal zu schnell war."
-            note="Die gestrichelte Linie ist der Schnitt der Vormonate. Steigt die Kurve darüber, wird es ungewöhnlich."
+            lead="Anteil der Fahrer, die im Monat mindestens einmal zu schnell waren."
+            note="Gestrichelt: der Schnitt der Vormonate. Darüber ist ungewöhnlich."
             blank={
                 empty
                     ? "Die Kurve beginnt im ersten Monat, in dem Fahrzeuge mit Fahrer unterwegs sind."

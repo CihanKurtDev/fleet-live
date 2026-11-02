@@ -95,7 +95,7 @@ describe("the example files that ship with the app", () => {
                 .send({ preview_id: preview.body.data.preview_id })
                 .expect(200);
 
-            assert.equal(commit.body.data.failed_rows, 0);
+            assert.equal(commit.body.data.failed_rows, 0, JSON.stringify(commit.body.data.errors));
             assert.ok(commit.body.data.created_vehicles >= 4);
 
             const vehicles = driving();

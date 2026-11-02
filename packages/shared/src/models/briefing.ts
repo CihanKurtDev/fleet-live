@@ -5,8 +5,9 @@ export const BRIEFING_HISTORY_MONTHS = 9;
 
 export type BriefingHistoryMonth = {
     month: string;
-    active_drivers: number;
-    active_vehicles: number;
+    /** Drivers and vehicles with a trip that month; `null` once those trips are past the retention. */
+    active_drivers: number | null;
+    active_vehicles: number | null;
     speeding_drivers: number;
     speeding_events: number;
     speeding_high: number;
@@ -45,8 +46,8 @@ export type BriefingCounts = {
     in_depot: number;
     /** Fahrzeuge mit laufender Tempoüberschreitung (`speeding_open`). */
     speeding: number;
-    /** Fahrzeuge in der Werkstatt (Filter `in_workshop`). */
-    in_workshop: number;
+    /** Fahren heute nicht: Werkstatt, nicht fahrbereit, außer Dienst (Filter `unavailable`). */
+    unavailable: number;
 };
 
 export type BriefingData = {

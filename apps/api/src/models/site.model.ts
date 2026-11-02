@@ -1,6 +1,7 @@
 import {
     DEPOT_RADIUS_DEFAULT_M,
     type Site,
+    type SiteHomeStatus,
     type SiteInput,
     type SitePatch,
     type TelemetryPatch,
@@ -66,11 +67,19 @@ const SELECT_SITE_COUNTS = `
     SELECT
         s.id,
         COALESCE(h.cnt, 0) AS home_count,
+        COALESCE(h.driving, 0) AS home_driving,
+        COALESCE(h.idle, 0) AS home_idle,
+        COALESCE(h.stopped, 0) AS home_stopped,
+        COALESCE(h.offline, 0) AS home_offline,
         COALESCE(d.cnt, 0) AS in_depot_count,
         COALESCE(o.cnt, 0) AS other_home_count
     FROM sites s
     LEFT JOIN (
-        SELECT home_site_id AS sid, COUNT(*) AS cnt
+        SELECT home_site_id AS sid, COUNT(*) AS cnt,
+            SUM(status = 'DRIVING') AS driving,
+            SUM(status = 'IDLE') AS idle,
+            SUM(status = 'STOPPED') AS stopped,
+            SUM(status = 'OFFLINE') AS offline
         FROM vehicles
         WHERE company_id = ?
           AND home_site_id IS NOT NULL
@@ -98,12 +107,14 @@ const SELECT_SITE_COUNTS = `
 
 type CountRow = {
     home_count: number;
+    home_status: SiteHomeStatus;
     in_depot_count: number;
     other_home_count: number;
 };
 
 const EMPTY_COUNTS: CountRow = {
     home_count: 0,
+    home_status: { driving: 0, idle: 0, stopped: 0, offline: 0 },
     in_depot_count: 0,
     other_home_count: 0,
 };
@@ -487,6 +498,10 @@ export class SiteModel {
         ) as Array<{
             id: number;
             home_count: number;
+            home_driving: number;
+            home_idle: number;
+            home_stopped: number;
+            home_offline: number;
             in_depot_count: number;
             other_home_count: number;
         }>;
@@ -496,6 +511,12 @@ export class SiteModel {
                 row.id,
                 {
                     home_count: Number(row.home_count),
+                    home_status: {
+                        driving: Number(row.home_driving),
+                        idle: Number(row.home_idle),
+                        stopped: Number(row.home_stopped),
+                        offline: Number(row.home_offline),
+                    },
                     in_depot_count: Number(row.in_depot_count),
                     other_home_count: Number(row.other_home_count),
                 },
@@ -512,6 +533,7 @@ export class SiteModel {
             radius_m: site.radius_m,
             is_default: site.is_default === 1,
             home_count: counts.home_count,
+            home_status: counts.home_status,
             in_depot_count: counts.in_depot_count,
             other_home_count: counts.other_home_count,
         };

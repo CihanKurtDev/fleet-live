@@ -6,15 +6,18 @@ import {
 } from "@fleet-live/shared";
 
 import { stmt } from "../db/statements";
-import { NotFoundError } from "../lib/errors";
+import { AppError, NotFoundError } from "../lib/errors";
 
 export type OdometerActor = { id: number; name: string };
 
 const SELECT_KM = `
-    SELECT CAST(v.odometer_m / 1000 AS INTEGER) AS km
+    SELECT CAST(v.odometer_m / 1000 AS INTEGER) AS km, v.odometer_reported_at AS reported_at
     FROM vehicles v
     WHERE v.id = ? AND v.company_id = ?
 `;
+
+const FROM_DEVICE_MESSAGE =
+    "Der Kilometerstand kommt vom Fahrzeug, wie auf dem Tacho, und lässt sich nicht korrigieren.";
 
 const SET_KM = `UPDATE vehicles SET odometer_m = ? WHERE id = ?`;
 
@@ -35,17 +38,27 @@ const SELECT_READINGS = `
 
 /**
  * Der Kilometerstand eines Fahrzeugs. Er steht in Metern am Fahrzeug
- * (`vehicles.odometer_m`) und wächst mit jeder gemeldeten Teilstrecke
+ * (`vehicles.odometer_m`). Liest das Gerät den Tacho (LKW über FMS), meldet
+ * es ihn mit jedem Ping; sonst wächst er mit jeder gemeldeten Teilstrecke
  * (`TripModel.appendPoints`, dieselben Meter wie `trips.distance_m`). Wer ihn
- * setzt (Anlegen, Import, Korrektur), schreibt eine Zeile in den Verlauf.
+ * setzt (Anlegen, Import, Korrektur), schreibt eine Zeile in den Verlauf; ein
+ * Stand vom Tacho wird nicht überschrieben.
  */
 export class OdometerModel {
+    private static row(vehicleId: number, companyId: number) {
+        return stmt(SELECT_KM).get(vehicleId, companyId) as
+            | { km: number | null; reported_at: string | null }
+            | undefined;
+    }
+
     /** Current reading of a vehicle of the company; `undefined` for another company's. */
     static km(vehicleId: number, companyId: number): number | null | undefined {
-        const row = stmt(SELECT_KM).get(vehicleId, companyId) as
-            | { km: number | null }
-            | undefined;
-        return row ? row.km : undefined;
+        return this.row(vehicleId, companyId)?.km;
+    }
+
+    /** The device reports the dashboard reading: nobody sets it by hand or by import. */
+    static fromDevice(vehicleId: number, companyId: number): boolean {
+        return Boolean(this.row(vehicleId, companyId)?.reported_at);
     }
 
     /**
@@ -60,11 +73,19 @@ export class OdometerModel {
         actor: OdometerActor | null,
         note: string | null = null,
     ): boolean {
-        const previous = this.km(vehicleId, companyId);
+        const row = this.row(vehicleId, companyId);
 
-        if (previous === undefined) {
+        if (row === undefined) {
             throw new NotFoundError("Fahrzeug nicht gefunden.");
         }
+
+        if (row.reported_at) {
+            throw new AppError(409, "ODOMETER_FROM_DEVICE", FROM_DEVICE_MESSAGE, {
+                km: FROM_DEVICE_MESSAGE,
+            });
+        }
+
+        const previous = row.km;
 
         if (previous === km) {
             return false;
@@ -84,9 +105,9 @@ export class OdometerModel {
     }
 
     static forVehicle(vehicleId: number, companyId: number): VehicleOdometer {
-        const km = this.km(vehicleId, companyId);
+        const row = this.row(vehicleId, companyId);
 
-        if (km === undefined) {
+        if (row === undefined) {
             throw new NotFoundError("Fahrzeug nicht gefunden.");
         }
 
@@ -95,6 +116,6 @@ export class OdometerModel {
             ODOMETER_HISTORY_LIMIT,
         ) as OdometerReading[];
 
-        return { km, readings };
+        return { km: row.km, reported_at: row.reported_at, readings };
     }
 }

@@ -1,7 +1,26 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { Vehicle } from "@fleet-live/shared";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../context/vehiclesContext", () => ({
+    useVehicles: () => ({ listEpoch: 0 }),
+}));
+
+vi.mock("../hooks/useDueSettings", () => ({
+    useDueSettings: () => ({ settings: { lead_days: 30, check_months: 6 } }),
+}));
+
+vi.mock("../api/alerts", () => ({
+    listAlerts: vi.fn().mockResolvedValue({
+        data: [{ id: 41, created_at: "2026-10-27 13:24:01" }],
+        meta: { total: 1 },
+    }),
+}));
+
+vi.mock("../api/drivers", () => ({
+    getDriver: vi.fn().mockResolvedValue({ id: 7, phone: "+49 170 6152496" }),
+}));
 
 import { VehicleHintsPanel } from "../components/alerts/VehicleHintsPanel";
 
@@ -21,6 +40,7 @@ const vehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({
     home_site_id: null,
     cost_center: null,
     odometer_km: null,
+    odometer_reported_at: null,
     latitude: 50.9,
     longitude: 6.9,
     speed: 80,
@@ -33,7 +53,10 @@ const vehicle = (overrides: Partial<Vehicle> = {}): Vehicle => ({
     current_driver_id: 7,
     availability: "READY",
     workshop: null,
+    workshop_task: null,
     open_damages: 0,
+    hu_state: "ok",
+    uvv_state: "ok",
     ...overrides,
 });
 
@@ -45,16 +68,13 @@ const renderHints = (v: Vehicle, canWrite = true) =>
     );
 
 describe("Hinweise: Kein Signal", () => {
-    it("shows it while the vehicle has no signal, with a link to its warning and no button", () => {
+    it("shows how long the vehicle is silent and whom to call, and no button", async () => {
         renderHints(
             vehicle({ status: "OFFLINE", open_alert_types: ["OFFLINE"], active_alerts: 1 }),
         );
 
-        expect(screen.getByText("Meldet sich nicht.")).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: "Zu den Warnungen" })).toHaveAttribute(
-            "href",
-            "/alerts?vehicle_id=3&type=OFFLINE",
-        );
+        expect(await screen.findByText(/^Meldet sich nicht seit \d+ Tag/)).toBeInTheDocument();
+        expect(screen.getByText("Fahrer anrufen: +49 170 6152496")).toBeInTheDocument();
         // The warning closes itself when the vehicle reports again.
         expect(screen.queryByRole("button", { name: "Erledigen" })).toBeNull();
     });
@@ -63,15 +83,59 @@ describe("Hinweise: Kein Signal", () => {
         renderHints(vehicle());
 
         expect(screen.getByText("Keine offenen Hinweise.")).toBeInTheDocument();
-        expect(screen.queryByText("Meldet sich nicht.")).toBeNull();
+        expect(screen.queryByText(/Meldet sich nicht/)).toBeNull();
     });
 
-    it("shows low fuel next to it", () => {
+    it("shows low fuel next to it", async () => {
         renderHints(
             vehicle({ status: "OFFLINE", open_alert_types: ["OFFLINE"], fuel_level: 4 }),
         );
 
-        expect(screen.getByText("Meldet sich nicht.")).toBeInTheDocument();
+        expect(await screen.findByText(/^Meldet sich nicht/)).toBeInTheDocument();
         expect(screen.getByText(/Tank bei 4 %/)).toBeInTheDocument();
+    });
+});
+
+describe("Hinweise: HU und UVV", () => {
+    const renderDue = (v: Vehicle) => {
+        const onPlan = vi.fn();
+        const onEditMaster = vi.fn();
+        render(
+            <MemoryRouter>
+                <VehicleHintsPanel vehicle={v} canWrite onPlanWorkshop={onPlan} onEditMaster={onEditMaster} />
+            </MemoryRouter>,
+        );
+        return { onPlan, onEditMaster };
+    };
+
+    it("plans a workshop stay for an overdue HU and asks for a missing date", () => {
+        const { onPlan, onEditMaster } = renderDue(vehicle({ hu_due_on: "2020-01", uvv_checked_on: null }));
+
+        fireEvent.click(screen.getByRole("button", { name: "Termin planen" }));
+        expect(onPlan).toHaveBeenCalledWith({ reason: "HU" });
+
+        fireEvent.click(screen.getByRole("button", { name: "Eintragen" }));
+        expect(onEditMaster).toHaveBeenCalledWith("uvv-checked");
+    });
+
+    it("names the open stay instead of planning a second one", () => {
+        renderDue(
+            vehicle({
+                hu_due_on: "2020-01",
+                workshop: {
+                    id: 4,
+                    state: "PLANNED",
+                    reasons: ["HU"],
+                    place: "Autohaus Weber",
+                    workshop_id: 1,
+                    planned_on: "2026-11-03",
+                    planned_time: null,
+                    expected_on: "2026-11-03",
+                },
+            }),
+        );
+
+        expect(screen.getByText(/Termin am 03\.11\.2026/)).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Termin planen" })).toBeNull();
     });
 });

@@ -1,5 +1,7 @@
 import {
     ALERT_TYPES,
+    berlinTodayIso,
+    vehicleDeadlines,
     isLowFuelLevel,
     speedBand,
     VEHICLE_STATUS_FILTER,
@@ -19,8 +21,9 @@ import type { KpiTileTone } from "../ui/KpiTiles/KpiTiles";
 import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
 import { WarningChip } from "../alerts/WarningChip";
 import chipStyles from "../alerts/WarningChip.module.scss";
-import { isReturnLate, shortDate } from "./workshopText";
+import { dayText, isReturnLate, shortDate } from "./workshopText";
 import { speedBandTitle, SPEED_BAND_COLORS } from "./speedBand";
+import { VEHICLE_TILE_HINTS } from "./vehicleTileHints";
 import { VehicleStatusChip } from "./VehicleStatusChip";
 import styles from "./vehicleTableConfig.module.scss";
 
@@ -34,6 +37,7 @@ const statusTile = (status: VehicleStatus) => ({
     id: VEHICLE_STATUS_FILTER[status],
     label: VEHICLE_STATUS_LABELS[status],
     count: VEHICLE_STATUS_FILTER[status],
+    hint: VEHICLE_TILE_HINTS.status,
 });
 
 export const vehicleFilters: Array<
@@ -56,6 +60,8 @@ type VehicleFilterOption = {
     label: string;
     count: keyof VehicleListCounts;
     tone?: KpiTileTone;
+    /** The tile's line under the number: what it counts. */
+    hint?: string;
 };
 
 /**
@@ -64,20 +70,23 @@ type VehicleFilterOption = {
  * tile is pressed and the toolbar shows the active filter.
  */
 export const vehicleTileFilters: VehicleFilterOption[] = [
-    { id: null, label: "Alle", count: "all" },
+    { id: null, label: "Alle", count: "all", hint: VEHICLE_TILE_HINTS.all },
     { ...statusTile("DRIVING"), tone: "positive" },
     statusTile("IDLE"),
     statusTile("STOPPED"),
     { ...statusTile("OFFLINE"), tone: "critical" },
-    { id: "in_workshop", label: "Werkstatt", count: "in_workshop" },
-    { id: "speeding", label: "Tempo jetzt", count: "speeding", tone: "critical" },
-    { id: "alerts", label: "Mit Warnung", count: "alerts", tone: "critical" },
-    { id: "low_fuel", label: "Wenig Tank", count: "low_fuel", tone: "warning" },
+    { id: "unavailable", label: "Ausfall", count: "unavailable", hint: VEHICLE_TILE_HINTS.unavailable },
+    { id: "speeding", label: "Tempo jetzt", count: "speeding", tone: "critical", hint: VEHICLE_TILE_HINTS.speeding },
+    { id: "alerts", label: "Mit Warnung", count: "alerts", tone: "critical", hint: VEHICLE_TILE_HINTS.alerts },
+    { id: "low_fuel", label: "Wenig Tank", count: "low_fuel", tone: "warning", hint: VEHICLE_TILE_HINTS.low_fuel },
 ];
 
 /** The rarer filters behind "Weitere Filter" in the toolbar. */
 export const vehicleMoreFilters: VehicleFilterOption[] = [
     { id: "unassigned", label: "Kein Fahrer", count: "unassigned" },
+    { id: "in_workshop", label: "In der Werkstatt", count: "in_workshop" },
+    { id: "deadline_overdue", label: "Frist abgelaufen", count: "deadline_overdue", tone: "critical" },
+    { id: "deadline_soon", label: "Frist bald fällig", count: "deadline_soon", tone: "warning" },
     { id: "in_depot", label: "Im Depot", count: "in_depot" },
     { id: "workshop_due", label: "Werkstatt fällig", count: "workshop_due" },
     { id: "out_of_service", label: "Außer Dienst", count: "out_of_service" },
@@ -87,20 +96,53 @@ export const vehicleMoreFilters: VehicleFilterOption[] = [
 ];
 
 /**
+ * A vehicle that is not in the workshop but has business there: the
+ * appointment (red when missed, „kein Fahrer“ when nobody takes it today),
+ * or finished and waiting there, or parked there without a stay. The same
+ * rows as the filter Werkstatt fällig, plus planned appointments. Short, so
+ * the warning chips after it still fit the column.
+ */
+function workshopHint(row: Vehicle) {
+    const text =
+        row.workshop_task === "missed"
+            ? "verpasst"
+            : row.workshop_task === "trip_no_driver"
+              ? "kein Fahrer"
+              : row.workshop_task === "pickup"
+                ? "abholen"
+                : row.workshop_task === "unplanned"
+                  ? "ohne Termin"
+                  : row.workshop?.state === "PLANNED"
+                    ? `Termin ${dayText(row.workshop.planned_on)}`
+                    : null;
+
+    if (!text) {
+        return null;
+    }
+
+    return (
+        <>
+            <span className={chipStyles.chip}>Werkstatt</span>
+            <span className={row.workshop_task === "missed" ? styles.late : styles.muted}>{text}</span>
+        </>
+    );
+}
+
+/**
  * „Werkstatt · fertig 31.10.“ (red when late), „Nicht fahrbereit“ or „Außer
  * Dienst“, and „Schaden“ for an open damage it can still be driven with.
  */
 function availabilityHint(row: Vehicle) {
     if (row.availability === "NOT_DRIVABLE") {
         return (
-            <span className={chipStyles.chip} data-type="SPEEDING">
+            <span className={chipStyles.chip} data-tone="danger">
                 Nicht fahrbereit
             </span>
         );
     }
 
     const damage =
-        row.open_damages > 0 ? <span className={chipStyles.chip} data-type="LOW_FUEL">Schaden</span> : null;
+        row.open_damages > 0 ? <span className={chipStyles.chip} data-tone="warning">Schaden</span> : null;
 
     if (row.availability === "OUT_OF_SERVICE") {
         return (
@@ -112,7 +154,12 @@ function availabilityHint(row: Vehicle) {
     }
 
     if (row.availability === "READY") {
-        return damage;
+        return (
+            <>
+                {workshopHint(row)}
+                {damage}
+            </>
+        );
     }
 
     if (row.availability !== "WORKSHOP" || !row.workshop) {
@@ -132,6 +179,80 @@ function availabilityHint(row: Vehicle) {
                 </span>
             )}
         </>
+    );
+}
+
+type DeadlineMark = "overdue" | "today" | "soon" | null;
+
+/**
+ * HU and UVV of a row as the list marks them: past, due today, or due within
+ * the company lead (`hu_state` / `uvv_state` from the server, the rule of
+ * /fristen). „Today“ is the same rule with a lead of 0 days.
+ */
+function deadlineMarks(row: Vehicle): Record<"HU" | "UVV", DeadlineMark> {
+    const dueToday = vehicleDeadlines(row, berlinTodayIso(), 0);
+    const mark = (reason: "HU" | "UVV", state: Vehicle["hu_state"]): DeadlineMark =>
+        state === "overdue"
+            ? "overdue"
+            : dueToday.find((deadline) => deadline.reason === reason)?.state === "soon"
+              ? "today"
+              : state === "soon"
+                ? "soon"
+                : null;
+
+    return { HU: mark("HU", row.hu_state), UVV: mark("UVV", row.uvv_state) };
+}
+
+/**
+ * „HU abgelaufen“, „UVV heute“, „HU/UVV abgelaufen“, unless the open workshop
+ * stay already takes care of it (then the Werkstatt hint says when).
+ */
+function deadlineHint(row: Vehicle) {
+    const covered = (reason: "HU" | "UVV") => row.workshop?.reasons.includes(reason) ?? false;
+    const marks = deadlineMarks(row);
+    const of = (state: DeadlineMark) =>
+        (["HU", "UVV"] as const).filter((reason) => marks[reason] === state && !covered(reason));
+    const expired = of("overdue");
+    const today = of("today");
+
+    if (expired.length === 0 && today.length === 0) {
+        return null;
+    }
+
+    return (
+        <>
+            {expired.length > 0 && (
+                <span className={chipStyles.chip} data-tone="accent">
+                    {expired.join("/")} abgelaufen
+                </span>
+            )}
+            {today.length > 0 && (
+                <span className={chipStyles.chip} data-tone="accent">
+                    {today.join("/")} heute
+                </span>
+            )}
+        </>
+    );
+}
+
+const MARK_TEXT: Record<Exclude<DeadlineMark, null>, string> = {
+    overdue: "abgelaufen",
+    today: "heute fällig",
+    soon: "bald fällig",
+};
+
+/** A deadline cell: yellow with a dot when past or due today, a ring when due within the lead. */
+function deadlineCell(text: string, mark: DeadlineMark) {
+    if (mark === null) {
+        return text;
+    }
+
+    return (
+        <span className={styles.deadline} data-state={mark} title={MARK_TEXT[mark]}>
+            <span className={styles.deadlineDot} aria-hidden="true" />
+            {text}
+            <span className={styles.srOnly}>, {MARK_TEXT[mark]}</span>
+        </span>
     );
 }
 
@@ -256,14 +377,14 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         displayText: "HU",
         width: "100px",
         sortable: true,
-        render: (value) => formatYearMonth(value),
+        render: (value, { row }) => deadlineCell(formatYearMonth(value), deadlineMarks(row).HU),
     },
     {
         key: "uvv_due_on",
         displayText: "UVV",
         width: "100px",
         sortable: true,
-        render: (value) => formatIsoDate(value),
+        render: (value, { row }) => deadlineCell(formatIsoDate(value), deadlineMarks(row).UVV),
     },
     {
         key: "active_alerts",
@@ -275,14 +396,16 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
         render: (_value, { row }) => {
             const types = warningTypes(row);
             const availability = availabilityHint(row);
+            const deadline = deadlineHint(row);
 
-            if (types.length === 0 && !availability) {
+            if (types.length === 0 && !availability && !deadline) {
                 return <span className={styles.muted}>—</span>;
             }
 
             return (
                 <span className={styles.chips}>
                     {availability}
+                    {deadline}
                     {types.map((type) => (
                         <WarningChip key={type} type={type} />
                     ))}

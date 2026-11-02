@@ -1,4 +1,5 @@
 import {
+    ALERT_RETENTION_DAYS,
     RETENTION_FALLBACK,
     type PrivacyPatch,
     type PrivacySettings,
@@ -83,5 +84,14 @@ export const PrivacyModel = {
         ) as { trip_retention_days: number | null } | undefined;
 
         return row?.trip_retention_days ?? config.tripRetentionDays;
+    },
+
+    /** Days resolved warnings of this company stay in the list before they are deleted. */
+    alertDays(companyId: number): number {
+        const row = stmt("SELECT alert_retention_days FROM companies WHERE id = ?").get(
+            companyId,
+        ) as { alert_retention_days: number | null } | undefined;
+
+        return row?.alert_retention_days ?? ALERT_RETENTION_DAYS;
     },
 };

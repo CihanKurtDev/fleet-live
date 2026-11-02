@@ -23,6 +23,8 @@ import { parseRecordedAt } from "@fleet-live/shared";
  *   most `MAX_RATE` times the real speed. A gap longer than `MAX_GAP_MS`, a
  *   lag over `MAX_BEHIND_MS` or a long pause of the frames (tab in the
  *   background) starts again at the right place instead of crawling after it.
+ *   A long gap after which the road begins where the vehicle stood is a stop:
+ *   it waits there and then drives off along the road.
  * - Dots, group symbols, the follow camera and the detail map's trail all
  *   read this one position. The class knows neither React nor Leaflet; the
  *   caller passes the clock (`performance.now()`), so tests can drive it.
@@ -76,6 +78,12 @@ export type PlaybackReport = RoadPoint & {
     road?: readonly RoadPoint[];
     /** The road points begin a new trip (`path_reset`). */
     newTrip?: boolean;
+    /**
+     * Index of `road[0]` in the trip line, when the caller draws that line:
+     * `passed` then counts its points exactly, even though a report lies
+     * between two of them and only becomes a point with the next road.
+     */
+    roadFrom?: number;
     /** Show this report at once (reduced motion). */
     jump?: boolean;
 };
@@ -210,6 +218,15 @@ const timeAlong = (
         t: timeAt(index),
     }));
 };
+
+/**
+ * After a long stand: the same place until one usual gap before `t`, so the
+ * stretch to `t` is driven at speed instead of crept along the whole stand.
+ */
+const standUntil = (from: Sample, t: number): Sample => ({
+    ...from,
+    t: Math.max(from.t, t - DEFAULT_GAP_MS),
+});
 
 export class VehiclePlayback {
     private readonly tracks = new Map<number, Track>();
@@ -351,6 +368,10 @@ export class VehiclePlayback {
             track.nextOrdinal = 0;
         }
 
+        if (report.roadFrom !== undefined && road.length > 0) {
+            track.nextOrdinal = report.roadFrom;
+        }
+
         // Ordinals: every road point is one point of the trip line; the report
         // is the last road point (or a new one when it lies apart from it).
         const points = road.map((roadPoint) => ({
@@ -373,11 +394,16 @@ export class VehiclePlayback {
             points.push({ ...point, line: track.line, ordinal: track.nextOrdinal++ });
         }
 
+        // It stood where this road begins (parked, then set off): a stop, not
+        // a lost signal. It waits there and drives the road in one usual gap.
+        const setOff =
+            road.length > 0 && meters(newest, road[0]!) <= MATCH_METERS;
+
         if (
             report.jump ||
             clockReset ||
             !joins ||
-            gap > MAX_GAP_MS
+            (gap > MAX_GAP_MS && !setOff)
         ) {
             // Shown at once: the stretch before it is not one drive we can play.
             const at = lastOf(points);
@@ -391,7 +417,13 @@ export class VehiclePlayback {
         }
 
         noteGap(track, gap);
-        track.samples.push(...timeAlong(newest, points, t, estimated));
+        const from = gap > MAX_GAP_MS ? standUntil(newest, t) : newest;
+
+        if (from !== newest) {
+            track.samples.push(from);
+        }
+
+        track.samples.push(...timeAlong(from, points, t, estimated));
         this.prune(
             track,
             Math.max(track.p, estimate - MAX_DELAY_MS - MAX_BEHIND_MS),
@@ -534,8 +566,18 @@ export class VehiclePlayback {
         ];
 
         for (let next = 1; next < anchors.length; next += 1) {
-            const from = lastOf(samples);
             const anchor = anchors[next]!;
+            let from = lastOf(samples);
+
+            if (
+                anchor.index !== anchors[next - 1]!.index &&
+                anchor.t - from.t > MAX_GAP_MS
+            ) {
+                // Stood there, then set off.
+                from = standUntil(from, anchor.t);
+                samples.push(from);
+            }
+
             const points =
                 anchor.index === anchors[next - 1]!.index
                     ? [{ ...vertices[anchor.index]!, line: lineId, ordinal: anchor.index }]

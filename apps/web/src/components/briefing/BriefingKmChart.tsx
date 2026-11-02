@@ -93,8 +93,8 @@ export const BriefingKmChart = ({
             compact
             kicker="Pro Kilometer"
             title="Passiert das oft — oder nur, weil viel gefahren wird?"
-            lead="Tempo-Vorfälle je 1.000 gefahrene Kilometer. Wenn die Flotte wächst oder mehr Touren fährt, bleibt die Zahl vergleichbar. Die Balken daneben: wie groß der Anteil der schweren Tempo-Vorfälle war."
-            note="Die Monatssumme bleibt, auch wenn alte Fahrten (der Verlauf auf der Karte) gelöscht werden."
+            lead="Tempo-Vorfälle je 1.000 km: vergleichbar, auch wenn die Flotte wächst."
+            note="Balken: Anteil der schweren Vorfälle."
             blank={
                 empty
                     ? "Die Balken erscheinen nach den ersten gefahrenen Kilometern."

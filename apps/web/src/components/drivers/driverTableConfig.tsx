@@ -33,6 +33,13 @@ export const driverTileOptions: DriverTileOption[] = [
         count: "without_vehicle",
         hint: "kein aktuelles Fahrzeug",
     },
+    {
+        id: "licence_driving",
+        label: "Führerschein",
+        count: "licence_driving",
+        hint: "abgelaufen, eingeteilt",
+        tone: "critical",
+    },
 ];
 
 export const driverColumns: TableColumn<Driver>[] = [

@@ -59,6 +59,22 @@ describe("the Auskunft about a driver", () => {
         ).run(mine);
         insertAlert(van.id, { driver_id: ada, message: "zu schnell", ended_at: "2026-10-20 08:11:00", resolved_at: "2026-10-20 09:00:00" });
         insertAlert(van.id, { driver_id: bob, message: "Bob zu schnell" });
+        const visit = (bringer: number, place: string, state: string) =>
+            db
+                .prepare(
+                    "INSERT INTO workshop_visits (vehicle_id, reasons, state, place, planned_on, planned_time, expected_on, bring_driver_id) VALUES (?, json_array('HU'), ?, ?, '2026-11-03', '08:00', '2026-11-03', ?)",
+                )
+                .run(van.id, state, place, bringer);
+        visit(ada, "Autohaus Weber", "PLANNED");
+        visit(bob, "Bobs Werkstatt", "CANCELLED");
+        const damage = (driverId: number, description: string) =>
+            db
+                .prepare(
+                    "INSERT INTO vehicle_damages (vehicle_id, occurred_on, occurred_time, description, severity, drivable, latitude, longitude, driver_id, driver_name) VALUES (?, '2026-10-22', '07:42', ?, 'SEVERE', 0, 50.95, 6.93, ?, 'x')",
+                )
+                .run(van.id, description, driverId);
+        damage(ada, "Reifen geplatzt");
+        damage(bob, "Bobs Delle");
 
         const response = await agent
             .get(`/api/export/drivers/${ada}`)
@@ -74,9 +90,11 @@ describe("the Auskunft about a driver", () => {
             "fahrten.csv",
             "fahrzeuge.csv",
             "liesmich.txt",
+            "schaeden.csv",
             "stammdaten.csv",
             "warnungen.csv",
             "wege.geojson",
+            "werkstatt.csv",
         ]);
         const text = (name: string) => strFromU8(files[name] as Uint8Array);
         assert.match(text("stammdaten.csv"), /Ada Lovelace;0221 123;2027-05-31/);
@@ -85,6 +103,10 @@ describe("the Auskunft about a driver", () => {
         assert.match(text("ereignisse.csv"), /Zu schnell/);
         assert.equal(text("warnungen.csv").trim().split("\r\n").length, 2);
         assert.doesNotMatch(text("warnungen.csv"), /Bob/);
+        assert.match(text("werkstatt.csv"), /K-AU 1;HU;Fahrer bringt;Autohaus Weber;2026-11-03;08:00;Geplant/);
+        assert.doesNotMatch(text("werkstatt.csv"), /Bobs Werkstatt/);
+        assert.match(text("schaeden.csv"), /K-AU 1;2026-10-22;07:42;Reifen geplatzt;schwer;Nein;50.95;6.93;0;Offen/);
+        assert.doesNotMatch(text("schaeden.csv"), /Bobs Delle/);
 
         const routes = JSON.parse(text("wege.geojson"));
         assert.equal(routes.features.length, 1);

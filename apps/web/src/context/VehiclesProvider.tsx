@@ -108,6 +108,14 @@ export const VehiclesProvider = ({
                     ...(patch.speeding_open !== undefined
                         ? { speeding_open: patch.speeding_open }
                         : {}),
+                    // The reading grows with the ping; a dashboard reading
+                    // is as new as the ping that carried it.
+                    ...(patch.odometer_km !== undefined
+                        ? { odometer_km: patch.odometer_km }
+                        : {}),
+                    ...(patch.odometer_from_device
+                        ? { odometer_reported_at: patch.recorded_at }
+                        : {}),
                 };
             }
 

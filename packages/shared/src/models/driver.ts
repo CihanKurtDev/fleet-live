@@ -48,9 +48,21 @@ export type DriverVehicle = {
     availability: VehicleAvailability;
 };
 
+/** A planned workshop trip this driver is to bring a vehicle on. */
+export type DriverWorkshopTransport = {
+    visit_id: number;
+    vehicle_id: number;
+    license_plate: string;
+    place: string;
+    planned_on: string;
+    planned_time: string | null;
+};
+
 export type DriverDetail = Driver & {
     vehicles: DriverVehicle[];
     current_vehicle: DriverVehicle | null;
+    /** Planned workshop trips, soonest first. */
+    workshop_transports: DriverWorkshopTransport[];
 };
 
 /** Numbers for the tiles on `/drivers`; they follow the search only. */
@@ -60,6 +72,8 @@ export type DriverListCounts = {
     talk: number;
     /** No current vehicle. */
     without_vehicle: number;
+    /** Licence expired and still a current vehicle. */
+    licence_driving: number;
 };
 
 export type DriverListMeta = {
@@ -163,6 +177,14 @@ export const driverListQuerySchema = z.object({
             .transform(() => true as const)
             .optional(),
     ),
+    /** `true`: Führerschein abgelaufen und trotzdem ein aktuelles Fahrzeug. */
+    licence_driving: z.preprocess(
+        emptyToUndefined,
+        z
+            .enum(["true"], { error: "Führerschein-Filter muss true sein." })
+            .transform(() => true as const)
+            .optional(),
+    ),
 });
 
 export type DriverListQuery = z.infer<typeof driverListQuerySchema>;
@@ -203,6 +225,10 @@ export function serializeDriverListQuery(
 
     if (query.without_vehicle) {
         params.set("without_vehicle", "true");
+    }
+
+    if (query.licence_driving) {
+        params.set("licence_driving", "true");
     }
 
     return params;

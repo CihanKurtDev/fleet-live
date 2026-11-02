@@ -1,4 +1,4 @@
-import type { GeoPoint } from "@fleet-live/shared";
+import type { GeoPoint, VehicleType } from "@fleet-live/shared";
 import { haversineMeters, pathLengthMeters } from "../lib/geo";
 import { ROUTE_GEOMETRIES } from "./routeGeometries";
 
@@ -28,6 +28,21 @@ export const SIM_PING_SECONDS = 5;
 export const TIME_SCALE = 5;
 export const CITY_LIMIT_KMH = 50;
 export const HIGHWAY_LIMIT_KMH = 120;
+/** The stretch between town and motorway (a Zubringer), as one class. */
+export const RAMP_LIMIT_KMH = 80;
+
+/**
+ * Road classes of the simulation per vehicle kind, steps like signs, never a
+ * ramp of values: a truck has its own, lower classes outside town. These are
+ * the simulation's road classes, not legal limits.
+ */
+export const SIM_CLASS_LIMITS: Record<"default" | "TRUCK", { city: number; ramp: number; highway: number }> = {
+    default: { city: CITY_LIMIT_KMH, ramp: RAMP_LIMIT_KMH, highway: HIGHWAY_LIMIT_KMH },
+    TRUCK: { city: CITY_LIMIT_KMH, ramp: 60, highway: 80 },
+};
+
+/** A simulated truck is governed: it never shows more than this. */
+export const SIM_TRUCK_GOVERNOR_KMH = 89;
 /** Jedes 8. Fahrzeug darf über dem Klassenlimit fahren, sonst gibt es nie SPEEDING. */
 export const SIM_OVERSPEED_EVERY = 8;
 /**
@@ -38,8 +53,8 @@ export const SIM_OVERSPEED_EVERY = 8;
 export const SIM_OVERSPEED_STRETCH_M = 4_000;
 export const SIM_OVERSPEED_SHARE = 0.2;
 /** Wie weit über dem Limit, je Abschnitt verschieden (Stadt 54–68, Autobahn 130–162). */
-export const SIM_OVERSPEED_MIN_FACTOR = 1.08;
-export const SIM_OVERSPEED_MAX_FACTOR = 1.35;
+export const SIM_OVERSPEED_MIN_FACTOR = 1.05;
+export const SIM_OVERSPEED_MAX_FACTOR = 1.3;
 
 const ROUTE_META: Array<{ id: string; from: string; to: string }> = [
     { id: "koeln-duesseldorf", from: "Köln", to: "Düsseldorf" },
@@ -70,7 +85,45 @@ type Progress = {
     direction: 1 | -1;
     /** Fahrten dieses Fahrzeugs auf der Strecke; jede rast woanders. */
     lap: number;
+    /** A place next to the road the vehicle drives to and parks at (a workshop). */
+    dest?: { frac: number; point: LatLng };
+    /** Where it parked off the road; the next drive starts from there. */
+    parkedAt?: LatLng;
+    /**
+     * A stretch off the baked roads, driven straight over several ticks: from
+     * the road to a destination (then it parks) or from where it parked back
+     * to its road. There is no routing at runtime, so a place anywhere is
+     * reached the same way, a workshop beside the road or one in Budapest.
+     */
+    leg?: { from: LatLng; to: LatLng; done: number; length: number; park: boolean };
 };
+
+/** A stretch off the road longer than this is driven at motorway speed. */
+const LEG_HIGHWAY_M = 5_000;
+
+/**
+ * Sends a vehicle to a place, wherever it is: along its road to the point
+ * nearest the place, then straight there, where it parks (ignition off).
+ * Returns false when the vehicle has not moved yet (no road known).
+ */
+export function setSimDestination(vehicleId: number, point: LatLng): boolean {
+    const state = progressByVehicle.get(vehicleId);
+    const route = state && SIM_ROUTES.find((entry) => entry.id === state.routeId);
+
+    if (!state || !route) {
+        return false;
+    }
+
+    if (state.dest && haversineMeters(state.dest.point, point) < 1) {
+        return true;
+    }
+
+    const frac = nearestFraction(route.points, point);
+
+    state.dest = { frac, point };
+    state.direction = frac >= state.frac ? 1 : -1;
+    return true;
+}
 
 const progressByVehicle = new Map<number, Progress>();
 const lengthCache = new WeakMap<LatLng[], number>();
@@ -399,32 +452,19 @@ function distanceToRoute(route: SimRoute, pos: LatLng): number {
     return haversineMeters(pos, onRoute);
 }
 
-export function speedLimitKmh(frac: number): number {
+export function speedLimitKmh(frac: number, vehicleType: VehicleType | null = null): number {
     const clamped = Math.min(1, Math.max(0, frac));
-    const cityEnd = 0.08;
-    const rampEnd = 0.15;
-    const highwayEnd = 0.85;
-    const exitRampEnd = 0.92;
+    const classes = SIM_CLASS_LIMITS[vehicleType === "TRUCK" ? "TRUCK" : "default"];
 
-    if (clamped < cityEnd) {
-        return CITY_LIMIT_KMH;
+    if (clamped < 0.08 || clamped >= 0.92) {
+        return classes.city;
     }
 
-    if (clamped < rampEnd) {
-        const t = (clamped - cityEnd) / (rampEnd - cityEnd);
-        return CITY_LIMIT_KMH + (HIGHWAY_LIMIT_KMH - CITY_LIMIT_KMH) * t;
+    if (clamped < 0.15 || clamped >= 0.85) {
+        return classes.ramp;
     }
 
-    if (clamped < highwayEnd) {
-        return HIGHWAY_LIMIT_KMH;
-    }
-
-    if (clamped < exitRampEnd) {
-        const t = (clamped - highwayEnd) / (exitRampEnd - highwayEnd);
-        return HIGHWAY_LIMIT_KMH + (CITY_LIMIT_KMH - HIGHWAY_LIMIT_KMH) * t;
-    }
-
-    return CITY_LIMIT_KMH;
+    return classes.highway;
 }
 
 export function simExceedsClassLimit(vehicleId: number): boolean {
@@ -468,10 +508,12 @@ export function simOverspeedFactor(
         return 1;
     }
 
+    // Mostly a little over, now and then a lot: squared, so small overshoots
+    // are common and big ones rare, as on real roads.
     return (
         SIM_OVERSPEED_MIN_FACTOR +
         (SIM_OVERSPEED_MAX_FACTOR - SIM_OVERSPEED_MIN_FACTOR) *
-            unitHash(...key, 1)
+            unitHash(...key, 1) ** 2
     );
 }
 
@@ -538,6 +580,8 @@ export type SimTick = {
      * `spreadOnRoute`): die bisherige Fahrt endet, eine neue beginnt dort.
      */
     relocated: boolean;
+    /** Reached its destination and parked there: the device reports ignition off. */
+    parked: boolean;
 };
 
 /** Näher als das an einem anderen Fahrzeug derselben Strecke gilt als Kolonne. */
@@ -557,6 +601,10 @@ function spreadOnRoute(
     routeId: string,
     frac: number,
     length: number,
+    /** The vehicle's home (its depot), else where it stands: only roads near it count. */
+    anchor: LatLng,
+    /** Away from home: always move, crowded or not. */
+    force = false,
 ): { routeId: string; frac: number; direction: 1 | -1 } | null {
     const route = SIM_ROUTES.find((entry) => entry.id === routeId);
 
@@ -598,15 +646,16 @@ function spreadOnRoute(
         }
     }
 
-    if (!crowded) {
+    if (!crowded && !force) {
         return null;
     }
 
-    // The widest free stretch on any road, in metres: a fleet sends its
-    // vehicles over all its roads, not all of them onto the nearest one.
+    // The widest free stretch on the roads near home, in metres: a fleet
+    // sends its vehicles over its roads, not across the country.
     let best = { routeId, from: 0, to: 1, meters: -1 };
+    const nearHome = SIM_ROUTES.filter((candidate) => distanceToRoute(candidate, anchor) <= NEAR_ROUTE_METERS);
 
-    for (const candidate of SIM_ROUTES) {
+    for (const candidate of nearHome.length > 0 ? nearHome : [route]) {
         const candidateLength = routeLengthMeters(candidate.points);
         const stops = [
             0,
@@ -632,24 +681,85 @@ function spreadOnRoute(
     };
 }
 
+/** One tick on a stretch off the road: straight on, then park or join the road. */
+function legTick(
+    vehicleId: number,
+    state: Progress,
+    leg: NonNullable<Progress["leg"]>,
+    currentSpeed: number | null,
+    elapsedS: number,
+    relocated: boolean,
+    vehicleType: VehicleType | null,
+): SimTick {
+    const classes = SIM_CLASS_LIMITS[vehicleType === "TRUCK" ? "TRUCK" : "default"];
+    const limit = leg.length > LEG_HIGHWAY_M ? classes.highway : classes.city;
+    const speed = nextDisplaySpeed(currentSpeed, limit, limit);
+    const done = Math.min(leg.length, leg.done + (speed * elapsedS * TIME_SCALE) / 3.6);
+    const pointAt = (metres: number) => {
+        const share = leg.length === 0 ? 1 : metres / leg.length;
+
+        return {
+            lat: leg.from.lat + (leg.to.lat - leg.from.lat) * share,
+            lng: leg.from.lng + (leg.to.lng - leg.from.lng) * share,
+        };
+    };
+    const at = pointAt(done);
+    const arrived = done >= leg.length;
+    const { leg: _leg, dest: _dest, ...rest } = state;
+
+    progressByVehicle.set(
+        vehicleId,
+        !arrived
+            ? { ...state, leg: { ...leg, done } }
+            : leg.park
+              ? { ...rest, parkedAt: leg.to }
+              : { ...rest, ...(state.dest ? { dest: state.dest } : {}) },
+    );
+
+    return {
+        lat: at.lat,
+        lng: at.lng,
+        speed: arrived && leg.park ? 0 : speed,
+        limit_kmh: limit,
+        // What the odometer and the trip count: the stretch between the two
+        // points, not the share of the leg (degrees are not metres).
+        meters: haversineMeters(pointAt(leg.done), at),
+        // The first step names where the stretch starts (the parked place),
+        // so a map plays it as setting off from there.
+        path: leg.done === 0 ? [leg.from, at] : [at],
+        turnedAround: false,
+        relocated,
+        parked: arrived && leg.park,
+    };
+}
+
 export function nextSimTick(
     vehicleId: number,
     current: LatLng,
     currentSpeed: number | null,
     /** Echte Sekunden seit dem letzten Ping dieses Fahrzeugs. */
     elapsedS = SIM_PING_SECONDS,
+    vehicleType: VehicleType | null = null,
+    /** The vehicle's home depot: it drives on the roads near it. */
+    home: LatLng | null = null,
 ): SimTick {
     let state = progressByVehicle.get(vehicleId);
     let relocated = false;
 
     if (!state) {
-        const picked = pickRoute(vehicleId, current);
+        // A vehicle far from home (sent across the country by an older
+        // version) goes back onto a road near its depot, once.
+        const farFromHome =
+            home !== null && distanceToRoute(pickRoute(vehicleId, current), home) > NEAR_ROUTE_METERS;
+        const picked = pickRoute(vehicleId, farFromHome && home ? home : current);
         const frac = nearestFraction(picked.points, current);
         const spread = spreadOnRoute(
             vehicleId,
             picked.id,
             frac,
             routeLengthMeters(picked.points),
+            home ?? current,
+            farFromHome,
         );
         relocated = spread !== null;
         state = spread
@@ -662,17 +772,34 @@ export function nextSimTick(
               };
     }
 
+    const { routeId } = state;
     const route =
-        SIM_ROUTES.find((entry) => entry.id === state.routeId) ??
+        SIM_ROUTES.find((entry) => entry.id === routeId) ??
         pickRoute(vehicleId, current);
+
+    // Parked off the road: the first stretch leads back to the road.
+    if (state.parkedAt) {
+        const to = pointAtFraction(route.points, state.frac);
+        const { parkedAt: from, ...rest } = state;
+
+        state = {
+            ...rest,
+            leg: { from, to, done: 0, length: haversineMeters(from, to), park: false },
+        };
+    }
+
+    if (state.leg) {
+        return legTick(vehicleId, state, state.leg, currentSpeed, elapsedS, relocated, vehicleType);
+    }
+
     let { frac, direction } = state;
-    const { lap } = state;
+    const { lap, dest } = state;
     const fromFrac = frac;
     const length = routeLengthMeters(route.points);
-    const limit = speedLimitKmh(frac);
-    const cap = Math.round(
-        limit *
-            simOverspeedFactor(vehicleId, route.id, direction, lap, frac * length),
+    const limit = speedLimitKmh(frac, vehicleType);
+    const cap = Math.min(
+        Math.round(limit * simOverspeedFactor(vehicleId, route.id, direction, lap, frac * length)),
+        vehicleType === "TRUCK" ? SIM_TRUCK_GOVERNOR_KMH : Number.POSITIVE_INFINITY,
     );
     const speed = nextDisplaySpeed(currentSpeed, limit, cap);
     const meters = (speed * elapsedS * TIME_SCALE) / 3.6;
@@ -681,6 +808,43 @@ export function nextSimTick(
     frac += direction * deltaFrac;
 
     let turnedAround = false;
+
+    // Reached the road point nearest its destination: from here straight on
+    // to the place, over as many ticks as that takes.
+    if (
+        dest &&
+        ((direction === 1 && frac >= dest.frac) || (direction === -1 && frac <= dest.frac))
+    ) {
+        const from = pointAtFraction(route.points, fromFrac);
+        const exit = pointAtFraction(route.points, dest.frac);
+        const road = verticesBetween(route.points, fromFrac, dest.frac);
+
+        progressByVehicle.set(vehicleId, {
+            routeId: route.id,
+            frac: dest.frac,
+            direction,
+            lap,
+            leg: {
+                from: exit,
+                to: dest.point,
+                done: 0,
+                length: haversineMeters(exit, dest.point),
+                park: true,
+            },
+        });
+
+        return {
+            lat: exit.lat,
+            lng: exit.lng,
+            speed,
+            limit_kmh: Math.round(limit),
+            meters: pathLengthMeters([from, ...road, exit]),
+            path: [...road, exit],
+            turnedAround: false,
+            relocated,
+            parked: false,
+        };
+    }
 
     if (frac >= 1) {
         frac = 1;
@@ -697,6 +861,7 @@ export function nextSimTick(
         frac,
         direction,
         lap: turnedAround ? lap + 1 : lap,
+        ...(dest && !turnedAround ? { dest } : {}),
     });
 
     const point = pointAtFraction(route.points, frac);
@@ -716,5 +881,6 @@ export function nextSimTick(
         path,
         turnedAround,
         relocated,
+        parked: false,
     };
 }

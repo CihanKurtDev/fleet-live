@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { TodayResponse, Vehicle } from "@fleet-live/shared";
+import { berlinTodayIso, type TodayResponse, type Vehicle } from "@fleet-live/shared";
 import { Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -30,7 +30,12 @@ const empty = {
     open_warnings: null,
     fuel_level: null,
     workshop: null,
+    workshop_task: null,
+    workshop_place: null,
     damage: null,
+    vehicle_plate: null,
+    vehicle_driving: null,
+    phone: null,
 };
 
 const response: TodayResponse = {
@@ -70,6 +75,8 @@ const response: TodayResponse = {
             low_fuel: 0,
             deadline_soon: 0,
             workshop_due: 0,
+            licence_driving: 0,
+            deadline_today: 0,
             damage_unplanned: 0,
         },
         total: 16,
@@ -220,7 +227,9 @@ describe("Heute dran in an empty company", () => {
                 low_fuel: 0,
                 deadline_soon: 0,
                 workshop_due: 0,
-                damage_unplanned: 0,
+                licence_driving: 0,
+            deadline_today: 0,
+            damage_unplanned: 0,
             },
             total: 0,
         },
@@ -250,21 +259,35 @@ describe("Heute dran in an empty company", () => {
 });
 
 describe("Heute dran: workshop stays", () => {
+    const threeDaysAgo = (() => {
+        const date = new Date(`${berlinTodayIso()}T12:00:00Z`);
+        date.setUTCDate(date.getUTCDate() - 3);
+        return date.toISOString().slice(0, 10);
+    })();
     const stay = {
         id: 4,
         vehicle_id: 5,
         license_plate: "K-RT 4410",
         hu_due_on: "2027-03",
-        reason: "MAINTENANCE" as const,
+        reasons: ["MAINTENANCE" as const],
+        transport: "DRIVER" as const,
         state: "IN_WORKSHOP" as const,
         place: "Werkstatt Becker",
+        workshop_id: 3,
         planned_on: "2026-10-20",
-        expected_on: "2026-10-27",
+        planned_time: null,
+        expected_on: threeDaysAgo,
+        bring_driver_id: null,
+        bring_driver_name: null,
         assignee_user_id: 1,
         assignee_name: "Cihan Kurt",
         note: null,
+        workshop: null,
         arrived_on: "2026-10-20",
+        arrived_at: "2026-10-20 07:10:00",
+        arrived_by: "POSITION" as const,
         finished_on: null,
+        picked_up_at: null,
         cost_cents: null,
         result_note: null,
         created_at: "2026-10-19 10:00:00",
@@ -278,6 +301,8 @@ describe("Heute dran: workshop stays", () => {
                 vehicle_id: 5,
                 subject: "K-RT 4410",
                 workshop: stay,
+                workshop_task: "return_late",
+                workshop_place: { id: 3, name: "Werkstatt Becker", phone: "0221 555 0177" },
                 damage: null,
             },
         ],
@@ -290,13 +315,15 @@ describe("Heute dran: workshop stays", () => {
                 low_fuel: 0,
                 deadline_soon: 0,
                 workshop_due: 1,
-                damage_unplanned: 0,
+                licence_driving: 0,
+            deadline_today: 0,
+            damage_unplanned: 0,
             },
             total: 1,
         },
     };
 
-    it("marks a late return, says who is on it and offers Fertig melden", async () => {
+    it("marks a late return with the workshop's phone and offers Fertig melden", async () => {
         vi.mocked(getToday).mockResolvedValue(late);
         renderPanel();
 
@@ -304,7 +331,7 @@ describe("Heute dran: workshop stays", () => {
         expect(within(row).getByText("Rückgabe")).toBeInTheDocument();
         expect(
             within(row).getByText(
-                "Wartung bei Werkstatt Becker · fertig erwartet am 27.10.2026 · zuständig: du",
+                "seit 3 Tagen überfällig · Werkstatt Becker, 0221 555 0177",
             ),
         ).toBeInTheDocument();
         expect(within(row).getByRole("button", { name: "Fertig melden" })).toBeInTheDocument();

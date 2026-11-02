@@ -1,6 +1,6 @@
 import "./env";
 import assert from "node:assert/strict";
-import { dueExplanationText } from "@fleet-live/shared";
+import { addIsoDays, berlinTodayIso, dueExplanationText } from "@fleet-live/shared";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { app } from "../app";
@@ -360,5 +360,71 @@ describe("GET and PATCH /api/due/settings", () => {
                 licence_check_months: null,
             });
         }
+    });
+});
+
+describe("vehicle list deadline filters", () => {
+    it("filters and counts HU/UVV by the rule of /fristen and the company lead", async () => {
+        const today = berlinTodayIso();
+        const overdue = VehicleModel.create({
+            license_plate: "K-FR 1",
+            company_id: 1,
+            hu_due_on: "2020-01",
+            uvv_due_on: "2099-01-01",
+        });
+        const soon = VehicleModel.create({
+            license_plate: "K-FR 2",
+            company_id: 1,
+            hu_due_on: "2099-01",
+            uvv_due_on: addIsoDays(today, 10),
+        });
+        VehicleModel.create({
+            license_plate: "K-FR 3",
+            company_id: 1,
+            hu_due_on: "2099-01",
+            uvv_due_on: "2099-01-01",
+        });
+
+        try {
+            const listed = await api.get("/api/vehicles?filter=deadline_overdue");
+            assert.deepEqual(
+                listed.body.data.map((row: { id: number }) => row.id),
+                [overdue.id],
+            );
+            assert.equal(listed.body.meta.counts.deadline_overdue, 1);
+            assert.equal(listed.body.meta.counts.deadline_soon, 1);
+
+            const soonList = await api.get("/api/vehicles?filter=deadline_soon");
+            assert.deepEqual(
+                soonList.body.data.map((row: { id: number }) => row.id),
+                [soon.id],
+            );
+
+            // A lead shorter than the 10 days: not „bald“ any more.
+            await api.patch("/api/due/settings").send({ due_lead_days: 5 });
+            const shorter = await api.get("/api/vehicles");
+            assert.equal(shorter.body.meta.counts.deadline_soon, 0);
+
+            const due = await api.get("/api/due?state=overdue&kind=hu");
+            assert.ok(due.body.data.some((row: { vehicle_id: number }) => row.vehicle_id === overdue.id));
+        } finally {
+            CompanyModel.updateDueSettings(1, {
+                due_lead_days: null,
+                licence_check_months: null,
+            });
+        }
+    });
+
+    it("counts vehicles that do not drive today as unavailable", async () => {
+        const out = VehicleModel.create({ license_plate: "K-NV 1", company_id: 1 });
+        VehicleModel.create({ license_plate: "K-NV 2", company_id: 1 });
+        db.prepare("UPDATE vehicles SET out_of_service_since = '2026-10-01' WHERE id = ?").run(out.id);
+
+        const listed = await api.get("/api/vehicles?filter=unavailable");
+        assert.deepEqual(
+            listed.body.data.map((row: { id: number }) => row.id),
+            [out.id],
+        );
+        assert.equal(listed.body.meta.counts.unavailable, 1);
     });
 });

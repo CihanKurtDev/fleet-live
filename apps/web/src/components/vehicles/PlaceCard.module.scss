@@ -1,0 +1,303 @@
+@use "../../styles/motion";
+
+@include motion.keyframes;
+
+/* A place card over the fleet map (depot, workshop, the list of all places). */
+.card {
+    animation: drop-in var(--dur-3) var(--ease-out);
+    position: absolute;
+    top: 12px;
+    left: 48px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(320px, calc(100% - 60px));
+    max-height: calc(100% - 24px);
+    overflow: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: var(--shadow);
+    font-size: 13px;
+    text-align: left;
+}
+
+.cardHead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.kindTag {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--text) 42%, transparent);
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--heading);
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.1;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-h);
+}
+
+.close {
+    flex: none;
+    width: var(--control-xs);
+    height: var(--control-xs);
+    margin-left: auto;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+
+    &:hover {
+        background: var(--code-bg);
+        color: var(--text-h);
+    }
+}
+
+.lead {
+    margin: 0;
+    color: var(--text-h);
+
+    b {
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+.legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+
+    li {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    b {
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-h);
+    }
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+
+    &[data-status="driving"] {
+        background: var(--success);
+    }
+
+    &[data-status="idle"] {
+        background: var(--warning);
+    }
+
+    &[data-status="stopped"] {
+        background: var(--status-off);
+    }
+
+    &[data-status="offline"] {
+        background: var(--danger);
+    }
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px 12px;
+    margin: 0;
+
+    dt {
+        font-family: var(--mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding-top: 2px;
+    }
+
+    dd {
+        margin: 0;
+        color: var(--text-h);
+    }
+}
+
+.plain {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.link,
+.facts a,
+.lead a,
+.muted a {
+    color: var(--accent);
+}
+
+.muted {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text);
+}
+
+.warn {
+    margin: 0;
+    font-size: 12px;
+    color: var(--warning);
+}
+
+.error {
+    margin: 0;
+    font-size: 12px;
+    color: var(--danger);
+}
+
+.cardActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.actionsStart {
+    margin-right: auto;
+}
+
+.editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-h);
+    }
+}
+
+/* The list of all places. */
+.search {
+    flex: none;
+}
+
+.scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow: auto;
+}
+
+.group {
+    margin: 0 0 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    min-height: 44px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+        background: var(--code-bg);
+    }
+
+    &[aria-pressed="true"] {
+        border-color: var(--accent-fill);
+        background: var(--accent-bg);
+    }
+}
+
+.rowHead {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.rowName {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 650;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-h);
+}
+
+.rowFigure {
+    flex: none;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-h);
+}
+
+.rowLine {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.foot {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text);
+}
+
+@media (max-width: 700px) {
+    .card {
+        left: 12px;
+        width: calc(100% - 24px);
+    }
+}

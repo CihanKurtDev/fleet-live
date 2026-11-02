@@ -15,6 +15,7 @@ import { stmt } from "../db/statements";
 import { overLimitKmh, speedingSeverity } from "../lib/speeding";
 import { nowSqlite } from "../lib/sqlTime";
 import { pagedQuery } from "../lib/pagination";
+import { PrivacyModel } from "./privacy.model";
 
 const ALERT_COLUMNS = `
         a.id,
@@ -28,7 +29,14 @@ const ALERT_COLUMNS = `
         a.details,
         a.created_at,
         a.ended_at,
-        a.resolved_at
+        a.resolved_at,
+        a.resolution_note,
+        (
+            SELECT e.trip_id FROM trip_events e
+            WHERE e.alert_id = a.id
+            ORDER BY e.id
+            LIMIT 1
+        ) AS trip_id
 `;
 
 const SELECT_ONE = `
@@ -258,10 +266,11 @@ function parseDetails(raw: unknown): AlertDetails | null {
 }
 
 function toAlert(row: AlertSqlRow): Alert {
-    const { total: _total, details, ...alert } = row;
+    const { total: _total, details, trip_id, ...alert } = row;
     return {
         ...alert,
         details: parseDetails(details),
+        trip_id: trip_id === null || trip_id === undefined ? null : Number(trip_id),
     };
 }
 
@@ -412,6 +421,7 @@ export class AlertModel {
                     LOW_FUEL: Number(typeCounts.low_fuel_count),
                     OFFLINE: Number(typeCounts.offline_count),
                 },
+                resolved_kept_days: PrivacyModel.alertDays(companyId),
             },
         };
     }
@@ -471,6 +481,28 @@ export class AlertModel {
 
             return { resolved: Number(result.changes) };
         });
+    }
+
+    /**
+     * „Gespräch geführt“: every open speeding warning of the driver is cleared
+     * at once, with the talk as the note. Returns how many it cleared.
+     */
+    static resolveSpeedingForDriver(
+        driverId: number,
+        companyId: number,
+        note: string,
+    ): number {
+        const result = stmt(
+            `
+            UPDATE alerts
+            SET resolved_at = ?, resolution_note = ?
+            WHERE driver_id = ?
+              AND type = 'SPEEDING'
+              AND resolved_at IS NULL
+              AND vehicle_id IN (SELECT id FROM vehicles WHERE company_id = ?)
+            `,
+        ).run(nowSqlite(), note, driverId, companyId);
+        return Number(result.changes);
     }
 
     static findOpenSpeeding(vehicleId: number): {

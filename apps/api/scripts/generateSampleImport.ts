@@ -213,10 +213,18 @@ for (const driver of drivers) {
 }
 
 // About 90 drivers sit in one of their vehicles; most of those are driving.
+// Nobody with an expired licence may drive, so only drivers whose licence is
+// valid for years (or not entered) get a current vehicle; the file stays
+// importable whenever it is read.
 const current: Array<[string, string]> = [];
 const taken = new Set<string>();
+// Dates in the file read DD.MM.YYYY.
+const isoOf = (german: string) => german.split(".").reverse().join("-");
+const mayDrive = (driver: SampleDriver) =>
+    driver.licenceExpires === "" || isoOf(driver.licenceExpires) >= "2028-01-01";
 for (const driver of shuffle([...drivers])) {
     if (current.length >= CURRENT_N) break;
+    if (!mayDrive(driver)) continue;
     const plate = eligibleOf.get(driver.name)!.find((candidate) => !taken.has(candidate));
     if (!plate) continue;
     taken.add(plate);

@@ -10,6 +10,7 @@ import {
 import type { TableColumn } from "../../types/table";
 import { formatTimestamp } from "../../utils/dateTime";
 import type { KpiTileTone } from "../ui/KpiTiles/KpiTiles";
+import { VEHICLE_TILE_HINTS } from "../vehicles/vehicleTileHints";
 import { AlertTypeChip } from "./AlertSemantics";
 import styles from "./alertTableConfig.module.scss";
 
@@ -18,6 +19,8 @@ type AlertTileId = "open" | AlertType | "resolved";
 type AlertTileOption = {
     id: AlertTileId;
     label: string;
+    /** The tile's line under the number: what it counts. */
+    hint: string;
     tone?: KpiTileTone;
     /** The URL state the tile sets. */
     view: { filter: AlertFilterId; type: AlertType | null };
@@ -25,28 +28,32 @@ type AlertTileOption = {
 
 /** KPI tiles on `/alerts`: the main filter, exactly one is pressed. */
 export const alertTiles: AlertTileOption[] = [
-    { id: "open", label: "Offen", view: { filter: "open", type: null } },
+    { id: "open", label: "Offen", hint: "noch nicht erledigt", view: { filter: "open", type: null } },
     {
         id: "SPEEDING",
         label: "Tempo",
+        hint: "offene Tempo-Warnungen",
         tone: "critical",
         view: { filter: "open", type: "SPEEDING" },
     },
     {
         id: "OFFLINE",
         label: "Kein Signal",
+        hint: "Fahrzeuge ohne Meldung",
         tone: "critical",
         view: { filter: "open", type: "OFFLINE" },
     },
     {
         id: "LOW_FUEL",
         label: "Wenig Tank",
+        hint: VEHICLE_TILE_HINTS.low_fuel,
         tone: "warning",
         view: { filter: "open", type: "LOW_FUEL" },
     },
     {
         id: "resolved",
         label: "Erledigt",
+        hint: "geklärt, im Verlauf",
         view: { filter: "resolved", type: null },
     },
 ];

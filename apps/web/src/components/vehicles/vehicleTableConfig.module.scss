@@ -70,6 +70,46 @@
     gap: 4px;
 }
 
+/* HU/UVV past (red) or due within the company lead (amber). */
+.deadline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+
+    &[data-state="overdue"],
+    &[data-state="today"] {
+        color: var(--accent);
+    }
+
+    &[data-state="soon"] {
+        font-weight: inherit;
+    }
+}
+
+.deadlineDot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* Due within the lead: a ring, not a dot. */
+.deadline[data-state="soon"] .deadlineDot {
+    border: 1.5px solid var(--accent);
+    background: transparent;
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .late {
     font-size: 12px;
     white-space: nowrap;
