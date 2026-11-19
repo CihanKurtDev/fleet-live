@@ -29,6 +29,8 @@ interface ConfirmDialogProps {
     items?: ConfirmItem[];
     /** Spoken name of that list. */
     itemsLabel?: string;
+    /** More affected items than `items` holds (a whole filter). */
+    moreCount?: number;
     /** Shown under the list, e.g. a failed request (`role="alert"`). */
     error?: string | null;
 }
@@ -45,10 +47,11 @@ export const ConfirmDialog = ({
     confirmVariant = "danger",
     items,
     itemsLabel,
+    moreCount,
     error,
 }: ConfirmDialogProps) => {
     const listed = items?.slice(0, CONFIRM_ITEMS_MAX) ?? [];
-    const more = (items?.length ?? 0) - listed.length;
+    const more = moreCount ?? (items?.length ?? 0) - listed.length;
 
     return (
         <Modal open={open} onClose={onClose} title={title}>
@@ -71,7 +74,7 @@ export const ConfirmDialog = ({
                             ))}
                             {more > 0 && (
                                 <li className={styles.confirmMore}>
-                                    + {more} weitere
+                                    + {more.toLocaleString("de-DE")} weitere
                                 </li>
                             )}
                         </ul>

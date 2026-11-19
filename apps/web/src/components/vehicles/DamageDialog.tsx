@@ -50,6 +50,8 @@ export type DamageTarget = {
     driverName?: string | null;
     /** The last reported position, where the map opens. */
     position?: PickedPoint | null;
+    /** The open workshop stay, offered to take the damage along. */
+    openStayPlace?: string | null;
 };
 
 interface DamageDialogProps {
@@ -161,6 +163,8 @@ const DamageForm = ({
     // workshop) until the box is ticked or cleared by hand.
     const [planChoice, setPlanChoice] = useState<boolean | null>(null);
     const planAfter = onPlan !== undefined && (planChoice ?? !drivable);
+    const openStayPlace = damage ? null : (target?.openStayPlace ?? null);
+    const [addToStay, setAddToStay] = useState(true);
     const photoCount = keptPhotos.length + newPhotos.length;
     const driverName = damage ? damage.driver_name : (target?.driverName ?? null);
 
@@ -245,6 +249,7 @@ const DamageForm = ({
             occurred_time: occurredTime === "" ? null : occurredTime,
             latitude: point?.latitude ?? null,
             longitude: point?.longitude ?? null,
+            ...(openStayPlace && addToStay ? { add_to_open_stay: true } : {}),
         };
 
         try {
@@ -520,6 +525,13 @@ const DamageForm = ({
                         </Button>
                     </div>
                 </div>
+            )}
+
+            {openStayPlace && (
+                <label className={styles.check}>
+                    <Checkbox checked={addToStay} onChange={(event) => setAddToStay(event.target.checked)} />
+                    Beim Termin bei {openStayPlace} mit erledigen
+                </label>
             )}
 
             {onPlan && (

@@ -3,7 +3,6 @@ import {
     LOW_FUEL_CRITICAL_PERCENT,
     LOW_FUEL_THRESHOLD_PERCENT,
     SELF_CLOSING_ALERT_TYPES,
-    SPEEDING_OPEN_DAYS,
 } from "@fleet-live/shared";
 
 /** `('LOW_FUEL', 'OFFLINE')` for SQL: warnings that follow a state. */
@@ -161,37 +160,15 @@ export function syncStateAlerts(
 }
 
 /**
- * A speeding event that ended and that nobody handled becomes history after
- * `SPEEDING_OPEN_DAYS`: it leaves the open warnings (and the driver's count
- * for the talk) at the moment the period ran out, not at the moment this ran.
- * Open events (still speeding) are never touched.
+ * Ended speeding warnings used to close themselves after seven days. They no
+ * longer do; the rows from that time say so, so nobody reads them as handled.
  */
-export function archiveStaleSpeeding(database: DatabaseSync): number[] {
-    const due = `
-        a.type = 'SPEEDING'
-        AND a.resolved_at IS NULL
-        AND a.ended_at IS NOT NULL
-        AND a.ended_at <= datetime('now', '-${SPEEDING_OPEN_DAYS} days')`;
-
-    const companies = database
-        .prepare(
-            `SELECT DISTINCT v.company_id AS company_id
-             FROM alerts a INNER JOIN vehicles v ON v.id = a.vehicle_id
-             WHERE ${due}`,
-        )
-        .all() as Array<{ company_id: number }>;
-
-    if (companies.length === 0) {
-        return [];
-    }
-
-    database
-        .prepare(
-            `UPDATE alerts AS a
-             SET resolved_at = datetime(a.ended_at, '+${SPEEDING_OPEN_DAYS} days')
-             WHERE ${due}`,
-        )
-        .run();
-
-    return companies.map((row) => Number(row.company_id));
+export function noteOldAutoClosedSpeeding(database: DatabaseSync) {
+    database.exec(`
+        UPDATE alerts
+        SET resolution_note = 'Automatisch nach 7 Tagen geschlossen (alte Regel)'
+        WHERE type = 'SPEEDING'
+          AND resolution_note IS NULL
+          AND resolved_at = datetime(ended_at, '+7 days')
+    `);
 }

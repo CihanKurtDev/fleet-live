@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type {
     Alert,
     AlertListResponse,
@@ -6,6 +6,7 @@ import type {
     DriverDetail,
     DriverListResponse,
 } from "@fleet-live/shared";
+import { useState } from "react";
 import { Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -138,6 +139,7 @@ const listResponse: DriverListResponse = {
         total: 1,
         pageCount: 1,
         counts: { all: 1, talk: 1, without_vehicle: 0, licence_driving: 0 },
+        resolved_kept_days: 90,
     },
 };
 
@@ -206,13 +208,49 @@ describe("Fahrer detail page", () => {
         };
     });
 
+    it("keeps the page, an open dialog and its input through a live refresh", async () => {
+        let bumpEpoch = () => {};
+        const Live = () => {
+            const [listEpoch, setListEpoch] = useState(0);
+            bumpEpoch = () => setListEpoch((value) => value + 1);
+            return (
+                <VehiclesContext.Provider value={{ ...vehicles, listEpoch }}>
+                    <Routes>
+                        <Route path="/drivers/:id" element={<DriverDetailPage />} />
+                    </Routes>
+                </VehiclesContext.Provider>
+            );
+        };
+        let release: (driver: DriverDetail) => void = () => {};
+        renderAuth(<Live />, { user: authUser({ role: "dispatcher" }), route: "/drivers/11" });
+
+        fireEvent.click(await screen.findByRole("button", { name: "Bearbeiten" }));
+        const name = await screen.findByLabelText("Name");
+        fireEvent.change(name, { target: { value: "Ben Arslan neu" } });
+
+        vi.mocked(getDriver).mockImplementationOnce(
+            () => new Promise<DriverDetail>((resolve) => { release = resolve; }),
+        );
+        act(() => bumpEpoch());
+
+        // While the new data loads, nothing falls back to „wird geladen“.
+        expect(screen.queryByText("Fahrer wird geladen…")).not.toBeInTheDocument();
+        expect(screen.getByLabelText("Name")).toBe(name);
+        expect(name).toHaveValue("Ben Arslan neu");
+
+        await act(async () => release(baseDriver));
+        expect(screen.getByLabelText("Name")).toBe(name);
+        expect(name).toHaveValue("Ben Arslan neu");
+    });
+
     it("shows the header, the hints and the panels from real data", async () => {
         renderDetail();
 
         expect(
             await screen.findByRole("heading", { name: "Ben Arslan" }),
         ).toBeInTheDocument();
-        expect(screen.getByText("16 offene Tempo-Warnungen")).toBeInTheDocument();
+        // Header and hint say the same number.
+        expect(screen.getAllByText("16 offene Tempo-Warnungen")).toHaveLength(2);
         expect(
             screen.getByText(
                 "fährt HH-FN 1218 · darf 2 Fahrzeuge fahren · Telefon fehlt",

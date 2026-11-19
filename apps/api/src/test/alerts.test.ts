@@ -608,3 +608,133 @@ describe("PATCH /api/alerts (bulk)", () => {
         assert.equal(VehicleModel.getById(vehicle.id, 1)?.active_alerts, 0);
     });
 });
+
+describe("warning lists at any size", () => {
+    const realOpen = (type: string) =>
+        (db.prepare("SELECT COUNT(*) AS n FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id WHERE v.company_id = 1 AND a.type = ? AND a.resolved_at IS NULL").get(type) as { n: number }).n;
+    const driver = async (name: string) => (await api.post("/api/drivers").send({ name })).body.data.id as number;
+    const open = async (query = "") => (await api.get(`/api/alerts?filter=open${query}`)).body;
+
+    it("keeps tiles and driver counts right through insert, resolve and delete", async () => {
+        const vehicle = VehicleModel.create({ license_plate: "K-SKA 1", company_id: 1 });
+        const driverId = await driver("Skala Eins");
+        const first = insertAlert(vehicle.id, { type: "SPEEDING", driver_id: driverId, ended_at: "2026-01-01 00:00:00" });
+        const second = insertAlert(vehicle.id, { type: "SPEEDING", driver_id: driverId, ended_at: "2026-01-01 00:00:00" });
+        insertAlert(vehicle.id, { type: "LOW_FUEL", ended_at: null });
+
+        let body = await open();
+        assert.equal(body.meta.type_counts.SPEEDING, realOpen("SPEEDING"));
+        assert.equal(body.meta.type_counts.LOW_FUEL, realOpen("LOW_FUEL"));
+        assert.equal(body.meta.total, body.meta.counts.open);
+        assert.equal((await api.get(`/api/drivers/${driverId}`)).body.data.open_warnings, 2);
+
+        await api.patch(`/api/alerts/${first}`).send({ resolved: true }).expect(200);
+        body = await open();
+        assert.equal(body.meta.type_counts.SPEEDING, realOpen("SPEEDING"));
+        assert.equal(body.meta.counts.resolved, 1);
+        assert.equal((await api.get(`/api/drivers/${driverId}`)).body.data.open_warnings, 1);
+
+        db.prepare("DELETE FROM alerts WHERE id = ?").run(second);
+        body = await open();
+        assert.equal(body.meta.type_counts.SPEEDING, realOpen("SPEEDING"));
+        assert.equal((await api.get(`/api/drivers/${driverId}`)).body.data.open_warnings, 0);
+    });
+
+    it("finds warnings by plate or driver name, in the numbers too", async () => {
+        const one = VehicleModel.create({ license_plate: "K-FIND 1", company_id: 1 });
+        const two = VehicleModel.create({ license_plate: "D-ELSE 2", company_id: 1 });
+        const named = await driver("Suche Fahrer");
+        insertAlert(one.id, { type: "SPEEDING", ended_at: "2026-01-01 00:00:00" });
+        insertAlert(two.id, { type: "SPEEDING", driver_id: named, ended_at: "2026-01-01 00:00:00" });
+
+        const plate = await open("&search=k-fi");
+        assert.deepEqual(plate.data.map((row: { license_plate: string }) => row.license_plate), ["K-FIND 1"]);
+        assert.equal(plate.meta.total, 1);
+        assert.equal(plate.meta.counts.open, 1);
+
+        const name = await open("&search=suche");
+        assert.deepEqual(name.data.map((row: { license_plate: string }) => row.license_plate), ["D-ELSE 2"]);
+        assert.equal((await open("&search=100%25")).meta.total, 0);
+    });
+
+    it("searches _ and % as plain characters", async () => {
+        const car = VehicleModel.create({ license_plate: "K-US 1", company_id: 1 });
+        const odd = await driver("Ana_Rand 50%");
+        const plain = await driver("Anaxrand");
+        insertAlert(car.id, { type: "SPEEDING", driver_id: odd, ended_at: "2026-01-01 00:00:00" });
+        insertAlert(car.id, { type: "SPEEDING", driver_id: plain, ended_at: "2026-01-01 00:00:00" });
+
+        // "_" is no wildcard: only the name with the underscore matches.
+        const underscore = await open("&search=ana_r");
+        assert.equal(underscore.meta.total, 1);
+        assert.equal(underscore.data[0].driver_name, "Ana_Rand 50%");
+        assert.equal((await open("&search=50%25")).meta.total, 1);
+    });
+
+    it("does not let a viewer find a driver by name where names are hidden", async () => {
+        const vehicle = VehicleModel.create({ license_plate: "K-HID 1", company_id: 1 });
+        const named = await driver("Geheim Name");
+        insertAlert(vehicle.id, { type: "SPEEDING", driver_id: named, ended_at: "2026-01-01 00:00:00" });
+        await api.patch("/api/auth/privacy").send({ viewer_driver_names: false }).expect(200);
+        const { agent: viewer } = await loginAs(1, "viewer");
+
+        const byName = await viewer.get("/api/alerts?filter=open&search=geheim");
+        assert.equal(byName.status, 200);
+        assert.equal(byName.body.meta.total, 0);
+        assert.equal(byName.body.meta.talk_drivers, 0);
+
+        const byPlate = await viewer.get("/api/alerts?filter=open&search=k-hid");
+        assert.equal(byPlate.body.meta.total, 1);
+    });
+
+    it("closes every Tempo warning of a filter, and nothing else", async () => {
+        const mine = VehicleModel.create({ license_plate: "K-ALL 1", company_id: 1 });
+        const scoped = VehicleModel.create({ license_plate: "K-ALL 2", company_id: 1 });
+        const theirs = VehicleModel.create({ license_plate: "K-ALL 3", company_id: 2 });
+        for (const id of [mine.id, mine.id, scoped.id, theirs.id]) {
+            insertAlert(id, { type: "SPEEDING", ended_at: "2026-01-01 00:00:00" });
+        }
+        insertAlert(mine.id, { type: "LOW_FUEL", ended_at: null });
+
+        const scopedDone = await api
+            .patch("/api/alerts")
+            .send({ filter: { type: "SPEEDING", vehicle_id: mine.id }, expected: 2, resolved: true });
+        assert.equal(scopedDone.status, 200);
+        assert.equal(scopedDone.body.data.resolved, 2);
+        assert.equal(realOpen("SPEEDING"), 1);
+        assert.equal(realOpen("LOW_FUEL"), 1);
+        assert.equal(
+            (db.prepare("SELECT COUNT(*) AS n FROM alerts WHERE vehicle_id = ? AND resolved_at IS NULL").get(theirs.id) as { n: number }).n,
+            1,
+        );
+    });
+
+    it("changes nothing when the list moved on since the number was confirmed", async () => {
+        const vehicle = VehicleModel.create({ license_plate: "K-MOV 1", company_id: 1 });
+        insertAlert(vehicle.id, { type: "SPEEDING", ended_at: "2026-01-01 00:00:00" });
+        insertAlert(vehicle.id, { type: "SPEEDING", ended_at: "2026-01-01 00:00:00" });
+
+        const stale = await api.patch("/api/alerts").send({ filter: { type: "SPEEDING" }, expected: 1, resolved: true });
+        assert.equal(stale.status, 409);
+        assert.equal(stale.body.code, "ALERTS_CHANGED");
+        assert.equal(realOpen("SPEEDING"), 2);
+    });
+
+    it("refuses other types and another company's vehicle", async () => {
+        const theirs = VehicleModel.create({ license_plate: "K-NOT 1", company_id: 2 });
+
+        assert.equal((await api.patch("/api/alerts").send({ filter: { type: "LOW_FUEL" }, expected: 1, resolved: true })).status, 400);
+        assert.equal((await api.patch("/api/alerts").send({ filter: { type: "SPEEDING", vehicle_id: theirs.id }, expected: 1, resolved: true })).status, 404);
+    });
+
+    it("names how many drivers need a talk, the number of that tile", async () => {
+        const vehicle = VehicleModel.create({ license_plate: "K-TLK 1", company_id: 1 });
+        const talker = await driver("Viel Tempo");
+        for (let n = 0; n < 5; n += 1) {
+            insertAlert(vehicle.id, { type: "SPEEDING", driver_id: talker, ended_at: "2026-01-01 00:00:00" });
+        }
+
+        assert.equal((await open()).meta.talk_drivers, 1);
+        assert.equal((await api.get("/api/drivers?min_open_warnings=5")).body.meta.counts.talk, 1);
+    });
+});

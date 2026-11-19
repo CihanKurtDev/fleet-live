@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import type { VehicleInput } from "@fleet-live/shared";
+import { normalizeLicensePlate, type VehicleInput } from "@fleet-live/shared";
 
 import { PageTips } from "../components/help/PageTips";
 import { VehicleTable } from "../components/vehicles/VehicleTable";
@@ -33,7 +33,7 @@ export const VehiclesPage = () => {
         }
 
         setIsCreateOpen(false);
-        showNotice(`Fahrzeug ${input.license_plate.trim()} angelegt.`);
+        showNotice(`Fahrzeug ${normalizeLicensePlate(input.license_plate)} angelegt.`);
 
         // The first vehicle ends the import question on Schicht.
         if (user?.import_prompt) {

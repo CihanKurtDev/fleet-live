@@ -47,3 +47,7 @@
 .chip[data-status="OFFLINE"] {
     --status: var(--danger);
 }
+
+.chip[data-status="UNCONNECTED"] {
+    --status: var(--text);
+}

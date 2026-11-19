@@ -128,7 +128,17 @@ export const alertColumns: TableColumn<Alert>[] = [
     {
         key: "message",
         displayText: "Ereignis",
-        render: (_value, { row }) => formatAlertEvent(row),
+        render: (_value, { row }) =>
+            row.resolution_note ? (
+                <span className={styles.event}>
+                    {formatAlertEvent(row)}
+                    <small className={styles.note} title={row.resolution_note}>
+                        {row.resolution_note}
+                    </small>
+                </span>
+            ) : (
+                formatAlertEvent(row)
+            ),
     },
     {
         key: "created_at",

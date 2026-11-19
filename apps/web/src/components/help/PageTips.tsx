@@ -33,9 +33,11 @@ function placeNear(target: Element): Placement {
     const viewHeight = window.innerHeight;
     const width = Math.min(CARD_WIDTH, viewWidth - EDGE * 2);
     const left = clamp(rect.left + 8, EDGE, viewWidth - width - EDGE);
+    // Above when there is room: below, the card would cover what comes next
+    // on the page (on Schicht the most urgent row).
     const above =
-        rect.bottom + GAP + CARD_HEIGHT_GUESS > viewHeight &&
-        rect.top - GAP - CARD_HEIGHT_GUESS > 0;
+        rect.top - GAP - CARD_HEIGHT_GUESS > 0 ||
+        rect.bottom + GAP + CARD_HEIGHT_GUESS > viewHeight;
 
     return {
         ring: {

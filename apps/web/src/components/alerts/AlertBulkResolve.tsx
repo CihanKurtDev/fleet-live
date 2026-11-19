@@ -1,11 +1,14 @@
 import type { Alert } from "@fleet-live/shared";
 
 import { formatTimestamp } from "../../utils/dateTime";
+import { formatCount } from "../../utils/formatCount";
 import { ConfirmDialog } from "../ui/Modal/ConfirmDialog";
 import { warningCount } from "./alertLabels";
 
 interface AlertBulkResolveDialogProps {
     rows: Alert[] | null;
+    /** How many are affected; more than `rows` when all of a filter are meant. */
+    count: number;
     isBusy: boolean;
     error: string | null;
     onClose: () => void;
@@ -15,24 +18,24 @@ interface AlertBulkResolveDialogProps {
 /** Confirm before the selected warnings are resolved (`PATCH /api/alerts`). */
 export const AlertBulkResolveDialog = ({
     rows,
+    count,
     isBusy,
     error,
     onClose,
     onConfirm,
 }: AlertBulkResolveDialogProps) => {
-    const count = rows?.length ?? 0;
-
     return (
         <ConfirmDialog
             open={rows !== null}
             onClose={onClose}
             title={`${warningCount(count)} erledigen?`}
-            confirmLabel={`${count} erledigen`}
+            confirmLabel={`${formatCount(count)} erledigen`}
             busyLabel="Wird erledigt…"
             confirmVariant="primary"
             isBusy={isBusy}
             onConfirm={onConfirm}
             itemsLabel="Ausgewählte Warnungen"
+            moreCount={rows ? Math.max(0, count - Math.min(rows.length, 8)) : 0}
             items={rows?.map((row) => ({
                 key: row.id,
                 name: row.license_plate,

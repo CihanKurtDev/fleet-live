@@ -41,7 +41,7 @@ export function getAlerts(req: Request, res: Response) {
     }
 
     const started = performance.now();
-    const listed = AlertModel.listForCompany(companyId, query);
+    const listed = AlertModel.listForCompany(companyId, query, { searchDrivers: !hidden });
     const result = hidden ? { ...listed, data: listed.data.map(withoutDriver) } : listed;
     const duration = performance.now() - started;
 
@@ -76,12 +76,33 @@ export function resolveAlert(req: Request, res: Response) {
 }
 
 export function resolveAlerts(req: Request, res: Response) {
-    const { ids } = parseAlertBulkPatch(req.body);
+    const patch = parseAlertBulkPatch(req.body);
     const companyId = sessionCompany(req);
-    const result = AlertModel.resolveMany(ids, companyId);
+
+    if ("filter" in patch) {
+        if (
+            (patch.filter.vehicle_id !== undefined && !VehicleModel.getById(patch.filter.vehicle_id, companyId)) ||
+            (patch.filter.driver_id !== undefined && !DriverModel.getById(patch.filter.driver_id, companyId))
+        ) {
+            throw new NotFoundError();
+        }
+    }
+
+    const result =
+        "filter" in patch
+            ? AlertModel.resolveMatching(companyId, patch.filter, patch.expected)
+            : AlertModel.resolveMany(patch.ids, companyId);
 
     if (!result) {
         throw new NotFoundError("Mindestens eine Warnung wurde nicht gefunden.");
+    }
+
+    if ("changed" in result) {
+        throw new AppError(
+            409,
+            "ALERTS_CHANGED",
+            `Die Liste hat sich geändert, jetzt sind es ${result.changed.toLocaleString("de-DE")} Warnungen. Bitte noch einmal bestätigen.`,
+        );
     }
 
     if (result.resolved > 0) {

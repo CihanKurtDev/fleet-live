@@ -520,6 +520,7 @@ export const AccountPage = () => {
     const retentionStored: Record<RetentionKind, number | null> | null = retention && {
         trips: retention.trips_days,
         alerts: retention.alerts_days,
+        damages: retention.damages_days,
         audit: retention.audit_days,
     };
     const retentionValues: Record<RetentionKind, string> | null =
@@ -527,6 +528,7 @@ export const AccountPage = () => {
         (retentionStored && {
             trips: retentionStored.trips === null ? "" : String(retentionStored.trips),
             alerts: retentionStored.alerts === null ? "" : String(retentionStored.alerts),
+            damages: retentionStored.damages === null ? "" : String(retentionStored.damages),
             audit: retentionStored.audit === null ? "" : String(retentionStored.audit),
         });
 
@@ -573,6 +575,7 @@ export const AccountPage = () => {
             const { data, deleted } = await savePrivacy({
                 trips_days: days(retentionValues.trips),
                 alerts_days: days(retentionValues.alerts),
+                damages_days: days(retentionValues.damages),
                 audit_days: days(retentionValues.audit),
             });
             setRetention(data);
@@ -581,6 +584,9 @@ export const AccountPage = () => {
                 deleted.trips > 0 ? `${deleted.trips} ${deleted.trips === 1 ? "Fahrt" : "Fahrten"}` : null,
                 deleted.alerts > 0
                     ? `${deleted.alerts} ${deleted.alerts === 1 ? "erledigte Warnung" : "erledigte Warnungen"}`
+                    : null,
+                deleted.damages > 0
+                    ? `${deleted.damages} ${deleted.damages === 1 ? "Schaden" : "Schäden"} ohne Fotos, Ort und Fahrer`
                     : null,
                 deleted.audit > 0
                     ? `${deleted.audit} ${deleted.audit === 1 ? "Protokoll-Eintrag" : "Protokoll-Einträge"}`
@@ -1442,7 +1448,9 @@ export const AccountPage = () => {
                                     Wie lange fleet-live aufbewahrt, was es über eure Fahrer
                                     aufzeichnet. Meist legt das eine Betriebsvereinbarung fest.
                                     Leer heißt Standard. Was älter ist, wird gelöscht, auch
-                                    sofort beim Speichern.
+                                    sofort beim Speichern. Bei einem Schaden zählt die Frist ab
+                                    seinem Abschluss; was passiert ist, bleibt am Fahrzeug stehen,
+                                    offene Schäden bleiben ganz.
                                 </p>
                                 {retention && retentionValues ? (
                                     <form className={styles.form} onSubmit={submitRetention}>
@@ -1513,7 +1521,7 @@ export const AccountPage = () => {
                                         Live-Positionen: nur die letzten 100 Meldungen je Fahrzeug,
                                         ältere werden laufend überschrieben.
                                     </li>
-                                    <li>Offene Warnungen und laufende Fahrten werden nie gelöscht.</li>
+                                    <li>Offene Warnungen, laufende Fahrten und offene Schäden werden nie gelöscht.</li>
                                     <li>
                                         Die Monatszahlen der Schicht bleiben, auch wenn die einzelnen
                                         Warnungen und Fahrten gelöscht sind.

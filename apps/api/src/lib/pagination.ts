@@ -24,7 +24,7 @@ export function pagedQuery<TRow extends RowWithTotal, T>(options: {
     const rows = stmt(options.listSql).all(...options.listParams) as TRow[];
     let total = Number(rows[0]?.total ?? 0);
 
-    if (rows.length === 0) {
+    if (rows[0]?.total === undefined) {
         total = Number(
             (stmt(options.countSql).get(...options.countParams) as { total: number })
                 .total,

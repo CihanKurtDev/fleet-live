@@ -71,7 +71,6 @@ export function isSelfClosingAlertType(type: string): boolean {
  * Ein beendetes Tempo-Ereignis, das so lange niemand erledigt hat, gilt danach
  * als Verlauf und steht nicht mehr bei den offenen Warnungen.
  */
-export const SPEEDING_OPEN_DAYS = 7;
 
 /** Erledigte Warnungen werden so viele Tage nach dem Erledigen gelöscht; die Monatssummen bleiben. */
 export const ALERT_RETENTION_DAYS = 90;
@@ -226,6 +225,8 @@ export type AlertListMeta = {
     type_counts: AlertTypeCounts;
     /** Days a resolved warning stays in the list (the company's retention). */
     resolved_kept_days: number;
+    /** Drivers with `DRIVER_TALK_MIN_OPEN_WARNINGS` or more open: the tile on /drivers. */
+    talk_drivers: number;
 };
 
 export type AlertListResponse = {
@@ -240,15 +241,25 @@ export type AlertPatch = {
 /** Höchstens so viele Warnungen schließt ein Sammel-Erledigen auf einmal. */
 export const ALERT_BULK_MAX_IDS = 100;
 
-export type AlertBulkPatch = {
-    ids: number[];
-    resolved: true;
+/** Everything the list shows right now: only Tempo can be closed by hand. */
+export type AlertBulkFilter = {
+    type: "SPEEDING";
+    vehicle_id?: number;
+    driver_id?: number;
+    search?: string;
 };
+
+/** Either the ticked rows, or all rows of a filter. `expected`: the number the person saw. */
+export type AlertBulkPatch =
+    | { ids: number[]; resolved: true }
+    | { filter: AlertBulkFilter; expected: number; resolved: true };
 
 /** `resolved`: Zeilen, die dieser Aufruf von offen auf erledigt gesetzt hat. */
 export type AlertBulkPatchResponse = {
     data: { resolved: number };
 };
+
+export const ALERT_SEARCH_MAX = 100;
 
 export const alertListQuerySchema = z.object({
     filter: z.preprocess(
@@ -314,6 +325,13 @@ export const alertListQuerySchema = z.object({
             .enum(ALERT_TYPES, { error: "Ungültiger Warnungstyp." })
             .optional(),
     ),
+    /** Plate or driver name. */
+    search: z
+        .string({ error: "Suche muss Text sein." })
+        .trim()
+        .max(ALERT_SEARCH_MAX, `Suche höchstens ${ALERT_SEARCH_MAX} Zeichen.`)
+        .optional()
+        .default(""),
 });
 
 export type AlertListQuery = z.infer<typeof alertListQuerySchema>;
@@ -342,6 +360,20 @@ export const alertBulkPatchSchema = z.object({
     resolved: z.literal(true, { error: "resolved muss true sein." }),
 });
 
+const alertBulkFilterPatchSchema = z.object({
+    filter: z.object({
+        type: z.literal("SPEEDING", { error: "Nur Tempo-Warnungen lassen sich erledigen." }),
+        vehicle_id: z.number().int().positive().optional(),
+        driver_id: z.number().int().positive().optional(),
+        search: z.string().trim().max(ALERT_SEARCH_MAX).optional(),
+    }),
+    expected: z
+        .number({ error: "expected muss eine Zahl sein." })
+        .int()
+        .positive(),
+    resolved: z.literal(true, { error: "resolved muss true sein." }),
+});
+
 export function parseAlertListQuery(input: unknown): AlertListQuery {
     return alertListQuerySchema.parse(input);
 }
@@ -351,7 +383,9 @@ export function parseAlertPatch(input: unknown): AlertPatch {
 }
 
 export function parseAlertBulkPatch(input: unknown): AlertBulkPatch {
-    return alertBulkPatchSchema.parse(input);
+    return typeof input === "object" && input !== null && "filter" in input
+        ? alertBulkFilterPatchSchema.parse(input)
+        : alertBulkPatchSchema.parse(input);
 }
 
 export function serializeAlertListQuery(
@@ -389,6 +423,10 @@ export function serializeAlertListQuery(
 
     if (query.type !== undefined) {
         params.set("type", query.type);
+    }
+
+    if (query.search) {
+        params.set("search", query.search);
     }
 
     return params;

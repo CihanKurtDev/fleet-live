@@ -225,4 +225,50 @@ describe("repairData: other states the rules do not allow", () => {
         repairData();
         assert.equal(state("K-ID 1").depot_site_id, site.id);
     });
+
+    it("never lets a trip end before it began", () => {
+        const { idle } = setup();
+        const id = Number(
+            db
+                .prepare(
+                    `INSERT INTO trips (vehicle_id, started_at, ended_at, path) VALUES (?, '2026-11-18 10:12:50', '2026-11-12 14:13:50', '')`,
+                )
+                .run(idle.id).lastInsertRowid,
+        );
+
+        assert.equal(rule(repairData(), "trips_out_of_order").count, 1);
+        assert.equal(
+            (db.prepare(`SELECT ended_at FROM trips WHERE id = ?`).get(id) as { ended_at: string }).ended_at,
+            "2026-11-18 10:12:50",
+        );
+        assert.equal(rule(repairData(), "trips_out_of_order").count, 0);
+    });
+
+    it("takes the driver off a vehicle that is in the workshop", () => {
+        const { idle } = setup();
+        const driverId = Number(db.prepare(`INSERT INTO drivers (company_id, name) VALUES (1, 'Hanna Werk')`).run().lastInsertRowid);
+        db.prepare(`INSERT INTO driver_vehicles (driver_id, vehicle_id) VALUES (?, ?)`).run(driverId, idle.id);
+        db.prepare(`UPDATE vehicles SET current_driver_id = ?, driver_name = 'Hanna Werk' WHERE id = ?`).run(driverId, idle.id);
+        db.prepare(
+            `INSERT INTO workshop_visits (vehicle_id, reasons, state, place, planned_on, expected_on) VALUES (?, json_array('OTHER'), 'IN_WORKSHOP', 'Weber', '2026-11-03', '2026-11-03')`,
+        ).run(idle.id);
+
+        assert.deepEqual(rule(repairData({ dryRun: true }), "driver_in_workshop").examples, ["K-ID 1"]);
+        assert.equal(state("K-ID 1").current_driver_id, driverId);
+        repairData();
+        assert.equal(state("K-ID 1").current_driver_id, null);
+    });
+});
+
+describe("TripModel.close", () => {
+    it("never ends a trip before it began", () => {
+        const car = VehicleModel.create({ license_plate: "K-TC 1", company_id: 1 });
+        TripModel.open(car.id);
+        const open = db.prepare(`SELECT id, started_at FROM trips WHERE vehicle_id = ?`).get(car.id) as { id: number; started_at: string };
+
+        TripModel.close(car.id, "2000-01-01 00:00:00");
+
+        const closed = db.prepare(`SELECT ended_at FROM trips WHERE id = ?`).get(open.id) as { ended_at: string };
+        assert.equal(closed.ended_at, open.started_at);
+    });
 });

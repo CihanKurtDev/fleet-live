@@ -22,10 +22,10 @@ export type SimRoute = {
  */
 export const SIM_PING_SECONDS = 5;
 /**
- * Zeitraffer: Köln–Düsseldorf dauert grob 5–8 Minuten. Schneller lässt
- * sich ein fahrendes Fahrzeug auf der Karte nicht mehr anklicken.
+ * 1 ist echtes Tempo. Ein Zeitraffer über Tage macht Kilometer, Fahrten und
+ * Warnungen unglaubhaft: bei 5 fuhr ein Fahrzeug 10.000 km am Tag.
  */
-export const TIME_SCALE = 5;
+export const TIME_SCALE = 1;
 export const CITY_LIMIT_KMH = 50;
 export const HIGHWAY_LIMIT_KMH = 120;
 /** The stretch between town and motorway (a Zubringer), as one class. */
@@ -43,8 +43,13 @@ export const SIM_CLASS_LIMITS: Record<"default" | "TRUCK", { city: number; ramp:
 
 /** A simulated truck is governed: it never shows more than this. */
 export const SIM_TRUCK_GOVERNOR_KMH = 89;
-/** Jedes 8. Fahrzeug darf über dem Klassenlimit fahren, sonst gibt es nie SPEEDING. */
-export const SIM_OVERSPEED_EVERY = 8;
+/** Jedes 5. Fahrzeug darf über dem Klassenlimit fahren, sonst gibt es nie SPEEDING. */
+export const SIM_OVERSPEED_EVERY = 5;
+/**
+ * Auch ein Raser rast nicht auf jeder Fahrt: Jede Fahrt mit Überschreitung ist
+ * eine Warnung. Bei rund drei Fahrten am Tag ist das etwa eine je Woche.
+ */
+export const SIM_OVERSPEED_TRIP_SHARE = 0.05;
 /**
  * Auch ein Raser fährt nicht die ganze Strecke zu schnell: die Straße ist in
  * Abschnitte dieser Länge geteilt, und auf jedem fährt er mit dieser
@@ -127,6 +132,30 @@ export function setSimDestination(vehicleId: number, point: LatLng): boolean {
 
 const progressByVehicle = new Map<number, Progress>();
 const lengthCache = new WeakMap<LatLng[], number>();
+
+/**
+ * The vehicle now stands here without having driven (towed, reported by hand):
+ * its next drive sets off from this place, not from where its road left off.
+ */
+export function setSimParked(vehicleId: number, point: LatLng) {
+    const state = progressByVehicle.get(vehicleId);
+
+    if (state) {
+        const { leg: _leg, dest: _dest, ...rest } = state;
+        progressByVehicle.set(vehicleId, { ...rest, parkedAt: point });
+        return;
+    }
+
+    const route = pickRoute(vehicleId, point);
+    const frac = nearestFraction(route.points, point);
+    progressByVehicle.set(vehicleId, {
+        routeId: route.id,
+        frac,
+        direction: frac <= 0.5 ? 1 : -1,
+        lap: 0,
+        parkedAt: point,
+    });
+}
 
 export function resetSimProgress() {
     progressByVehicle.clear();
@@ -487,7 +516,7 @@ function unitHash(...parts: number[]): number {
 
 /**
  * Faktor über dem Limit an dieser Stelle der Strecke: 1 für alle, die nicht
- * rasen, und für einen Raser außerhalb seiner Abschnitte.
+ * rasen, und für einen Raser außerhalb seiner seltenen Fahrten und Abschnitte.
  */
 export function simOverspeedFactor(
     vehicleId: number,
@@ -501,19 +530,25 @@ export function simOverspeedFactor(
     }
 
     const route = SIM_ROUTES.findIndex((entry) => entry.id === routeId);
+    const trip = [vehicleId, route, direction === 1 ? 1 : 2, lap];
+
+    if (unitHash(...trip) >= SIM_OVERSPEED_TRIP_SHARE) {
+        return 1;
+    }
+
     const stretch = Math.floor(metresFromStart / SIM_OVERSPEED_STRETCH_M);
-    const key = [vehicleId, route, direction === 1 ? 1 : 2, lap, stretch];
+    const key = [...trip, stretch];
 
     if (unitHash(...key) >= SIM_OVERSPEED_SHARE) {
         return 1;
     }
 
-    // Mostly a little over, now and then a lot: squared, so small overshoots
-    // are common and big ones rare, as on real roads.
+    // Mostly a little over, now and then a lot: to the fourth power, so small overshoots
+    // are common and 20 km/h over the motorway limit stays the exception.
     return (
         SIM_OVERSPEED_MIN_FACTOR +
         (SIM_OVERSPEED_MAX_FACTOR - SIM_OVERSPEED_MIN_FACTOR) *
-            unitHash(...key, 1) ** 2
+            unitHash(...key, 1) ** 4
     );
 }
 
@@ -881,6 +916,8 @@ export function nextSimTick(
         path,
         turnedAround,
         relocated,
-        parked: false,
+        // The end of the road is the end of the trip: the device reports
+        // ignition off, and `playNextTrips` sends the vehicle back later.
+        parked: turnedAround,
     };
 }

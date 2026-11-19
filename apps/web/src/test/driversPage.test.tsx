@@ -67,6 +67,7 @@ const listResponse = (data: Driver[]): DriverListResponse => ({
         total: data.length,
         pageCount: 1,
         counts: { all: 2851, talk: 5, without_vehicle: 31, licence_driving: 0 },
+        resolved_kept_days: 90,
     },
 });
 
@@ -132,7 +133,7 @@ describe("Fahrer list page", () => {
 
         expect(
             await screen.findByText(
-                "2.851 Fahrer · sortiert nach offenen Tempo-Warnungen",
+                "2.851 Fahrer · sortiert nach offenen Tempo-Warnungen · erledigte zählen 90 Tage",
             ),
         ).toBeInTheDocument();
         expect(screen.getByRole("heading", { name: "Fahrer" })).toBeInTheDocument();
@@ -140,7 +141,8 @@ describe("Fahrer list page", () => {
         const table = screen.getByRole("table", { name: "Fahrerliste" });
         expect(within(table).getByText("HH-FN 1218")).toBeInTheDocument();
         expect(within(table).getByText("4 freigegeben")).toBeInTheDocument();
-        expect(within(table).getByText("20 gesamt")).toBeInTheDocument();
+        expect(within(table).getByRole("columnheader", { name: /Tempo-Warnungen/ })).toBeInTheDocument();
+        expect(within(table).getByText("20")).toBeInTheDocument();
         expect(within(table).getByText("16 offen")).toBeInTheDocument();
         expect(within(table).getAllByText("keine offen")).toHaveLength(2);
         expect(within(table).getAllByText("Kein Fahrzeug").length).toBeGreaterThan(0);
@@ -168,6 +170,11 @@ describe("Fahrer list page", () => {
         expect(all).toHaveAttribute("aria-pressed", "false");
 
         fireEvent.click(without);
+        await waitFor(() => expect(lastQuery().without_vehicle).toBe(true));
+
+        fireEvent.click(screen.getByRole("button", { name: /Führerschein/ }));
+        await waitFor(() => expect(lastQuery().licence_driving).toBe(true));
+        fireEvent.click(screen.getByRole("button", { name: /Ohne Fahrzeug/ }));
         await waitFor(() => expect(lastQuery().without_vehicle).toBe(true));
         expect(lastQuery().min_open_warnings).toBeUndefined();
         expect(without).toHaveAttribute("aria-pressed", "true");

@@ -1,6 +1,8 @@
 import { Link } from "react-router";
 import {
     VEHICLE_STATUS_LABELS,
+    berlinTodayIso,
+    endingUntil,
     type BriefingCounts,
     type BriefingData,
     type DueCounts,
@@ -10,7 +12,7 @@ import { ImportPrompt } from "../components/auth/ImportPrompt";
 import { BriefingCharts } from "../components/briefing/BriefingCharts";
 import { FirstSteps } from "../components/briefing/FirstSteps";
 import { LiveBand } from "../components/briefing/LiveBand";
-import { TodayPanel } from "../components/briefing/TodayPanel";
+import { ShiftPlan } from "../components/briefing/ShiftPlan";
 import { KpiTileView, type KpiTileTone } from "../components/ui/KpiTiles/KpiTiles";
 import { PageTips } from "../components/help/PageTips";
 import { dueSoonLabel } from "../components/due/dueLabels";
@@ -21,7 +23,6 @@ import { RetryMessage } from "../components/ui/RetryMessage";
 import { useAuth } from "../hooks/useAuth";
 import { useBriefing } from "../hooks/useBriefing";
 import { usePageTitle } from "../hooks/usePageTitle";
-import { formatCount } from "../utils/formatCount";
 import styles from "./BriefingPage.module.scss";
 import band from "../styles/pageBand.module.scss";
 
@@ -34,29 +35,21 @@ const briefingDateLabel = (now = new Date()) =>
 
 /** Every vehicle has one of these statuses, so all zero means none yet. */
 const hasNoVehicles = (counts: BriefingCounts) =>
-    counts.driving + counts.idle + counts.stopped + counts.offline === 0;
+    counts.driving + counts.idle + counts.stopped + counts.offline + counts.unconnected === 0;
 
-/** The line under the title. A viewer reads the state; only a dispatcher is asked to act. */
-const briefingNeed = (counts: BriefingCounts, canWrite: boolean) => {
-    const { open } = counts;
-
+/**
+ * The line under the title. The counts are in the tiles, so it says only
+ * what they cannot: an empty company, or that the weekend comes before the
+ * next working day.
+ */
+const briefingNeed = (counts: BriefingCounts) => {
     if (hasNoVehicles(counts)) {
         return "Noch keine Fahrzeuge in dieser Firma.";
     }
 
-    if (open === 0) {
-        return "Keine offenen Warnungen.";
-    }
-
-    if (!canWrite) {
-        return open === 1 ? "1 offene Warnung." : `${formatCount(open)} offene Warnungen.`;
-    }
-
-    if (open === 1) {
-        return "1 offene Warnung braucht dich.";
-    }
-
-    return `${formatCount(open)} offene Warnungen brauchen dich.`;
+    const today = berlinTodayIso();
+    const friday = new Date(`${today}T12:00:00Z`).getUTCDay() === 5;
+    return friday && endingUntil(today) !== today ? "der letzte Werktag vor dem Wochenende" : null;
 };
 
 const Kpis = ({ counts }: { counts: BriefingCounts }) => {
@@ -70,14 +63,14 @@ const Kpis = ({ counts }: { counts: BriefingCounts }) => {
         {
             key: "open",
             label: "Offen",
-            hint: "Warnungen",
+            hint: counts.open === 1 ? "Warnung" : "Warnungen",
             tone: "critical",
             to: "/alerts",
         },
         {
             key: "offline",
             label: VEHICLE_STATUS_LABELS.OFFLINE,
-            hint: "Fahrzeuge",
+            hint: counts.offline === 1 ? "Fahrzeug" : "Fahrzeuge",
             tone: "critical",
             to: "/alerts?type=OFFLINE",
         },
@@ -210,7 +203,7 @@ const BriefingBody = ({
     canWrite: boolean;
 }) => (
     <>
-        <LiveBand labelledBy="briefing-title">
+        <LiveBand labelledBy="briefing-title" stopped={data.counts.stopped}>
             <header className={styles.headGrid}>
                 <h1
                     id="briefing-title"
@@ -219,10 +212,13 @@ const BriefingBody = ({
                     Schicht
                 </h1>
                 <p className={styles.subtitle}>
-                    {briefingDateLabel()} ·{" "}
-                    <span className={styles.need}>
-                        {briefingNeed(data.counts, canWrite)}
-                    </span>
+                    {briefingDateLabel()}
+                    {briefingNeed(data.counts) && (
+                        <>
+                            {" · "}
+                            <span className={styles.need}>{briefingNeed(data.counts)}</span>
+                        </>
+                    )}
                 </p>
                 <FirstSteps className={styles.headSteps} />
                 <div className={styles.headAction}>
@@ -248,10 +244,12 @@ const BriefingBody = ({
             </div>
         </LiveBand>
         <ImportPrompt companyEmpty={hasNoVehicles(data.counts)} />
-        <BriefingCharts
-            history={data.history}
-            lead={<TodayPanel companyEmpty={hasNoVehicles(data.counts)} />}
+        <ShiftPlan
+            due={data.due}
+            leadDays={data.due_lead_days}
+            companyEmpty={hasNoVehicles(data.counts)}
         />
+        <BriefingCharts history={data.history} />
         <PageTips page="briefing" />
     </>
 );

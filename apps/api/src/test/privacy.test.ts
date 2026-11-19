@@ -6,6 +6,7 @@ import { formatAuditEvent, type AuditEvent } from "@fleet-live/shared";
 import { app } from "../app";
 import { config } from "../config";
 import { db } from "../db/database";
+import { pruneClosedDamages } from "../db/damageRetention";
 import { sqliteDaysAgo } from "../lib/sqlTime";
 import { AuditModel } from "../models/audit.model";
 import { TripModel } from "../models/trip.model";
@@ -42,12 +43,60 @@ describe("retention per company", () => {
             viewer_driver_names: true,
             trips_days: null,
             alerts_days: null,
+            damages_days: null,
             audit_days: null,
             trips: config.tripRetentionDays,
             alerts: 90,
+            damages: 365,
             audit: 365,
-            defaults: { trips: config.tripRetentionDays, alerts: 90, audit: 365 },
+            defaults: { trips: config.tripRetentionDays, alerts: 90, damages: 365, audit: 365 },
         });
+    });
+
+    it("takes photos, place and driver off a damage closed long enough ago, and only there", async () => {
+        const { agent } = await loginAs(1);
+        const mine = vehicle("K-AUF 5", 1);
+        const add = (vehicleId: number, state: string, closedOn: string | null) => {
+            const { lastInsertRowid } = db
+                .prepare(
+                    `INSERT INTO vehicle_damages
+                     (vehicle_id, occurred_on, description, severity, state, closed_on, latitude, longitude, driver_name)
+                     VALUES (?, '2026-01-01', 'Delle', 'MINOR', ?, ?, 50.9, 6.9, 'Eda Yilmaz')`,
+                )
+                .run(vehicleId, state, closedOn);
+            const id = Number(lastInsertRowid);
+            db.prepare("INSERT INTO damage_photos (damage_id, content_type, data) VALUES (?, 'image/png', ?)").run(
+                id,
+                new Uint8Array([1, 2, 3]),
+            );
+            return id;
+        };
+        const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+        const old = add(mine.id, "REPAIRED", daysAgo(40));
+        const recent = add(mine.id, "CLOSED", daysAgo(10));
+        const open = add(mine.id, "OPEN", null);
+        const theirs = add(vehicle("K-AUF 6", 2).id, "REPAIRED", daysAgo(40));
+
+        // Nothing is due at the default of 365 days.
+        assert.equal(pruneClosedDamages(db), 0);
+
+        const saved = await agent.patch("/api/auth/privacy").send({ damages_days: 30 }).expect(200);
+        assert.deepEqual(saved.body.deleted, { trips: 0, alerts: 0, damages: 1, audit: 0 });
+        assert.equal(saved.body.data.damages, 30);
+
+        const row = (id: number) =>
+            db
+                .prepare(
+                    `SELECT d.description, d.latitude, d.driver_name,
+                            (SELECT COUNT(*) FROM damage_photos p WHERE p.damage_id = d.id) AS photos
+                     FROM vehicle_damages d WHERE d.id = ?`,
+                )
+                .get(id) as { description: string; latitude: number | null; driver_name: string | null; photos: number };
+
+        assert.deepEqual({ ...row(old) }, { description: "Delle", latitude: null, driver_name: null, photos: 0 });
+        for (const kept of [recent, open, theirs]) {
+            assert.deepEqual({ ...row(kept) }, { description: "Delle", latitude: 50.9, driver_name: "Eda Yilmaz", photos: 1 });
+        }
     });
 
     it("deletes closed trips past the company's days at once, and only there", async () => {
@@ -61,7 +110,7 @@ describe("retention per company", () => {
 
         const saved = await agent.patch("/api/auth/privacy").send({ trips_days: 30 }).expect(200);
         assert.equal(saved.body.data.trips, 30);
-        assert.deepEqual(saved.body.deleted, { trips: 1, alerts: 0, audit: 0 });
+        assert.deepEqual(saved.body.deleted, { trips: 1, alerts: 0, damages: 0, audit: 0 });
         assert.equal(count("SELECT COUNT(*) AS n FROM trips WHERE vehicle_id = ?", mine.id), 2);
         assert.equal(count("SELECT COUNT(*) AS n FROM trips WHERE vehicle_id = ? AND ended_at IS NULL", mine.id), 1);
         assert.equal(count("SELECT COUNT(*) AS n FROM trips WHERE vehicle_id = ?", theirs.id), 1);
@@ -185,22 +234,57 @@ describe("driver names for viewers", () => {
         assert.equal((await dispatcher.get("/api/auth/me")).body.driver_names_hidden, false);
     });
 
-    it("leave the drivers to talk to out of the viewer's day list", async () => {
-        const { dispatcher, van } = await setup();
-        for (let index = 0; index < 5; index += 1) {
-            insertAlert(van.id, {
-                driver_id: Number((db.prepare("SELECT id FROM drivers WHERE name = 'Ada'").get() as { id: number }).id),
-                ended_at: sqliteDaysAgo(1),
-            });
-        }
+    it("leave the drivers' licence checks out of the viewer's day list", async () => {
+        const { dispatcher, ada, van } = await setup();
+        // Ada drives the van and was never checked.
+        db.prepare("UPDATE drivers SET licence_expires_on = '2099-01-01', licence_checked_on = NULL WHERE id = ?").run(ada);
+        db.prepare("INSERT OR IGNORE INTO driver_vehicles (driver_id, vehicle_id) VALUES (?, ?)").run(ada, van.id);
+        db.prepare("UPDATE vehicles SET current_driver_id = ?, driver_name = 'Ada' WHERE id = ?").run(ada, van.id);
         const { agent: viewer } = await loginAs(1, "viewer");
         const before = await viewer.get("/api/today").expect(200);
-        assert.ok(before.body.meta.counts.driver_talk >= 1);
+        assert.ok(before.body.meta.counts.check_overdue >= 1);
 
         await dispatcher.patch("/api/auth/privacy").send({ viewer_driver_names: false }).expect(200);
         const after = await viewer.get("/api/today").expect(200);
-        assert.equal(after.body.meta.counts.driver_talk, 0);
-        assert.equal(after.body.data.some((row: { kind: string }) => row.kind === "driver_talk"), false);
+        assert.equal(after.body.meta.counts.check_overdue, 0);
+        assert.equal(after.body.data.groups.some((group: { kind: string }) => group.kind === "check_overdue"), false);
+    });
+
+    it("are kept out of damages, workshop stays and the licence row too", async () => {
+        const { dispatcher, ada, van } = await setup();
+        db.prepare("UPDATE drivers SET licence_expires_on = '2020-01-01' WHERE id = ?").run(ada);
+        db.prepare("INSERT OR IGNORE INTO driver_vehicles (driver_id, vehicle_id) VALUES (?, ?)").run(ada, van.id);
+        db.prepare("UPDATE vehicles SET current_driver_id = ?, driver_name = 'Ada' WHERE id = ?").run(ada, van.id);
+        db.prepare(
+            "INSERT INTO vehicle_damages (vehicle_id, occurred_on, description, severity, drivable, driver_id, driver_name) VALUES (?, '2026-10-20', 'Delle', 'MINOR', 1, ?, 'Ada')",
+        ).run(van.id, ada);
+        db.prepare(
+            "INSERT INTO workshop_visits (vehicle_id, reasons, state, place, planned_on, expected_on, bring_driver_id) VALUES (?, json_array('HU'), 'PLANNED', 'Weber', '2099-01-01', '2099-01-01', ?)",
+        ).run(van.id, ada);
+        const { agent: viewer } = await loginAs(1, "viewer");
+
+        const shown = await viewer.get(`/api/vehicles/${van.id}/damages`).expect(200);
+        assert.equal(shown.body.data[0].driver_name, "Ada");
+        assert.equal((await viewer.get(`/api/vehicles/${van.id}/workshop`)).body.data.open.bring_driver_name, "Ada");
+        assert.ok((await viewer.get("/api/today")).body.meta.counts.licence_driving >= 1);
+
+        await dispatcher.patch("/api/auth/privacy").send({ viewer_driver_names: false }).expect(200);
+
+        const damage = (await viewer.get(`/api/vehicles/${van.id}/damages`)).body.data[0];
+        assert.equal(damage.driver_name, null);
+        assert.equal(damage.driver_id, null);
+        const stay = (await viewer.get(`/api/vehicles/${van.id}/workshop`)).body.data.open;
+        assert.equal(stay.bring_driver_name, null);
+        assert.equal(stay.bring_driver_id, null);
+        const today = (await viewer.get("/api/today")).body;
+        assert.equal(today.meta.counts.licence_driving, 0);
+        assert.equal(today.data.groups.some((group: { kind: string }) => group.kind === "licence_driving"), false);
+
+        // Who may bring a vehicle is a dispatcher's list, whatever the setting.
+        await viewer.get(`/api/vehicles/${van.id}/workshop/bringers`).expect(403);
+
+        assert.equal((await dispatcher.get(`/api/vehicles/${van.id}/damages`)).body.data[0].driver_name, "Ada");
+        assert.equal((await dispatcher.get(`/api/vehicles/${van.id}/workshop`)).body.data.open.bring_driver_name, "Ada");
     });
 
     it("is a logged change", async () => {

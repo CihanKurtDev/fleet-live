@@ -18,6 +18,13 @@ export function withoutDriver<T extends { driver_id: number | null; driver_name:
     return { ...row, driver_id: null, driver_name: null };
 }
 
+/** A workshop stay without who brings it, for the same viewer. */
+export function withoutBringer<T extends { bring_driver_id: number | null; bring_driver_name: string | null }>(
+    row: T,
+): T {
+    return { ...row, bring_driver_id: null, bring_driver_name: null };
+}
+
 export const DRIVER_NAMES_HIDDEN = "Fahrerdaten sind in dieser Firma Dispatchern vorbehalten.";
 
 /** Driver pages for a viewer the company keeps names from: 403. */

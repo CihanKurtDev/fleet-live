@@ -82,6 +82,7 @@ const listResponse = (data: Vehicle[]): VehicleListResponse => ({
             driving: 12,
             idle: 20,
             offline: 3,
+            unconnected: 0,
             stopped: 7,
             in_depot: 7,
             speeding: 2,

@@ -97,8 +97,23 @@
         }
 
         :global(td[data-col="name"])::before,
-        :global(td[data-col="open_warnings"])::before {
+        :global(td[data-col="open_warnings"])::before,
+        :global(td[data-col="last_warning_at"])::before {
             display: none;
+        }
+
+        /* The row button takes the full width, so its label is never cut. */
+        :global(td[data-col="last_warning_at"]) {
+            grid-column: 1 / -1;
+            overflow: visible;
+        }
+
+        :global(td[data-col="last_warning_at"]:empty) {
+            display: none;
+        }
+
+        :global(td[data-col="last_warning_at"] button) {
+            width: 100%;
         }
 
         /* Selection mode: the checkbox sits left of the name. */

@@ -1,7 +1,7 @@
 import type { TodayResponse } from "@fleet-live/shared";
 import { request } from "./client";
 
-/** The Schicht task list: the `limit` most urgent tasks plus all counts. */
-export function getToday(limit: number, signal?: AbortSignal) {
-    return request<TodayResponse>(`/api/today?limit=${limit}`, { signal });
+/** Schicht: „Heute“ (everything in use that may or can not drive) and the next working days. */
+export function getToday(signal?: AbortSignal) {
+    return request<TodayResponse>("/api/today", { signal });
 }

@@ -17,21 +17,21 @@ export const useDriver = (id: number | null) => {
     const requestKey =
         id === null ? "null" : `${id}\0${listEpoch}\0${retryKey}`;
     const [fetchKey, setFetchKey] = useState(requestKey);
+    const [fetchId, setFetchId] = useState(id);
 
     if (requestKey !== fetchKey) {
         setFetchKey(requestKey);
 
-        if (id === null) {
+        // A live refresh of the same driver keeps what is on screen: dialogs,
+        // input and the scroll position stay. Only another driver starts empty.
+        if (id !== fetchId) {
+            setFetchId(id);
             setDriver(null);
-            setIsLoading(false);
-            setNotFound(true);
-            setError(null);
-        } else {
-            setDriver(null);
-            setIsLoading(true);
-            setNotFound(false);
-            setError(null);
         }
+
+        setIsLoading(id !== null);
+        setNotFound(id === null);
+        setError(null);
     }
 
     useEffect(() => {

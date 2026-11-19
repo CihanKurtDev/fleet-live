@@ -24,6 +24,7 @@ export {
     storedHuMonth,
     isVehicleStatus,
     isVehicleType,
+    normalizeLicensePlate,
     normalizeVin,
     parseHuDate,
     parseVehicleType,
@@ -97,6 +98,7 @@ export {
 
 export type {
     Alert,
+    AlertBulkFilter,
     AlertBulkPatch,
     AlertBulkPatchResponse,
     AlertDetails,
@@ -146,7 +148,6 @@ export {
     parseAlertPatch,
     SELF_CLOSING_ALERT_TYPES,
     serializeAlertListQuery,
-    SPEEDING_OPEN_DAYS,
 } from "./models/alert";
 
 export type { Site, SiteHomeStatus, SiteInput, SiteListResponse, SitePatch } from "./models/site";
@@ -616,14 +617,23 @@ export {
 } from "./models/fleet";
 export type {
     TodayCounts,
+    TodayGroup,
     TodayItem,
     TodayKind,
-    TodayQuery,
     TodayResponse,
+    TodaySection,
+    TodayStay,
+    WeekDay,
+    WeekItem,
+    WeekKind,
 } from "./models/today";
 export {
-    parseTodayQuery,
+    endingUntil,
+    nextWorkday,
+    TODAY_GROUP_MAX,
     TODAY_KINDS,
-    TODAY_LIMIT_DEFAULT,
-    TODAY_LIMIT_MAX,
+    TODAY_SECTION_OF,
+    TODAY_SECTIONS,
+    WEEK_KINDS,
+    WEEK_MIN_DAYS,
 } from "./models/today";

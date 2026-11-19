@@ -2,13 +2,15 @@ import type { Request, Response } from "express";
 import { isDamagePhotoType, parseDamageInput, parseDamagePatch } from "@fleet-live/shared";
 
 import { AppError, UnauthorizedError } from "../lib/errors";
+import { hidesDriverNames, withoutDriver } from "../lib/driverNames";
 import { notifyVehiclesChanged, parseId, sessionCompany } from "../lib/http";
 import { DamageModel } from "../models/damage.model";
 
 export function getVehicleDamages(req: Request, res: Response) {
     const companyId = sessionCompany(req);
     const vehicleId = parseId(req.params.id, "Fahrzeug-ID");
-    res.json({ data: DamageModel.forVehicle(vehicleId, companyId) });
+    const damages = DamageModel.forVehicle(vehicleId, companyId);
+    res.json({ data: hidesDriverNames(req) ? damages.map(withoutDriver) : damages });
 }
 
 export function createVehicleDamage(req: Request, res: Response) {

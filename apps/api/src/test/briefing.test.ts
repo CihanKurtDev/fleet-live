@@ -259,6 +259,45 @@ describe("GET /api/briefing", () => {
         assert.equal(row(older)?.active_vehicles, null);
     });
 
+    it("keeps who drove in a month after its trips pass the retention", async () => {
+        const month = briefingMonthKeys()[0];
+        const car = VehicleModel.create({ license_plate: "K-RT 1", company_id: 1 });
+        const other = VehicleModel.create({ license_plate: "K-RT 2", company_id: 2 });
+        const driver = db
+            .prepare("INSERT INTO drivers (company_id, name) VALUES (1, 'Rita Rollup')")
+            .run().lastInsertRowid;
+        const insertTrip = db.prepare(
+            "INSERT INTO trips (vehicle_id, driver_id, started_at, ended_at, path, distance_m) VALUES (?, ?, ?, ?, '', 1000)",
+        );
+        const at = `${month}-05 08:00:00`;
+        insertTrip.run(car.id, driver, at, at);
+        insertTrip.run(other.id, null, at, at);
+        TripModel.addClosedDistance(1, at, 1_000);
+        TripModel.addClosedDistance(2, at, 1_000);
+
+        assert.equal(TripModel.pruneClosedForCompany(1), 1);
+
+        const history = (await api.get("/api/briefing")).body.data.history as Array<{
+            month: string;
+            active_drivers: number | null;
+            active_vehicles: number | null;
+            distance_m: number;
+        }>;
+        const row = history.find((entry) => entry.month === month);
+
+        assert.equal(row?.active_drivers, 1);
+        assert.equal(row?.active_vehicles, 1);
+        assert.equal(row?.distance_m, 1_000);
+        // A later prune with nothing left must not wipe the sums.
+        assert.equal(TripModel.pruneClosedForCompany(1), 0);
+        assert.equal(
+            (await api.get("/api/briefing")).body.data.history.find(
+                (entry: { month: string }) => entry.month === month,
+            ).active_drivers,
+            1,
+        );
+    });
+
     it("counts this company's deadlines and skips the other tenant", async () => {
         VehicleModel.create({
             license_plate: "K-HU 1",

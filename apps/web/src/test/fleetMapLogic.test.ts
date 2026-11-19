@@ -105,6 +105,7 @@ describe("status counts", () => {
             IDLE: 0,
             STOPPED: 0,
             OFFLINE: 0,
+            UNCONNECTED: 0,
         });
         const totals = countDensityStatus(
             [

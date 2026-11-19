@@ -1,5 +1,6 @@
 import type {
     Alert,
+    AlertBulkFilter,
     AlertDetails,
     AlertListQuery,
     AlertListResponse,
@@ -8,13 +9,16 @@ import type {
     AlertType,
     SpeedingAlertDetails,
 } from "@fleet-live/shared";
-import { formatAlertEvent, isSpeedingAlertDetails } from "@fleet-live/shared";
+import {
+    DRIVER_TALK_MIN_OPEN_WARNINGS,
+    formatAlertEvent,
+    isSpeedingAlertDetails,
+} from "@fleet-live/shared";
 import { withTransaction } from "../db/database";
 import { SELF_CLOSING_TYPES_SQL } from "../db/stateAlerts";
 import { stmt } from "../db/statements";
 import { overLimitKmh, speedingSeverity } from "../lib/speeding";
 import { nowSqlite } from "../lib/sqlTime";
-import { pagedQuery } from "../lib/pagination";
 import { PrivacyModel } from "./privacy.model";
 
 const ALERT_COLUMNS = `
@@ -232,19 +236,6 @@ type AlertSqlRow = Omit<Alert, "details"> & {
     total?: number;
 };
 
-type FacetRow = {
-    all_count: number;
-    open_count: number;
-    resolved_count: number;
-};
-
-type TypeFacetRow = {
-    all_count: number;
-    speeding_count: number;
-    low_fuel_count: number;
-    offline_count: number;
-};
-
 function parseDetails(raw: unknown): AlertDetails | null {
     if (raw == null) {
         return null;
@@ -306,124 +297,161 @@ function currentDriverId(vehicleId: number): number | null {
     return row?.current_driver_id ?? null;
 }
 
+type AlertScope = { sql: string; params: Array<number | string>; narrowed: boolean };
+type AlertCountGroup = { type: AlertType; open: number; resolved: number; all: number };
+
+/** Vehicle, driver and search of a list. The search finds the vehicles and drivers first. */
+function alertScope(
+    companyId: number,
+    query: { vehicle_id?: number; driver_id?: number; search: string },
+    searchDrivers: boolean,
+): AlertScope {
+    const parts: string[] = [];
+    const params: Array<number | string> = [];
+
+    if (query.vehicle_id !== undefined) {
+        parts.push("AND a.vehicle_id = ?");
+        params.push(query.vehicle_id);
+    }
+
+    if (query.driver_id !== undefined) {
+        parts.push("AND a.driver_id = ?");
+        params.push(query.driver_id);
+    }
+
+    if (query.search !== "") {
+        const like = `%${query.search.toLowerCase().replace(/[#%_]/g, "#$&")}%`;
+        const plates = "a.vehicle_id IN (SELECT id FROM vehicles WHERE company_id = ? AND lower(license_plate) LIKE ? ESCAPE '#')";
+
+        parts.push(
+            searchDrivers
+                ? `AND (${plates} OR a.driver_id IN (SELECT id FROM drivers WHERE company_id = ? AND lower(name) LIKE ? ESCAPE '#'))`
+                : `AND ${plates}`,
+        );
+        params.push(companyId, like, ...(searchDrivers ? [companyId, like] : []));
+    }
+
+    return { sql: parts.join("\n"), params, narrowed: parts.length > 0 };
+}
+
+/** Open and resolved per type: running counters, or a count where the list is narrowed. */
+function countGroups(companyId: number, scope: AlertScope): AlertCountGroup[] {
+    const rows = (
+        scope.narrowed
+            ? stmt(`
+                SELECT a.type, SUM(a.resolved_at IS NULL) AS open_count, SUM(a.resolved_at IS NOT NULL) AS resolved_count
+                FROM alerts a
+                WHERE a.company_id = ? ${scope.sql}
+                GROUP BY a.type
+            `).all(companyId, ...scope.params)
+            : stmt("SELECT type, open_count, resolved_count FROM alert_counts WHERE company_id = ?").all(companyId)
+    ) as Array<{ type: AlertType; open_count: number; resolved_count: number }>;
+
+    return rows.map((row) => ({
+        type: row.type,
+        open: Number(row.open_count),
+        resolved: Number(row.resolved_count),
+        all: Number(row.open_count) + Number(row.resolved_count),
+    }));
+}
+
 export class AlertModel {
     static listForCompany(
         companyId: number,
         query: AlertListQuery,
+        options: { searchDrivers?: boolean } = {},
     ): AlertListResponse {
+        const scope = alertScope(companyId, query, options.searchDrivers !== false);
+        const groups = countGroups(companyId, scope);
         const offset = (query.page - 1) * query.limit;
-        const filterSql = FILTER_SQL[query.filter];
-        const vehicleSql =
-            query.vehicle_id !== undefined ? "AND a.vehicle_id = ?" : "";
-        const driverSql =
-            query.driver_id !== undefined ? "AND a.driver_id = ?" : "";
-        const typeSql = query.type !== undefined ? "AND a.type = ?" : "";
         const sortColumn = SORT_SQL[query.sort];
         const sortDirection = query.dir === "asc" ? "ASC" : "DESC";
-        const nullsLast =
-            query.sort === "driver_name" ? "d.name IS NULL, " : "";
-        const scopeParams = [
-            ...(query.vehicle_id !== undefined ? [query.vehicle_id] : []),
-            ...(query.driver_id !== undefined ? [query.driver_id] : []),
-        ];
-        const typeParams =
-            query.type !== undefined ? [query.type] : [];
-
-        const listSql = `
-            SELECT
-                ${ALERT_COLUMNS},
-                COUNT(*) OVER () AS total
+        const nullsLast = query.sort === "driver_name" ? "d.name IS NULL, " : "";
+        const typeSql = query.type !== undefined ? "AND a.type = ?" : "";
+        const typeParams = query.type !== undefined ? [query.type] : [];
+        // CROSS JOIN keeps the warnings first: the index gives their order,
+        // so a page reads its rows and no more.
+        const rows = stmt(`
+            SELECT ${ALERT_COLUMNS}
             FROM alerts a
-            INNER JOIN vehicles v ON v.id = a.vehicle_id
+            CROSS JOIN vehicles v ON v.id = a.vehicle_id
             LEFT JOIN drivers d ON d.id = a.driver_id
-            WHERE v.company_id = ?
-              ${vehicleSql}
-              ${driverSql}
-              ${filterSql}
+            WHERE a.company_id = ?
+              ${scope.sql}
+              ${FILTER_SQL[query.filter]}
               ${typeSql}
             ORDER BY ${nullsLast}${sortColumn} ${sortDirection}, a.id ${sortDirection}
             LIMIT ? OFFSET ?
-        `;
-        const countSql = `
-            SELECT COUNT(*) AS total
-            FROM alerts a
-            INNER JOIN vehicles v ON v.id = a.vehicle_id
-            WHERE v.company_id = ?
-              ${vehicleSql}
-              ${driverSql}
-              ${filterSql}
-              ${typeSql}
-        `;
-        const { data, meta } = pagedQuery<AlertSqlRow, Alert>({
-            listSql,
-            listParams: [
-                companyId,
-                ...scopeParams,
-                ...typeParams,
-                query.limit,
-                offset,
-            ],
-            countSql,
-            countParams: [companyId, ...scopeParams, ...typeParams],
-            page: query.page,
-            limit: query.limit,
-            map: toAlert,
-        });
+        `).all(companyId, ...scope.params, ...typeParams, query.limit, offset) as AlertSqlRow[];
 
-        const facetSql = `
-            SELECT
-                COUNT(*) AS all_count,
-                COALESCE(SUM(a.resolved_at IS NULL), 0) AS open_count,
-                COALESCE(SUM(a.resolved_at IS NOT NULL), 0) AS resolved_count
-            FROM alerts a
-            INNER JOIN vehicles v ON v.id = a.vehicle_id
-            LEFT JOIN drivers d ON d.id = a.driver_id
-            WHERE v.company_id = ?
-              ${vehicleSql}
-              ${driverSql}
-        `;
-        const counts = stmt(facetSql).get(
-            companyId,
-            ...scopeParams,
-        ) as FacetRow;
-
-        const typeFacetSql = `
-            SELECT
-                COUNT(*) AS all_count,
-                COALESCE(SUM(a.type = 'SPEEDING'), 0) AS speeding_count,
-                COALESCE(SUM(a.type = 'LOW_FUEL'), 0) AS low_fuel_count,
-                COALESCE(SUM(a.type = 'OFFLINE'), 0) AS offline_count
-            FROM alerts a
-            INNER JOIN vehicles v ON v.id = a.vehicle_id
-            LEFT JOIN drivers d ON d.id = a.driver_id
-            WHERE v.company_id = ?
-              ${vehicleSql}
-              ${driverSql}
-              ${filterSql}
-        `;
-        const typeCounts = stmt(typeFacetSql).get(
-            companyId,
-            ...scopeParams,
-        ) as TypeFacetRow;
+        const inFilter = (group: AlertCountGroup) => group[query.filter];
+        const total = groups
+            .filter((group) => query.type === undefined || group.type === query.type)
+            .reduce((sum, group) => sum + inFilter(group), 0);
+        const sumOf = (pick: (group: AlertCountGroup) => number) =>
+            groups.reduce((sum, group) => sum + pick(group), 0);
+        const typeCount = (type: AlertType) =>
+            groups.filter((group) => group.type === type).reduce((sum, group) => sum + inFilter(group), 0);
+        const talk = stmt(
+            "SELECT COUNT(*) AS n FROM drivers WHERE company_id = ? AND open_warnings >= ?",
+        ).get(companyId, DRIVER_TALK_MIN_OPEN_WARNINGS) as { n: number };
 
         return {
-            data,
+            data: rows.map(toAlert),
             meta: {
-                ...meta,
+                page: query.page,
+                limit: query.limit,
+                total,
+                pageCount: Math.max(1, Math.ceil(total / query.limit)),
                 counts: {
-                    all: Number(counts.all_count),
-                    open: Number(counts.open_count),
-                    resolved: Number(counts.resolved_count),
+                    all: sumOf((group) => group.all),
+                    open: sumOf((group) => group.open),
+                    resolved: sumOf((group) => group.resolved),
                 },
                 type_counts: {
-                    all: Number(typeCounts.all_count),
-                    SPEEDING: Number(typeCounts.speeding_count),
-                    LOW_FUEL: Number(typeCounts.low_fuel_count),
-                    OFFLINE: Number(typeCounts.offline_count),
+                    all: sumOf(inFilter),
+                    SPEEDING: typeCount("SPEEDING"),
+                    LOW_FUEL: typeCount("LOW_FUEL"),
+                    OFFLINE: typeCount("OFFLINE"),
                 },
                 resolved_kept_days: PrivacyModel.alertDays(companyId),
+                talk_drivers: options.searchDrivers === false ? 0 : Number(talk.n),
             },
         };
+    }
+
+    /**
+     * Erledigt alle offenen Tempo-Warnungen eines Filters. `expected` ist die
+     * Zahl, die der Mensch bestätigt hat: Hat sich die Liste seitdem geändert,
+     * ändert sich nichts und zurück kommt die neue Zahl.
+     */
+    static resolveMatching(
+        companyId: number,
+        filter: AlertBulkFilter,
+        expected: number,
+    ): { resolved: number } | { changed: number } {
+        const scope = alertScope(companyId, { ...filter, search: filter.search ?? "" }, true);
+        const where = `
+            WHERE a.company_id = ?
+              ${scope.sql}
+              AND a.type = 'SPEEDING'
+              AND a.resolved_at IS NULL`;
+        const params = [companyId, ...scope.params];
+
+        return withTransaction(() => {
+            const { n } = stmt(`SELECT COUNT(*) AS n FROM alerts a ${where}`).get(...params) as { n: number };
+
+            if (Number(n) !== expected) {
+                return { changed: Number(n) };
+            }
+
+            const result = stmt(`
+                UPDATE alerts SET resolved_at = ?
+                WHERE id IN (SELECT a.id FROM alerts a ${where})
+            `).run(nowSqlite(), ...params);
+
+            return { resolved: Number(result.changes) };
+        });
     }
 
     static getById(id: number, companyId: number): Alert | undefined {

@@ -6,6 +6,7 @@ import {
 import type { TableColumn } from "../../types/table";
 import type { KpiTileTone } from "../ui/KpiTiles/KpiTiles";
 import type { DriverTileId } from "../../hooks/useDriverListQuery";
+import { formatCount } from "../../utils/formatCount";
 import { DriverVehicleCell, DriverWarningCell } from "./DriverTableCells";
 import styles from "./DriverTableCells.module.scss";
 
@@ -76,10 +77,11 @@ export const driverColumns: TableColumn<Driver>[] = [
     },
     {
         key: "counts",
-        displayText: "Verstöße",
-        width: "140px",
+        displayText: "Tempo gesamt",
+        headerText: "Tempo-Warnungen",
+        width: "150px",
         sortable: true,
-        render: (value) => `${value.all} gesamt`,
+        render: (value) => formatCount(value.all),
     },
     {
         key: "open_warnings",

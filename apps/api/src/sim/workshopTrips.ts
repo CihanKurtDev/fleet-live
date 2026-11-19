@@ -1,6 +1,5 @@
 import { isCompanySimRunning } from "../lib/simControl";
 import { DriveModel } from "../models/drive.model";
-import { TelemetryModel } from "../models/telemetry.model";
 import { WorkshopModel } from "../models/workshop.model";
 import { setSimDestination } from "./routes";
 
@@ -33,16 +32,11 @@ function timeToMinutes(time: string): number {
  * drives off again. The app only sees positions and ignition, and recognises
  * arrival and pickup from them (`WorkshopModel.detectArrivals`,
  * `WorkshopPlaceModel.applyPatches`). A vehicle that is towed or fetched by
- * the workshop is not driven: at the appointment it reports its position at
- * the workshop with the ignition off (the patches, for the ticker to apply).
+ * the workshop is not driven and not moved here: a person reports its arrival.
  * Returns the companies whose vehicles changed.
  */
-export function playWorkshopTrips(now = new Date()): {
-    companies: number[];
-    patches: NonNullable<ReturnType<typeof TelemetryModel.recordMovedTo>>[];
-} {
+export function playWorkshopTrips(now = new Date()): number[] {
     const companies = new Set<number>();
-    const patches: NonNullable<ReturnType<typeof TelemetryModel.recordMovedTo>>[] = [];
     const minutes = berlinMinutes(now);
 
     for (const target of WorkshopModel.simTargets()) {
@@ -65,17 +59,6 @@ export function playWorkshopTrips(now = new Date()): {
         }
 
         if (target.transport !== "DRIVER") {
-            if (!target.driving) {
-                const patch = TelemetryModel.recordMovedTo(
-                    target.vehicle_id,
-                    target.latitude,
-                    target.longitude,
-                );
-                if (patch) {
-                    patches.push(patch);
-                    companies.add(target.company_id);
-                }
-            }
             continue;
         }
 
@@ -94,5 +77,5 @@ export function playWorkshopTrips(now = new Date()): {
         }
     }
 
-    return { companies: [...companies], patches };
+    return [...companies];
 }

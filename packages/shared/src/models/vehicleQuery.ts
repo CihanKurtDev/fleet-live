@@ -22,6 +22,8 @@ export const VEHICLE_FILTERS = [
     "driving",
     "idle",
     "offline",
+    /** Das Gerät hat noch nie gemeldet (Status `UNCONNECTED`). */
+    "unconnected",
     /** Status `STOPPED`, auf der Liste „Feierabend“. */
     "stopped",
     "in_depot",
@@ -108,6 +110,7 @@ export type VehicleListCounts = {
     driving: number;
     idle: number;
     offline: number;
+    unconnected: number;
     stopped: number;
     in_depot: number;
     speeding: number;

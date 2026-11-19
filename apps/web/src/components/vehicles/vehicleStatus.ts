@@ -12,6 +12,7 @@ const VEHICLE_STATUS_COLORS: Record<VehicleStatus, string> = {
     IDLE: "#b45309",
     STOPPED: "#475569",
     OFFLINE: "#b91c1c",
+    UNCONNECTED: "#64748b",
 };
 
 /** Dieselben Farben, hell genug für die dunkle Karte. */
@@ -20,6 +21,7 @@ const VEHICLE_STATUS_COLORS_DARK: Record<VehicleStatus, string> = {
     IDLE: "#fbbf24",
     STOPPED: "#94a3b8",
     OFFLINE: "#f87171",
+    UNCONNECTED: "#94a3b8",
 };
 
 /** Farbe für die Karte im aktuellen Farbschema (Canvas kennt keine CSS-Variablen). */
@@ -40,4 +42,4 @@ export const MAP_STATUS_LEGEND: VehicleStatus[] = [
 ];
 
 /** Ein neu angelegtes Fahrzeug hat noch nichts gemeldet. */
-export const NEW_VEHICLE_STATUS: VehicleStatus = "OFFLINE";
+export const NEW_VEHICLE_STATUS: VehicleStatus = "UNCONNECTED";

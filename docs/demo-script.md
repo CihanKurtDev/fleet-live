@@ -9,7 +9,7 @@ Vorbereitung: `npm run db:seed`, Anwendung starten, Browser auf 1366×768, Dispa
 - Sprechertext: „fleet-live ist eine TypeScript-Flottenleitstelle mit Session-Login und mandantengetrennten Daten.“
 
 **8–20 s — Schichtüberblick**
-- Schichtüberblick zeigen: Lagekarte, Kacheln, Fristenzahlen und die Liste „Heute dran“.
+- Schichtüberblick zeigen: Lagekarte, Kacheln, Fristenzahlen „Heute“ (was im Einsatz heute nicht fahren darf) und „Als Nächstes planen“ (was demnächst abläuft).
 - Sprechertext: „Die Startseite bündelt den aktuellen Flottenzustand, Ausfälle, Fristen und die Aufgaben der Schicht. Jede Zahl führt zur Liste mit denselben Zeilen.“
 
 **20–35 s — Flottenkarte**

@@ -521,6 +521,7 @@ describe("GET /api/drivers page size and tile counts", () => {
             without_vehicle: 1,
             licence_driving: 0,
         });
+        assert.equal(all.body.meta.resolved_kept_days, 90);
 
         // The numbers do not move with a tile filter, but follow the search.
         const filtered = await api

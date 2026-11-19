@@ -22,6 +22,7 @@ import { stmt } from "../db/statements";
 import { VEHICLE_AVAILABILITY_SQL, WORKSHOP_TASK_SQL } from "../db/vehicleConcepts";
 import { DamageModel } from "./damage.model";
 import { OdometerModel } from "./odometer.model";
+import { TelemetryModel } from "./telemetry.model";
 import { WorkshopPlaceModel } from "./workshopPlace.model";
 import { AppError, NotFoundError, ValidationError } from "../lib/errors";
 import { nowSqlite } from "../lib/sqlTime";
@@ -560,9 +561,20 @@ export class WorkshopModel {
 
         refuseDriving(vehicleOf(visit.vehicle_id, companyId), "Es kommt in die Werkstatt");
 
-        withTransaction(() =>
-            markArrived(visitId, visit.vehicle_id, "HAND", nowSqlite(), actor),
-        );
+        const place = visit.workshop_id === null ? undefined : WorkshopPlaceModel.find(visit.workshop_id, companyId);
+
+        withTransaction(() => {
+            markArrived(visitId, visit.vehicle_id, "HAND", nowSqlite(), actor);
+
+            // It stands there now, also on the map (a towed vehicle did not drive).
+            if (place) {
+                TelemetryModel.recordMovedTo(visit.vehicle_id, place.latitude, place.longitude);
+            }
+        });
+
+        if (place) {
+            WorkshopPlaceModel.refreshInside(companyId);
+        }
 
         return visitOf(visitId, companyId);
     }
@@ -851,7 +863,7 @@ export class WorkshopModel {
                 UNION ALL
                 SELECT v.id, v.company_id, 'pickup', 'DRIVER', 0, 1, 1, NULL, NULL, NULL
                 FROM vehicles v
-                WHERE v.status NOT IN ('DRIVING', 'OFFLINE')
+                WHERE v.status NOT IN ('DRIVING', 'OFFLINE', 'UNCONNECTED')
                   AND v.current_driver_id IS NOT NULL
                   AND v.at_workshop_id IS NOT NULL
                   AND EXISTS (

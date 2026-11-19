@@ -36,7 +36,7 @@ export function pruneResolvedAlerts(database: DatabaseSync): number {
     try {
         database
             .prepare(
-                `WITH due AS (
+                `WITH due AS MATERIALIZED (
                      SELECT DISTINCT v.company_id AS company_id,
                             strftime('%Y-%m', a.created_at) AS month
                      FROM alerts a

@@ -14,7 +14,9 @@ export type RepairRuleId =
     | "driving_without_trip"
     | "offline_without_warning"
     | "alerts_out_of_order"
-    | "depot_presence";
+    | "depot_presence"
+    | "trips_out_of_order"
+    | "driver_in_workshop";
 
 export type RepairRuleReport = {
     id: RepairRuleId;
@@ -47,6 +49,9 @@ const EXAMPLES = 5;
  *    der letzten Meldung plus der Funkstille-Schwelle.
  * 4. Warnungen, die vor ihrer Entstehung beendet oder erledigt sind.
  * 5. Depot-Zugehörigkeit nach dem letzten Standort (`depot_site_id`).
+ * 6. Fahrten, die vor ihrem Beginn enden: das Ende wird der Beginn.
+ * 7. Ein Fahrzeug in der Werkstatt mit aktuellem Fahrer: die Ankunft nimmt
+ *    den Fahrer ab; der Fahrer bleibt dafür eingetragen (Eignung).
  *
  * Läuft der Reihe nach; Regel 2 sieht, was Regel 1 übrig lässt.
  */
@@ -253,6 +258,52 @@ export function repairData(
             label: "Depot-Zugehörigkeit passte nicht zum Standort (neu berechnet)",
             count: changed.length,
             examples: changed.slice(0, EXAMPLES),
+        });
+
+        // 6. Fahrten, die vor ihrem Beginn enden
+        const reversed = db
+            .prepare(
+                `SELECT t.id FROM trips t JOIN vehicles v ON v.id = t.vehicle_id
+                 WHERE t.ended_at IS NOT NULL AND t.ended_at < t.started_at${scope}`,
+            )
+            .all(...scopeParams) as Array<{ id: number }>;
+
+        if (!dryRun && reversed.length > 0) {
+            db.prepare(
+                `UPDATE trips SET ended_at = started_at
+                 WHERE id IN (SELECT value FROM json_each(?))`,
+            ).run(JSON.stringify(reversed.map((row) => row.id)));
+        }
+
+        reports.push({
+            id: "trips_out_of_order",
+            label: "Fahrten, die vor ihrem Beginn enden (Ende = Beginn)",
+            count: reversed.length,
+            examples: reversed.slice(0, EXAMPLES).map((row) => `Fahrt ${row.id}`),
+        });
+
+        // 7. Fahrer auf einem Fahrzeug in der Werkstatt
+        const parked = db
+            .prepare(
+                `SELECT v.id, v.license_plate FROM vehicles v
+                 WHERE v.current_driver_id IS NOT NULL
+                   AND v.status != 'DRIVING'
+                   AND EXISTS (SELECT 1 FROM workshop_visits w WHERE w.vehicle_id = v.id AND w.state = 'IN_WORKSHOP')${scope}`,
+            )
+            .all(...scopeParams) as Array<{ id: number; license_plate: string }>;
+
+        if (!dryRun && parked.length > 0) {
+            db.prepare(
+                `UPDATE vehicles SET current_driver_id = NULL, driver_name = NULL
+                 WHERE id IN (SELECT value FROM json_each(?))`,
+            ).run(JSON.stringify(parked.map((row) => row.id)));
+        }
+
+        reports.push({
+            id: "driver_in_workshop",
+            label: "Fahrzeuge in der Werkstatt mit aktuellem Fahrer (Fahrer abgenommen)",
+            count: parked.length,
+            examples: parked.slice(0, EXAMPLES).map((row) => row.license_plate),
         });
     });
 

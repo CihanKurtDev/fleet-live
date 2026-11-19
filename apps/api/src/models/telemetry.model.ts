@@ -4,7 +4,7 @@ import { db } from "../db/database";
 import { stmt } from "../db/statements";
 import { nowSqlite, nowSqliteMs } from "../lib/sqlTime";
 import { simDashboardMeters } from "../sim/device";
-import { nextSimTick, SIM_PING_SECONDS } from "../sim/routes";
+import { nextSimTick, setSimParked, SIM_PING_SECONDS } from "../sim/routes";
 import { SpeedingEventModel } from "./speedingEvent.model";
 import { TripModel } from "./trip.model";
 import { isCompanySimRunning } from "../lib/simControl";
@@ -366,8 +366,8 @@ export class TelemetryModel {
      * Ohne das behält ein Fahrzeug im Feierabend seine Reisegeschwindigkeit.
      */
     /**
-     * A position report with the ignition off somewhere else: a towed vehicle,
-     * or one the workshop fetched. It moved without being driven, so no trip.
+     * The vehicle stands somewhere else without having driven (a person
+     * reported it arrived at the workshop after towing), so no trip.
      */
     static recordMovedTo(
         vehicleId: number,
@@ -386,6 +386,7 @@ export class TelemetryModel {
 
         stmt(INSERT_TELEMETRY).run(vehicleId, latitude, longitude, 0, recordedAt);
         stmt(PRUNE_TELEMETRY).run(vehicleId, vehicleId, config.telemetryKeepPerVehicle);
+        setSimParked(vehicleId, { lat: latitude, lng: longitude });
 
         return {
             id: vehicleId,

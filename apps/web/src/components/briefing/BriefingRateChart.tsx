@@ -47,7 +47,7 @@ const RateTooltip = ({
             </p>
             <p className={styles.tooltipHint}>
                 {row.verstoss} von {row.aktiveFahrer} Fahrern
-                {" "}hatten mindestens einen Tempo-Verstoß
+                {" "}hatten mindestens eine Tempo-Warnung
             </p>
         </ChartTooltipShell>
     );

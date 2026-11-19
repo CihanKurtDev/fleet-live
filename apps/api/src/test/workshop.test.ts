@@ -8,6 +8,7 @@ import { db } from "../db/database";
 import { TelemetryModel } from "../models/telemetry.model";
 import { UserModel } from "../models/user.model";
 import { VehicleModel } from "../models/vehicle.model";
+import { WorkshopModel } from "../models/workshop.model";
 import { WorkshopPlaceModel } from "../models/workshopPlace.model";
 import { playWorkshopTrips } from "../sim/workshopTrips";
 import {
@@ -90,9 +91,9 @@ async function inWorkshop(vehicleId: number, body: Record<string, unknown> = {})
 }
 
 const todayRows = async () =>
-    (await api.get("/api/today")).body.data.filter(
-        (item: { kind: string }) => item.kind === "workshop_due",
-    ) as Array<{ subject: string; workshop_task: string; workshop: { id: number } | null; workshop_place: { name: string } | null }>;
+    ((await api.get("/api/today")).body.data.groups.find(
+        (group: { kind: string }) => group.kind === "workshop_due",
+    )?.items ?? []) as Array<{ subject: string; workshop_task: string; workshop: { id: number } | null; workshop_place: { name: string } | null }>;
 
 beforeEach(async () => {
     api = (await loginAs(1)).agent;
@@ -300,8 +301,8 @@ describe("workshop stays", () => {
             .send({ finished_on: today, hu_due_on: "2028-10" });
         assert.equal(done.status, 200);
         assert.equal(done.body.data.cost_cents, null);
-        // It does not stand at the workshop: nothing to pick up.
-        assert.notEqual(done.body.data.picked_up_at, null);
+        // Reported as arrived, it stands at the workshop until someone fetches it.
+        assert.equal(done.body.data.picked_up_at, null);
 
         const bad = await api.post(`/api/workshop/${visit.id}/cost`).send({ cost: "viel" });
         assert.equal(bad.status, 400);
@@ -664,7 +665,7 @@ describe("a stay does everything that is due, and how the vehicle gets there", (
         assert.ok(withDriver.body.fields.bring_driver_id);
     });
 
-    it("lets the simulator bring a towed vehicle into the circle, where it arrives", async () => {
+    it("moves a towed vehicle only when a person reports it arrived, without a trip", async () => {
         const car = vehicle("K-TOW 2");
         parkAt(car.id, ELSEWHERE);
         const visit = (
@@ -676,15 +677,41 @@ describe("a stay does everything that is due, and how the vehicle gets there", (
             })
         ).body.data;
 
-        const trips = playWorkshopTrips();
-        assert.equal(trips.patches.length, 1);
-        applyTickEffects(trips.patches);
+        // The appointment alone moves nothing: no jump, no „seen at the position“.
+        playWorkshopTrips();
+        WorkshopModel.detectArrivals();
+        const waiting = (await api.get(`/api/vehicles/${car.id}/workshop`)).body.data.open;
+        assert.equal(waiting.state, "PLANNED");
+        const before = (await api.get(`/api/vehicles/${car.id}`)).body;
+        assert.equal(before.latitude, ELSEWHERE.latitude);
 
-        const open = (await api.get(`/api/vehicles/${car.id}/workshop`)).body.data.open;
-        assert.equal(open.id, visit.id);
-        assert.equal(open.state, "IN_WORKSHOP");
-        assert.equal(open.arrived_by, "POSITION");
+        const arrived = await api.post(`/api/workshop/${visit.id}/arrive`);
+        assert.equal(arrived.status, 200);
+        assert.equal(arrived.body.data.state, "IN_WORKSHOP");
+        assert.equal(arrived.body.data.arrived_by, "HAND");
+
+        const after = (await api.get(`/api/vehicles/${car.id}`)).body;
+        assert.equal(after.latitude, PLACE.latitude);
+        assert.equal(after.longitude, PLACE.longitude);
+        assert.equal((await api.get(`/api/vehicles/${car.id}/workshop`)).body.data.here.id, placeId);
         assert.equal((await api.get(`/api/vehicles/${car.id}/trips`)).body.meta.total, 0);
+    });
+
+    it("asks nobody to pick up a finished vehicle that cannot be driven", async () => {
+        const car = vehicle("K-TOW 3");
+        const visit = await inWorkshop(car.id, { reasons: ["MAINTENANCE"], transport: "TOW" });
+        await api.post(`/api/vehicles/${car.id}/damages`).send({
+            occurred_on: today,
+            description: "Getriebe",
+            severity: "SEVERE",
+            drivable: false,
+        });
+        const done = await api.post(`/api/workshop/${visit.id}/finish`).send({ finished_on: today });
+        assert.equal(done.status, 200);
+
+        const row = (await api.get(`/api/vehicles/${car.id}`)).body;
+        assert.equal(row.availability, "NOT_DRIVABLE");
+        assert.equal(row.workshop_task, null);
     });
 
     it("says who may bring it: an expired licence, another drive, another trip that day", async () => {

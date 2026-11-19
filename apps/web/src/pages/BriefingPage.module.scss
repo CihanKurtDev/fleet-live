@@ -111,7 +111,7 @@
     display: none;
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 1440px) {
     .tiles {
         display: grid;
         grid-template-columns: minmax(0, 7fr) 2px minmax(0, 3fr);
@@ -153,7 +153,7 @@
 }
 /* Half a screen to a narrow desktop: the ten tiles in two rows of five,
    status and deadlines together (the lane line needs one row). */
-@media (min-width: 701px) and (max-width: 1199px) {
+@media (min-width: 701px) and (max-width: 1439px) {
     .tiles {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));

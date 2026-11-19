@@ -16,6 +16,7 @@ const BRIEFING_VEHICLE_CONCEPTS = [
     "driving",
     "idle",
     "stopped",
+    "unconnected",
     "offline",
     "low_fuel",
     "in_depot",
@@ -27,6 +28,7 @@ type VehicleCountRow = Record<
     | "driving"
     | "idle"
     | "stopped"
+    | "unconnected"
     | "offline"
     | "low_fuel"
     | "in_depot"
@@ -56,6 +58,8 @@ type AlertMonthRow = {
 type KmMonthRow = {
     month: string;
     distance_m: number;
+    active_drivers: number | null;
+    active_vehicles: number | null;
 };
 
 type OpenKmRow = {
@@ -114,8 +118,7 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
                     COUNT(DISTINCT CASE WHEN a.type = 'LOW_FUEL' THEN a.vehicle_id END) AS low_fuel_vehicles,
                     COUNT(DISTINCT CASE WHEN a.type = 'OFFLINE' THEN a.vehicle_id END) AS offline_vehicles
                 FROM alerts a
-                INNER JOIN vehicles v ON v.id = a.vehicle_id
-                WHERE v.company_id = ?
+                WHERE a.company_id = ?
                   AND a.type IN ('LOW_FUEL', 'OFFLINE')
                   AND a.created_at < ?
                   AND (a.resolved_at IS NULL OR a.resolved_at >= ?)
@@ -142,8 +145,7 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
             COUNT(DISTINCT CASE WHEN a.type = 'OFFLINE' THEN a.vehicle_id END)
                 AS offline_vehicles
         FROM alerts a
-        INNER JOIN vehicles v ON v.id = a.vehicle_id
-        WHERE v.company_id = ?
+        WHERE a.company_id = ?
           AND a.created_at >= ?
           AND a.created_at < ?
         GROUP BY 1
@@ -164,7 +166,7 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
 
     const kmRows = stmt(
         `
-        SELECT month, distance_m
+        SELECT month, distance_m, active_drivers, active_vehicles
         FROM trip_month_km
         WHERE company_id = ?
           AND month >= ?
@@ -186,28 +188,33 @@ const listHistory = (companyId: number): BriefingHistoryMonth[] => {
     const alertsByMonth = new Map(
         [...alertRows, ...storedRows].map((row) => [row.month, row] as const),
     );
-    const kmByMonth = new Map(
-        kmRows.map((row) => [row.month, Number(row.distance_m)] as const),
-    );
+    const kmByMonth = new Map(kmRows.map((row) => [row.month, row] as const));
 
     const openDistance = Number(openKm.distance_m);
 
     return keys.map((month) => {
         const alerts = alertsByMonth.get(month);
-        const closedKm = kmByMonth.get(month) ?? 0;
+        const stored = kmByMonth.get(month);
+        const closedKm = Number(stored?.distance_m ?? 0);
         const distance = month === lastMonth ? closedKm + openDistance : closedKm;
         const roster = rosterByMonth.get(month);
         const state = stateByMonth.get(month);
-        // Trips older than the retention are gone while their km stay: then
-        // nobody can say who drove, which is not the same as nobody.
-        const unknownRoster = !roster && distance > 0;
+        // Trips past the retention leave their roster in the month sums. A
+        // month pruned before those existed: nobody can say who drove, which
+        // is not the same as nobody.
+        const unknownRoster =
+            !roster && stored?.active_drivers == null && distance > 0;
+        const activeCount = (key: "active_drivers" | "active_vehicles") =>
+            unknownRoster
+                ? null
+                : Math.max(Number(roster?.[key] ?? 0), Number(stored?.[key] ?? 0));
         const stateCount = (key: "low_fuel_vehicles" | "offline_vehicles") =>
             Number(state?.[key] ?? 0) || Number(alerts?.[key] ?? 0);
 
         return {
             month,
-            active_drivers: unknownRoster ? null : Number(roster?.active_drivers ?? 0),
-            active_vehicles: unknownRoster ? null : Number(roster?.active_vehicles ?? 0),
+            active_drivers: activeCount("active_drivers"),
+            active_vehicles: activeCount("active_vehicles"),
             speeding_drivers: Number(alerts?.speeding_drivers ?? 0),
             speeding_events: Number(alerts?.speeding_events ?? 0),
             speeding_high: Number(alerts?.speeding_high ?? 0),
@@ -235,11 +242,9 @@ export class BriefingModel {
 
         const open = stmt(
             `
-            SELECT COUNT(*) AS open_count
-            FROM alerts a
-            INNER JOIN vehicles v ON v.id = a.vehicle_id
-            WHERE v.company_id = ?
-              AND a.resolved_at IS NULL
+            SELECT COALESCE(SUM(open_count), 0) AS open_count
+            FROM alert_counts
+            WHERE company_id = ?
             `,
         ).get(companyId) as OpenCountRow;
 
@@ -249,6 +254,7 @@ export class BriefingModel {
             driving: Number(vehicles.driving),
             idle: Number(vehicles.idle),
             stopped: Number(vehicles.stopped),
+            unconnected: Number(vehicles.unconnected),
             low_fuel: Number(vehicles.low_fuel),
             in_depot: Number(vehicles.in_depot),
             speeding: Number(vehicles.speeding),

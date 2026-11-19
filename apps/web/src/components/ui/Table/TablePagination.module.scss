@@ -144,6 +144,12 @@
 }
 
 /* List panel footer: range left, pages right; the panel draws the line. */
+.footerStart {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
 .footer {
     display: flex;
     align-items: center;

@@ -3,11 +3,13 @@ import {
     WORKSHOP_NOTE_MAX,
     workshopReasonsText,
     berlinTodayIso,
+    type Damage,
     type VehicleOdometer,
     type WorkshopVisit,
 } from "@fleet-live/shared";
 
 import { ApiError } from "../../api/client";
+import { listVehicleDamages } from "../../api/damages";
 import { getVehicleOdometer } from "../../api/odometer";
 import { finishWorkshopVisit } from "../../api/workshop";
 import { formatIsoDate, formatYearMonth } from "../../utils/dateTime";
@@ -60,6 +62,23 @@ const FinishForm = ({
     const [odometer, setOdometer] = useState<VehicleOdometer | null>(null);
     const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // A damage it cannot be driven with that this stay does not take along.
+    const [stillBroken, setStillBroken] = useState<Damage | null>(null);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        listVehicleDamages(visit.vehicle_id, controller.signal)
+            .then((response) =>
+                setStillBroken(
+                    response.data.find(
+                        (damage) =>
+                            damage.state === "OPEN" && !damage.drivable && damage.workshop_visit_id !== visit.id,
+                    ) ?? null,
+                ),
+            )
+            .catch(() => setStillBroken(null));
+        return () => controller.abort();
+    }, [visit.vehicle_id, visit.id]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -92,11 +111,14 @@ const FinishForm = ({
                 hu_due_on: isHu ? huDueOn : null,
                 ...(askKm ? { odometer: km } : {}),
             });
+            const done = isHu
+                ? `${visit.license_plate} ist fertig. HU fällig ${formatYearMonth(huDueOn)}.`
+                : `${visit.license_plate} ist fertig und wieder einsatzbereit.`;
             onSaved(
                 data,
-                isHu
-                    ? `${visit.license_plate} ist fertig. HU fällig ${formatYearMonth(huDueOn)}.`
-                    : `${visit.license_plate} ist fertig und wieder einsatzbereit.`,
+                stillBroken
+                    ? `${visit.license_plate} ist fertig, aber weiter nicht fahrbereit: „${stillBroken.description}“ ist noch offen.`
+                    : done,
             );
         } catch (caught) {
             if (caught instanceof ApiError) {
@@ -249,8 +271,9 @@ const FinishForm = ({
             </div>
 
             <p className={styles.context}>
-                Danach ist {visit.license_plate} wieder einsatzbereit und lässt sich einem Fahrer
-                zuweisen.
+                {stillBroken
+                    ? `Danach bleibt ${visit.license_plate} nicht fahrbereit: „${stillBroken.description}“ gehört nicht zu diesem Termin.`
+                    : `Danach ist ${visit.license_plate} wieder einsatzbereit und lässt sich einem Fahrer zuweisen.`}
             </p>
 
             {errors.form && (

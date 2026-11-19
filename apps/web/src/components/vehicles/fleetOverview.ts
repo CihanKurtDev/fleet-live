@@ -24,6 +24,7 @@ function emptyStatusTotals(): StatusTotals {
         DRIVING: { inView: 0, fleet: 0 },
         STOPPED: { inView: 0, fleet: 0 },
         OFFLINE: { inView: 0, fleet: 0 },
+        UNCONNECTED: { inView: 0, fleet: 0 },
     };
 }
 

@@ -50,6 +50,7 @@ export const vehicleFilters: Array<
     statusFilter("IDLE"),
     statusFilter("OFFLINE"),
     statusFilter("STOPPED"),
+    statusFilter("UNCONNECTED"),
     { id: "in_depot", displayText: "Im Depot" },
     { id: "speeding", displayText: "Tempo jetzt" },
 ];
@@ -83,6 +84,7 @@ export const vehicleTileFilters: VehicleFilterOption[] = [
 
 /** The rarer filters behind "Weitere Filter" in the toolbar. */
 export const vehicleMoreFilters: VehicleFilterOption[] = [
+    { id: "unconnected", label: "Nicht verbunden", count: "unconnected" },
     { id: "unassigned", label: "Kein Fahrer", count: "unassigned" },
     { id: "in_workshop", label: "In der Werkstatt", count: "in_workshop" },
     { id: "deadline_overdue", label: "Frist abgelaufen", count: "deadline_overdue", tone: "critical" },
@@ -314,8 +316,8 @@ export const vehicleColumns: TableColumn<Vehicle>[] = [
     {
         key: "status",
         displayText: "Status",
-        // The longest chip ("Kein Signal") plus the cell padding, so no "…".
-        width: "150px",
+        // The longest chip ("Nicht verbunden") plus the cell padding, so no "…".
+        width: "172px",
         sortable: true,
         render: (value) => <VehicleStatusChip status={value} />,
     },

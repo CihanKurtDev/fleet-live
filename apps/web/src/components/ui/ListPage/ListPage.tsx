@@ -193,6 +193,8 @@ type PageCheckbox = {
 interface SelectionBarProps {
     /** Selected rows. */
     count: number;
+    /** Replaces "N ausgewählt" where the plain number would mislead. */
+    countLabel?: string;
     /** Checkbox for all rows on this page (`useSelectionMode().pageCheckbox`). */
     pageCheckbox: PageCheckbox;
     pageCheckboxLabel?: string;
@@ -210,6 +212,7 @@ interface SelectionBarProps {
  */
 export const SelectionBar = ({
     count,
+    countLabel,
     pageCheckbox,
     pageCheckboxLabel = "Alle auf dieser Seite auswählen",
     summary,
@@ -244,7 +247,7 @@ export const SelectionBar = ({
             />
             <p className={styles.selectionText}>
                 <strong className={styles.selectionCount}>
-                    {count} ausgewählt
+                    {countLabel ?? `${count} ausgewählt`}
                 </strong>
                 {summary && (
                     <span className={styles.selectionSummary}>{summary}</span>
@@ -283,6 +286,9 @@ interface ListFooterProps {
     limit: number;
     total: number;
     onPageChange: (page: number) => void;
+    /** Offers "pro Seite" next to the range; without it the page size is only measured. */
+    onLimitChange?: (limit: number) => void;
+    limitOptions?: readonly number[];
     /** Without rows the footer keeps its height and stays empty. */
     show?: boolean;
 }
@@ -294,6 +300,8 @@ export const ListFooter = ({
     limit,
     total,
     onPageChange,
+    onLimitChange,
+    limitOptions,
     show = true,
 }: ListFooterProps) => (
     <footer className={styles.footer}>
@@ -305,6 +313,8 @@ export const ListFooter = ({
                 limit={limit}
                 total={total}
                 onPageChange={onPageChange}
+                onLimitChange={onLimitChange}
+                limitOptions={limitOptions}
             />
         )}
     </footer>

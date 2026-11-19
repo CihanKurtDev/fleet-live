@@ -18,6 +18,7 @@ export const useAlertList = (query: AlertListQuery) => {
         vehicle_id,
         driver_id,
         type,
+        search,
     } = query;
     const [response, setResponse] = useState<AlertListResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
@@ -33,6 +34,7 @@ export const useAlertList = (query: AlertListQuery) => {
         vehicle_id,
         driver_id,
         type,
+        search,
         listEpoch,
         retryKey,
     ].join("\0");
@@ -56,6 +58,7 @@ export const useAlertList = (query: AlertListQuery) => {
             vehicle_id,
             driver_id,
             type,
+            search,
         };
 
         retryTransient(
@@ -100,6 +103,7 @@ export const useAlertList = (query: AlertListQuery) => {
         vehicle_id,
         driver_id,
         type,
+        search,
         listEpoch,
         retryKey,
     ]);

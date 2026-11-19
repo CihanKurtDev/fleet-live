@@ -11,6 +11,7 @@ import {
 } from "@fleet-live/shared";
 
 import { NotFoundError, UnauthorizedError } from "../lib/errors";
+import { hidesDriverNames, withoutBringer } from "../lib/driverNames";
 import { geocode, geocoderEnabled } from "../lib/geocoder";
 import { notifyVehiclesChanged, parseId, sessionCompany } from "../lib/http";
 import { VehicleModel } from "../models/vehicle.model";
@@ -28,7 +29,17 @@ function actor(req: Request): WorkshopActor {
 export function getVehicleWorkshop(req: Request, res: Response) {
     const companyId = sessionCompany(req);
     const vehicleId = parseId(req.params.id, "Fahrzeug-ID");
-    res.json({ data: WorkshopModel.forVehicle(vehicleId, companyId) });
+    const data = WorkshopModel.forVehicle(vehicleId, companyId);
+    res.json({
+        data: hidesDriverNames(req)
+            ? {
+                  ...data,
+                  open: data.open && withoutBringer(data.open),
+                  past: data.past.map(withoutBringer),
+                  to_pick_up: data.to_pick_up && withoutBringer(data.to_pick_up),
+              }
+            : data,
+    });
 }
 
 /** `?on=YYYY-MM-DD`: who may bring it on that day (default today). */

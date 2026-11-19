@@ -73,6 +73,8 @@ export type DamageInput = {
     occurred_time?: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    /** New damage: the vehicle's open workshop stay takes it along. */
+    add_to_open_stay?: boolean;
 };
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -108,7 +110,7 @@ const fields = (today: string) => ({
 
 export function parseDamageInput(input: unknown, today = berlinTodayIso()): DamageInput {
     return z
-        .object(fields(today))
+        .object({ ...fields(today), add_to_open_stay: z.boolean().optional() })
         .refine(placeRefine, { message: PLACE_MESSAGE, path: ["latitude"] })
         .parse(input);
 }

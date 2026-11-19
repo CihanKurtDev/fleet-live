@@ -28,7 +28,7 @@ const PAGES: Record<string, HelpPage> = {
         id: "briefing",
         title: "Schicht",
         intro:
-            "Der Stand deiner Firma für diese Schicht: offene Warnungen, Fahrzeuge nach Status, Fristen und die Entwicklung der letzten Monate.",
+            "Der Stand deiner Firma für diese Schicht: oben die Kacheln, darunter „Heute“ (wer oder was im Einsatz heute nicht fahren darf oder kann) und der Plan für die nächsten Werktage.",
         tips: "briefing",
         items: [
             {
@@ -42,9 +42,19 @@ const PAGES: Record<string, HelpPage> = {
                     "HU, UVV und Führerschein: was überfällig ist, was innerhalb des Vorlaufs der Firma fällig wird und wo ein Datum fehlt. Ein Klick öffnet Fristen in diesem Stand.",
             },
             {
+                question: "Was steht unter „Heute“?",
+                answer:
+                    "Nur was im Einsatz ist: Fahrzeuge mit einem Fahrer und Fahrer, die auf einem Fahrzeug eingeteilt sind. Oben, was heute nicht fahren darf oder kann (abgelaufener Führerschein, abgelaufene HU oder UVV, Werkstatt, kein Signal), dann was nicht prüfbar ist (Kontrolle überfällig, Datum fehlt), dann was vor dem nächsten Werktag abläuft; freitags gehört das Wochenende dazu. Gleiche Fälle ab drei stehen in einer Zeile, „N anzeigen“ klappt sie auf. Die Zeile unten sagt, welcher Teil jeder Kachel hier steht; der Rest ist nicht im Einsatz und steht in den Listen.",
+            },
+            {
+                question: "Was zeigt „Als Nächstes planen“?",
+                answer:
+                    "Was im Einsatz in den nächsten Wochen abläuft oder fällig wird, nach Datum, so weit voraus wie der Vorlauf der Firma (ohne Einstellung 30 Tage), dazu geplante Werkstatt-Termine. Es stehen nur Tage mit Einträgen da. Drei oder mehr Gleiche an einem Tag stehen in einer Zeile, „anzeigen“ klappt sie auf. Jede Zeile hat ihren Schritt: Datum eintragen, Kontrolle eintragen oder Termin planen.",
+            },
+            {
                 question: "Was zeigen die Diagramme?",
                 answer:
-                    "Zwei Diagramme zu Tempo, je Monat. „Wie viele Fahrer waren zu schnell?“: der Anteil der Fahrer, die in dem Monat gefahren sind und mindestens einmal zu schnell waren; ein Fahrer zählt einmal, egal wie oft. Die gestrichelte Linie ist der Schnitt der Vormonate mit Fahrten (Monate ohne Daten zählen nicht mit). „Passiert das oft?“: Tempo-Vorfälle je 1.000 km, damit die Zahl vergleichbar bleibt, wenn die Flotte mehr fährt; die Balken zeigen den Anteil der deutlichen Überschreitungen. Eine Tempo-Warnung entsteht erst ab 10 km/h über dem Limit. Wenig Tank und Kein Signal stehen in der Monatstabelle unter „Exakte Monatswerte anzeigen“: Fahrzeuge, die in dem Monat eine solche Warnung hatten. Sind die Fahrten eines Monats schon gelöscht, steht bei den aktiven Fahrern „—“.",
+                    "Zwei Diagramme zu Tempo, je Monat. „Wie viele Fahrer waren zu schnell?“: der Anteil der Fahrer, die in dem Monat gefahren sind und mindestens einmal zu schnell waren; ein Fahrer zählt einmal, egal wie oft. Die gestrichelte Linie ist der Schnitt der Vormonate mit Fahrten (Monate ohne Daten zählen nicht mit). „Passiert das oft?“: Tempo-Vorfälle je 1.000 km, damit die Zahl vergleichbar bleibt, wenn die Flotte mehr fährt; die Balken zeigen den Anteil der deutlichen Überschreitungen. Eine Tempo-Warnung entsteht erst ab 10 km/h über dem Limit. Sie liegen mit der Monatstabelle unter „Monatswerte und Verlauf anzeigen“. Wenig Tank und Kein Signal stehen in der Monatstabelle: Fahrzeuge, die in dem Monat eine solche Warnung hatten. Sind die Fahrten eines Monats schon gelöscht, steht bei den aktiven Fahrern „—“.",
             },
             {
                 question: "Was lädt „Monat“ herunter?",
@@ -63,7 +73,7 @@ const PAGES: Record<string, HelpPage> = {
         items: [
             {
                 question: "Was bedeuten die Filter?",
-                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Tempo jetzt“: eine Tempoüberschreitung läuft gerade. „Auf Fahrt“, „Standby“, „Feierabend“ und „Kein Signal“ sind der gemeldete Status und ergeben zusammen „Alle“. „Ausfall“: fährt heute nicht (Werkstatt, nicht fahrbereit, außer Dienst). Unter „Weitere Filter“ unter anderem „Kein Fahrer“, „In der Werkstatt“, „Frist abgelaufen“ und „Frist bald fällig“ (HU oder UVV, dieselbe Regel wie unter Fristen) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
+                answer: `Die Kacheln filtern die Liste. „Mit Warnung“: Fahrzeuge mit offenen Warnungen. „Wenig Tank“: Tankstand unter ${LOW_FUEL_THRESHOLD_PERCENT} %. „Tempo jetzt“: eine Tempoüberschreitung läuft gerade. „Auf Fahrt“, „Standby“, „Feierabend“ und „Kein Signal“ sind der gemeldete Status. Ein Fahrzeug, dessen Gerät noch nie gemeldet hat, ist „Nicht verbunden“ (unter „Weitere Filter“): das ist keine Störung, es gibt keine Warnung, und auf der Karte zählt es zu „ohne Position“. „Ausfall“: fährt heute nicht (Werkstatt, nicht fahrbereit, außer Dienst). Unter „Weitere Filter“ unter anderem „Kein Fahrer“, „In der Werkstatt“, „Frist abgelaufen“ und „Frist bald fällig“ (HU oder UVV, dieselbe Regel wie unter Fristen) und „Im Depot“ (letzte Position in einem Depot-Kreis).`,
             },
             {
                 question: "Was heißen die gelben Markierungen bei HU und UVV?",
@@ -136,7 +146,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was macht „Erledigen“?",
                 answer:
-                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. „Wenig Tank“ und „Kein Signal“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist bzw. das Fahrzeug wieder meldet. Eine beendete Tempo-Warnung, die niemand erledigt, wird nach 7 Tagen Verlauf und steht dann unter „Erledigt“. Erledigte Warnungen bleiben so lange sichtbar, wie die Firma unter Konto → Datenschutz festlegt (ohne Einstellung 90 Tage); die Zahl steht oben auf der Seite. Die Monatszahlen der Diagramme bleiben.",
+                    "Es nimmt die Warnung aus „Offen“. Der Zustand am Fahrzeug bleibt, eine laufende Tempo-Warnung bleibt rot. Erledigen dürfen nur Dispatcher. Mehrere auf einmal gehen auf der Kachel „Tempo“ über „Auswählen“: Das Kästchen wählt die Seite, „Alle N auswählen“ die ganze Liste. „Wenig Tank“ und „Kein Signal“ gibt es nicht zum Erledigen: die Warnung geht von selbst weg, sobald getankt ist bzw. das Fahrzeug wieder meldet. Eine Tempo-Warnung bleibt offen, bis jemand sie erledigt. Erledigte Warnungen bleiben so lange sichtbar, wie die Firma unter Konto → Datenschutz festlegt (ohne Einstellung 90 Tage); die Zahl steht oben auf der Seite. Die Monatszahlen der Diagramme bleiben.",
             },
             {
                 question: "Wohin führt eine Zeile?",
@@ -239,7 +249,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Was zeigt die Linie auf der Karte?",
                 answer:
-                    "Die ausgewählte Fahrt. Eine laufende Fahrt wächst live mit, eine abgeschlossene Fahrt aus „Fahrten“ zeigt ihren gespeicherten Weg. Die Demo fährt im Zeitraffer (×5, steht an „Fahrten“): Strecke und Dauer einer Fahrt passen deshalb nicht zur Uhr.",
+                    "Die ausgewählte Fahrt. Eine laufende Fahrt wächst live mit, eine abgeschlossene Fahrt aus „Fahrten“ zeigt ihren gespeicherten Weg.",
             },
             {
                 question: "„Aktuell“ und „Freigegeben“",
@@ -289,7 +299,7 @@ const PAGES: Record<string, HelpPage> = {
             {
                 question: "Warum lässt sich ein Fahrer nicht zuweisen?",
                 answer:
-                    "Ist sein Führerschein abgelaufen, darf er weder ein Fahrzeug fahren noch eines in die Werkstatt bringen. Ist er schon eingeteilt, steht das oben unter „Hinweise“ mit „Abnehmen“ und ganz oben in „Heute dran“. Eine Kontrolle nach dem Ablaufdatum zählt erst mit einem neuen Ablaufdatum.",
+                    "Ist sein Führerschein abgelaufen, darf er weder ein Fahrzeug fahren noch eines in die Werkstatt bringen. Ist er schon eingeteilt, steht das oben unter „Hinweise“ mit „Abnehmen“ und auf Schicht ganz oben unter „Heute“. Eine Kontrolle nach dem Ablaufdatum zählt erst mit einem neuen Ablaufdatum.",
             },
             {
                 question: "Ein Fahrer will wissen, was über ihn gespeichert ist. Was tue ich?",

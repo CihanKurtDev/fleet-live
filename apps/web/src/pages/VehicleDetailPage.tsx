@@ -576,6 +576,7 @@ export const VehicleDetailPage = () => {
         IDLE: "Steht seit",
         STOPPED: "Zündung aus seit",
         OFFLINE: "Kein Signal seit",
+        UNCONNECTED: "Noch keine Meldung, Ort vom",
     };
     const summary = [
         vehicle.vehicle_type ? VEHICLE_TYPE_LABELS[vehicle.vehicle_type] : null,
@@ -744,7 +745,7 @@ export const VehicleDetailPage = () => {
                                 title={formatTimestamp(vehicle.recorded_at)}
                             >
                                 {vehicle.recorded_at === null
-                                    ? "Noch keine Meldung"
+                                    ? "Noch keine Meldung vom Gerät"
                                     : vehicle.status === "DRIVING"
                                       ? `Letzte Meldung ${formatRelativeTimestamp(vehicle.recorded_at)}`
                                       : // A parked vehicle reported last when it stopped: say since when.
@@ -1166,6 +1167,7 @@ export const VehicleDetailPage = () => {
                               driving: isDriving,
                               driverName: vehicle.driver_name,
                               position,
+                              openStayPlace: vehicle.workshop?.place ?? null,
                           }
                         : null
                 }

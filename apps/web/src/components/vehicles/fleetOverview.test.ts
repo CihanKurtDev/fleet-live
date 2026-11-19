@@ -73,6 +73,7 @@ describe("fleetOverview", () => {
                         DRIVING: 4,
                         STOPPED: 0,
                         OFFLINE: 2,
+                        UNCONNECTED: 0,
                     },
                 },
                 {
@@ -82,6 +83,7 @@ describe("fleetOverview", () => {
                         DRIVING: 10,
                         STOPPED: 3,
                         OFFLINE: 0,
+                        UNCONNECTED: 0,
                     },
                 },
             ],

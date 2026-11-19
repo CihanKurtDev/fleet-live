@@ -118,7 +118,7 @@ function unit(seed: number): number {
 }
 
 function emptyCounts(): Record<VehicleStatus, number> {
-    return { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0 };
+    return { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0, UNCONNECTED: 0 };
 }
 
 function routeEndpoint(routeId: string, end: "start" | "end"): LatLng {

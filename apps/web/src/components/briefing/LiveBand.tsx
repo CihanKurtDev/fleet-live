@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import type { Site } from "@fleet-live/shared";
+import { VEHICLE_STATUS_LABELS, type Site } from "@fleet-live/shared";
 
 import { listSites } from "../../api/sites";
 import { useVehicles } from "../../context/vehiclesContext";
@@ -18,9 +18,12 @@ const NO_DRIVERS: string[] = [];
  */
 export const LiveBand = ({
     labelledBy,
+    stopped = 0,
     children,
 }: {
     labelledBy: string;
+    /** Vehicles in Feierabend: no tile of their own, so the line names them. */
+    stopped?: number;
     children: ReactNode;
 }) => {
     const { streamConnection } = useVehicles();
@@ -70,6 +73,9 @@ export const LiveBand = ({
                     {live ? "Live · " : ""}
                     {formatCount(placed)}{" "}
                     {placed === 1 ? "Fahrzeug" : "Fahrzeuge"} mit Position
+                    {stopped > 0
+                        ? ` · ${formatCount(stopped)} im ${VEHICLE_STATUS_LABELS.STOPPED}`
+                        : ""}
                 </p>
                 {children}
             </div>

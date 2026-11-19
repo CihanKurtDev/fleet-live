@@ -1,10 +1,10 @@
+/* Inside the opened month view: the two charts side by side. */
 .section {
-    flex: 1 1 auto;
-    min-height: 566px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: minmax(320px, 1fr) minmax(330px, 1fr);
+    grid-template-rows: 340px;
     gap: var(--gap-block);
+    margin-top: 10px;
 }
 
 .dataAlternative {
@@ -142,22 +142,6 @@
     .lead {
         font-size: 13px;
     }
-
-    /* The task list keeps the height of its rows; it never shrinks under the charts. */
-    .leadSlot {
-        flex: none;
-    }
-}
-
-/* The list left over both rows, the two charts right. */
-.withLead {
-    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-}
-
-.leadSlot {
-    grid-row: 1 / -1;
-    min-width: 0;
-    min-height: 0;
 }
 
 .card {
@@ -363,14 +347,12 @@
     }
 }
 
-/* Desktop: the two chart rows share the height of their grid row on the
-   page, but each keeps at least the height its card needs (min-content),
-   so legends never run into the next card. Open, the month table drops
-   below the window; the page scrolls. */
+/* Desktop: each chart keeps at least the height its card needs
+   (min-content), so legends never run into the table. Open, the month view
+   drops below the window; the page scrolls. */
 @media (min-width: 701px) {
     .section {
-        min-height: 0;
-        grid-template-rows: minmax(min-content, 1fr) minmax(min-content, 1fr);
+        grid-template-rows: minmax(min-content, 340px);
     }
 
     .chart,

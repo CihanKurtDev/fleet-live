@@ -5,7 +5,7 @@ export const BRIEFING_HISTORY_MONTHS = 9;
 
 export type BriefingHistoryMonth = {
     month: string;
-    /** Drivers and vehicles with a trip that month; `null` once those trips are past the retention. */
+    /** Drivers and vehicles with a trip that month; `null` only for a month whose trips went before these sums existed. */
     active_drivers: number | null;
     active_vehicles: number | null;
     speeding_drivers: number;
@@ -41,6 +41,8 @@ export type BriefingCounts = {
     idle: number;
     /** Status `STOPPED`, auf den Listen „Feierabend“. */
     stopped: number;
+    /** Status `UNCONNECTED`: das Gerät hat sich noch nie gemeldet (keine Kachel). */
+    unconnected: number;
     low_fuel: number;
     /** Letzte Position liegt in einem Depot-Radius der Firma. */
     in_depot: number;

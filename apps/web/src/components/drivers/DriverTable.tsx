@@ -27,6 +27,9 @@ import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useServerTable } from "../../hooks/useServerTable";
 import { useStatusNotice } from "../../hooks/useStatusNotice";
 import { formatCount } from "../../utils/formatCount";
+import type { TableColumn } from "../../types/table";
+import { DriverTalkDialog } from "./DriverTalkDialog";
+import { talkDoneText } from "./driverTalkText";
 import { driverColumns, driverTileOptions } from "./driverTableConfig";
 import {
     deleteErrorMessage,
@@ -42,7 +45,7 @@ interface DriverTableProps {
     emptyActions?: ReactNode;
     /** Enables "Auswählen" and bulk delete. Dispatchers only. */
     canDelete?: boolean;
-    /** Called after drivers were deleted, to refetch the lists. */
+    /** Called after drivers were deleted or a talk was entered, to refetch the lists. */
     onDeleted?: () => void;
     /** Status line to show once on arrival (after deleting on the detail page). */
     initialNotice?: string | null;
@@ -100,6 +103,36 @@ export const DriverTable = ({
         }).toString(),
     );
 
+    const [talkingTo, setTalkingTo] = useState<Driver | null>(null);
+    const columns = useMemo<TableColumn<Driver>[]>(
+        () =>
+            canDelete
+                ? [
+                      ...driverColumns,
+                      {
+                          key: "last_warning_at",
+                          displayText: "Gespräch",
+                          headerText: " ",
+                          width: "170px",
+                          render: (_value, { row, selectionMode }) =>
+                              selectionMode || row.open_warnings === 0 ? null : (
+                                  <Button
+                                      variant="secondary"
+                                      size="row"
+                                      onClick={(event) => {
+                                          event.stopPropagation();
+                                          setTalkingTo(row);
+                                      }}
+                                  >
+                                      Gespräch geführt
+                                  </Button>
+                              ),
+                      },
+                  ]
+                : driverColumns,
+        [canDelete],
+    );
+
     const [pendingDelete, setPendingDelete] = useState<Driver[] | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -123,6 +156,9 @@ export const DriverTable = ({
                   ? `${formatCount(counts.all)} Treffer`
                   : driverCountText(counts.all),
               isDefaultSort ? "sortiert nach offenen Tempo-Warnungen" : null,
+              listResult.meta
+                  ? `erledigte zählen ${listResult.meta.resolved_kept_days} Tage`
+                  : null,
           ]
               .filter(Boolean)
               .join(" · ")
@@ -258,7 +294,7 @@ export const DriverTable = ({
 
                 <ListBody ref={bodyRef}>
                     <Table
-                        columns={driverColumns}
+                        columns={columns}
                         rows={paginatedRows}
                         getRowKey={(driver) => driver.id}
                         selectionMode={selection.active}
@@ -306,6 +342,16 @@ export const DriverTable = ({
                     show={showPagination}
                 />
             </ListPanel>
+
+            <DriverTalkDialog
+                driver={talkingTo}
+                onClose={() => setTalkingTo(null)}
+                onDone={(resolved) => {
+                    setTalkingTo(null);
+                    onDeleted?.();
+                    showNotice(talkDoneText(resolved));
+                }}
+            />
 
             <ConfirmDialog
                 open={pendingDelete !== null}

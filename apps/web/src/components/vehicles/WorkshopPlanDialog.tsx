@@ -257,9 +257,16 @@ const PlanForm = ({
     const notDrivable = damages.some((damage) => !damage.drivable) || vehicle?.availability === "NOT_DRIVABLE";
     const chosenTransport: WorkshopTransport = transport ?? (notDrivable ? "TOW" : "DRIVER");
 
-    // Distance from where the vehicle belongs, so it does not change while it drives.
+    // A vehicle that cannot drive is towed from where it stands: the distance
+    // counts from the breakdown. Otherwise from where it belongs, so the number
+    // does not change while it drives.
+    const breakdown = damages.find(
+        (damage) => !damage.drivable && damage.latitude !== null && damage.longitude !== null,
+    );
     const homeSite = sites.find((site) => site.id === vehicle?.home_site_id) ?? null;
-    const reference = homeSite
+    const reference = breakdown
+        ? { latitude: breakdown.latitude as number, longitude: breakdown.longitude as number, label: "vom Pannenort" }
+        : homeSite && !notDrivable
         ? { latitude: homeSite.latitude, longitude: homeSite.longitude, label: `vom Depot ${homeSite.name}` }
         : vehicle?.latitude != null && vehicle.longitude != null
           ? { latitude: vehicle.latitude, longitude: vehicle.longitude, label: "vom letzten Standort" }

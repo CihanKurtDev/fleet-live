@@ -1,15 +1,18 @@
 import { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
-    isSelfClosingAlertType,
+    DRIVER_TALK_MIN_OPEN_WARNINGS,
+    LIST_PAGE_LIMIT_MAX,
     serializeAlertListQuery,
     type Alert,
 } from "@fleet-live/shared";
 
-import { resolveAlerts } from "../../api/alerts";
+import { resolveAlerts, resolveAlertsMatching } from "../../api/alerts";
 import { ApiError } from "../../api/client";
 import { useVehicles } from "../../context/vehiclesContext";
 import { useAlertList } from "../../hooks/useAlertList";
 import { useAlertListQuery } from "../../hooks/useAlertListQuery";
+import { useAuth } from "../../hooks/useAuth";
 import { useListPageSize } from "../../hooks/useListPageSize";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useServerTable } from "../../hooks/useServerTable";
@@ -32,7 +35,7 @@ import {
 import { RetryMessage } from "../ui/RetryMessage";
 import { Table } from "../ui/Table/Table";
 import { AlertBulkResolveDialog } from "./AlertBulkResolve";
-import { resolvedNotice, selectionSummary } from "./alertLabels";
+import { resolvedNotice } from "./alertLabels";
 import {
     activeAlertTile,
     alertTileCount,
@@ -56,8 +59,12 @@ export const AlertTable = ({
     onSelectAlert,
 }: AlertTableProps) => {
     const listQuery = useAlertListQuery();
-    const { ref: bodyRef, pageSize } = useListPageSize(listQuery.query.limit);
-    const listResult = useAlertList({ ...listQuery.query, limit: pageSize });
+    const { ref: bodyRef, pageSize: fitted } = useListPageSize(listQuery.query.limit);
+    // 10 is "no choice made": the list shows what fits the window.
+    const pageSize = listQuery.query.limit === 10 ? fitted : listQuery.query.limit;
+    const limitOptions = [...new Set([fitted, 25, 50, LIST_PAGE_LIMIT_MAX])].sort((a, b) => a - b);
+    const listResult = useAlertList({ ...listQuery.apiQuery, limit: pageSize });
+    const namesHidden = useAuth().user?.driver_names_hidden ?? false;
     const { refetchLists } = useVehicles();
     const { notice, show: showNotice } = useStatusNotice();
     const onSingleResolved = useCallback(
@@ -82,16 +89,15 @@ export const AlertTable = ({
         total,
         showPagination,
         emptyContent,
+        setSearch,
         handleSort,
         setPage,
     } = useServerTable<Alert>({ listQuery, listResult });
 
-    // Nothing to select on Erledigt, nor on Wenig Tank and Kein Signal (they close
-    // themselves).
-    const selectable =
-        canWrite &&
-        query.filter !== "resolved" &&
-        !(query.type && isSelfClosingAlertType(query.type));
+    // Only on Tempo: every row there can be closed by hand, so the number on
+    // the tile, in the footer and in the selection bar is the same number.
+    // Wenig Tank and Kein Signal close themselves.
+    const selectable = canWrite && query.filter === "open" && query.type === "SPEEDING";
     const openRows = useMemo(
         () => paginatedRows.filter(canResolveByHand),
         [paginatedRows],
@@ -106,13 +112,31 @@ export const AlertTable = ({
         () => openRows.filter((row) => selection.selectedIds.includes(row.id)),
         [openRows, selection.selectedIds],
     );
+    // "Alle N" stays on while paging; the list it means is everything but the page.
+    const wholeList = serializeAlertListQuery({ ...listQuery.apiQuery, page: 1, limit: 10 }).toString();
+    const [allOf, setAllOf] = useState<string | null>(null);
+    const allSelected = selecting && allOf === wholeList;
+    const pageFull = selection.pageCheckbox.checked;
+    const offerAll = selecting && !allSelected && pageFull && total > openRows.length;
+    const selectedCount = allSelected ? total : selection.count;
+    const selectionLabel = allSelected
+        ? `Alle ${formatCount(total)} ausgewählt`
+        : offerAll
+          ? `${formatCount(selection.count)} auf dieser Seite ausgewählt`
+          : `${formatCount(selection.count)} ausgewählt`;
+    const endSelection = () => {
+        setAllOf(null);
+        selection.stop();
+    };
 
     const [pendingRows, setPendingRows] = useState<Alert[] | null>(null);
+    const [pendingAll, setPendingAll] = useState(false);
     const [bulkError, setBulkError] = useState<string | null>(null);
     const [isResolving, setIsResolving] = useState(false);
 
     const closeBulkDialog = () => {
         setPendingRows(null);
+        setPendingAll(false);
         setBulkError(null);
     };
 
@@ -125,18 +149,29 @@ export const AlertTable = ({
         setIsResolving(true);
 
         try {
-            await resolveAlerts(pendingRows.map((row) => row.id));
-            const count = pendingRows.length;
-            setPendingRows(null);
-            selection.stop();
+            const { data } = pendingAll
+                ? await resolveAlertsMatching(
+                      {
+                          type: "SPEEDING",
+                          vehicle_id: query.vehicle_id,
+                          driver_id: query.driver_id,
+                          search: listQuery.apiQuery.search,
+                      },
+                      total,
+                  )
+                : await resolveAlerts(pendingRows.map((row) => row.id));
+            closeBulkDialog();
+            endSelection();
             refetchLists();
-            showNotice(resolvedNotice(count));
+            showNotice(resolvedNotice(data.resolved));
         } catch (caught: unknown) {
             setBulkError(
                 caught instanceof ApiError
                     ? caught.message
                     : "Warnungen konnten nicht erledigt werden.",
             );
+            // The list moved on: the next confirmation counts the new number.
+            refetchLists();
         } finally {
             setIsResolving(false);
         }
@@ -165,14 +200,16 @@ export const AlertTable = ({
         );
     }
 
+    const hasSearch = query.search.trim() !== "";
     const hasScope =
-        query.vehicle_id !== undefined || query.driver_id !== undefined;
+        query.vehicle_id !== undefined || query.driver_id !== undefined || hasSearch;
     const activeTile = activeAlertTile(query);
     const isFiltered = activeTile !== "open" || hasScope;
     const counts = meta?.counts;
     // Never a warning in this company (or none yet in a new one): not the
     // same as "Keine offenen Warnungen", which says the inbox is cleared.
     const noAlerts = counts !== undefined && !hasScope && counts.all === 0;
+    const talkDrivers = hasScope ? 0 : (meta?.talk_drivers ?? 0);
 
     const summary = (
         <>
@@ -183,6 +220,14 @@ export const AlertTable = ({
                   // company's retention.
                   `${formatCount(counts.open)} offen · ${formatCount(counts.resolved)} erledigt. Erledigt heißt geklärt; die Warnung bleibt ${meta.resolved_kept_days} Tage im Verlauf.`
                 : "Warnungen der Firma"}
+            {talkDrivers > 0 && (
+                <>
+                    {" · "}
+                    <Link className={styles.scopeButton} to={`/drivers?min_open_warnings=${DRIVER_TALK_MIN_OPEN_WARNINGS}`}>
+                        {formatCount(talkDrivers)} Fahrer mit {DRIVER_TALK_MIN_OPEN_WARNINGS} oder mehr offenen Tempo-Warnungen
+                    </Link>
+                </>
+            )}
             {query.vehicle_id !== undefined && (
                 <>
                     {" · "}Nur Warnungen eines Fahrzeugs.{" "}
@@ -218,7 +263,7 @@ export const AlertTable = ({
         tone: tile.tone,
         pressed: activeTile === tile.id,
         onToggle: () => {
-            selection.stop();
+            endSelection();
             setView(tile.view);
         },
     }));
@@ -250,22 +295,36 @@ export const AlertTable = ({
             <ListPanel label="Warnungsliste">
                 {selecting ? (
                     <SelectionBar
-                        count={selection.count}
-                        pageCheckbox={selection.pageCheckbox}
-                        summary={
-                            selectedRows.length > 0
-                                ? selectionSummary(selectedRows)
-                                : undefined
+                        count={selectedCount}
+                        countLabel={selectionLabel}
+                        pageCheckbox={
+                            allSelected
+                                ? { checked: true, indeterminate: false, onChange: () => setAllOf(null) }
+                                : selection.pageCheckbox
                         }
-                        onDone={selection.stop}
+                        summary={
+                            offerAll ? (
+                                <button
+                                    type="button"
+                                    className={styles.scopeButton}
+                                    onClick={() => setAllOf(wholeList)}
+                                >
+                                    Alle {formatCount(total)} auswählen
+                                </button>
+                            ) : undefined
+                        }
+                        onDone={endSelection}
                         actions={
                             <Button
                                 variant="primary"
                                 size="toolbar"
-                                disabled={selection.count === 0}
-                                onClick={() => setPendingRows(selectedRows)}
+                                disabled={selectedCount === 0}
+                                onClick={() => {
+                                    setPendingAll(allSelected);
+                                    setPendingRows(allSelected ? openRows : selectedRows);
+                                }}
                             >
-                                {selection.count} erledigen
+                                {formatCount(selectedCount)} erledigen
                             </Button>
                         }
                     />
@@ -275,6 +334,12 @@ export const AlertTable = ({
                             selectable ? selection.start : undefined
                         }
                         disabled={noAlerts}
+                        search={{
+                            value: tableState.search,
+                            onChange: setSearch,
+                            placeholder: namesHidden ? "Kennzeichen suchen" : "Fahrer oder Kennzeichen suchen",
+                            ariaLabel: namesHidden ? "Kennzeichen suchen" : "Fahrer oder Kennzeichen suchen",
+                        }}
                     />
                 )}
 
@@ -299,8 +364,16 @@ export const AlertTable = ({
                         rows={paginatedRows}
                         getRowKey={(alert) => alert.id}
                         selectionMode={selecting}
-                        selectedRows={selection.selectedIds}
-                        onSelectRow={(key) => selection.toggle(Number(key))}
+                        selectedRows={allSelected ? rowKeys : selection.selectedIds}
+                        onSelectRow={(key) => {
+                            if (allSelected) {
+                                setAllOf(null);
+                                selection.select(rowKeys.filter((id) => id !== Number(key)));
+                                return;
+                            }
+
+                            selection.toggle(Number(key));
+                        }}
                         isRowSelectable={canResolveByHand}
                         getRowSelectLabel={(alert) =>
                             `Warnung ${alert.license_plate}, ${formatTimestamp(alert.created_at)} auswählen`
@@ -336,6 +409,8 @@ export const AlertTable = ({
                     limit={pageSize}
                     total={total}
                     onPageChange={setPage}
+                    onLimitChange={(limit) => listQuery.setLimit(limit === fitted ? 10 : limit)}
+                    limitOptions={limitOptions}
                     show={showPagination}
                 />
             </ListPanel>
@@ -343,6 +418,7 @@ export const AlertTable = ({
             {canWrite && (
                 <AlertBulkResolveDialog
                     rows={pendingRows}
+                    count={pendingAll ? total : (pendingRows?.length ?? 0)}
                     isBusy={isResolving}
                     error={bulkError}
                     onClose={closeBulkDialog}

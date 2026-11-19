@@ -54,6 +54,7 @@ export function assertLicenceValid(driver: { name: string; licence_expires_on: s
     }
 }
 import { WorkshopModel } from "./workshop.model";
+import { PrivacyModel } from "./privacy.model";
 import { pagedQuery, type SqlParam } from "../lib/pagination";
 
 const INSERT_OR_IGNORE = `
@@ -68,7 +69,7 @@ const INSERT_DRIVER = `
 `;
 
 const SELECT_ID = `
-    SELECT id FROM drivers WHERE company_id = ? AND name = ?
+    SELECT id FROM drivers WHERE company_id = ? AND name = ? COLLATE NOCASE
 `;
 
 const SELECT_ONE = `
@@ -121,7 +122,7 @@ function toLikePattern(search: string): string {
 }
 
 function toCounts(row: DriverRow): DriverIncidentCounts {
-    const speeding = Number(row.speeding);
+    const speeding = Number(row.all_incidents);
 
     return {
         all: speeding,
@@ -186,26 +187,16 @@ const AGG_SELECT = `
         WHERE v.current_driver_id = d.id
         LIMIT 1
     ) AS current_vehicle_status,
+    d.open_warnings,
     (
-        SELECT COUNT(*)
+        SELECT a.created_at
         FROM alerts a
         WHERE a.driver_id = d.id
           AND a.type = 'SPEEDING'
           AND a.resolved_at IS NULL
-    ) AS open_warnings,
-    (
-        SELECT MAX(a.created_at)
-        FROM alerts a
-        WHERE a.driver_id = d.id
-          AND a.type = 'SPEEDING'
-          AND a.resolved_at IS NULL
+        ORDER BY a.created_at DESC
+        LIMIT 1
     ) AS last_warning_at,
-    (
-        SELECT COUNT(*)
-        FROM alerts a
-        WHERE a.driver_id = d.id
-          AND a.type = 'SPEEDING'
-    ) AS speeding,
     (
         SELECT COUNT(*)
         FROM alerts a
@@ -217,7 +208,7 @@ const AGG_SELECT = `
 const SORT_SQL: Record<DriverSortKey, string> = {
     name: "d.name COLLATE NOCASE",
     vehicle_count: "vehicle_count",
-    open_warnings: "open_warnings",
+    open_warnings: "d.open_warnings",
     counts: "all_incidents",
 };
 
@@ -412,13 +403,7 @@ export class DriverModel {
                 : "";
         const warningsSql =
             query.min_open_warnings !== undefined
-                ? `AND (
-                    SELECT COUNT(*)
-                    FROM alerts a
-                    WHERE a.driver_id = d.id
-                      AND a.type = 'SPEEDING'
-                      AND a.resolved_at IS NULL
-                  ) >= ?`
+                ? "AND d.open_warnings >= ?"
                 : "";
         const withoutVehicleSql = query.without_vehicle
             ? `AND NOT EXISTS (
@@ -442,8 +427,7 @@ export class DriverModel {
 
         const listSql = `
             SELECT
-                ${AGG_SELECT},
-                COUNT(*) OVER () AS total
+                ${AGG_SELECT}
             FROM drivers d
             WHERE d.company_id = ?
               ${filterSql}
@@ -495,13 +479,7 @@ export class DriverModel {
                 COALESCE(SUM(licence_driving), 0) AS licence_driving
             FROM (
                 SELECT
-                    (
-                        SELECT COUNT(*)
-                        FROM alerts a
-                        WHERE a.driver_id = d.id
-                          AND a.type = 'SPEEDING'
-                          AND a.resolved_at IS NULL
-                    ) AS open_warnings,
+                    d.open_warnings,
                     EXISTS (
                         SELECT 1 FROM vehicles v
                         WHERE v.current_driver_id = d.id
@@ -530,6 +508,7 @@ export class DriverModel {
                     without_vehicle: Number(counts.without_vehicle),
                     licence_driving: Number(counts.licence_driving),
                 },
+                resolved_kept_days: PrivacyModel.alertDays(companyId),
             },
         };
     }
