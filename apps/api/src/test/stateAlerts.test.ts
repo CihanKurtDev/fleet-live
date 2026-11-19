@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import request from "supertest";
 import { db } from "../db/database";
 import { pruneResolvedAlerts } from "../db/alertRetention";
-import { archiveStaleSpeeding, syncStateAlerts } from "../db/stateAlerts";
+import { noteOldAutoClosedSpeeding, syncStateAlerts } from "../db/stateAlerts";
 import { ExceptionEventModel } from "../models/exceptionEvent.model";
 import { UserModel } from "../models/user.model";
 import { VehicleModel } from "../models/vehicle.model";
@@ -125,77 +125,56 @@ describe("Kein Signal is a state warning", () => {
     });
 });
 
-describe("Tempo becomes history after seven days", () => {
-    it("archives only ended events that ran out of their days", () => {
+describe("Tempo warnings stay open until someone handles them", () => {
+    it("does not close an ended warning, however old, and it stays on the driver", async () => {
         const vehicle = make("K-ST 6");
-        const old = insertAlert(vehicle.id, {
-            type: "SPEEDING",
-            created_at: daysAgo(10),
-            ended_at: daysAgo(8),
-        });
-        const fresh = insertAlert(vehicle.id, {
-            type: "SPEEDING",
-            created_at: daysAgo(3),
-            ended_at: daysAgo(2),
-        });
-        const stillSpeeding = insertAlert(vehicle.id, {
-            type: "SPEEDING",
-            created_at: daysAgo(9),
-        });
-        const handled = insertAlert(vehicle.id, {
-            type: "SPEEDING",
-            created_at: daysAgo(20),
-            ended_at: daysAgo(19),
-            resolved_at: daysAgo(18),
-        });
-
-        const companies = archiveStaleSpeeding(db);
-        assert.deepEqual(companies, [1]);
-
-        const get = (id: number) =>
-            db
-                .prepare("SELECT ended_at, resolved_at FROM alerts WHERE id = ?")
-                .get(id) as { ended_at: string | null; resolved_at: string | null };
-
-        const archived = get(old);
-        assert.ok(archived.resolved_at);
-        // It left the open list when its seven days ran out, not when this ran.
-        assert.equal(
-            archived.resolved_at,
-            (
-                db
-                    .prepare("SELECT datetime(?, '+7 days') AS t")
-                    .get(archived.ended_at) as { t: string }
-            ).t,
-        );
-        assert.equal(get(fresh).resolved_at, null);
-        assert.equal(get(stillSpeeding).resolved_at, null);
-        assert.equal(get(handled).resolved_at, daysAgo(18));
-        assert.deepEqual(archiveStaleSpeeding(db), []);
-    });
-
-    it("takes the event out of the driver's open count", async () => {
-        const vehicle = make("K-ST 7");
         const driver = await api.post("/api/drivers").send({ name: "Tempo Test" });
         assert.equal(driver.status, 201);
         const driverId = driver.body.data.id as number;
-
-        insertAlert(vehicle.id, {
+        const old = insertAlert(vehicle.id, {
             type: "SPEEDING",
             driver_id: driverId,
-            created_at: daysAgo(10),
-            ended_at: daysAgo(9),
+            created_at: daysAgo(30),
+            ended_at: daysAgo(29),
         });
 
-        const open = async () => {
-            const response = await api.get(`/api/drivers/${driverId}`);
-            assert.equal(response.status, 200);
-            return response.body.data.open_warnings as number;
-        };
+        syncStateAlerts(db);
+        noteOldAutoClosedSpeeding(db);
+        pruneResolvedAlerts(db);
 
-        assert.equal(await open(), 1);
-        archiveStaleSpeeding(db);
-        assert.equal(await open(), 0);
+        const listed = await api.get("/api/alerts?filter=open&type=SPEEDING");
+        assert.ok(listed.body.data.some((row: { id: number }) => row.id === old));
+        const open = await api.get(`/api/drivers/${driverId}`);
+        assert.equal(open.body.data.open_warnings, 1);
+    });
+
+    it("says on the rows the old rule closed that nobody handled them", async () => {
+        const vehicle = make("K-ST 7");
+        const ended = daysAgo(20);
+        const plus7 = (
+            db.prepare("SELECT datetime(?, '+7 days') AS t").get(ended) as { t: string }
+        ).t;
+        const auto = insertAlert(vehicle.id, {
+            type: "SPEEDING",
+            created_at: daysAgo(21),
+            ended_at: ended,
+            resolved_at: plus7,
+        });
+        const byHand = insertAlert(vehicle.id, {
+            type: "SPEEDING",
+            created_at: daysAgo(21),
+            ended_at: ended,
+            resolved_at: daysAgo(19),
+        });
+
+        noteOldAutoClosedSpeeding(db);
+
+        const rowsNow = (await api.get(`/api/alerts?filter=resolved&vehicle_id=${vehicle.id}`)).body.data as Array<{
+            id: number;
+            resolution_note: string | null;
+        }>;
+        assert.match(rowsNow.find((row) => row.id === auto)?.resolution_note ?? "", /alte Regel/);
+        assert.equal(rowsNow.find((row) => row.id === byHand)?.resolution_note, null);
     });
 });
 

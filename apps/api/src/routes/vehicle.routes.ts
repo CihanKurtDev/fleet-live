@@ -39,7 +39,7 @@ router.get("/:id/trips/latest", getVehicleTrip);
 router.get("/:id/trips/:tripId", getVehicleTripById);
 router.get("/:id/trips", getVehicleTrips);
 router.get("/:id/workshop", getVehicleWorkshop);
-router.get("/:id/workshop/bringers", getVehicleWorkshopBringers);
+router.get("/:id/workshop/bringers", requireDispatcher, getVehicleWorkshopBringers);
 router.post("/:id/workshop", requireDispatcher, createVehicleWorkshop);
 router.patch("/:id/availability", requireDispatcher, patchVehicleAvailability);
 router.get("/:id/damages", getVehicleDamages);

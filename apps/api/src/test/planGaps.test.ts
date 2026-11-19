@@ -155,7 +155,7 @@ describe("plan gaps: injection and secrets", () => {
             depot: "<img src=x onerror=alert(1)>",
         });
         assert.equal(created.status, 201);
-        assert.equal(created.body.license_plate, plate);
+        assert.equal(created.body.license_plate, plate.toUpperCase());
         assertNoSecrets(created.body);
 
         const me = await agent.get("/api/auth/me");

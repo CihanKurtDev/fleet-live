@@ -48,6 +48,7 @@ const mockSignals = ({
                 driving: 0,
                 idle: 0,
                 offline: 0,
+                unconnected: 0,
                 stopped: 0,
                 in_depot: 0,
                 speeding: 0,

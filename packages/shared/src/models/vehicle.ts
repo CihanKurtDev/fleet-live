@@ -10,6 +10,7 @@ export const VEHICLE_STATUSES = [
     "DRIVING",
     "STOPPED",
     "OFFLINE",
+    "UNCONNECTED",
 ] as const;
 
 export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
@@ -20,6 +21,7 @@ export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
     IDLE: "Standby",
     STOPPED: "Feierabend",
     OFFLINE: "Kein Signal",
+    UNCONNECTED: "Nicht verbunden",
 };
 
 /** The list filter (and count) that selects exactly the vehicles of a status. */
@@ -28,6 +30,7 @@ export const VEHICLE_STATUS_FILTER = {
     IDLE: "idle",
     STOPPED: "stopped",
     OFFLINE: "offline",
+    UNCONNECTED: "unconnected",
 } as const satisfies Record<VehicleStatus, VehicleFilterId>;
 
 export const VEHICLE_TYPES = [
@@ -282,14 +285,20 @@ export function normalizeVin(raw: string): string {
     return raw.replace(/[\s-]/g, "").toUpperCase();
 }
 
+/** One spelling for a plate: capitals, single spaces. „bn-de 6545“ is „BN-DE 6545“. */
+export function normalizeLicensePlate(raw: string): string {
+    return raw.trim().replace(/\s+/g, " ").toUpperCase();
+}
+
 const licensePlateSchema = z
     .string({ error: "Kennzeichen ist erforderlich." })
     .trim()
-    .min(1, "Kennzeichen ist erforderlich.")
+    .transform(normalizeLicensePlate)
+    .pipe(z.string().min(1, "Kennzeichen ist erforderlich.")
     .max(
         LICENSE_PLATE_MAX,
         `Kennzeichen darf höchstens ${LICENSE_PLATE_MAX} Zeichen haben.`,
-    );
+    ));
 
 export const driverNameSchema = z
     .string({ error: "Fahrer ist erforderlich." })

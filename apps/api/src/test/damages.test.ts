@@ -114,7 +114,7 @@ describe("damages", () => {
 
         const today = (await api.get("/api/today")).body;
         assert.equal(today.meta.counts.damage_unplanned, 1);
-        const row = today.data.find((item: { kind: string }) => item.kind === "damage_unplanned");
+        const row = today.data.groups.find((group: { kind: string }) => group.kind === "damage_unplanned").items[0];
         assert.equal(row.subject, "K-SCH 3");
         assert.equal(row.damage.id, created.body.data.id);
         assert.equal((await counts()).damage_unplanned, 1);
@@ -216,6 +216,34 @@ describe("damages", () => {
             .get(Number(stay.lastInsertRowid)) as { transport: string; bring_driver_id: number | null };
         assert.equal(row.transport, "TOW");
         assert.equal(row.bring_driver_id, null);
+    });
+
+    it("joins the open stay when asked: a reason there, repaired when it is finished", async () => {
+        const car = vehicle("K-SCH 13");
+        const place = (
+            await api.post("/api/workshop/places").send({ name: "Karosserie Zu", latitude: 50.98, longitude: 6.97 })
+        ).body.data;
+        const stay = (
+            await api.post(`/api/vehicles/${car.id}/workshop`).send({
+                reasons: ["MAINTENANCE"],
+                transport: "TOW",
+                workshop_id: place.id,
+                planned_on: today,
+                expected_on: today,
+                assignee_user_id: me,
+            })
+        ).body.data;
+
+        const created = (await report(car.id, { drivable: false, add_to_open_stay: true })).body.data;
+        assert.equal(created.workshop_visit_id, stay.id);
+        const open = (await api.get(`/api/vehicles/${car.id}/workshop`)).body.data.open;
+        assert.deepEqual([...open.reasons].sort(), ["DAMAGE", "MAINTENANCE"]);
+
+        await api.post(`/api/workshop/${stay.id}/arrive`).expect(200);
+        await api.post(`/api/workshop/${stay.id}/finish`).send({ finished_on: today }).expect(200);
+        const listed = (await api.get(`/api/vehicles/${car.id}/damages`)).body.data[0];
+        assert.equal(listed.state, "REPAIRED");
+        assert.equal((await api.get(`/api/vehicles/${car.id}`)).body.availability, "READY");
     });
 
     it("validates time and place", async () => {

@@ -11,6 +11,7 @@ import {
     formatAlertEvent,
     type AlertSeverity,
     type AlertType,
+    type DamagePhotoType,
     type DamageSeverity,
     type DamageState,
     type WorkshopTransport,
@@ -26,6 +27,12 @@ import {
     parseDetails,
 } from "./export.model";
 import { PrivacyModel } from "./privacy.model";
+
+const PHOTO_EXTENSION: Record<DamagePhotoType, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+};
 
 type DriverRow = {
     id: number;
@@ -153,15 +160,15 @@ export function driverExport(
     // Damages reported while this person drove the vehicle (snapshot at the report).
     const damages = stmt(
         `
-        SELECT v.license_plate, d.occurred_on, d.occurred_time, d.description, d.severity,
-               d.drivable, d.latitude, d.longitude, d.state,
-               (SELECT COUNT(*) FROM damage_photos p WHERE p.damage_id = d.id) AS photos
+        SELECT d.id, v.license_plate, d.occurred_on, d.occurred_time, d.description, d.severity,
+               d.drivable, d.latitude, d.longitude, d.state
         FROM vehicle_damages d
         JOIN vehicles v ON v.id = d.vehicle_id
         WHERE d.driver_id = ? AND v.company_id = ?
         ORDER BY d.occurred_on DESC, d.id DESC
         `,
     ).all(driverId, companyId) as {
+        id: number;
         license_plate: string;
         occurred_on: string;
         occurred_time: string | null;
@@ -229,18 +236,35 @@ export function driverExport(
         "- ereignisse.csv: Tempo-Verstöße und Funklöcher auf diesen Fahrten",
         "- warnungen.csv: Warnungen, die beim Öffnen dieser Person zugeordnet waren",
         "- werkstatt.csv: Werkstatt-Aufenthalte, zu denen diese Person das Fahrzeug bringen sollte",
-        "- schaeden.csv: Schäden, die gemeldet wurden, während diese Person das Fahrzeug fuhr (Ort und Zahl der Fotos; die Fotos selbst sind nicht in der Datei)",
+        "- schaeden.csv: Schäden, die gemeldet wurden, während diese Person das Fahrzeug fuhr, mit Ort und den Namen der Fotos",
+        "- fotos/: die Fotos dieser Schäden",
         "",
         "Aufbewahrung dieser Firma:",
         `- Fahrten: ${retention.trips > 0 ? `${retention.trips} Tage nach dem Ende` : "ohne Frist"}`,
         `- Erledigte Warnungen: ${retention.alerts} Tage nach dem Erledigen`,
-        `- Offene Warnungen und laufende Fahrten werden nicht gelöscht.`,
+        `- Fotos, Ort und Fahrer eines Schadens: ${retention.damages} Tage nach seinem Abschluss`,
+        `- Offene Warnungen, laufende Fahrten und offene Schäden werden nicht gelöscht.`,
         "",
         "Nicht enthalten:",
         "- Live-Positionen der Fahrzeuge: nur die letzten 100 Meldungen je Fahrzeug, nicht der Person zugeordnet und laufend überschrieben.",
         `- Das Protokoll der Firma (${retention.audit ?? RETENTION_FALLBACK.audit} Tage) betrifft Konten, nicht Fahrer.`,
         "",
     ].join("\r\n");
+
+    // Each photo is a file of its own; the damage row names them.
+    const photoNames = new Map<number, string[]>();
+    const photos = damages.flatMap((damage) =>
+        (
+            stmt(
+                "SELECT content_type, data FROM damage_photos WHERE damage_id = ? ORDER BY id",
+            ).all(damage.id) as Array<{ content_type: DamagePhotoType; data: Uint8Array }>
+        ).map((photo, index) => {
+            const name = `fotos/schaden-${damage.id}-${index + 1}.${PHOTO_EXTENSION[photo.content_type]}`;
+            photoNames.set(damage.id, [...(photoNames.get(damage.id) ?? []), name]);
+
+            return { name, data: photo.data };
+        }),
+    );
 
     const files: Record<string, Uint8Array> = {
         "liesmich.txt": strToU8(`\uFEFF${readme}`),
@@ -327,7 +351,7 @@ export function driverExport(
                     Number(row.drivable) === 1 ? "Ja" : "Nein",
                     row.latitude === null ? "" : String(row.latitude),
                     row.longitude === null ? "" : String(row.longitude),
-                    String(row.photos),
+                    (photoNames.get(row.id) ?? []).join(", "),
                     DAMAGE_STATE_LABELS[row.state],
                 ]),
             ]),
@@ -350,6 +374,10 @@ export function driverExport(
             ]),
         ),
     };
+
+    for (const photo of photos) {
+        files[photo.name] = photo.data;
+    }
 
     return { name: driver.name, zip: zipSync(files) };
 }

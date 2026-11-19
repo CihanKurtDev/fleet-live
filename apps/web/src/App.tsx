@@ -3,7 +3,7 @@ import { AuthProvider } from "./context/AuthProvider";
 import { VehiclesProvider } from "./context/VehiclesProvider";
 import { AppHeader, HeaderLiveStatus } from "./components/AppHeader";
 import { useAuth } from "./hooks/useAuth";
-import { useBriefing } from "./hooks/useBriefing";
+import { useOpenAlertCount } from "./hooks/useOpenAlertCount";
 import "./App.css";
 
 /**
@@ -26,13 +26,13 @@ function SkipLink() {
 }
 
 function AuthedShell() {
-    const { data } = useBriefing();
+    const openAlerts = useOpenAlertCount();
 
     return (
         <>
             <SkipLink />
             <AppHeader
-                openAlertCount={data?.counts.open}
+                openAlertCount={openAlerts}
                 status={<HeaderLiveStatus />}
             />
             <main id="main" tabIndex={-1}>

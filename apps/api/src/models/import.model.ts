@@ -36,6 +36,7 @@ import {
     isVehicleStatus,
     LICENSE_PLATE_MAX,
     ODOMETER_MAX_KM,
+    normalizeLicensePlate,
     normalizeVin,
     parseKilometerText,
     parseHuDate,
@@ -93,6 +94,7 @@ import {
 } from "../lib/errors";
 
 const STATUS_HINTS: Array<{ pattern: RegExp; status: VehicleStatus }> = [
+    { pattern: /nicht verbunden|unconnected/i, status: "UNCONNECTED" },
     { pattern: /unterwegs|driving|fahrt|rollt/i, status: "DRIVING" },
     { pattern: /idle|standby|bereit|frei|wartet|park/i, status: "IDLE" },
     { pattern: /stop|halt|steht|gestoppt|feierabend/i, status: "STOPPED" },
@@ -204,7 +206,7 @@ function findDriverId(
     const row = stmt(
         `
         SELECT id FROM drivers
-        WHERE company_id = ? AND name = ?
+        WHERE company_id = ? AND name = ? COLLATE NOCASE
         `,
     ).get(companyId, name) as { id: number } | undefined;
 
@@ -426,7 +428,7 @@ function mapTableRows(
             return rawRow[index];
         };
 
-        const plateRaw = read("license_plate")?.trim() ?? "";
+        const plateRaw = normalizeLicensePlate(read("license_plate") ?? "");
         const statusParsed = parseStatus(read("status"), statusMapping);
 
         if (statusParsed.unmapped) {
@@ -1797,7 +1799,7 @@ export class ImportModel {
                             }
 
                             const fuelLevel = row.fuel_level ?? 100;
-                            const status = row.status ?? "IDLE";
+                            const status = row.status ?? "UNCONNECTED";
                             const namedDepot = row.depot
                                 ? lookup.depotsByKey.get(
                                       normalizeDepotKey(row.depot),

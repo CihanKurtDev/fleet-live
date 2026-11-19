@@ -98,7 +98,7 @@ type ClusterAgg = StatusCounts & {
 export type FleetClusterIndex = Supercluster<PointProps, ClusterAgg>;
 
 function emptyStatusCounts(): StatusCounts {
-    return { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0 };
+    return { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0, UNCONNECTED: 0 };
 }
 
 export function isInsideBBox(
@@ -274,6 +274,7 @@ export function clustersFromIndex(
                     DRIVING: props.DRIVING,
                     STOPPED: props.STOPPED,
                     OFFLINE: props.OFFLINE,
+                    UNCONNECTED: props.UNCONNECTED,
                 },
                 bounds: {
                     west: props.minLng,

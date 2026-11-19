@@ -3,6 +3,8 @@ import {
     DAMAGE_PHOTOS_MAX,
     DAMAGE_PHOTO_MAX_BYTES,
     berlinTodayIso,
+    parseWorkshopReasons,
+    sortWorkshopReasons,
     type Damage,
     type DamageInput,
     type DamagePhotoType,
@@ -141,6 +143,32 @@ function takeOffTheRoad(vehicle: DamageVehicle, companyId: number, actor: Damage
     }
 }
 
+/** The open stay takes this damage along: it is a reason there, and finishing repairs it. */
+function addToOpenStay(vehicleId: number, damageId: number, actor: DamageActor) {
+    const stay = stmt(
+        `
+        SELECT id, reasons FROM workshop_visits
+        WHERE vehicle_id = ? AND state IN ('PLANNED', 'IN_WORKSHOP')
+        `,
+    ).get(vehicleId) as { id: number; reasons: string } | undefined;
+
+    if (!stay) {
+        return;
+    }
+
+    stmt(`UPDATE vehicle_damages SET workshop_visit_id = ? WHERE id = ?`).run(stay.id, damageId);
+    stmt(`UPDATE workshop_visits SET reasons = ? WHERE id = ?`).run(
+        JSON.stringify(sortWorkshopReasons([...parseWorkshopReasons(stay.reasons), "DAMAGE"])),
+        stay.id,
+    );
+    stmt(
+        `
+        INSERT INTO workshop_visit_events (visit_id, action, actor_user_id, actor_name, details)
+        VALUES (?, 'updated', ?, ?, ?)
+        `,
+    ).run(stay.id, actor.id, actor.name, JSON.stringify({ fields: ["damage_ids"] }));
+}
+
 /** The first bytes say what a file is; the declared type must match them. */
 function photoMatches(type: DamagePhotoType, data: Uint8Array): boolean {
     const starts = (...bytes: number[]) => bytes.every((byte, index) => data[index] === byte);
@@ -219,11 +247,17 @@ export class DamageModel {
                 vehicle.current_driver_id === null ? null : vehicle.driver_name,
             );
 
+            const damageId = Number(result.lastInsertRowid);
+
             if (!input.drivable) {
                 takeOffTheRoad(vehicle, companyId, actor);
             }
 
-            return Number(result.lastInsertRowid);
+            if (input.add_to_open_stay) {
+                addToOpenStay(vehicleId, damageId, actor);
+            }
+
+            return damageId;
         });
 
         return damageOf(id, companyId);

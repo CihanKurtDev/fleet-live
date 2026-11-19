@@ -837,24 +837,28 @@ describe("account page", () => {
             viewer_driver_names: true,
             trips_days: null,
             alerts_days: null,
+            damages_days: null,
             audit_days: null,
             trips: 90,
             alerts: 90,
+            damages: 365,
             audit: 365,
-            defaults: { trips: 90, alerts: 90, audit: 365 },
+            defaults: { trips: 90, alerts: 90, damages: 365, audit: 365 },
         } });
         vi.mocked(savePrivacy).mockResolvedValue({
             data: { ...{
             viewer_driver_names: true,
             trips_days: null,
             alerts_days: null,
+            damages_days: null,
             audit_days: null,
             trips: 90,
             alerts: 90,
+            damages: 365,
             audit: 365,
-            defaults: { trips: 90, alerts: 90, audit: 365 },
+            defaults: { trips: 90, alerts: 90, damages: 365, audit: 365 },
         }, trips_days: 30, trips: 30 },
-            deleted: { trips: 12, alerts: 0, audit: 1 },
+            deleted: { trips: 12, alerts: 0, damages: 0, audit: 1 },
         });
         renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
 
@@ -878,6 +882,7 @@ describe("account page", () => {
         expect(savePrivacy).toHaveBeenCalledWith({
             trips_days: 30,
             alerts_days: null,
+            damages_days: null,
             audit_days: null,
         });
     });
@@ -887,16 +892,18 @@ describe("account page", () => {
             viewer_driver_names: true,
             trips_days: null,
             alerts_days: null,
+            damages_days: null,
             audit_days: null,
             trips: 90,
             alerts: 90,
+            damages: 365,
             audit: 365,
-            defaults: { trips: 90, alerts: 90, audit: 365 },
+            defaults: { trips: 90, alerts: 90, damages: 365, audit: 365 },
         };
         vi.mocked(getPrivacy).mockResolvedValue({ data: settings });
         vi.mocked(savePrivacy).mockResolvedValue({
             data: { ...settings, viewer_driver_names: false },
-            deleted: { trips: 0, alerts: 0, audit: 0 },
+            deleted: { trips: 0, alerts: 0, damages: 0, audit: 0 },
         });
         renderAuth(<AccountPage />, { user: authUser(), route: "/konto#datenschutz" });
 
@@ -919,11 +926,13 @@ describe("account page", () => {
                 viewer_driver_names: true,
                 trips_days: null,
                 alerts_days: null,
+                damages_days: null,
                 audit_days: null,
                 trips: 90,
                 alerts: 90,
+                damages: 365,
                 audit: 365,
-                defaults: { trips: 90, alerts: 90, audit: 365 },
+                defaults: { trips: 90, alerts: 90, damages: 365, audit: 365 },
             },
         });
         vi.mocked(savePrivacy).mockReset();

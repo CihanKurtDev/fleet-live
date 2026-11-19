@@ -73,8 +73,14 @@ describe("the Auskunft about a driver", () => {
                     "INSERT INTO vehicle_damages (vehicle_id, occurred_on, occurred_time, description, severity, drivable, latitude, longitude, driver_id, driver_name) VALUES (?, '2026-10-22', '07:42', ?, 'SEVERE', 0, 50.95, 6.93, ?, 'x')",
                 )
                 .run(van.id, description, driverId);
-        damage(ada, "Reifen geplatzt");
-        damage(bob, "Bobs Delle");
+        const photo = new Uint8Array([255, 216, 255, 1, 2, 3]);
+        const addPhoto = (damageId: number | bigint) =>
+            db
+                .prepare("INSERT INTO damage_photos (damage_id, content_type, data) VALUES (?, 'image/jpeg', ?)")
+                .run(damageId, photo);
+        const adasDamage = damage(ada, "Reifen geplatzt").lastInsertRowid;
+        addPhoto(adasDamage);
+        addPhoto(damage(bob, "Bobs Delle").lastInsertRowid);
 
         const response = await agent
             .get(`/api/export/drivers/${ada}`)
@@ -89,6 +95,7 @@ describe("the Auskunft about a driver", () => {
             "ereignisse.csv",
             "fahrten.csv",
             "fahrzeuge.csv",
+            `fotos/schaden-${adasDamage}-1.jpg`,
             "liesmich.txt",
             "schaeden.csv",
             "stammdaten.csv",
@@ -105,8 +112,10 @@ describe("the Auskunft about a driver", () => {
         assert.doesNotMatch(text("warnungen.csv"), /Bob/);
         assert.match(text("werkstatt.csv"), /K-AU 1;HU;Fahrer bringt;Autohaus Weber;2026-11-03;08:00;Geplant/);
         assert.doesNotMatch(text("werkstatt.csv"), /Bobs Werkstatt/);
-        assert.match(text("schaeden.csv"), /K-AU 1;2026-10-22;07:42;Reifen geplatzt;schwer;Nein;50.95;6.93;0;Offen/);
+        assert.match(text("schaeden.csv"), /K-AU 1;2026-10-22;07:42;Reifen geplatzt;schwer;Nein;50.95;6.93;[^;]*;Offen/);
         assert.doesNotMatch(text("schaeden.csv"), /Bobs Delle/);
+        assert.match(text("schaeden.csv"), new RegExp(`fotos/schaden-${adasDamage}-1\\.jpg`));
+        assert.deepEqual([...(files[`fotos/schaden-${adasDamage}-1.jpg`] as Uint8Array)], [...photo]);
 
         const routes = JSON.parse(text("wege.geojson"));
         assert.equal(routes.features.length, 1);

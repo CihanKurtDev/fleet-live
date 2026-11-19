@@ -11,23 +11,26 @@ type RetentionRow = {
     viewer_driver_names: number;
     trip_retention_days: number | null;
     alert_retention_days: number | null;
+    damage_retention_days: number | null;
     audit_retention_days: number | null;
 };
 
 const COLUMN = {
     trips_days: "trip_retention_days",
     alerts_days: "alert_retention_days",
+    damages_days: "damage_retention_days",
     audit_days: "audit_retention_days",
 } as const;
 
 export const PrivacyModel = {
     get(companyId: number): PrivacySettings {
         const row = stmt(
-            "SELECT viewer_driver_names, trip_retention_days, alert_retention_days, audit_retention_days FROM companies WHERE id = ?",
+            "SELECT viewer_driver_names, trip_retention_days, alert_retention_days, damage_retention_days, audit_retention_days FROM companies WHERE id = ?",
         ).get(companyId) as RetentionRow | undefined;
         const defaults = {
             trips: config.tripRetentionDays,
             alerts: RETENTION_FALLBACK.alerts,
+            damages: RETENTION_FALLBACK.damages,
             audit: RETENTION_FALLBACK.audit,
         };
 
@@ -35,9 +38,11 @@ export const PrivacyModel = {
             viewer_driver_names: row?.viewer_driver_names !== 0,
             trips_days: row?.trip_retention_days ?? null,
             alerts_days: row?.alert_retention_days ?? null,
+            damages_days: row?.damage_retention_days ?? null,
             audit_days: row?.audit_retention_days ?? null,
             trips: row?.trip_retention_days ?? defaults.trips,
             alerts: row?.alert_retention_days ?? defaults.alerts,
+            damages: row?.damage_retention_days ?? defaults.damages,
             audit: row?.audit_retention_days ?? defaults.audit,
             defaults,
         };

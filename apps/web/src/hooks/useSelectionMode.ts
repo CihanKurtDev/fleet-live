@@ -49,6 +49,12 @@ export const useSelectionMode = <K extends Key>(
         setSelection({ key: resetKey, ids: allSelected ? [] : [...rowKeys] });
     }, [allSelected, resetKey, rowKeys]);
 
+    /** Exactly these rows, e.g. all but one after "alle" was undone. */
+    const select = useCallback(
+        (ids: K[]) => setSelection({ key: resetKey, ids }),
+        [resetKey],
+    );
+
     const start = useCallback(() => {
         setSelection({ key: resetKey, ids: [] });
         setActive(true);
@@ -69,6 +75,7 @@ export const useSelectionMode = <K extends Key>(
         count,
         toggle,
         toggleAll,
+        select,
         /** Props for the page checkbox in `SelectionBar`. */
         pageCheckbox: {
             checked: allSelected,

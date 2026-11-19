@@ -26,6 +26,7 @@ const readAlertParams = (
     vehicle_id: searchParams.get("vehicle_id") ?? undefined,
     driver_id: searchParams.get("driver_id") ?? undefined,
     type: searchParams.get("type") ?? undefined,
+    search: searchParams.get("search") ?? "",
 });
 
 const useAlertListQueryBase = createListQueryHook<
@@ -56,9 +57,11 @@ const useAlertListQueryBase = createListQueryHook<
         "vehicle_id",
         "driver_id",
         "type",
+        "search",
     ],
     defaultSort: { key: "created_at", dir: "desc", mode: "sticky" },
-    getSearch: () => "",
+    debounceSearch: true,
+    getSearch: (query) => query.search,
     getFilterId: (query) => (query.filter === "all" ? null : query.filter),
     extra: (patch) => ({
         setFilter: (filterId: string | null) => {
@@ -92,6 +95,7 @@ const useAlertListQueryBase = createListQueryHook<
                     type: null,
                     vehicle_id: null,
                     driver_id: null,
+                    search: "",
                 } as ListQueryPatch<AlertListQuery>,
                 { replace: true, resetPage: true },
             );
@@ -114,8 +118,10 @@ const useAlertListQueryBase = createListQueryHook<
 export const useAlertListQuery = () => {
     const {
         query,
+        apiQuery,
         tableState,
         sortConfig,
+        setSearch,
         setFilter,
         setType,
         setView,
@@ -129,8 +135,10 @@ export const useAlertListQuery = () => {
 
     return {
         query,
+        apiQuery,
         tableState,
         sortConfig,
+        setSearch,
         setFilter,
         setType,
         setView,

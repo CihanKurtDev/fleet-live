@@ -30,3 +30,4 @@
 - `/pr-body` — PR title and body for the current branch
 - `/after-merge` — update `main` and remove a merged branch
 - `/measure-page <path>` — measure a page in the browser at the standard sizes
+- `/screen-check <path>` — check a screen or design as the user reads it (numbers, plausibility, 0/1/normal/huge, the job, a reviewer without context); before showing a screen, offering a design, saying done or opening a PR

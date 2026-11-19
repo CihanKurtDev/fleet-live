@@ -8,10 +8,12 @@ import {
     XAxis,
     YAxis,
 } from "recharts";
+import { SPEED_CRITICAL_OVER_LIMIT_KMH } from "@fleet-live/shared";
 
 import { useChartTheme } from "../../hooks/useChartTheme";
 import {
     CHART_SERIES,
+    HIGH_SHARE_LABEL,
     firstKmMonth,
     yCeiling,
     type KmMonth,
@@ -45,12 +47,12 @@ const KmTooltip = ({
     return (
         <ChartTooltipShell label={String(label)} year={year}>
             <ChartTooltipRow
-                label="Tempo-Vorfälle je 1.000 km"
+                label="Tempo-Warnungen je 1.000 km"
                 value={row.eventsPer1000km ?? "—"}
                 color={CHART_SERIES.km}
             />
             <ChartTooltipRow
-                label="Davon deutlich über dem Limit"
+                label={HIGH_SHARE_LABEL}
                 value={`${row.highShare}%`}
                 color={CHART_SERIES.speeding}
             />
@@ -78,8 +80,8 @@ export const BriefingKmChart = ({
     const kmStart = firstKmMonth(series);
     const kmMax = yCeiling(
         series.map((row) => row.eventsPer1000km ?? 0),
-        1,
-        0.5,
+        0.1,
+        0.05,
     );
     const highMax = yCeiling(
         series.map((row) => row.highShare),
@@ -93,8 +95,8 @@ export const BriefingKmChart = ({
             compact
             kicker="Pro Kilometer"
             title="Passiert das oft — oder nur, weil viel gefahren wird?"
-            lead="Tempo-Vorfälle je 1.000 km: vergleichbar, auch wenn die Flotte wächst."
-            note="Balken: Anteil der schweren Vorfälle."
+            lead="Tempo-Warnungen je 1.000 km: vergleichbar, auch wenn die Flotte wächst."
+            note={`Balken: Anteil mit ${SPEED_CRITICAL_OVER_LIMIT_KMH} km/h oder mehr über dem Limit.`}
             blank={
                 empty
                     ? "Die Balken erscheinen nach den ersten gefahrenen Kilometern."
@@ -107,14 +109,14 @@ export const BriefingKmChart = ({
                             className={styles.swatch}
                             style={{ background: CHART_SERIES.km }}
                         />
-                        Tempo-Vorfälle je 1.000 km
+                        Tempo-Warnungen je 1.000 km
                     </li>
                     <li className={styles.legendItem}>
                         <span
                             className={styles.swatch}
                             style={{ background: CHART_SERIES.speeding, opacity: 0.45 }}
                         />
-                        Davon deutlich über dem Limit
+                        {HIGH_SHARE_LABEL}
                     </li>
                 </ul>
             }
@@ -137,7 +139,10 @@ export const BriefingKmChart = ({
                     axisLine={false}
                     tickLine={false}
                     domain={[0, kmMax]}
-                    width={36}
+                    tickFormatter={(value: number) =>
+                        value.toLocaleString("de-DE", { maximumFractionDigits: 2 })
+                    }
+                    width={40}
                 />
                 <YAxis
                     yAxisId="right"
@@ -168,7 +173,7 @@ export const BriefingKmChart = ({
                     fillOpacity={0.22}
                     barSize={18}
                     radius={[3, 3, 0, 0]}
-                    name="Davon deutlich über dem Limit"
+                    name={HIGH_SHARE_LABEL}
                     isAnimationActive={false}
                 />
                 <Line
@@ -184,7 +189,7 @@ export const BriefingKmChart = ({
                         strokeWidth: 0,
                     }}
                     connectNulls={false}
-                    name="Tempo-Vorfälle je 1.000 km"
+                    name="Tempo-Warnungen je 1.000 km"
                     isAnimationActive={false}
                 />
             </ComposedChart>

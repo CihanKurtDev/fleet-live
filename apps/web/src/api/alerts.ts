@@ -1,5 +1,6 @@
 import type {
     Alert,
+    AlertBulkFilter,
     AlertBulkPatchResponse,
     AlertListQuery,
     AlertListResponse,
@@ -22,6 +23,14 @@ export function resolveAlert(id: number, body: AlertPatch = { resolved: true }) 
     return request<Alert>(`/api/alerts/${id}`, {
         method: "PATCH",
         body,
+    });
+}
+
+/** Erledigt alle Tempo-Warnungen eines Filters; `expected` ist die bestätigte Zahl. */
+export function resolveAlertsMatching(filter: AlertBulkFilter, expected: number) {
+    return request<AlertBulkPatchResponse>("/api/alerts", {
+        method: "PATCH",
+        body: { filter, expected, resolved: true },
     });
 }
 

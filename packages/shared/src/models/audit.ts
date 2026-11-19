@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { USER_ROLE_LABELS, type UserRole } from "./auth";
+import type { RetentionKind } from "./privacy";
 
 /** Changes to who may do what in a company, kept for its dispatchers (`GET /api/auth/audit`). */
 export const AUDIT_ACTIONS = [
@@ -44,7 +45,7 @@ export type AuditDetails = {
     /** The company domain of a domain_* entry. */
     domain?: string;
     /** New retention days of a privacy_changed entry; null = default. */
-    retention?: Partial<Record<"trips" | "alerts" | "audit", number | null>>;
+    retention?: Partial<Record<RetentionKind, number | null>>;
     /** New visibility of driver names for viewers (privacy_changed). */
     viewer_driver_names?: boolean;
     /** The driver whose data was exported (driver_exported). */
@@ -85,7 +86,12 @@ const SECURITY_CHANGE_TEXT: Record<SecurityChange, string> = {
     sso_secret: "Client-Geheimnis ersetzt",
 };
 
-const RETENTION_NAMES = { trips: "Fahrten", alerts: "Warnungen", audit: "Protokoll" } as const;
+const RETENTION_NAMES: Record<RetentionKind, string> = {
+    trips: "Fahrten",
+    alerts: "Warnungen",
+    damages: "Schaden-Details",
+    audit: "Protokoll",
+};
 
 const role = (value: UserRole | undefined) => (value ? USER_ROLE_LABELS[value] : "?");
 
@@ -136,7 +142,7 @@ export function formatAuditEvent(event: AuditEvent): string {
             return `Datenschutz geändert: ${[
                 ...Object.entries(details.retention ?? {}).map(
                     ([kind, days]) =>
-                        `${RETENTION_NAMES[kind as keyof typeof RETENTION_NAMES]} ${days === null ? "Standard" : `${days} Tage`}`,
+                        `${RETENTION_NAMES[kind as RetentionKind]} ${days === null ? "Standard" : `${days} Tage`}`,
                 ),
                 ...(details.viewer_driver_names === undefined
                     ? []

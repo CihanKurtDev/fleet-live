@@ -64,21 +64,31 @@ describe("an expired driving licence", () => {
         assert.equal(rows[0].due_on, null);
     });
 
-    it("puts a driver with an expired licence who has a vehicle first in Heute dran, with the vehicle and phone", async () => {
+    it("puts a driver with an expired licence who has a vehicle first in Heute, with the vehicle and phone", async () => {
         const truck = VehicleModel.create({ license_plate: "K-XE 1", company_id: 1 });
         const id = await driverWith("Olga Krause", { phone: "+49 152 1883462", licence_expires_on: "2031-01-01" }, truck.id);
         await api.patch(`/api/drivers/${id}/current-vehicle`).send({ vehicle_id: truck.id });
         db.prepare(`UPDATE drivers SET licence_expires_on = '2026-05-06' WHERE id = ?`).run(id);
 
         const today = (await api.get("/api/today")).body;
-        assert.equal(today.data[0].kind, "licence_driving");
-        assert.equal(today.data[0].subject, "Olga Krause");
-        assert.equal(today.data[0].vehicle_plate, "K-XE 1");
-        assert.equal(today.data[0].phone, "+49 152 1883462");
+        const first = today.data.groups[0];
+        assert.equal(first.kind, "licence_driving");
+        assert.equal(first.items[0].subject, "Olga Krause");
+        assert.equal(first.items[0].vehicle_plate, "K-XE 1");
+        assert.equal(first.items[0].phone, "+49 152 1883462");
         assert.equal(today.meta.counts.licence_driving, 1);
 
         const list = (await api.get("/api/drivers?licence_driving=true")).body;
         assert.equal(list.meta.total, 1);
         assert.equal(list.meta.counts.licence_driving, 1);
+
+        // The same expired licence is one task, one row.
+        type Row = { driver_id: number | null; due_kind: string | null };
+        const rowsForOlga = (today.data.groups as Array<{ items: Row[] }>)
+            .flatMap((group) => group.items)
+            .filter((item) => item.driver_id === id && item.due_kind === "licence_expiry");
+        assert.equal(rowsForOlga.length, 1);
+        const sum = Object.values(today.meta.counts as Record<string, number>).reduce((a, b) => a + b, 0);
+        assert.equal(today.meta.total, sum);
     });
 });

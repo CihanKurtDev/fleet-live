@@ -18,7 +18,7 @@
         container-type: inline-size;
         overflow-x: auto;
 
-        @container (max-width: 1179px) {
+        @container (max-width: 1201px) {
             :global(col[data-col="license_plate"]) {
                 width: 180px !important;
             }
@@ -28,7 +28,7 @@
             }
 
             :global(col[data-col="status"]) {
-                width: 136px !important;
+                width: 164px !important;
             }
 
             :global(col[data-col="fuel_level"]) {
@@ -48,14 +48,14 @@
             }
         }
 
-        @container (max-width: 1043px) {
+        @container (max-width: 1071px) {
             :global([data-col="hu_due_on"]),
             :global([data-col="uvv_due_on"]) {
                 display: none;
             }
         }
 
-        @container (max-width: 855px) {
+        @container (max-width: 883px) {
             :global([data-col="speed"]) {
                 display: none;
             }

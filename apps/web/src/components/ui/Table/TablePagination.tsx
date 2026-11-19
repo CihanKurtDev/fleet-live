@@ -193,10 +193,39 @@ export const TablePagination = ({
         </p>
     );
 
+    const limitSelect = (
+        <div className={styles.limit}>
+            <Select
+                id={limitSelectId}
+                size="sm"
+                value={limit}
+                disabled={disabled || onLimitChange === undefined}
+                onChange={(event) =>
+                    onLimitChange?.(
+                        Number(event.target.value),
+                    )
+                }
+            >
+                {limitOptions.map((option) => (
+                    <option key={option} value={option}>
+                        {option}
+                    </option>
+                ))}
+            </Select>
+
+            <label htmlFor={limitSelectId}>
+                pro Seite
+            </label>
+        </div>
+    );
+
     if (layout === "footer") {
         return (
             <div className={styles.footer}>
-                {range}
+                <div className={styles.footerStart}>
+                    {range}
+                    {onLimitChange && limitSelect}
+                </div>
                 {pages}
             </div>
         );
@@ -204,29 +233,7 @@ export const TablePagination = ({
 
     return (
         <div className={styles.pagination}>
-            <div className={styles.limit}>
-                <Select
-                    id={limitSelectId}
-                    size="sm"
-                    value={limit}
-                    disabled={disabled || onLimitChange === undefined}
-                    onChange={(event) =>
-                        onLimitChange?.(
-                            Number(event.target.value),
-                        )
-                    }
-                >
-                    {limitOptions.map((option) => (
-                        <option key={option} value={option}>
-                            {option}
-                        </option>
-                    ))}
-                </Select>
-
-                <label htmlFor={limitSelectId}>
-                    pro Seite
-                </label>
-            </div>
+            {limitSelect}
 
             {pages}
 

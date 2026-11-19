@@ -76,7 +76,8 @@ export const DriverDetailPage = () => {
         );
     }
 
-    if (error) {
+    // A failed background refresh keeps the driver on screen.
+    if (error && !driver) {
         return (
             <section className={styles.page}>
                 <DetailBackLink fallback="/drivers" />

@@ -2,20 +2,18 @@ import { useState } from "react";
 import { Link } from "react-router";
 import {
     DRIVER_TALK_MIN_OPEN_WARNINGS,
-    DRIVER_TALK_NOTE_MAX,
     berlinTodayIso,
     isLicenceExpired,
     type DriverDetail,
     type Vehicle,
 } from "@fleet-live/shared";
 
-import { setDriverCurrentVehicle, talkToDriver } from "../../api/drivers";
+import { setDriverCurrentVehicle } from "../../api/drivers";
 import { formatIsoDate } from "../../utils/dateTime";
 import { Button } from "../ui/Button/Button";
-import { FieldError } from "../ui/FieldError/FieldError";
-import { Textarea } from "../ui/Input/Textarea";
-import { Modal } from "../ui/Modal/Modal";
 import { vehicleDeadlines } from "../vehicles/vehicleDeadlines";
+import { DriverTalkDialog } from "./DriverTalkDialog";
+import { talkDoneText } from "./driverTalkText";
 import { driverHints, type DriverFormField } from "./driverHints";
 import detail from "./driverDetail.module.scss";
 import styles from "./DriverHintsPanel.module.scss";
@@ -43,16 +41,13 @@ export const DriverHintsPanel = ({
 }: DriverHintsPanelProps) => {
     const today = berlinTodayIso();
     const hints = driverHints(driver, checkMonths);
-    const openSpeeding = driver.counts.SPEEDING;
+    const openSpeeding = driver.open_warnings;
     const current = driver.current_vehicle;
     const licenceExpired = isLicenceExpired(driver.licence_expires_on, today);
     const expiredVehicleDeadlines = currentVehicle
         ? vehicleDeadlines(currentVehicle, today, 0).filter((deadline) => deadline.state === "overdue")
         : [];
     const [talking, setTalking] = useState(false);
-    const [note, setNote] = useState("");
-    const [talkError, setTalkError] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
 
     const takeOff = () => {
@@ -65,25 +60,6 @@ export const DriverHintsPanel = ({
             .catch((caught: unknown) =>
                 setActionError(caught instanceof Error ? caught.message : "Nicht abgenommen."),
             );
-    };
-
-    const confirmTalk = async () => {
-        setBusy(true);
-        setTalkError(null);
-        try {
-            const { data } = await talkToDriver(driver.id, note.trim() === "" ? null : note.trim());
-            setTalking(false);
-            setNote("");
-            onChanged?.(
-                data.resolved === 1
-                    ? "Gespräch eingetragen, 1 Tempo-Warnung erledigt."
-                    : `Gespräch eingetragen, ${data.resolved} Tempo-Warnungen erledigt.`,
-            );
-        } catch (caught) {
-            setTalkError(caught instanceof Error ? caught.message : "Nicht gespeichert.");
-        } finally {
-            setBusy(false);
-        }
     };
 
     const empty =
@@ -144,10 +120,7 @@ export const DriverHintsPanel = ({
                                 <Button
                                     variant="ghost"
                                     size="row"
-                                    onClick={() => {
-                                        setTalkError(null);
-                                        setTalking(true);
-                                    }}
+                                    onClick={() => setTalking(true)}
                                 >
                                     Gespräch geführt
                                 </Button>
@@ -205,38 +178,14 @@ export const DriverHintsPanel = ({
                 </ul>
             )}
 
-            <Modal open={talking} onClose={() => setTalking(false)} title="Gespräch geführt?">
-                <div className={styles.talk}>
-                    <p>
-                        Erledigt {openSpeeding === 1 ? "1 offene Tempo-Warnung" : `${openSpeeding} offene Tempo-Warnungen`} von{" "}
-                        {driver.name} mit dem Vermerk „Gespräch geführt am {formatIsoDate(today)}“.
-                    </p>
-                    <label htmlFor="driver-talk-note">Notiz (freiwillig)</label>
-                    <Textarea
-                        id="driver-talk-note"
-                        rows={2}
-                        maxLength={DRIVER_TALK_NOTE_MAX}
-                        value={note}
-                        onChange={(event) => setNote(event.target.value)}
-                    />
-                    <FieldError fieldId="driver-talk-note">{talkError}</FieldError>
-                    <div className={styles.talkActions}>
-                        <Button type="button" variant="secondary" size="md" onClick={() => setTalking(false)}>
-                            Abbrechen
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="primary"
-                            size="md"
-                            busy={busy}
-                            busyLabel="Wird gespeichert…"
-                            onClick={() => void confirmTalk()}
-                        >
-                            {openSpeeding === 1 ? "1 erledigen" : `${openSpeeding} erledigen`}
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
+            <DriverTalkDialog
+                driver={talking ? driver : null}
+                onClose={() => setTalking(false)}
+                onDone={(resolved) => {
+                    setTalking(false);
+                    onChanged?.(talkDoneText(resolved));
+                }}
+            />
         </section>
     );
 };

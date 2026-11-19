@@ -43,13 +43,29 @@ const INVARIANTS: Array<[string, string]> = [
          WHERE a.type = 'LOW_FUEL' AND a.resolved_at IS NULL AND v.fuel_level >= 15`,
     ],
     [
+        "die laufenden Zähler der Warnungen stimmen",
+        `SELECT COUNT(*) AS c FROM (
+             SELECT a.company_id, a.type, SUM(a.resolved_at IS NULL) AS o, SUM(a.resolved_at IS NOT NULL) AS r
+             FROM alerts a GROUP BY 1, 2
+         ) x LEFT JOIN alert_counts k ON k.company_id = x.company_id AND k.type = x.type
+         WHERE k.open_count IS NOT x.o OR k.resolved_count IS NOT x.r`,
+    ],
+    [
+        "die offenen Warnungen am Fahrer stimmen",
+        `SELECT COUNT(*) AS c FROM drivers d
+         WHERE d.open_warnings <> (
+             SELECT COUNT(*) FROM alerts a
+             WHERE a.driver_id = d.id AND a.type = 'SPEEDING' AND a.resolved_at IS NULL
+         )`,
+    ],
+    [
         "eine beendete Funk- oder Tank-Warnung ist auch erledigt",
         `SELECT COUNT(*) AS c FROM alerts
          WHERE type IN ('OFFLINE', 'LOW_FUEL')
            AND ended_at IS NOT NULL AND resolved_at IS NULL`,
     ],
     [
-        "ein beendetes Tempo-Ereignis steht höchstens 7 Tage bei den offenen",
+        "in den Demodaten wartet eine beendete Tempo-Warnung höchstens 7 Tage auf den Disponenten",
         `SELECT COUNT(*) AS c FROM alerts
          WHERE type = 'SPEEDING' AND resolved_at IS NULL
            AND ended_at IS NOT NULL AND ended_at <= datetime('now', '-7 days')`,

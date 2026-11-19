@@ -1,7 +1,7 @@
 import { db } from "../db/database";
 import { pruneResolvedAlerts } from "../db/alertRetention";
 import { pruneAuditEvents } from "../db/auditRetention";
-import { archiveStaleSpeeding } from "../db/stateAlerts";
+import { pruneClosedDamages } from "../db/damageRetention";
 import { logger } from "../logger";
 import { TelemetryModel } from "../models/telemetry.model";
 import { SpeedingEventModel } from "../models/speedingEvent.model";
@@ -10,6 +10,8 @@ import { SiteModel } from "../models/site.model";
 import { DriveModel } from "../models/drive.model";
 import { WorkshopModel } from "../models/workshop.model";
 import { WorkshopPlaceModel } from "../models/workshopPlace.model";
+import { playNextTrips } from "../sim/driveCycle";
+import { playFirstReports } from "../sim/firstReports";
 import { playWorkshopTrips } from "../sim/workshopTrips";
 import { broadcast } from "./hub";
 import type { TelemetryPatch } from "@fleet-live/shared";
@@ -18,7 +20,7 @@ let timer: ReturnType<typeof setInterval> | undefined;
 let intervalMs = 0;
 let lastArchive = 0;
 
-/** Ended speeding events that ran out of their open days and resolved warnings past their retention are looked for this often. */
+/** Resolved warnings and log entries past their retention are looked for this often. */
 const ARCHIVE_EVERY_MS = 10 * 60_000;
 /** Workshop trips and pickups are looked for this often. */
 const WORKSHOP_TRIPS_EVERY_MS = 10_000;
@@ -103,11 +105,9 @@ export function startTelemetryTicker(ms: number) {
             if (Date.now() - lastWorkshopTrips >= WORKSHOP_TRIPS_EVERY_MS) {
                 lastWorkshopTrips = Date.now();
 
-                const trips = playWorkshopTrips();
-                for (const companyId of [...trips.companies, ...applyTickEffects(trips.patches)]) {
+                for (const companyId of [...playFirstReports(), ...playWorkshopTrips(), ...playNextTrips()]) {
                     notifyCompanies.add(companyId);
                 }
-                patches.push(...trips.patches);
             }
 
             for (const companyId of ExceptionEventModel.applySilence()) {
@@ -121,11 +121,8 @@ export function startTelemetryTicker(ms: number) {
             if (Date.now() - lastArchive >= ARCHIVE_EVERY_MS) {
                 lastArchive = Date.now();
 
-                for (const companyId of archiveStaleSpeeding(db)) {
-                    notifyCompanies.add(companyId);
-                }
-
                 pruneResolvedAlerts(db);
+                pruneClosedDamages(db);
                 pruneAuditEvents(db);
             }
 

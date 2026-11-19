@@ -22,7 +22,20 @@ export const db = new DatabaseSync(config.databasePath);
 
 // Today in Europe/Berlin for SQL, the same day `GET /api/due` counts with
 // (workshop stays due today). Not deterministic: it changes at midnight.
-db.function("berlin_today", { deterministic: false }, () => berlinTodayIso());
+// A query calls this once per row: working out the Berlin day each time costs seconds at 50.000 rows.
+let berlinToday = { day: "", until: 0 };
+
+const cachedBerlinToday = () => {
+    const now = Date.now();
+
+    if (now >= berlinToday.until) {
+        berlinToday = { day: berlinTodayIso(), until: now + 1_000 };
+    }
+
+    return berlinToday.day;
+};
+
+db.function("berlin_today", { deterministic: false }, cachedBerlinToday);
 
 // HU/UVV of a vehicle by the rule of /fristen (shared), so the vehicle list
 // marks, filters and counts with the same rule the page draws. `kind` 'HU' or
@@ -43,11 +56,11 @@ db.function(
         }).lead_days;
 
         if (kind === "ANY") {
-            return vehicleDeadlineState(vehicle, berlinTodayIso(), lead);
+            return vehicleDeadlineState(vehicle, cachedBerlinToday(), lead);
         }
 
         return (
-            vehicleDeadlines(vehicle, berlinTodayIso(), lead).find(
+            vehicleDeadlines(vehicle, cachedBerlinToday(), lead).find(
                 (deadline) => deadline.reason === kind,
             )?.state ?? null
         );

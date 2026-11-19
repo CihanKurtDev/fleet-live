@@ -18,6 +18,7 @@ export const useDriverList = (query: DriverListQuery) => {
         vehicle_id,
         min_open_warnings,
         without_vehicle,
+        licence_driving,
     } = query;
     const [response, setResponse] = useState<DriverListResponse | null>(null);
     const [isFetching, setIsFetching] = useState(true);
@@ -32,6 +33,7 @@ export const useDriverList = (query: DriverListQuery) => {
         vehicle_id,
         min_open_warnings,
         without_vehicle,
+        licence_driving,
         listEpoch,
         retryKey,
     ].join("\0");
@@ -54,6 +56,7 @@ export const useDriverList = (query: DriverListQuery) => {
             vehicle_id,
             min_open_warnings,
             without_vehicle,
+            licence_driving,
         };
 
         retryTransient(
@@ -91,6 +94,7 @@ export const useDriverList = (query: DriverListQuery) => {
         vehicle_id,
         min_open_warnings,
         without_vehicle,
+        licence_driving,
         listEpoch,
         retryKey,
     ]);

@@ -82,6 +82,8 @@ export type DriverListMeta = {
     total: number;
     pageCount: number;
     counts: DriverListCounts;
+    /** Days a resolved warning stays (company setting); open ones always count. */
+    resolved_kept_days: number;
 };
 
 export type DriverListResponse = {

@@ -2,10 +2,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { isValidIsoDate } from "@fleet-live/shared";
 import { pruneResolvedAlerts } from "./alertRetention";
 import { pruneAuditEvents } from "./auditRetention";
-import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
+import { pruneClosedDamages } from "./damageRetention";
+import { noteOldAutoClosedSpeeding, syncStateAlerts } from "./stateAlerts";
 import { backfillTripHistory, ensureTripEvents } from "./tripEvents";
 
-const SCHEMA_VERSION = 25;
+const SCHEMA_VERSION = 28;
 
 type TableColumn = {
     name: string;
@@ -744,6 +745,46 @@ function enforceOneCurrentVehiclePerDriver(database: DatabaseSync) {
  * „Abschleppen“ ohne Bringer. Läuft bei jedem Start; ohne solche Zeilen tut
  * es nichts.
  */
+/**
+ * „bn-de 6545“ neben „BN-DE 6545“ und „sam nowak“ neben „Sam Nowak“ sind
+ * dasselbe. Kennzeichen stehen danach in Großbuchstaben, soweit das keine
+ * Dublette träfe. Der Index bleibt aus, solange alte Dubletten da sind: die
+ * muss ein Mensch zusammenführen, der Start darf daran nicht scheitern.
+ */
+function ensureCaseInsensitiveNames(database: DatabaseSync) {
+    if (tableExists(database, "vehicles")) {
+        database.exec(`
+            UPDATE vehicles SET license_plate = upper(license_plate)
+            WHERE license_plate <> upper(license_plate)
+              AND NOT EXISTS (
+                  SELECT 1 FROM vehicles other
+                  WHERE other.company_id = vehicles.company_id
+                    AND other.id <> vehicles.id
+                    AND upper(other.license_plate) = upper(vehicles.license_plate)
+              )
+        `);
+    }
+
+    const unique = (table: string, column: string, index: string) => {
+        if (!tableExists(database, table)) {
+            return;
+        }
+        const clash = database
+            .prepare(
+                `SELECT 1 FROM ${table} GROUP BY company_id, ${column} COLLATE NOCASE HAVING COUNT(*) > 1 LIMIT 1`,
+            )
+            .get();
+        if (!clash) {
+            database.exec(
+                `CREATE UNIQUE INDEX IF NOT EXISTS ${index} ON ${table}(company_id, ${column} COLLATE NOCASE)`,
+            );
+        }
+    };
+
+    unique("vehicles", "license_plate", "idx_vehicles_plate_nocase");
+    unique("drivers", "name", "idx_drivers_name_nocase");
+}
+
 function towUndrivablePlannedStays(database: DatabaseSync) {
     if (
         !tableExists(database, "workshop_visits") ||
@@ -963,6 +1004,209 @@ function ensureAssignmentModel(database: DatabaseSync) {
 function migrateToV14(database: DatabaseSync) {
     ensureAssignmentModel(database);
     applyMaintenanceTriggers(database);
+}
+
+/**
+ * A vehicle whose device has never reported is `UNCONNECTED`. SQLite cannot
+ * change a CHECK, so the table is rebuilt from its own stored definition; all
+ * data, indexes and triggers stay. Vehicles that exist keep their status.
+ */
+function ensureUnconnectedStatus(database: DatabaseSync) {
+    const table = database
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'vehicles'")
+        .get() as { sql: string };
+
+    if (table.sql.includes("'UNCONNECTED'") || !/CHECK\s*\(\s*status/.test(table.sql)) {
+        return;
+    }
+
+    const rebuilt = table.sql
+        .replace(/CREATE TABLE\s+"?vehicles"?/, "CREATE TABLE vehicles_v26")
+        .replace(
+            /\('IDLE',\s*'DRIVING',\s*'STOPPED',\s*'OFFLINE'\)/,
+            "('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE', 'UNCONNECTED')",
+        );
+
+    if (!rebuilt.includes("'UNCONNECTED'") || !rebuilt.includes("vehicles_v26")) {
+        throw new Error("vehicles: status CHECK not found");
+    }
+
+    // Without the generated `search_text`, which no insert may name.
+    const columns = (database.prepare("PRAGMA table_info(vehicles)").all() as Array<{ name: string }>)
+        .map((column) => column.name)
+        .join(", ");
+    const sequence = database
+        .prepare("SELECT seq FROM sqlite_sequence WHERE name = 'vehicles'")
+        .get() as { seq: number } | undefined;
+    // Triggers elsewhere that name the table must not be there while it is gone.
+    const dependents = database
+        .prepare(
+            `SELECT type, name, sql FROM sqlite_master
+             WHERE sql IS NOT NULL AND type IN ('index', 'trigger')
+               AND (tbl_name = 'vehicles' OR (type = 'trigger' AND sql LIKE '%vehicles%'))`,
+        )
+        .all() as Array<{ type: string; name: string; sql: string }>;
+
+    database.exec("PRAGMA foreign_keys = OFF");
+    database.exec("BEGIN");
+    try {
+        for (const dependent of dependents) {
+            if (dependent.type === "trigger") {
+                database.exec(`DROP TRIGGER "${dependent.name}"`);
+            }
+        }
+
+        database.exec(rebuilt);
+        database.exec(`INSERT INTO vehicles_v26 (${columns}) SELECT ${columns} FROM vehicles`);
+        database.exec("DROP TABLE vehicles");
+        database.exec("ALTER TABLE vehicles_v26 RENAME TO vehicles");
+
+        if (sequence) {
+            database
+                .prepare("UPDATE sqlite_sequence SET seq = ? WHERE name = 'vehicles'")
+                .run(sequence.seq);
+        }
+
+        for (const dependent of dependents) {
+            database.exec(dependent.sql);
+        }
+
+        database.exec("COMMIT");
+    } catch (error) {
+        database.exec("ROLLBACK");
+        throw error;
+    } finally {
+        database.exec("PRAGMA foreign_keys = ON");
+    }
+}
+
+/**
+ * What keeps the warning and driver lists fast at any size: the company on
+ * the warning (one index per list, also for a company without a hit) and
+ * running counters instead of counting all rows on every load.
+ */
+function ensureAlertScale(database: DatabaseSync) {
+    if (!tableExists(database, "alerts") || !tableExists(database, "drivers")) {
+        return;
+    }
+
+    const newCounts = !tableExists(database, "alert_counts");
+    const newDriverCounter = !columnNames(database, "drivers").has("open_warnings");
+
+    database.exec("BEGIN");
+    try {
+        addColumn(database, "alerts", "company_id", "INTEGER");
+        addColumn(database, "drivers", "open_warnings", "INTEGER NOT NULL DEFAULT 0");
+        database.exec(`
+            UPDATE alerts
+            SET company_id = (SELECT company_id FROM vehicles WHERE id = alerts.vehicle_id)
+            WHERE company_id IS NULL;
+
+            CREATE TABLE IF NOT EXISTS alert_counts (
+                company_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                open_count INTEGER NOT NULL DEFAULT 0,
+                resolved_count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (company_id, type)
+            ) WITHOUT ROWID;
+        `);
+
+        if (newCounts) {
+            database.exec(`
+                INSERT INTO alert_counts (company_id, type, open_count, resolved_count)
+                SELECT company_id, type, SUM(resolved_at IS NULL), SUM(resolved_at IS NOT NULL)
+                FROM alerts WHERE company_id IS NOT NULL
+                GROUP BY company_id, type
+            `);
+        }
+
+        if (newDriverCounter) {
+            database.exec(`
+                UPDATE drivers
+                SET open_warnings = (
+                    SELECT COUNT(*) FROM alerts a
+                    WHERE a.driver_id = drivers.id AND a.type = 'SPEEDING' AND a.resolved_at IS NULL
+                )
+            `);
+        }
+
+        database.exec(`
+            CREATE INDEX IF NOT EXISTS idx_alerts_company_open
+                ON alerts(company_id, created_at DESC, id DESC) WHERE resolved_at IS NULL;
+            CREATE INDEX IF NOT EXISTS idx_alerts_company_type_open
+                ON alerts(company_id, type, created_at DESC, id DESC) WHERE resolved_at IS NULL;
+            CREATE INDEX IF NOT EXISTS idx_alerts_company_resolved
+                ON alerts(company_id, created_at DESC, id DESC) WHERE resolved_at IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_alerts_company_all
+                ON alerts(company_id, created_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_alerts_driver_open_speeding
+                ON alerts(driver_id, created_at DESC) WHERE resolved_at IS NULL AND type = 'SPEEDING';
+            CREATE INDEX IF NOT EXISTS idx_alerts_company_type_created
+                ON alerts(company_id, type, created_at);
+            CREATE INDEX IF NOT EXISTS idx_alerts_driver_type
+                ON alerts(driver_id, type);
+            CREATE INDEX IF NOT EXISTS idx_drivers_company_open
+                ON drivers(company_id, open_warnings DESC, id);
+
+            CREATE TRIGGER IF NOT EXISTS trg_alerts_company
+            AFTER INSERT ON alerts
+            WHEN NEW.company_id IS NULL
+            BEGIN
+                UPDATE alerts
+                SET company_id = (SELECT company_id FROM vehicles WHERE id = NEW.vehicle_id)
+                WHERE id = NEW.id;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_alert_counts_insert
+            AFTER INSERT ON alerts
+            BEGIN
+                INSERT INTO alert_counts (company_id, type, open_count, resolved_count)
+                SELECT v.company_id, NEW.type, NEW.resolved_at IS NULL, NEW.resolved_at IS NOT NULL
+                FROM vehicles v WHERE v.id = NEW.vehicle_id
+                ON CONFLICT (company_id, type) DO UPDATE SET
+                    open_count = open_count + excluded.open_count,
+                    resolved_count = resolved_count + excluded.resolved_count;
+                UPDATE drivers SET open_warnings = open_warnings + 1
+                WHERE id = NEW.driver_id AND NEW.type = 'SPEEDING' AND NEW.resolved_at IS NULL;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_alert_counts_update
+            AFTER UPDATE OF resolved_at ON alerts
+            WHEN (OLD.resolved_at IS NULL) <> (NEW.resolved_at IS NULL)
+            BEGIN
+                UPDATE alert_counts
+                SET open_count = open_count + CASE WHEN NEW.resolved_at IS NULL THEN 1 ELSE -1 END,
+                    resolved_count = resolved_count + CASE WHEN NEW.resolved_at IS NULL THEN -1 ELSE 1 END
+                WHERE company_id = OLD.company_id AND type = OLD.type;
+                UPDATE drivers
+                SET open_warnings = MAX(0, open_warnings + CASE WHEN NEW.resolved_at IS NULL THEN 1 ELSE -1 END)
+                WHERE id = OLD.driver_id AND OLD.type = 'SPEEDING';
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_alert_counts_delete
+            AFTER DELETE ON alerts
+            BEGIN
+                UPDATE alert_counts
+                SET open_count = MAX(0, open_count - (OLD.resolved_at IS NULL)),
+                    resolved_count = MAX(0, resolved_count - (OLD.resolved_at IS NOT NULL))
+                WHERE company_id = OLD.company_id AND type = OLD.type;
+                UPDATE drivers SET open_warnings = MAX(0, open_warnings - 1)
+                WHERE id = OLD.driver_id AND OLD.type = 'SPEEDING' AND OLD.resolved_at IS NULL;
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_alerts_driver_changed
+            AFTER UPDATE OF driver_id ON alerts
+            WHEN OLD.driver_id IS NOT NEW.driver_id AND NEW.type = 'SPEEDING' AND NEW.resolved_at IS NULL
+            BEGIN
+                UPDATE drivers SET open_warnings = MAX(0, open_warnings - 1) WHERE id = OLD.driver_id;
+                UPDATE drivers SET open_warnings = open_warnings + 1 WHERE id = NEW.driver_id;
+            END;
+        `);
+        database.exec("COMMIT");
+    } catch (error) {
+        database.exec("ROLLBACK");
+        throw error;
+    }
 }
 
 function ensureImportTables(database: DatabaseSync) {
@@ -1242,6 +1486,7 @@ export function ensurePrivacyColumns(database: DatabaseSync) {
     addColumn(database, "companies", "trip_retention_days", "INTEGER");
     addColumn(database, "companies", "alert_retention_days", "INTEGER");
     addColumn(database, "companies", "audit_retention_days", "INTEGER");
+    addColumn(database, "companies", "damage_retention_days", "INTEGER");
     addColumn(database, "companies", "viewer_driver_names", "INTEGER NOT NULL DEFAULT 1");
 }
 
@@ -1854,12 +2099,22 @@ export function migrate(database: DatabaseSync) {
     ensurePrivacyColumns(database);
     ensureVehicleService(database);
     towUndrivablePlannedStays(database);
+    ensureCaseInsensitiveNames(database);
+    ensureUnconnectedStatus(database);
     ensureTripEvents(database);
     applyMaintenanceTriggers(database);
+    ensureAlertScale(database);
+    if (tableExists(database, "trip_month_km")) {
+        addColumn(database, "trip_month_km", "active_drivers", "INTEGER");
+        addColumn(database, "trip_month_km", "active_vehicles", "INTEGER");
+    }
     // After the triggers, so `active_alerts` follows the rows it writes.
     syncStateAlerts(database);
-    archiveStaleSpeeding(database);
+    noteOldAutoClosedSpeeding(database);
     pruneResolvedAlerts(database);
+    if (tableExists(database, "vehicle_damages")) {
+        pruneClosedDamages(database);
+    }
     pruneAuditEvents(database);
 
     if (currentVersion < SCHEMA_VERSION) {

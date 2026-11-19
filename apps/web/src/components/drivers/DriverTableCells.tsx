@@ -1,5 +1,6 @@
 import type { Driver } from "@fleet-live/shared";
 
+import { formatCount } from "../../utils/formatCount";
 import styles from "./DriverTableCells.module.scss";
 
 /** "Kein Fahrzeug" or the current plate, with the number of releases below. */
@@ -25,7 +26,7 @@ export const DriverWarningCell = ({ driver }: { driver: Driver }) => (
         data-active={driver.open_warnings > 0 ? "true" : "false"}
     >
         {driver.open_warnings > 0
-            ? `${driver.open_warnings} offen`
+            ? `${formatCount(driver.open_warnings)} offen`
             : "keine offen"}
     </span>
 );
@@ -36,6 +37,6 @@ export const DriverOpenWarningsPill = ({ count }: { count: number }) =>
         <span className={styles.warning} data-active="true">
             {count === 1
                 ? "1 offene Tempo-Warnung"
-                : `${count} offene Tempo-Warnungen`}
+                : `${formatCount(count)} offene Tempo-Warnungen`}
         </span>
     ) : null;

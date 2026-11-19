@@ -41,7 +41,7 @@ Eine Fahrt anklicken: Die Karte zeigt nur diese Fahrt, rot sind genau die Stück
 
 ## Schichtüberblick
 
-Der erste Blick zum Schichtbeginn: wie viele Fahrzeuge fahren, was offen ist, welche Fristen ablaufen, und „Heute dran“ mit dem, was jetzt zu tun ist. Jede Zahl öffnet die Liste mit genau diesen Zeilen.
+Der erste Blick zum Schichtbeginn: wie viele Fahrzeuge fahren, was offen ist, welche Fristen ablaufen, darunter „Heute“: wer oder was im Einsatz heute nicht fahren darf oder kann, und daneben, was demnächst abläuft, nach Datum. Jede Zahl öffnet die Liste mit genau diesen Zeilen.
 
 ![Schichtüberblick mit Kennzahlen, Fristen und der Liste „Heute dran“](docs/screenshots/briefing.png)
 

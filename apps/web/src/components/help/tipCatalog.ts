@@ -27,7 +27,7 @@ const PAGE_TIPS: Record<TipPageId, PageTip[]> = {
         {
             target: "list-tiles",
             title: "Kachel = Filter",
-            body: "Ein Klick zeigt in der Liste nur diese Fahrzeuge. Eine Kachel ist immer gewählt. Die vier Status ergeben zusammen „Alle“.",
+            body: "Ein Klick zeigt in der Liste nur diese Fahrzeuge. Eine Kachel ist immer gewählt. Die Status ergeben zusammen „Alle“, nur „Nicht verbunden“ steht unter „Weitere Filter“.",
         },
         {
             target: "list-select",
@@ -99,6 +99,16 @@ const PAGE_TIPS: Record<TipPageId, PageTip[]> = {
             target: "briefing-due",
             title: "Fristen auf einen Blick",
             body: "Überfällig, bald fällig und fehlende Daten für HU, UVV und Führerschein. Ein Klick öffnet Fristen in diesem Stand.",
+        },
+        {
+            target: "briefing-today",
+            title: "Heute: nur was im Einsatz ist",
+            body: "Oben, was sofort zu klären ist, dann was nicht prüfbar ist und was bald abläuft. Gleiche Fälle stehen in einer Zeile, „anzeigen“ klappt sie auf.",
+        },
+        {
+            target: "briefing-week",
+            title: "Als Nächstes",
+            body: "Was im Einsatz demnächst abläuft oder fällig wird, nach Datum.",
         },
     ],
     fristen: [

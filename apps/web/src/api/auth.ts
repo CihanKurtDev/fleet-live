@@ -147,7 +147,7 @@ export const savePrivacy = (patch: PrivacyPatch) =>
     request<{
         data: PrivacySettings;
         /** Rows deleted because of this change. */
-        deleted: { trips: number; alerts: number; audit: number };
+        deleted: { trips: number; alerts: number; damages: number; audit: number };
     }>("/api/auth/privacy", {
         method: "PATCH",
         body: patch,

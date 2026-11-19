@@ -51,6 +51,7 @@ export const DriverWarningsPanel = ({
                 listAlerts(
                     {
                         filter: "all",
+                        search: "",
                         type: "SPEEDING",
                         sort: "created_at",
                         dir: "desc",

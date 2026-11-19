@@ -88,6 +88,7 @@ const STATUS_TONE: Record<VehicleStatus, FleetKpiTile["tone"]> = {
     IDLE: "neutral",
     STOPPED: "neutral",
     OFFLINE: "critical",
+    UNCONNECTED: "neutral",
 };
 
 const statusFromFilter = (
@@ -162,6 +163,7 @@ export const FleetPage = () => {
     const [eventType, setEventType] = useState<AlertType | null>(null);
     const events = useAlertList({
         filter: "all",
+        search: "",
         sort: "created_at",
         dir: "desc",
         page: 1,

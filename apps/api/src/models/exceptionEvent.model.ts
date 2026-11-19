@@ -111,6 +111,11 @@ export class ExceptionEventModel {
         id: number;
         status: VehicleStatus;
     }, nowMs = Date.now()): void {
+        // A vehicle that parked reports nothing on purpose: that is no lost signal.
+        if (input.status !== "DRIVING") {
+            lastReport.delete(input.id);
+        }
+
         applyOfflineStatus(input.id, input.status, nowMs);
     }
 

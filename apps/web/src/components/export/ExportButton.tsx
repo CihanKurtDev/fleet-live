@@ -18,7 +18,7 @@ const LABELS: Record<ExportKind, { label: string; aria: string }> = {
         aria: "Alle Fahrten der Firma als CSV",
     },
     period: {
-        label: "Monat",
+        label: "Monat als CSV",
         aria: "Diesen Monat als CSV: Kilometer, angelegte Warnungen und Verbrauch",
     },
 };

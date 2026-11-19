@@ -331,6 +331,13 @@ function toVehicle(row: ListRow): Vehicle {
     };
 }
 
+/**
+ * The fleet map draws what vehicles reported. A place from a file or a depot is
+ * no report: a vehicle whose device never reported counts as „ohne Position“.
+ */
+const REPORTED_POSITION_SQL = "AND v.status <> 'UNCONNECTED'";
+const NO_REPORTED_POSITION_SQL = "(v.last_telemetry_id IS NULL OR v.status = 'UNCONNECTED')";
+
 export class VehicleModel {
     static list(query: VehicleListQuery, companyId: number): VehicleListResponse {
         const search = query.search;
@@ -499,6 +506,7 @@ export class VehicleModel {
             FROM vehicles v
             INNER JOIN telemetry t ON t.id = v.last_telemetry_id
             ${matchSql}
+            ${REPORTED_POSITION_SQL}
             ${bboxSql}
         `;
         const positionedParams = [...matchParams, ...bboxParams];
@@ -509,7 +517,7 @@ export class VehicleModel {
                     SELECT COUNT(*) AS n
                     FROM vehicles v
                     ${matchSql}
-                      AND v.last_telemetry_id IS NULL
+                      AND ${NO_REPORTED_POSITION_SQL}
                     `,
                 ).get(...matchParams) as { n: number }
             ).n,
@@ -523,6 +531,7 @@ export class VehicleModel {
                           FROM vehicles v
                           INNER JOIN telemetry t ON t.id = v.last_telemetry_id
                           ${matchSql}
+                          ${REPORTED_POSITION_SQL}
                           `,
                       ).get(...matchParams) as { n: number }
                   ).n,
@@ -585,7 +594,7 @@ export class VehicleModel {
                     SELECT v.id, v.license_plate, v.driver_name, v.status
                     FROM vehicles v
                     ${matchSql}
-                      AND v.last_telemetry_id IS NULL
+                      AND ${NO_REPORTED_POSITION_SQL}
                     ORDER BY v.id ASC
                     `,
                 ).all(...matchParams) as Array<{
@@ -674,6 +683,8 @@ export class VehicleModel {
                 DRIVING: Number(row.driving_count),
                 STOPPED: Number(row.stopped_count),
                 OFFLINE: Number(row.offline_count),
+                // A vehicle that never reported has no position to draw.
+                UNCONNECTED: 0,
             },
         }));
 

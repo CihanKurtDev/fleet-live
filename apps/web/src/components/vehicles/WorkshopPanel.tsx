@@ -168,6 +168,8 @@ export const WorkshopPanel = ({ vehicle, canWrite, onNotice, damages = [], onPla
             chip = { label: WORKSHOP_STATE_LABELS.PLANNED, tone: null };
             if (open.workshop_id === null) {
                 lines = [{ text: "Diese Werkstatt hat keinen Ort auf der Karte: Ankunft von Hand melden." }];
+            } else if (open.transport !== "DRIVER") {
+                lines = [{ text: "Niemand fährt es hin: Ankunft melden, sobald es dort steht." }];
             } else if (driving && open.planned_on === today) {
                 lines = [{ text: "Fährt gerade." }, { text: "Gilt als angekommen, sobald es dort parkt." }];
             } else if (open.planned_on === today && !vehicle.current_driver_id) {
@@ -202,7 +204,9 @@ export const WorkshopPanel = ({ vehicle, canWrite, onNotice, damages = [], onPla
     } else if (pickup) {
         chip = { label: "Fertig", tone: "success" };
         lines = [{ text: "Steht noch dort." }];
-        if (vehicle.current_driver_id) {
+        if (vehicle.availability === "NOT_DRIVABLE") {
+            lines.push({ text: "Nicht fahrbereit: ein Schaden ist noch offen.", tone: "warning" });
+        } else if (vehicle.current_driver_id) {
             lines.push({ text: `${vehicle.driver_name ?? "Der Fahrer"} holt es ab.` });
         } else {
             lines.push({ text: "Kein Fahrer zum Abholen.", tone: "warning" });

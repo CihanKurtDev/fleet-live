@@ -14,9 +14,10 @@ vi.mock("../api/alerts", () => ({
     listAlerts: vi.fn(),
     resolveAlert: vi.fn(),
     resolveAlerts: vi.fn(),
+    resolveAlertsMatching: vi.fn(),
 }));
 
-import { listAlerts, resolveAlert, resolveAlerts } from "../api/alerts";
+import { listAlerts, resolveAlert, resolveAlerts, resolveAlertsMatching } from "../api/alerts";
 
 const alert = (overrides: Partial<Alert> & { id: number }): Alert => ({
     vehicle_id: overrides.id,
@@ -48,7 +49,7 @@ const listResponse = (data: Alert[]): AlertListResponse => ({
             SPEEDING: 1,
             LOW_FUEL: 0,
             OFFLINE: data.length - 1,
-        }, resolved_kept_days: 90,
+        }, resolved_kept_days: 90, talk_drivers: 0,
     },
 });
 
@@ -169,7 +170,7 @@ describe("alert list page", () => {
             meta: {
                 ...resolved.meta,
                 counts: { all: 8, open: 3, resolved: 5 },
-                type_counts: { all: 5, SPEEDING: 5, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
+                type_counts: { all: 5, SPEEDING: 5, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90, talk_drivers: 0,
             },
         });
 
@@ -211,7 +212,7 @@ describe("alert list page", () => {
     });
 
     it("shows no checkboxes until Auswählen is pressed", async () => {
-        renderTable(true);
+        renderTable(true, "/alerts?type=SPEEDING");
         await screen.findByText("K-AB 1");
 
         expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
@@ -223,7 +224,7 @@ describe("alert list page", () => {
 
     it("selects by row click in selection mode and resolves after confirm", async () => {
         vi.mocked(resolveAlerts).mockResolvedValue({ data: { resolved: 2 } });
-        renderTable(true);
+        renderTable(true, "/alerts?type=SPEEDING");
         await screen.findByText("K-AB 1");
 
         startSelection();
@@ -238,9 +239,6 @@ describe("alert list page", () => {
         expect(onSelectAlert).not.toHaveBeenCalled();
 
         expect(within(bar).getByText("2 ausgewählt")).toBeInTheDocument();
-        expect(
-            within(bar).getByText("alle Tempo · 2 Fahrzeuge"),
-        ).toBeInTheDocument();
 
         const pageBox = within(bar).getByRole("checkbox", {
             name: "Alle auf dieser Seite auswählen",
@@ -285,7 +283,7 @@ describe("alert list page", () => {
     });
 
     it("selects every row on the page from the bar and ends with Abbrechen", async () => {
-        renderTable(true);
+        renderTable(true, "/alerts?type=SPEEDING");
         await screen.findByText("K-AB 1");
         startSelection();
 
@@ -304,7 +302,7 @@ describe("alert list page", () => {
     });
 
     it("ends selection mode with Escape", async () => {
-        renderTable(true);
+        renderTable(true, "/alerts?type=SPEEDING");
         await screen.findByText("K-AB 1");
         startSelection();
         expect(
@@ -323,7 +321,7 @@ describe("alert list page", () => {
             ...paged,
             meta: { ...paged.meta, total: 30, pageCount: 3 },
         });
-        renderTable(true);
+        renderTable(true, "/alerts?type=SPEEDING");
         await screen.findByText("K-AB 1");
         startSelection();
 
@@ -349,7 +347,7 @@ describe("alert list page", () => {
         vi.mocked(resolveAlerts).mockRejectedValue(
             new ApiError("Mindestens eine Warnung wurde nicht gefunden.", 404),
         );
-        renderTable(true);
+        renderTable(true, "/alerts?type=SPEEDING");
         await screen.findByText("K-AB 1");
         startSelection();
 
@@ -400,7 +398,7 @@ describe("alert list page", () => {
         for (const name of ["Auswählen", "Erledigen", "Exportieren"]) {
             expect(screen.queryByRole("button", { name })).toBeNull();
         }
-        expect(screen.queryByRole("searchbox")).toBeNull();
+        expect(screen.getByRole("searchbox")).toBeInTheDocument();
     });
 
     it("shows a failed request without the empty-list sentence", async () => {
@@ -421,7 +419,7 @@ describe("alert list page", () => {
             meta: {
                 ...empty.meta,
                 counts: { all: 5, open: 0, resolved: 5 },
-                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90, talk_drivers: 0,
             },
         });
         renderTable(true, "/alerts?type=SPEEDING");
@@ -436,6 +434,82 @@ describe("alert list page", () => {
     });
 });
 
+describe("the numbers of a selection agree with the list", () => {
+    const tempoPage = (total: number): AlertListResponse => ({
+        data: rows,
+        meta: {
+            page: 1,
+            limit: 3,
+            total,
+            pageCount: Math.ceil(total / 3),
+            counts: { all: total + 37, open: total + 37, resolved: 0 },
+            type_counts: { all: total + 37, SPEEDING: total, LOW_FUEL: 33, OFFLINE: 4 },
+            resolved_kept_days: 90,
+            talk_drivers: 6,
+        },
+    });
+
+    beforeEach(() => {
+        refetchLists.mockReset();
+        vi.mocked(listAlerts).mockReset();
+        vi.mocked(listAlerts).mockResolvedValue(tempoPage(66));
+        vi.mocked(resolveAlertsMatching).mockReset();
+        vi.mocked(resolveAlertsMatching).mockResolvedValue({ data: { resolved: 66 } });
+    });
+
+    it("offers no selection on Offen, where not every row can be closed", async () => {
+        renderTable(true);
+        await screen.findByText("K-AB 1");
+
+        expect(screen.queryByRole("button", { name: "Auswählen" })).toBeNull();
+    });
+
+    it("says it is the page, then all of the list, and closes exactly those", async () => {
+        renderTable(true, "/alerts?type=SPEEDING");
+        await screen.findByText("K-AB 1");
+        startSelection();
+        const bar = screen.getByRole("region", { name: "Auswahl" });
+
+        fireEvent.click(within(bar).getByRole("checkbox", { name: "Alle auf dieser Seite auswählen" }));
+        expect(within(bar).getByText("3 auf dieser Seite ausgewählt")).toBeInTheDocument();
+
+        fireEvent.click(within(bar).getByRole("button", { name: "Alle 66 auswählen" }));
+        expect(within(bar).getByText("Alle 66 ausgewählt")).toBeInTheDocument();
+
+        fireEvent.click(within(bar).getByRole("button", { name: "66 erledigen" }));
+        const dialog = screen.getByRole("dialog", { name: "66 Warnungen erledigen?", hidden: true });
+        fireEvent.click(within(dialog).getByRole("button", { name: "66 erledigen", hidden: true }));
+
+        await waitFor(() =>
+            expect(resolveAlertsMatching).toHaveBeenCalledWith(
+                { type: "SPEEDING", vehicle_id: undefined, driver_id: undefined, search: "" },
+                66,
+            ),
+        );
+        expect(await screen.findByText("66 Warnungen erledigt.")).toBeInTheDocument();
+    });
+
+    it("offers no Alle when the page already holds every row", async () => {
+        vi.mocked(listAlerts).mockResolvedValue(tempoPage(3));
+        renderTable(true, "/alerts?type=SPEEDING");
+        await screen.findByText("K-AB 1");
+        startSelection();
+        const bar = screen.getByRole("region", { name: "Auswahl" });
+
+        fireEvent.click(within(bar).getByRole("checkbox", { name: "Alle auf dieser Seite auswählen" }));
+
+        expect(within(bar).getByText("3 ausgewählt")).toBeInTheDocument();
+        expect(within(bar).queryByRole("button", { name: /^Alle/ })).toBeNull();
+    });
+
+    it("links to the drivers to talk to, with the number of that tile", async () => {
+        renderTable(true);
+        const link = await screen.findByRole("link", { name: /6 Fahrer mit 5 oder mehr/ });
+
+        expect(link).toHaveAttribute("href", "/drivers?min_open_warnings=5");
+    });
+});
+
 describe("Warnungen in a company without any warning", () => {
     it("explains where warnings come from instead of an all-clear", async () => {
         vi.mocked(listAlerts).mockResolvedValue({
@@ -446,10 +520,10 @@ describe("Warnungen in a company without any warning", () => {
                 total: 0,
                 pageCount: 1,
                 counts: { all: 0, open: 0, resolved: 0 },
-                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90, talk_drivers: 0,
             },
         });
-        renderTable(true);
+        renderTable(true, "/alerts?type=SPEEDING");
 
         expect(
             await screen.findByRole("heading", { name: "Noch keine Warnungen" }),
@@ -468,7 +542,7 @@ describe("Warnungen in a company without any warning", () => {
                 total: 0,
                 pageCount: 1,
                 counts: { all: 5, open: 0, resolved: 5 },
-                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90,
+                type_counts: { all: 0, SPEEDING: 0, LOW_FUEL: 0, OFFLINE: 0 }, resolved_kept_days: 90, talk_drivers: 0,
             },
         });
         renderTable(true);

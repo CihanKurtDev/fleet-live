@@ -3,6 +3,7 @@ import { parsePrivacyPatch, type AuditDetails } from "@fleet-live/shared";
 import { db } from "../db/database";
 import { pruneResolvedAlerts } from "../db/alertRetention";
 import { pruneAuditEvents } from "../db/auditRetention";
+import { DAMAGE_HOLDS_DETAILS, pruneClosedDamages } from "../db/damageRetention";
 import { UnauthorizedError } from "../lib/errors";
 import { AuditModel } from "../models/audit.model";
 import { PrivacyModel } from "../models/privacy.model";
@@ -27,6 +28,10 @@ function counts(companyId: number) {
         alerts: one(
             "SELECT COUNT(*) AS n FROM alerts a JOIN vehicles v ON v.id = a.vehicle_id WHERE v.company_id = ? AND a.resolved_at IS NOT NULL",
         ),
+        damages: one(
+            `SELECT COUNT(*) AS n FROM vehicle_damages d JOIN vehicles v ON v.id = d.vehicle_id
+             WHERE v.company_id = ? AND d.state <> 'OPEN' AND ${DAMAGE_HOLDS_DETAILS}`,
+        ),
         audit: one("SELECT COUNT(*) AS n FROM audit_events WHERE company_id = ?"),
     };
 }
@@ -47,10 +52,11 @@ export function patchPrivacy(req: Request, res: Response) {
 
     if (before.trips_days !== after.trips_days) retention.trips = after.trips_days;
     if (before.alerts_days !== after.alerts_days) retention.alerts = after.alerts_days;
+    if (before.damages_days !== after.damages_days) retention.damages = after.damages_days;
     if (before.audit_days !== after.audit_days) retention.audit = after.audit_days;
     const names = before.viewer_driver_names !== after.viewer_driver_names;
 
-    let deleted = { trips: 0, alerts: 0, audit: 0 };
+    let deleted = { trips: 0, alerts: 0, damages: 0, audit: 0 };
 
     if (names || Object.keys(retention).length > 0) {
         AuditModel.record({
@@ -68,11 +74,13 @@ export function patchPrivacy(req: Request, res: Response) {
         const before = counts(companyId);
         TripModel.pruneClosedForCompany(companyId);
         pruneResolvedAlerts(db);
+        pruneClosedDamages(db);
         pruneAuditEvents(db);
         const left = counts(companyId);
         deleted = {
             trips: before.trips - left.trips,
             alerts: before.alerts - left.alerts,
+            damages: before.damages - left.damages,
             audit: before.audit - left.audit,
         };
     }

@@ -1,4 +1,10 @@
-import type { BriefingHistoryMonth } from "@fleet-live/shared";
+import {
+    SPEED_CRITICAL_OVER_LIMIT_KMH,
+    type BriefingHistoryMonth,
+} from "@fleet-live/shared";
+
+/** What the app calls a severe speeding warning (`severity` HIGH). */
+export const HIGH_SHARE_LABEL = `Davon ${SPEED_CRITICAL_OVER_LIMIT_KMH} km/h oder mehr drüber`;
 
 const MONTH_LABELS = [
     "Jan",
@@ -61,8 +67,6 @@ export type RateMonth = {
 export type TypeMonth = {
     month: string;
     rate: number | null;
-    lowFuel: number | null;
-    offline: number | null;
     highShare: number | null;
 };
 
@@ -84,8 +88,6 @@ export const toTypeSeries = (history: BriefingHistoryMonth[]): TypeMonth[] =>
     history.map((row) => ({
         month: monthLabel(row.month),
         rate: pct(row.speeding_drivers, row.active_drivers),
-        lowFuel: pct(row.low_fuel_vehicles, row.active_vehicles),
-        offline: pct(row.offline_vehicles, row.active_vehicles),
         highShare: pct(row.speeding_high, row.speeding_events),
     }));
 
@@ -132,7 +134,17 @@ export const yCeiling = (
     cap = Number.POSITIVE_INFINITY,
 ) => {
     const peak = Math.max(min, ...values.filter((value): value is number => value !== null), 0);
-    return Math.min(cap, Math.ceil((peak * 1.15) / step) * step);
+    // Round away float noise: 3 × 0.05 is 0.15000000000000002 otherwise.
+    return Number(Math.min(cap, Math.ceil((peak * 1.15) / step) * step).toFixed(6));
+};
+
+/**
+ * Months before the first one with trips say nothing (no fleet yet): they are
+ * left out. With no trips at all the history stays as it is, for the empty charts.
+ */
+export const withoutEmptyStart = (history: BriefingHistoryMonth[]) => {
+    const first = history.findIndex((row) => row.distance_m > 0 || (row.active_drivers ?? 0) > 0);
+    return first <= 0 ? history : history.slice(first);
 };
 
 export const historyYear = (history: BriefingHistoryMonth[]) => {

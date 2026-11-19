@@ -32,7 +32,7 @@ The source design is board 0 on the canvas "fleet-live Ein Rahmen für alle Seit
    - Header row 38 px, muted 12 px labels, sort marks.
    - Rows 48 px: identity first (bold value plus muted second line), state in the middle, hints right, an optional 28 px row button last. Rows fill the measured height (`hooks/useBoundHeight`), no fixed 10.
    - Deadlines in a list (HU, UVV) are yellow (`--accent`, the sticker), never red: past or due today a dot and „HU abgelaufen“ / „UVV heute“ among the hints, due within the company lead a ring.
-   - Panel narrower than the columns (a window on half a screen): the columns close up to their content, then the least needed go (Fahrzeuge: HU and UVV below 1044 px panel width, then km/h below 856 px; `VehicleTable.module.scss`, by `data-col` on `col`, `th` and `td`), and what still does not fit scrolls sideways. Never cut off at the right edge.
+   - Panel narrower than the columns (a window on half a screen): the columns close up to their content, then the least needed go (Fahrzeuge: HU and UVV below 1072 px panel width, then km/h below 884 px; `VehicleTable.module.scss`, by `data-col` on `col`, `th` and `td`), and what still does not fit scrolls sideways. Never cut off at the right edge.
    - Footer 48 px: "X–Y von N" left, pages right.
 
 ## Control sizes
@@ -66,7 +66,7 @@ KPI tiles keep 14 px inside (they are narrow); dialog bodies keep 20 px (`Modal`
 - A control whose text changes with its state (Speichern / Wird gespeichert…, Depot anlegen / Klicken abbrechen) keeps its width: `Button` `busy` + `busyLabel`, or `ui/Button/SwapLabel` in a custom control.
 - One focus indicator: 2 px outline in `--focus-ring` (`:focus-visible` in `index.css`, `--focus-width`). Do not replace it with a faint shadow; it must reach 3:1.
 - Text colours come from tokens; tinted tags mix at most 12 % of their colour into the background so 12 px text stays at 4.5:1 in both schemes.
-- Status pill (Auf Fahrt green, Standby amber, Feierabend grey, Kein Signal red) and hint tags (Tempo red, Kein Signal red, Tank amber) use the existing colour tokens.
+- Status pill (Auf Fahrt green, Standby amber, Feierabend grey, Kein Signal red, Nicht verbunden in the text colour: no fault) and hint tags (Tempo red, Kein Signal red, Tank amber) use the existing colour tokens.
 - Confirm dialog for destructive or bulk actions: title with the count, one sentence, list of affected items, Abbrechen plus the action.
 - Short `role="status"` line after every write that stays on the page ("3 Warnungen erledigt.", "Fahrzeug K-AB 1 angelegt.", "Mitglied entfernt."). A new action clears the old line. A create that opens the new record's page needs none.
 - Dialogs: `Modal` keeps the header fixed and scrolls the body; form actions stick to the bottom edge (`bottom: -20px` on the bar, the form reaches into the body padding), so Speichern is always reachable and never covers the last field. Footer buttons are `md` like the fields. A confirm dialog focuses Abbrechen first; a form focuses its first (or `data-autofocus`) field. Removing a person or record always asks first in a confirm dialog (title, one sentence, the affected items, Abbrechen plus Löschen/Entfernen).
@@ -81,8 +81,8 @@ KPI tiles keep 14 px inside (they are narrow); dialog bodies keep 20 px (`Modal`
 | Page | Row click | Header (dispatcher) | Bulk action | Row button |
 |---|---|---|---|---|
 | Fahrzeuge | opens the vehicle | Importieren, Exportieren (Fahrzeuge, Fahrten), Fahrzeug anlegen | Löschen | – |
-| Warnungen | opens the alert's vehicle | Exportieren | Erledigen | Erledigen (open rows) |
-| Fahrer | opens the driver | Fahrer anlegen | Löschen | – |
+| Warnungen | opens the alert's vehicle | Exportieren | Erledigen (Kachel Tempo; Seite oder alle der Liste) | Erledigen (open rows) |
+| Fahrer | opens the driver | Fahrer anlegen | Löschen | Gespräch geführt (offene Tempo-Warnungen) |
 
 Update this table when a page gains or loses an action.
 

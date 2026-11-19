@@ -26,3 +26,19 @@
     display: flex;
     justify-content: flex-end;
 }
+
+/* Why a warning was closed (a talk with the driver, the old 7-day rule). */
+.event {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.note {
+    overflow: hidden;
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text);
+}

@@ -51,3 +51,4 @@ Writing code is not checking it. Before saying a change is done:
 - Check the same screen as viewer and at 375 px.
 - Read the screen like a user who has never seen it: for every element ask what it does, and whether a second element does the same thing.
 - List what you did and saw in the report. "Tests pass" is not a review.
+- Run `/screen-check` (`.claude/commands/screen-check.md`) on every screen the change touches, before showing a design, saying done or opening a PR.

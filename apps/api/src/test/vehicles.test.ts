@@ -19,6 +19,7 @@ import {
     SIM_OVERSPEED_MAX_FACTOR,
     SIM_OVERSPEED_MIN_FACTOR,
     SIM_OVERSPEED_STRETCH_M,
+    SIM_OVERSPEED_TRIP_SHARE,
     SIM_PING_SECONDS,
     SIM_ROUTES,
     TIME_SCALE,
@@ -32,6 +33,11 @@ import {
     speedLimitKmh,
     verticesBetween,
 } from "../sim/routes";
+import { playNextTrips, SIM_MIN_REST_MS, SIM_ON_ROAD_SHARE } from "../sim/driveCycle";
+import { playFirstReports } from "../sim/firstReports";
+import { sqliteFromMs } from "../lib/sqlTime";
+import { ExceptionEventModel } from "../models/exceptionEvent.model";
+import { applyTickEffects } from "../sse/telemetryTicker";
 import { broadcast, closeAllSseClients } from "../sse/hub";
 import { resetSimControlForTests, setCompanySimRunning } from "../lib/simControl";
 import { sqliteDaysAgo, nowSqlite } from "../lib/sqlTime";
@@ -2054,7 +2060,7 @@ describe("telemetry route simulation", () => {
         assert.equal(highway.speed_limit_kmh, HIGHWAY_LIMIT_KMH);
     });
 
-    it("lets every 8th vehicle exceed the class limit on some stretches only", () => {
+    it(`lets every ${SIM_OVERSPEED_EVERY}th vehicle exceed the class limit on rare trips and some stretches only`, () => {
         const created = Array.from({ length: SIM_OVERSPEED_EVERY }, (_, index) =>
             VehicleModel.create({
                 license_plate: `K-OV ${index + 1}`,
@@ -2082,11 +2088,22 @@ describe("telemetry route simulation", () => {
                 lap,
                 (stretch + 0.5) * SIM_OVERSPEED_STRETCH_M,
             );
-        const laps = Array.from({ length: 20 }, (_, lap) =>
-            Array.from({ length: stretches }, (_, stretch) =>
+        const trips = 5_000;
+        const speedingLaps = Array.from({ length: trips }, (_, lap) => ({
+            lap,
+            factors: Array.from({ length: stretches }, (_, stretch) =>
                 at(aggressive.id, lap, stretch),
             ),
+        })).filter(({ factors }) => factors.some((factor) => factor > 1));
+
+        // Each such trip is a warning, so most trips must have none.
+        assert.ok(
+            speedingLaps.length >= trips * SIM_OVERSPEED_TRIP_SHARE * 0.6 &&
+                speedingLaps.length <= trips * SIM_OVERSPEED_TRIP_SHARE * 1.4,
+            `${speedingLaps.length} of ${trips} trips`,
         );
+
+        const laps = speedingLaps.map(({ factors }) => factors);
         const factors = laps.flat();
         const over = factors.filter((factor) => factor > 1);
 
@@ -2114,8 +2131,8 @@ describe("telemetry route simulation", () => {
             return frac > 0.2 && frac < 0.8;
         };
         const find = (match: (factor: number) => boolean) => {
-            for (let lap = 0; lap < laps.length; lap += 1) {
-                const stretch = laps[lap]!.findIndex(
+            for (const { lap, factors: trip } of speedingLaps) {
+                const stretch = trip.findIndex(
                     (factor, index) => motorway(index) && match(factor),
                 );
                 if (stretch >= 0) {
@@ -2812,6 +2829,153 @@ describe("route vertices", () => {
     });
 });
 
+describe("a vehicle whose device never reported", () => {
+    const create = async (plate: string) =>
+        (await api.post("/api/vehicles").send({ license_plate: plate })).body;
+
+    it("is not connected, opens no warning and is off the map and the status tiles", async () => {
+        const before = (await api.get("/api/vehicles?limit=1")).body.meta.counts;
+        const car = await create("K-NV 1");
+        assert.equal(car.status, "UNCONNECTED");
+        assert.equal(car.active_alerts, 0);
+
+        const after = (await api.get("/api/vehicles?limit=1")).body.meta.counts;
+        assert.equal(after.unconnected, before.unconnected + 1);
+        assert.equal(after.offline, before.offline);
+        assert.equal(after.all, before.all + 1);
+
+        const list = (await api.get("/api/vehicles?filter=unconnected")).body;
+        assert.ok(list.data.some((row: { id: number }) => row.id === car.id));
+
+        // A place that came from a file is no report.
+        TelemetryModel.recordMovedTo(car.id, 50.9, 6.9);
+        const map = (await api.get("/api/vehicles/positions")).body;
+        const row = map.data.find((entry: { id: number }) => entry.id === car.id);
+        assert.equal(row.has_position, false);
+        assert.ok(map.meta.without_position >= 1);
+    });
+
+    it("stands in its home depot after the first report", async () => {
+        const depot = (await api.post("/api/sites").send({ name: "Erst Hof", latitude: 50.95, longitude: 6.95 }).expect(201)).body;
+        const car = await create("K-NV 9");
+        await api.patch(`/api/vehicles/${car.id}`).send({ home_site_id: depot.id }).expect(200);
+        const driver = (await api.post("/api/drivers").send({ name: "Erna Erst" })).body.data;
+        await api.post(`/api/drivers/${driver.id}/vehicles`).send({ vehicle_id: car.id }).expect(201);
+        await api.patch(`/api/drivers/${driver.id}/current-vehicle`).send({ vehicle_id: car.id }).expect(200);
+
+        setCompanySimRunning(1, true);
+        playFirstReports();
+
+        const after = db.prepare("SELECT status, depot_site_id FROM vehicles WHERE id = ?").get(car.id) as {
+            status: string;
+            depot_site_id: number | null;
+        };
+        assert.equal(after.status, "IDLE");
+        assert.equal(after.depot_site_id, depot.id);
+    });
+
+    it("reports once it has a current driver, unless the company paused the simulation", async () => {
+        const car = await create("K-NV 2");
+        const alone = await create("K-NV 3");
+        const driver = (await api.post("/api/drivers").send({ name: "Nils Vogt" })).body.data;
+        await api.post(`/api/drivers/${driver.id}/vehicles`).send({ vehicle_id: car.id }).expect(201);
+        await api.patch(`/api/drivers/${driver.id}/current-vehicle`).send({ vehicle_id: car.id }).expect(200);
+
+        setCompanySimRunning(1, false);
+        playFirstReports();
+        assert.equal((await api.get(`/api/vehicles/${car.id}`)).body.status, "UNCONNECTED");
+
+        setCompanySimRunning(1, true);
+        assert.deepEqual(playFirstReports(), [1]);
+        assert.equal((await api.get(`/api/vehicles/${car.id}`)).body.status, "IDLE");
+        assert.equal((await api.get(`/api/vehicles/${alone.id}`)).body.status, "UNCONNECTED");
+    });
+});
+
+describe("the simulated fleet takes turns", () => {
+    const standing = async (plate: string, driver: string, restedMs: number) => {
+        const vehicle = VehicleModel.create({ license_plate: plate, company_id: 1, status: "IDLE" });
+        await giveCurrentDriver(api, vehicle.id, driver);
+        TelemetryModel.recordMovedTo(vehicle.id, 50.9, 6.9);
+        db.prepare(
+            `UPDATE telemetry SET recorded_at = ?
+             WHERE id = (SELECT last_telemetry_id FROM vehicles WHERE id = ?)`,
+        ).run(sqliteFromMs(Date.now() - restedMs), vehicle.id);
+        return vehicle;
+    };
+    const statusOf = (id: number) => VehicleModel.getById(id, 1)?.status;
+
+    it("sends the vehicle that stood longest, and only as many as the share allows", async () => {
+        const longest = await standing("K-TURN 1", "Lange Pause", SIM_MIN_REST_MS * 3);
+        const shorter = await standing("K-TURN 2", "Kurze Pause", SIM_MIN_REST_MS * 2);
+        const fresh = await standing("K-TURN 3", "Gerade Da", 60_000);
+        const other = await standing("K-TURN 4", "Noch Einer", SIM_MIN_REST_MS * 2);
+        assert.equal(Math.ceil(4 * SIM_ON_ROAD_SHARE), 1);
+
+        assert.deepEqual(playNextTrips(), [1]);
+        assert.equal(statusOf(longest.id), "DRIVING");
+        assert.equal(statusOf(shorter.id), "IDLE");
+        assert.equal(statusOf(other.id), "IDLE");
+        assert.equal(statusOf(fresh.id), "IDLE");
+        assert.deepEqual(playNextTrips(), []);
+    });
+
+    it("never sends a driver whose licence has run out", async () => {
+        const expired = await standing("K-TURN 7", "Ohne Schein", SIM_MIN_REST_MS * 3);
+        db.prepare(
+            `UPDATE drivers SET licence_expires_on = '2020-01-01'
+             WHERE id = (SELECT current_driver_id FROM vehicles WHERE id = ?)`,
+        ).run(expired.id);
+
+        assert.deepEqual(playNextTrips(), []);
+        assert.equal(statusOf(expired.id), "IDLE");
+    });
+
+    it("sends nobody while the company paused the simulation", async () => {
+        const rested = await standing("K-TURN 5", "Pause Firma", SIM_MIN_REST_MS * 2);
+        setCompanySimRunning(1, false);
+        assert.deepEqual(playNextTrips(), []);
+        assert.equal(statusOf(rested.id), "IDLE");
+    });
+
+    it("parks at the end of the road: the trip ends, and pausing later is no lost signal", async () => {
+        const vehicle = VehicleModel.create({ license_plate: "K-TURN 6", company_id: 1 });
+        await giveCurrentDriver(api, vehicle.id, "Ende Strasse");
+        await api.patch(`/api/vehicles/${vehicle.id}`).send({ status: "DRIVING" }).expect(200);
+        seedSimProgress(vehicle.id, "koeln-duesseldorf", 0.99999, 1);
+
+        const patches = TelemetryModel.tickDrivingVehicles([vehicle.id]);
+        assert.equal(patches[0]?.parked, true);
+        applyTickEffects(patches);
+
+        assert.equal(statusOf(vehicle.id), "IDLE");
+        assert.equal((await api.get(`/api/vehicles/${vehicle.id}/trips`)).body.data[0].ended_at !== null, true);
+
+        setCompanySimRunning(1, false);
+        ExceptionEventModel.applySilence(Date.now() + 60_000);
+        assert.equal((await api.get(`/api/alerts?filter=open&vehicle_id=${vehicle.id}`)).body.meta.total, 0);
+    });
+});
+
+describe("one spelling for plates and driver names", () => {
+    it("stores a plate in capitals and refuses it in another case", async () => {
+        const created = await api.post("/api/vehicles").send({ license_plate: " bn-de   6545 " });
+        assert.equal(created.status, 201);
+        assert.equal(created.body.license_plate, "BN-DE 6545");
+
+        const again = await api.post("/api/vehicles").send({ license_plate: "BN-de 6545" });
+        assert.equal(again.status, 409);
+        assert.ok(again.body.fields.license_plate);
+    });
+
+    it("refuses a driver name in another case", async () => {
+        assert.equal((await api.post("/api/drivers").send({ name: "Sam Nowak" })).status, 201);
+        const again = await api.post("/api/drivers").send({ name: "sam nowak" });
+        assert.equal(again.status, 409);
+        assert.ok(again.body.fields.name);
+    });
+});
+
 describe("a long reporting pause ends the trip", () => {
     it("closes the trip at its last report and starts a new one with the next", async () => {
         const vehicle = VehicleModel.create({ license_plate: "K-PAUSE 1", company_id: 1 });
@@ -2826,6 +2990,8 @@ describe("a long reporting pause ends the trip", () => {
         db.prepare(
             "UPDATE telemetry SET recorded_at = datetime('now', '-2 hours') WHERE vehicle_id = ?",
         ).run(vehicle.id);
+        // The trip began before that report (a trip never ends before it began).
+        db.prepare("UPDATE trips SET started_at = datetime('now', '-3 hours') WHERE id = ?").run(first.id);
         const lastReport = (
             db.prepare("SELECT MAX(recorded_at) AS at FROM telemetry WHERE vehicle_id = ?").get(vehicle.id) as {
                 at: string;

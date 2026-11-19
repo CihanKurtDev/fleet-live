@@ -80,7 +80,7 @@ describe("cluster status counts", () => {
                     continue;
                 }
 
-                const truth = { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0 };
+                const truth = { IDLE: 0, DRIVING: 0, STOPPED: 0, OFFLINE: 0, UNCONNECTED: 0 };
 
                 for (const memberId of clusterMemberIds(index, cluster.id)) {
                     truth[status.get(memberId)!] += 1;
@@ -141,7 +141,7 @@ describe("clusterFleet", () => {
         expect(cluster).toMatchObject({
             kind: "cluster",
             count: 4,
-            counts: { DRIVING: 2, IDLE: 1, STOPPED: 0, OFFLINE: 1 },
+            counts: { DRIVING: 2, IDLE: 1, STOPPED: 0, OFFLINE: 1, UNCONNECTED: 0 },
         });
         expect(cluster?.kind === "cluster" && boundsSpanMeters(cluster.bounds)).toBe(
             0,

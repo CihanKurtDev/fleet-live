@@ -58,7 +58,9 @@ export const WORKSHOP_TASK_SQL = `COALESCE(
         ),
         CASE
             WHEN v.at_workshop_id IS NULL OR v.status = 'DRIVING' OR ${OPEN_STAY_SQL} THEN NULL
-            WHEN ${TO_PICK_UP_SQL} THEN CASE WHEN v.current_driver_id IS NULL THEN 'pickup' END
+            WHEN ${TO_PICK_UP_SQL} THEN CASE
+                WHEN v.current_driver_id IS NULL AND NOT ${UNDRIVABLE_DAMAGE_SQL} THEN 'pickup'
+            END
             ELSE 'unplanned'
         END
     )`;
@@ -97,6 +99,7 @@ export const VEHICLE_CONCEPT_SQL: Record<VehicleFilterId, string> = {
     driving: "v.status = 'DRIVING'",
     idle: "v.status = 'IDLE'",
     offline: "v.status = 'OFFLINE'",
+    unconnected: "v.status = 'UNCONNECTED'",
     stopped: "v.status = 'STOPPED'",
     in_depot: "v.depot_site_id IS NOT NULL",
     speeding: `EXISTS (

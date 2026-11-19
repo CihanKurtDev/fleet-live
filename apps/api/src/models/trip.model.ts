@@ -176,6 +176,38 @@ const END_TRIP_EVENTS = `
       AND ended_at IS NULL
 `;
 
+/**
+ * Months about to lose trips and without their roster yet. A running month
+ * stays in the list: with a retention under a month it is not complete.
+ */
+const ROSTER_MONTHS_DUE = `
+    SELECT DISTINCT k.month AS month
+    FROM trips t
+    INNER JOIN vehicles v ON v.id = t.vehicle_id
+    INNER JOIN trip_month_km k
+        ON k.company_id = v.company_id
+       AND k.month = strftime('%Y-%m', t.started_at)
+    WHERE t.ended_at IS NOT NULL
+      AND t.ended_at < ?
+      AND v.company_id = ?
+      AND (k.active_drivers IS NULL OR k.month >= strftime('%Y-%m', 'now'))
+`;
+
+const KEEP_MONTH_ROSTER = `
+    UPDATE trip_month_km
+    SET active_drivers = MAX(COALESCE(active_drivers, 0), roster.drivers),
+        active_vehicles = MAX(COALESCE(active_vehicles, 0), roster.vehicles)
+    FROM (
+        SELECT COUNT(DISTINCT t.driver_id) AS drivers,
+               COUNT(DISTINCT t.vehicle_id) AS vehicles
+        FROM trips t
+        INNER JOIN vehicles v ON v.id = t.vehicle_id
+        WHERE v.company_id = ?
+          AND strftime('%Y-%m', t.started_at) = ?
+    ) AS roster
+    WHERE company_id = ? AND month = ?
+`;
+
 const PRUNE_CLOSED_FOR_COMPANY = `
     DELETE FROM trips
     WHERE ended_at IS NOT NULL
@@ -331,6 +363,12 @@ export class TripModel {
             return;
         }
 
+        // A trip never ends before it began (a gap close passes the last
+        // report, which can predate a trip opened by a status change).
+        if (at < open.started_at) {
+            at = open.started_at;
+        }
+
         if (open.point_count < 3) {
             stmt(CLOSE_TRIP).run(at, open.path, open.point_count, open.id);
         } else {
@@ -376,6 +414,7 @@ export class TripModel {
      * Löscht geschlossene Fahrten dieser Firma, die älter sind als ihre
      * Aufbewahrung (Firmenwert, sonst `TRIP_RETENTION_DAYS`; 0 = behalten).
      * Offene Fahrten und andere Firmen bleiben. Kein `company_id` auf `trips`.
+     * Wer im Monat gefahren ist, bleibt als Zahl in `trip_month_km`.
      */
     static pruneClosedForCompany(companyId: number): number {
         const days = PrivacyModel.tripDays(companyId);
@@ -384,10 +423,16 @@ export class TripModel {
             return 0;
         }
 
-        const result = stmt(PRUNE_CLOSED_FOR_COMPANY).run(
-            sqliteDaysAgo(days),
-            companyId,
-        );
+        const before = sqliteDaysAgo(days);
+        const months = stmt(ROSTER_MONTHS_DUE).all(before, companyId) as {
+            month: string;
+        }[];
+
+        for (const { month } of months) {
+            stmt(KEEP_MONTH_ROSTER).run(companyId, month, companyId, month);
+        }
+
+        const result = stmt(PRUNE_CLOSED_FOR_COMPANY).run(before, companyId);
 
         return Number(result.changes);
     }

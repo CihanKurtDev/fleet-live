@@ -12,7 +12,7 @@ import {
     dropMaintenanceTriggers,
 } from "./migrate";
 import { upsertDevAccounts } from "./devAccounts";
-import { archiveStaleSpeeding, syncStateAlerts } from "./stateAlerts";
+import { syncStateAlerts } from "./stateAlerts";
 import {
     assignDepotSitesFromTelemetry,
     assignHomeSites,
@@ -477,7 +477,10 @@ export function seedLivedIn(database: DatabaseSync) {
             const maxSpeed = limit + over;
             const duration = pickInt(rng, 9, 42);
             const ended = open ? null : laterStamp(created, rng);
-            const resolved = open || rng() < 0.12 ? null : laterStamp(ended ?? created, rng);
+            // Nothing closes a Tempo warning by itself: only the last days can still be waiting.
+            const recent = Date.parse(`${created.replace(" ", "T")}Z`) > Date.now() - 6 * 86_400_000;
+            const waiting = rng() < 0.12 && recent;
+            const resolved = open || waiting ? null : laterStamp(ended ?? created, rng);
             insertAlert.run(
                 vehicleId,
                 vehicles.find((row) => row.id === vehicleId)?.driverId ?? null,
@@ -631,7 +634,6 @@ export function seedLivedIn(database: DatabaseSync) {
     applyMaintenanceTriggers(database);
     // The random LOW_FUEL history above is replaced by what the tanks say.
     syncStateAlerts(database);
-    archiveStaleSpeeding(database);
     database.exec("ANALYZE");
     database.exec("VACUUM");
 

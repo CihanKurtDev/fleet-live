@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS companies (
     -- Retention in days set by the company; NULL is the default (shared RETENTION_*).
     trip_retention_days INTEGER,
     alert_retention_days INTEGER,
+    damage_retention_days INTEGER,
     audit_retention_days INTEGER,
     -- 0: driver names on warnings, trips and the driver pages are for dispatchers only.
     viewer_driver_names INTEGER NOT NULL DEFAULT 1
@@ -215,6 +216,8 @@ CREATE TABLE IF NOT EXISTS drivers (
     phone TEXT,
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- Open SPEEDING warnings of this driver, kept by triggers (migrate.ts).
+    open_warnings INTEGER NOT NULL DEFAULT 0,
 
     FOREIGN KEY (company_id)
         REFERENCES companies(id),
@@ -231,7 +234,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
     fuel_level REAL NOT NULL DEFAULT 100
         CHECK (fuel_level >= 0 AND fuel_level <= 100),
     status TEXT NOT NULL DEFAULT 'IDLE'
-        CHECK (status IN ('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE')),
+        CHECK (status IN ('IDLE', 'DRIVING', 'STOPPED', 'OFFLINE', 'UNCONNECTED')),
     vin TEXT,
     vehicle_type TEXT
         CHECK (vehicle_type IS NULL OR vehicle_type IN (
@@ -331,6 +334,9 @@ CREATE TABLE IF NOT EXISTS trip_month_km (
     company_id INTEGER NOT NULL,
     month TEXT NOT NULL,
     distance_m REAL NOT NULL DEFAULT 0,
+    -- Who drove in the month, written before its trips are deleted.
+    active_drivers INTEGER,
+    active_vehicles INTEGER,
 
     PRIMARY KEY (company_id, month),
     FOREIGN KEY (company_id)
@@ -368,6 +374,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     resolved_at TEXT,
     -- How it was cleared, e.g. „Gespräch geführt am 02.11.2026“.
     resolution_note TEXT,
+    -- Set by a trigger from the vehicle: lists of a company read one index.
+    company_id INTEGER,
 
     FOREIGN KEY (vehicle_id)
         REFERENCES vehicles(id)

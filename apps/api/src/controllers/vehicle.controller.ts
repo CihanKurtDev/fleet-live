@@ -5,6 +5,7 @@ import {
     parseFleetPositionsQuery,
     parseTelemetryHistoryQuery,
     parseTripListQuery,
+    normalizeLicensePlate,
     parseVehicleListQuery,
     validateVehicleInput,
     normalizeVin,
@@ -133,7 +134,7 @@ function trimStrings(input: Partial<VehicleInput>): Partial<VehicleInput> {
     return {
         ...input,
         ...(input.license_plate !== undefined && {
-            license_plate: input.license_plate.trim(),
+            license_plate: normalizeLicensePlate(input.license_plate),
         }),
     };
 }
@@ -313,7 +314,7 @@ export function createVehicle(req: Request, res: Response) {
         throwFieldErrors(errors);
     }
 
-    const { license_plate, fuel_level, status } =
+    const { license_plate, fuel_level, status = "UNCONNECTED" } =
         trimStrings(input);
 
     // Ein neues Fahrzeug hat noch keinen Fahrer, `DRIVING` ist hier nie gültig.
